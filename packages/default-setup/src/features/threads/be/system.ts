@@ -7,7 +7,7 @@ import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { createClaudeTerminalViews } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
-import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews } from './claude-ui.ts';
+import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews, operateClaudeMemory } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
 import { broadcast, sendToWindow, tell } from '#generated/events.ts';
@@ -153,6 +153,7 @@ function reported<T>(refused: (error: unknown) => void, write: () => T): T {
 }
 
 export const answers = threadsSpec.answers({
+  CLAUDE_MEMORY: ({ args, client, signal }) => operateClaudeMemory(args, client, signal),
   SET_CLAUDE_PERMISSION_MODE: async ({ args: { threadId, mode }, client }) => {
     if (!client) throw new Error('A Claude permission change requires a requesting window');
     const result = await services.action.executeIfFound('CC: Update Permission Mode', { threadId, mode });
@@ -788,6 +789,7 @@ export const threadsSystem = setup({
             actions: 'pauseTurn',
           },
           SET_CLAUDE_PERMISSION_MODE: answers.on.SET_CLAUDE_PERMISSION_MODE,
+          CLAUDE_MEMORY: answers.on.CLAUDE_MEMORY,
           FORWARD_BRAIN_EVENT: {
             actions: 'forwardBrainEvent',
           },

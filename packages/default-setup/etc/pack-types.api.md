@@ -1384,6 +1384,15 @@ declare const ClaudeMemoryDialogSchema: z.ZodObject<{
     }, z.core.$strip>;
 }, z.core.$strip>;
 
+type ClaudeMemoryRequest = {
+    threadId: string;
+    mountId: string;
+    attachmentId: string;
+    ownerId: string;
+    sessionId: string;
+    enabled?: boolean;
+};
+
 type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>;
 
 declare const ClaudeModelCatalogSchema: z.ZodObject<{
@@ -9758,6 +9767,13 @@ type ThreadViewData = Simplify<ThreadCreateData & {
  * asks, answered to the window that made them.
  */
 type ThreadsAsks = {
+    CLAUDE_MEMORY: {
+        args: ClaudeMemoryRequest;
+        answer: {
+            dialog?: ClaudeMemoryDialog;
+            saved?: boolean;
+        };
+    };
     SET_CLAUDE_PERMISSION_MODE: {
         args: {
             threadId: string;

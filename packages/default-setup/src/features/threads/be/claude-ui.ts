@@ -11,7 +11,7 @@ import { getClaudeUiOwner } from '#features/code/be/services/claude-code/ui-owne
 import { mountClaudeUi } from '#features/code/be/services/claude-code/ui-mount.ts'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import type { ClaudeUiOwner } from '#features/code/be/services/claude-code/ui-mount.ts'
-import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from './types.ts'
+import type { ClaudeMemoryRequest, ClaudeUiViewRequest, OutgoingThreadsEvents } from './types.ts'
 import type { Reply } from '@apackdev/sdk/events'
 import { registerThreadTeardown } from './thread-teardown.ts'
 
@@ -176,6 +176,40 @@ export async function submitClaudeParentCommand(client: string, threadId: string
   bind(view)
   if (!view.mount) throw new Error('Claude composer is not attached')
   return view.mount.submitParentCommand(revision, text, hasReferences)
+}
+
+/** Keep a settings request bound to the initiating window's live main attachment. */
+export async function operateClaudeMemory(request: ClaudeMemoryRequest, client: string | undefined, signal: AbortSignal) {
+  const { threadId, mountId, attachmentId, sessionId, ownerId, enabled } = request
+  if (!client || !validId(mountId) || !validId(attachmentId) || (enabled !== undefined && typeof enabled !== 'boolean')) {
+    throw new Error('A Claude memory operation requires a current window and view')
+  }
+  const view = views.get(keyOf(client, mountId))
+  const owner = services.cli.claudeCode.getNativeTerminal(threadId)
+  if (!owner || !view) throw new Error('Claude memory view changed')
+  const current = () => {
+    signal.throwIfAborted()
+    if (!viewCurrent(view) || view.client !== client || view.threadId !== threadId
+      || view.attachmentId !== attachmentId || view.expires <= Date.now() || view.nativeView || view.backgroundView
+      || !view.owner || view.owner !== getClaudeUiOwner(threadId) || services.cli.claudeCode.getNativeTerminal(threadId) !== owner
+      || owner.state.status !== 'live' || owner.state.ownerId !== ownerId || owner.state.sessionId !== sessionId
+      || owner.state.view?.kind !== 'main') throw new Error('Claude memory view changed')
+  }
+  current()
+  if (enabled === undefined) {
+    const dialog = await owner.getMemoryDialog()
+    current()
+    return { dialog }
+  }
+  await owner.setAutoMemory(enabled)
+  try {
+    current()
+    const dialog = await owner.getMemoryDialog()
+    current()
+    return { dialog, saved: enabled }
+  } catch {
+    return { saved: enabled }
+  }
 }
 
 /** Delivery identity owns each mount. A heartbeat renews its lease without launching a process. */

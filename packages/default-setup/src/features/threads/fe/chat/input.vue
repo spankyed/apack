@@ -121,7 +121,7 @@
                       v-for="btn in leftButtons"
                       :key="btn.action"
                       @select="handleButtonClick(btn.action)"
-                      :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending) || (btn.action === 'native-themes' && nativeDecisionPending)"
+                      :disabled="(btn.action === 'native-model' || btn.action === 'native-memory' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending) || (btn.action === 'native-themes' && nativeDecisionPending)"
                       class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
                       :class="btn.class"
                     >
@@ -140,7 +140,7 @@
                   class="hidden @lg:block p-2 transition-colors text-neutral-500"
                   :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
                   :aria-label="btn.label"
-                  :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending)) || (btn.action === 'native-themes' && nativeDecisionPending)"
+                  :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-memory' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending)) || (btn.action === 'native-themes' && nativeDecisionPending)"
                   :title="btn.label"
                   @click="handleButtonClick(btn.action)"
                 >
@@ -230,7 +230,7 @@ import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, shallowRef, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
+import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, BookOpen, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import NativePanePanel from './NativePanePanel.vue'
@@ -284,6 +284,7 @@ const props = defineProps<{
   disabled?: boolean
   disabledReason?: string
   nativeDecisionPending?: boolean
+  nativeMemoryAvailable?: boolean
   nativeSendWaiting?: boolean
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
@@ -323,6 +324,7 @@ const emit = defineEmits<{
   (e: 'attach-file'): void
   (e: 'voice-input'): void
   (e: 'pause', nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope): void
+  (e: 'native-memory'): void
   (e: 'native-session-controls'): void
   (e: 'mode-change', mode: string): void
   (e: 'phase-change', phase: string): void
@@ -790,6 +792,7 @@ const leftButtons = computed<ActionButton[]>(() => {
     { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
     { icon: Plug, label: 'Claude MCP servers', action: 'native-mcp' },
   )
+  if (props.nativeMemoryAvailable) buttons.push({ icon: BookOpen, label: 'Claude memory', action: 'native-memory' })
   if (props.nativeBackground && props.nativeSubmit && props.nativePrompt) buttons.push({ icon: ListTodo, label: 'Run session in background', action: 'native-background' })
   if(props.currentMode === 'Claude Code' && props.currentThread?.id) buttons.push({icon:Plug,label:'Claude channels',action:'claude-channels'})
   // Note: In expanded view, 'quick-message' is rendered via QuickPromptsPopup instead
@@ -822,6 +825,7 @@ const handleButtonClick = (action: string) => {
   if (action === 'native-themes') { void openNativePanel('/theme'); return }
   if (action === 'native-background') { if (props.nativeBackground) void openNativePanel('/background'); return }
   if (action === 'native-settings') { void openNativePanel('/config'); return }
+  if (action === 'native-memory') { if (!submitting.value && !props.nativeDecisionPending) emit('native-memory'); return }
   if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
   if (action === 'native-mcp') { void openNativePanel('/mcp'); return }
   if (props.disabled) return

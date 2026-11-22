@@ -705,11 +705,21 @@ export type UserCommand = { command: string; text: string; mode?: string; phase?
 /** Where a message or a command went: the thread, and whether sending it started that thread */
 export type MessageSent = { threadId: EARS.EntityId; started: boolean };
 
+export type ClaudeMemoryRequest = {
+  threadId: string;
+  mountId: string;
+  attachmentId: string;
+  ownerId: string;
+  sessionId: string;
+  enabled?: boolean;
+};
+
 /**
  * What the threads system answers. What it stores is its views (\`be/views.ts\`); a window's writes and commands are
  * asks, answered to the window that made them.
  */
 export type ThreadsAsks = {
+  CLAUDE_MEMORY: { args: ClaudeMemoryRequest; answer: { dialog?: import('#features/code/be/services/claude-code/host-controls.ts').ClaudeMemoryDialog; saved?: boolean } };
   SET_CLAUDE_PERMISSION_MODE: { args: { threadId: string; mode: PermissionMode } };
   CREATE_THREAD: { args: { topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }; answer: { id: EARS.EntityId } };
   UPDATE_THREAD_STATUS: { args: { threadId: string; status: string } };

@@ -43,6 +43,7 @@
               aria-label="Scroll to latest message" @click="scrollToBottom('smooth')">Latest message <span aria-hidden="true">↓</span></button>
           </template>
         </ClaudeNativeSession>
+        <NativeMemoryPanel v-if="showMemory && memoryTarget" :key="memoryTarget.attachmentId" :target="memoryTarget" :busy="nativeComposerOwner?.busy" @close="closeMemory" />
         <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
@@ -164,6 +165,7 @@
               :native-send-waiting="nativeSendWaiting"
               :native-pause-requested="nativePauseRequested" :native-pause="nativePauseScope"
               @native-session-controls="nativeSession?.open()"
+              :native-memory-available="!!memoryTarget" @native-memory="showMemory = true"
               :modes="threads.data.modes"
               :default-mode="threads.data.chatSettings?.defaultMode"
               :hotkeys="threads.data.hotkeys"
@@ -324,6 +326,7 @@ import { openSurface } from '#generated/fe.ts'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { tell } from '#generated/events.ts'
+import NativeMemoryPanel from './NativeMemoryPanel.vue'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import { claudeWindowAgentDrafts } from './native-window-draft.ts'
 import { useSettings } from '#generated/settings-fe.ts';
@@ -1268,6 +1271,24 @@ const nativeViewport = useNativeTranscriptViewport({
   active: () => nativeTranscriptVisible.value,
   onFollowingChange: following => { isNearBottom.value = following },
 })
+const showMemory = ref(false)
+const memoryTarget = computed(() => {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value
+  const attachmentId = mount && nativeUiViews.value[mount.mountId]?.attachmentId
+  if (!mount || mount.threadId !== currentThread.value?.id || !attachmentId || owner?.view?.kind !== 'main'
+    || nativeTerminalActive.value || focusedAgent.value || mainCommandActive.value || nativeQuotaDecisionPending.value
+    || pendingNativeApproval.value || pendingNativeQuestion.value || pendingNativePlan.value) return undefined
+  return { ...mount, attachmentId, ownerId: owner.ownerId, sessionId: owner.sessionId }
+})
+watch(() => {
+  const target = memoryTarget.value
+  return target ? [target.mountId, target.attachmentId, target.sessionId].join(':') : undefined
+}, () => { showMemory.value = false })
+function closeMemory(restoreFocus: boolean) {
+  showMemory.value = false
+  if (restoreFocus) void nextTick(() => mainComposer.value?.focus())
+}
+
 </script>
 
 <style scoped>
