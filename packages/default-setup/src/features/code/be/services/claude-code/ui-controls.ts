@@ -3,6 +3,7 @@ import type { ClaudePrintClientProjection } from './print-client-bridge.ts'
 import { z } from 'zod'
 import type { ClaudePromptHost, createClaudePromptHosts } from './ui-prompt-host.ts'
 import { ClaudeProtocolError } from './errors.ts'
+import { CLAUDE_UI_TEXT_MAX_LENGTH } from './ui-text-limits.ts'
 import type { ClaudeInitialization, createHostControls } from './host-controls.ts'
 
 const clientPointer = z.object({kind:z.literal('pointer'),type:z.enum(['down','move','up','enter','leave']),x:z.number().int().min(-1000000).max(1000000),y:z.number().int().min(-1000000).max(1000000),fine:z.object({x:z.number().finite().min(-1000000).max(1000000),y:z.number().finite().min(-1000000).max(1000000)}).strict().optional(),button:z.enum(['left','middle','right']).optional(),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),alt:z.literal(true).optional()}).strict()
@@ -186,7 +187,7 @@ export function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIni
       return z.object({ released: z.boolean() }).parse(await request({ subtype: 'apack_ui_release_instance', ...valid }))
     },
     async prepareParentCommand(options: { client_id: string; text: string }) {
-      const valid = z.object({ client_id: clientId, text: z.string().min(1).max(32768) }).strict().parse(options)
+      const valid = z.object({ client_id: clientId, text: z.string().min(1).max(CLAUDE_UI_TEXT_MAX_LENGTH) }).strict().parse(options)
       return z.union([z.object({ kind: z.literal('prepared'), id: z.string().uuid() }).strict(), parentCommandResult]).parse(await request({ subtype: 'apack_ui_parent_command', operation: 'prepare', ...valid }))
     },
     async startParentCommand(options: { client_id: string; command_id: string }) {

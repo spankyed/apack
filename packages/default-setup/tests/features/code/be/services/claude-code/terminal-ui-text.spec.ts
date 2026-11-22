@@ -6,7 +6,7 @@ import {join} from 'node:path'
 import {tmpdir} from 'node:os'
 import {createClaudeTerminalUiTransport} from '#features/code/be/services/claude-code/terminal-ui.ts'
 import {claudeTerminalUiRuntime} from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
-import {CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES} from '#features/code/be/services/claude-code/ui-text-limits.ts'
+import {CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MAX_LENGTH, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES} from '#features/code/be/services/claude-code/ui-text-limits.ts'
 
 async function fixture(){
  const directory=await mkdtemp(join(tmpdir(),'cc-forward-text-')),socketPath=join(directory,'ui.sock')
@@ -20,7 +20,7 @@ async function fixture(){
   http:{createServer},AbortController,Buffer,process:{pid:owner.pid},config:{token},configUrl:'config',
   readFileSync:()=>JSON.stringify({sessionId:owner.sessionId,transportEpoch}),activeSession:owner.sessionId,
   seen:new Set(),highestSequence:0,sequenceSession:owner.sessionId,sequenceEpoch:transportEpoch,inFlight:0,control,
-  nativeUiTextMessageMaxBytes:CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES,nativeUiPromptRpcSubtypes:new Set(['ui_prompt_edit','ui_prompt_autocomplete']),
+  nativeUiTextMessageMaxBytes:CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES,nativeUiPromptRpcSubtypes:new Set(CLAUDE_UI_PROMPT_RPC_SUBTYPES),
  };
  const server=vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';server',runtime) as ReturnType<typeof createServer>
  await new Promise<void>(resolve=>server.listen(socketPath,resolve))
@@ -42,6 +42,15 @@ it.each(['ui_prompt_edit','ui_prompt_autocomplete'])('round-trips native-limit U
    expect(value).toEqual(subtype==='ui_prompt_edit'?{text,cursor:text.length}:{suggestions:[{text}]})
   }
  }finally{await f.close()}
+})
+it('round-trips bounded long drafts and native accepted text through the owned submission RPCs', async () => {
+ const f = await fixture()
+ const text = '漢'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH)
+ try {
+  await expect(f.transport.request({subtype:'apack_prepare_prompt',text})).resolves.toEqual({text})
+  f.control.mockResolvedValueOnce({text,cursor:text.length})
+  await expect(f.transport.request({subtype:'apack_prompt_outcome'})).resolves.toEqual({text,cursor:text.length})
+ } finally { await f.close() }
 })
 it('keeps non-prompt requests and responses at their existing bounds',async()=>{
  const f=await fixture()

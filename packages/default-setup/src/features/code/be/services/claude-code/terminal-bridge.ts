@@ -3,7 +3,7 @@ import {CLAUDE_NATIVE_EDITOR_MESSAGE_MAX_BYTES, CLAUDE_NATIVE_EDITOR_MAX_BYTES} 
 import type { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
 import { ClaudeBackgroundControlSchema } from './background-controls.ts'
 import { z } from 'zod'
-import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudeTerminalPlugin } from './terminal-plugin.ts'
 import { NATIVE_NOTIFICATION_ROUTES, type NativeNotificationRoute } from './native-plugin/program.ts'
 import { createClaudeBackgroundStatusObserver, type ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
@@ -494,7 +494,8 @@ export async function createClaudeTerminalBridge(options: {
       get activity() { return activity },
       get busy() { return busy || !!pending || !!nativeEditor?.active },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
-        if (closed || !ready || pending || busy || nativeEditor?.active || !text.trim() && !images.length || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+        if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(new Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
+        if (closed || !ready || pending || busy || nativeEditor?.active || !text.trim() && !images.length) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
         if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {
           const timer = submissionTimer(images.length > 0)

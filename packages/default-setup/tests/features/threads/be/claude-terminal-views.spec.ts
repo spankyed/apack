@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ClaudeBackgroundStatus } from '#features/code/common/native-background.ts'
 import { createClaudeTerminalViews, type ClaudeTerminalViewReply } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/be/services/claude-code/ui-text-limits.ts'
 const mount = { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: randomUUID() } as const
 function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0]['prepareInput'], beforeViewChange?: Parameters<typeof createClaudeTerminalViews>[0]['beforeViewChange'], command?: Parameters<typeof createClaudeTerminalViews>[0]['command']) {
   const listeners = new Set<() => void>()
@@ -85,6 +86,25 @@ it('submits once for the owning view and publishes the native accepted prompt id
     await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toEqual({ ownerId: submit.ownerId, revision: 1, status: 'accepted', receipt }))
     f.views.handle(submit, 'one', f.send)
     expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith('Original draft')
+  } finally { f.views.clear() }
+})
+it('settles an oversized owned submission and lets the same composer send a long draft afterward', async () => {
+  const f = fixture()
+  try {
+    f.views.handle(mount, 'one', f.send)
+    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId } as const
+    const oversized = { ...submit, revision: 1, text: '😀'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH / 2) + 'x' }
+    f.views.handle(oversized, 'other-window', f.send)
+    expect(f.send.mock.calls.at(-1)![0].submission).toBeUndefined()
+    f.views.handle(oversized, 'one', f.send)
+    expect(f.send.mock.calls.at(-1)![0].submission).toEqual({ ownerId: submit.ownerId, revision: 1, status: 'rejected', problem: CLAUDE_UI_TEXT_LIMIT_MESSAGE })
+    expect(f.owner.submit).not.toHaveBeenCalled()
+    const text = 'Review the release checklist. '.repeat(1800)
+    f.views.handle({ ...submit, revision: 2, text }, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission?.status).toBe('accepted'))
+    f.views.handle(oversized, 'one', f.send)
+    expect(f.send.mock.calls.at(-1)![0].submission?.revision).toBe(2)
+    expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith(text)
   } finally { f.views.clear() }
 })
 it('reports native refusal without an accepted prompt receipt', async () => {

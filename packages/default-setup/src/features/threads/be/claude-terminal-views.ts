@@ -5,6 +5,7 @@ import type { ClaudeNativeContinuation } from '#features/code/be/services/claude
 import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest, ClaudeBackgroundUiTarget } from '#features/code/common/native-background.ts'
 import { isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
 import { randomUUID } from 'node:crypto'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/be/services/claude-code/ui-text-limits.ts'
 import type { MessageReferences } from './types.ts'
 import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
@@ -426,9 +427,14 @@ export function createClaudeTerminalViews(dependencies: {
       else if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
         if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
           || event.phase !== undefined && event.phase !== 'Plan' && event.phase !== 'Edit'
-          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !Object.values(event.references ?? {}).some(value => value?.length) || event.text.length > 32768) return
-        const references = event.references ? structuredClone(event.references) : undefined
+          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !Object.values(event.references ?? {}).some(value => value?.length)) return
         target.submissionRevision = event.revision
+        if (event.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) {
+          target.submission = { ownerId: event.ownerId, revision: event.revision, status: 'rejected', problem: CLAUDE_UI_TEXT_LIMIT_MESSAGE }
+          publish(key, target)
+          return
+        }
+        const references = event.references ? structuredClone(event.references) : undefined
         const submission: ClaudeTerminalSubmissionState = { ownerId: event.ownerId, revision: event.revision, status: 'pending' }
         target.submission = submission; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.submission === submission

@@ -47,9 +47,10 @@ async function nativeParentCommand(n,request){
   if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native parent command client detached');
   const binding=originalContext??n.runtime.ey(),facts=nativeViewFacts(n,binding,new AbortController());
   if(facts.view.kind!=='main')throw Error('Return to the native main view before running a parent command');
-  if(typeof request.text!=='string'||!request.text.trim()||request.text.length>32768)throw Error('Native input is empty or too long');
+  if(typeof request.text!=='string'||!request.text.trim()||request.text.length>nativeUiTextMaxLength)throw Error('Native input is empty or too long');
   const prepared=n.runtime.GYt(request.text,{}),parsed=n.commandInput.IS(prepared.input.trimEnd()),command=parsed&&n.engine.Rs(parsed.commandName,binding.commands());
   if(!command||!['local','local-jsx'].includes(command.type))return {kind:'not_command'};
+  if(request.text.length>32768)throw Error('Native command input exceeds 32,768 UTF-16 units');
   if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
   for(const [id,entry] of parentCommands)if(entry.state==='prepared'&&Date.now()-entry.createdAt>30000||parentCommands.size>=16&&['finished','failed'].includes(entry.state))parentCommands.delete(id);
   if(parentCommands.size>=16||[...parentCommands.values()].some(entry=>entry.state==='running'))throw Error('A native parent command is pending');

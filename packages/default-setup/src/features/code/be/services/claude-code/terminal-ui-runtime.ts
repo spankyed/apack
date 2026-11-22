@@ -4,7 +4,7 @@ import { claudeTerminalAutoModeSafetyRuntime } from './terminal-auto-mode-safety
 import { claudeTerminalComputerPermissionRuntime } from './terminal-computer-permission-runtime.ts'
 import { claudeTerminalChromeSetupRuntime } from './terminal-chrome-setup-runtime.ts'
 import { claudeTerminalHelperPolicyRuntime } from './terminal-helper-policy-runtime.ts'
-import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
+import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MAX_LENGTH, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
@@ -57,6 +57,7 @@ import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
+const nativeUiTextMaxLength=${CLAUDE_UI_TEXT_MAX_LENGTH};
 async function nativeInterruptionModule(){return await import('/$bunfs/root/chunk-ev1xcp32.js');}
 const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SUBTYPES)});
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
@@ -473,7 +474,7 @@ async function promptOutcome(n,id){
  return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
 }
 async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
- if(typeof text!=='string'||!allowEmpty&&!text.trim()||text.length>32768)throw Error('Native terminal draft is invalid');
+ if(typeof text!=='string'||!allowEmpty&&!text.trim()||text.length>nativeUiTextMaxLength)throw Error('Native terminal draft is invalid');
  if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
  const context=originalContext??n.runtime.ey(),composer=context?.composer;
  if(context?.surface!=='terminal'||!composer)throw Error('Native terminal composer is not bound');
