@@ -32,8 +32,8 @@ export interface ShellNotify {
 
 /** The I/O the shell is given */
 export interface ShellOptions {
-  /** This window's registered pack frontends: the surfaces the shell starts with, and its default */
-  packs: Pick<FePackRegistry, 'getRegisteredSurfaces' | 'surfaceBindings' | 'designation'>;
+  /** This window's registered pack frontends: the surfaces the shell starts with and the extensions it can show */
+  packs: Pick<FePackRegistry, 'getRegisteredSurfaces' | 'surfaceBindings' | 'designation' | 'getAppExtension'>;
   catalog: ShellSurfaceCatalog;
   client: ShellClient;
   packFrontends: ShellPackFrontends;

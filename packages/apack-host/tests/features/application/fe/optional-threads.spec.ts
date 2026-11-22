@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import { createActor } from 'xstate';
 import { createShellMachine } from '../../../../src/fe/index.ts';
-import { fakeShell, surface } from './fakes.ts';
+import { fakeShell, surface, settle } from './fakes.ts';
 
 it.each([
   { role: undefined, ids: ['host/settings', 'host/packs'], selected: 'host/settings' },
@@ -59,4 +59,49 @@ it('resolves each window independently without a process-global designation', ()
       expect(app.getSnapshot().matches({ onboarding: 'wizard' })).toBe(true);
     }
   } finally { windows.forEach(({ app }) => app.stop()); }
+});
+
+it('leaves host Packs usable on a new profile with no welcome provider', async () => {
+  const shell = fakeShell({ surfaces: [surface('host/packs'), surface('host/settings')] });
+  const app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: {} }).start();
+  try {
+    shell.client.connect();
+    shell.client.receive({ to: 'host/application', event: { type: 'CLIENT_CONNECTED', hasOnboarded: false } });
+    await settle();
+    expect(app.getSnapshot().matches({ running: 'connected' })).toBe(true);
+    expect(app.getSnapshot().context.activeSurface.id).toBe('host/packs');
+    expect(app.getSnapshot().context.panelSizes.chatMaximized).toBe(false);
+    expect(shell.storage.savePanelSizes).not.toHaveBeenCalled();
+  } finally { app.stop(); }
+});
+
+it('waits for a welcome from any pack and recovers navigation if that pack is unloaded', async () => {
+  let hasWelcome = false;
+  const shell = fakeShell({ surfaces: [surface('host/packs')], hasWelcome: () => hasWelcome });
+  shell.client.loadedPacks.mockResolvedValue([{ id: 'alternate-starter', feEntry: 'runtime/fe.js' }]);
+  let finishLoad!: () => void;
+  const pendingLoad = new Promise<void>(resolve => { finishLoad = resolve; });
+  shell.packFrontends.load.mockImplementation(async () => {
+    await pendingLoad;
+    hasWelcome = true;
+    return [];
+  });
+  shell.packFrontends.unload.mockImplementation(() => { hasWelcome = false; });
+  const app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: {} }).start();
+  try {
+    shell.client.connect();
+    shell.client.receive({ to: 'host/application', event: { type: 'CLIENT_CONNECTED', hasOnboarded: false } });
+    await settle();
+    expect(shell.packFrontends.load).toHaveBeenCalledOnce();
+    expect(app.getSnapshot().hasTag('welcome')).toBe(true);
+
+    finishLoad();
+    await settle();
+    expect(app.getSnapshot().context.packLoadRunning).toBe(false);
+    expect(app.getSnapshot().hasTag('welcome')).toBe(true);
+
+    app.send({ type: 'PACK_SURFACES_UNLOADED', packId: 'alternate-starter' });
+    expect(app.getSnapshot().matches({ running: 'connected' })).toBe(true);
+    expect(app.getSnapshot().context.activeSurface.id).toBe('host/packs');
+  } finally { app.stop(); }
 });

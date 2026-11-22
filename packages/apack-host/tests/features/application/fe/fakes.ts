@@ -53,7 +53,7 @@ export function fakeClient() {
 }
 
 /** The shell's options over fakes, starting with `surfaces` registered (the first is the default, unless one is given) */
-export function fakeShell(start: { surfaces: Surface[]; defaultSurface?: Surface; designations?: Record<string, FeatureRef> }) {
+export function fakeShell(start: { surfaces: Surface[]; defaultSurface?: Surface; designations?: Record<string, FeatureRef>; hasWelcome?: () => boolean }) {
   const client = fakeClient();
   const packFrontends = {
     load: vi.fn<(pack: { id: string }) => Promise<Surface[] | null>>(() => Promise.resolve(null)),
@@ -85,7 +85,8 @@ export function fakeShell(start: { surfaces: Surface[]; defaultSurface?: Surface
   const pending = new Set<string>();
   const ready = () => { if (!pending.size) { catalog.status.mockReturnValue('ready'); for (const listener of catalogListeners) listener(); } };
   const options: ShellOptions = {
-    packs: { getRegisteredSurfaces: () => start.surfaces, surfaceBindings: () => bindings, designation: role => start.designations?.[role] },
+    packs: { getRegisteredSurfaces: () => start.surfaces, surfaceBindings: () => bindings, designation: role => start.designations?.[role],
+      getAppExtension: slot => slot === 'welcome' && start.hasWelcome?.() ? {} : undefined },
     catalog,
     client: { ...client.client, async loadedPacks() {
       const packs = await client.client.loadedPacks();

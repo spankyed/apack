@@ -18,7 +18,7 @@ let packClientReady: typeof fake.packClientReady;
 
 beforeEach(() => {
   builtInNotes = surface('notes');
-  shell = fakeShell({ surfaces: [builtInNotes] });
+  shell = fakeShell({ surfaces: [builtInNotes], hasWelcome: () => true });
   fake = shell.client;
   packClientReady = fake.packClientReady;
   app = createActor(createShellMachine(shell.options), {

@@ -10,7 +10,7 @@ let app: Actor<ShellMachine>;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  shell = fakeShell({ surfaces: [surface('default-setup/notes')] });
+  shell = fakeShell({ surfaces: [surface('default-setup/notes')], hasWelcome: () => true });
   shell.client.describeConnection.mockResolvedValue('127.0.0.1 refused the connection');
   app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: true } }).start();
   shell.client.connect();

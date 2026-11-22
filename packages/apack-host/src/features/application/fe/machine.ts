@@ -721,6 +721,14 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
         tags: ['onboarding'],
         // Maximized for the moment, so not saved
         entry: assign({ panelSizes: ({ context }) => ({ ...context.panelSizes, chatMaximized: true }) }),
+        // Only a loaded welcome component can let a user through this layout. Keep host navigation
+        // available when no pack supplies one, including when the welcome provider is unloaded.
+        always: {
+          guard: ({ context }) => context.busSubscribed && !context.packLoadRunning && !context.packLoadQueued
+            && !packs.getAppExtension('welcome'),
+          target: '#application.running.connected',
+          actions: assign({ panelSizes: ({ context }) => chatRestored(context.panelSizes) }),
+        },
         on: {
           ONBOARDING_COMPLETE: {
             actions: 'restoreChat',
