@@ -2,7 +2,7 @@
  * Restarts the API when its bundle is rebuilt, so a host, SDK or API edit costs a reload rather than a
  * manual build and a restarted app.
  *
- * `npm run dev` leaves `tsup --watch` on the bundle; an edit to `packages/api/src`, `@apackdev/host/src` or
+ * `npm run dev` leaves `tsup --watch` on the bundle; an edit to `packages/server/src`, `@apackdev/host/src` or
  * `@apackdev/sdk/src` rewrites `dist/server.js`, and this asks `ApiServer` to replace the child. Measured
  * 2026-10-10: ~95ms to rebuild, 545ms for the API to come back ready. The window never closes.
  *

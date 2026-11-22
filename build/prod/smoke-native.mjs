@@ -6,7 +6,7 @@
 //   node build/prod/smoke-native.mjs "dist/mac-arm64/apack.app/Contents/Resources/app"
 //
 // It runs a probe in the app's own executable as Node (ELECTRON_RUN_AS_NODE=1, as the app starts its API),
-// resolving each module from packages/api as the API does:
+// resolving each module from packages/server as the API does:
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
 //   @elmdb/ears       opens a database through EARS, the copy the API loads (it leaves EARS external to its bundle),
 //                     writes an entity and answers a query for it: EARS' own dependencies (msgpackr) and its `elmdb`
@@ -63,7 +63,7 @@ const PROBE = String.raw`
 const { createRequire } = require('node:module');
 const path = require('node:path');
 const [appDir, dataDir] = process.argv.slice(2);
-const load = createRequire(path.join(appDir, 'packages', 'api', 'package.json'));
+const load = createRequire(path.join(appDir, 'packages', 'server', 'package.json'));
 
 async function main() {
   const { Database } = load('elmdb');
@@ -78,7 +78,7 @@ async function main() {
   console.log('elmdb: wrote, closed, reopened and read back');
 
 
-  // Imported, as the API imports it: EARS is ESM. Resolved from packages/api, so it is the copy the API loads
+  // Imported, as the API imports it: EARS is ESM. Resolved from packages/server, so it is the copy the API loads
   const { pathToFileURL } = require('node:url');
   const { openDatabase } = await import(pathToFileURL(load.resolve('@elmdb/ears/database')).href);
   const { createEarsEngine } = await import(pathToFileURL(load.resolve('@elmdb/ears')).href);

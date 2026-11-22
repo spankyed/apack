@@ -9,7 +9,7 @@ data no field is too large for the engine, which is Part B's.
 ## Context
 
 The engine is in memory: at boot the API hydrates every row of the database (`store.hydrate()`,
-`packages/api/src/runtime/index.ts`) and every read after that is a memory read. LMDB is a mirror the engine writes
+`packages/server/src/runtime/index.ts`) and every read after that is a memory read. LMDB is a mirror the engine writes
 through a sink. Two costs follow, and each part below fixes one while keeping the engine in memory.
 
 **What real data costs** (measured 2026-10-23, copies converted to format 3, the built engine, 3 runs each):

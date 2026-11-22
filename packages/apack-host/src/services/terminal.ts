@@ -132,7 +132,7 @@ export function brokerBinary(): string {
  * path. npm installs the one platform package that matches and checks it against the lockfile's integrity.
  *
  * Resolved from `import.meta.url` rather than from a path of ours: this module is bundled into the API's
- * build, so its directory at runtime is `packages/api/dist`, and Node's lookup walks up from there to the
+ * build, so its directory at runtime is `packages/server/dist`, and Node's lookup walks up from there to the
  * app's `node_modules`, in a checkout and in a packaged app alike.
  *
  * A package that isn't installed is an absence, and anything else it throws is a real failure worth

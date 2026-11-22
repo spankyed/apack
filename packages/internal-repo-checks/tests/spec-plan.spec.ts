@@ -190,8 +190,8 @@ describe('what --full adds', () => {
   });
 
   it('runs both suites a vitest config decides for: its package, and the checks that read every config', () => {
-    expect(labels('packages/api/vitest.config.ts'))
-      .toEqual(['packages/api: (its config changed)', 'packages/internal-repo-checks: the checks that read every config']);
+    expect(labels('packages/server/vitest.config.ts'))
+      .toEqual(['packages/server: (its config changed)', 'packages/internal-repo-checks: the checks that read every config']);
   });
 
   // `pack` matched 355 of 368 spec files when the whole repo-relative path was searched, because every path

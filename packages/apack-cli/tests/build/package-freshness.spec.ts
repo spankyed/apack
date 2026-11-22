@@ -58,7 +58,7 @@ describe('what a walk of a declared input leaves out', () => {
   /**
    * A bundler's compiled config. `bundle-require` (through `tsup`) writes `<name>.bundled_<id>.mjs` beside the
    * config it is loading and removes it when the build ends, so for the length of a build one sits in
-   * `packages/api` — a directory several steps declare.
+   * `packages/server` — a directory several steps declare.
    *
    * A fingerprint taken while one exists records a file the next walk cannot find, so the step is stale
    * forever after and the reason never surfaces. Its id is random, which is why no `excludes` entry can name

@@ -482,7 +482,7 @@ what the audit of 2026-09-26 cost to establish, so it needn't be established aga
   Vite's conditions outright, so a pack that enables it typechecks against source while shipping bundles built
   from `dist` — green locally, and wrong after publishing. `assertSourceResolution`
   (`@apackdev/host/build/source-resolution`) is the same question with the opposite expectation, asked of a host
-  process; it lives in host and this cannot, because this needs `typescript` and `packages/api` imports host.
+  process; it lives in host and this cannot, because this needs `typescript` and `packages/server` imports host.
 - **`own-module-specifiers-gate.ts`** refuses a specifier that names no file — extensionless, or the `.js` a
   pack never emits — through `@apackdev/host/build/own-module-specifiers`, the same rule
   `scripts/check-import-specifiers.ts` applies to the packs in this checkout. The rule is shared; the reading

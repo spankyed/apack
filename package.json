@@ -34,8 +34,8 @@
     "dev:state": "tsx scripts/drive-preflight.ts && node scripts/with-source.mjs node scripts/app-dev.mjs drive --state",
     "build:default-setup": "npm run packages:ensure && npm run build -w @app/default-setup",
     "build:runtime": "tsx scripts/build-runtime.ts",
-    "build:api": "npm run build --workspace @app/api",
-    "build:api:dev": "npm run build:dev --workspace @app/api",
+    "build:server": "npm run build --workspace @app/server",
+    "build:server:dev": "npm run build:dev --workspace @app/server",
     "build:speech-macos": "cd native/speech/macos && bash build.sh",
     "build:preview": "tsx scripts/build-preview.ts",
     "build:production": "bash build/build.sh",
@@ -47,7 +47,7 @@
     "chain": "tsx scripts/chain.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "typecheck:renderer": "npm run type-check --workspace @app/renderer && echo '\u2705 Frontend type check passed'",
-    "typecheck:api": "cd packages/api && npx tsc -p . --noEmit && npx tsc -p tsconfig.test.json && npx tsc -p tsconfig.scripts.json && echo '\u2705 Backend type check passed'",
+    "typecheck:server": "cd packages/server && npx tsc -p . --noEmit && npx tsc -p tsconfig.test.json && npx tsc -p tsconfig.scripts.json && echo '\u2705 Backend type check passed'",
     "typecheck:main": "npm run typecheck --workspace @app/main && echo '\u2705 Electron main type check passed'",
     "typecheck:preload": "npm run typecheck --workspace @app/preload && echo '\u2705 Preload type check passed'",
     "typecheck:pack": "npm run packages:ensure && npm run typecheck --workspace @app/default-setup && echo '\u2705 Default-setup pack type check passed'",
@@ -146,7 +146,7 @@
     "vue-component-type-helpers": "^2.2.12"
   },
   "dependencies": {
-    "@app/api": "*",
+    "@app/server": "*",
     "@app/main": "*"
   },
   "overrides": {

@@ -507,7 +507,7 @@ describe('apack pack build says what it read', () => {
 
   it('reports a read the step does not declare', () => {
     const compile = CHAIN_STEPS.find((step) => step.name === 'build:default-setup')!;
-    const elsewhere = 'packages/api/src/server.ts';
+    const elsewhere = 'packages/server/src/server.ts';
     expect(fs.existsSync(path.join(REPO_ROOT, elsewhere)), 'this case needs a real file to be about').toBe(true);
     expect(undeclared([elsewhere], compile)).toEqual([elsewhere]);
     // And the same comparison says nothing about a file the step does declare, so it is not simply failing
@@ -527,8 +527,8 @@ describe('a build record is checked against itself before it is believed', () =>
   const built = () => buildReads.packsWithReads()[0];
 
   it('refuses a pack it has no record for, rather than reporting an empty read set', () => {
-    expect(buildReads.readsOf('packages/api')).toBeUndefined();
-    expect(buildReads.untrustworthy('packages/api')).toMatch(/has not been built in this checkout/);
+    expect(buildReads.readsOf('packages/server')).toBeUndefined();
+    expect(buildReads.untrustworthy('packages/server')).toMatch(/has not been built in this checkout/);
   });
 
   it('refuses one written by another bundler, naming which and both versions', (ctx) => {

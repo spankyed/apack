@@ -148,7 +148,7 @@ unless you rebuild first:
 
 | You edited | Rebuild with |
 |---|---|
-| `packages/apack-host/src/**`, `packages/apack-sdk/src/**`, `packages/api/src/**` | `npm run build:api` (bundles them into the API) |
+| `packages/apack-host/src/**`, `packages/apack-sdk/src/**`, `packages/server/src/**` | `npm run build:server` (bundles them into the API) |
 | `packages/renderer/src/**` | `npm run build -w @app/renderer` |
 | `packages/main/src/**`, `packages/preload/src/**` | `npm run build -w @app/main`, `-w @app/preload` |
 | a built-in pack (`packages/default-setup/**`) | `npm run build:default-setup` |
@@ -168,7 +168,7 @@ console.error(`[DROPDBG] t=${Date.now()} surface=${surfaceId} keys=[${[...map.ke
 ```
 
 ```bash
-npm run build:api && DEBUG_E2E=1 npm run test:e2e -- tests/e2e/app-integration/surface-sends.spec.ts --grep "restarted pack" \
+npm run build:server && DEBUG_E2E=1 npm run test:e2e -- tests/e2e/app-integration/surface-sends.spec.ts --grep "restarted pack" \
   2>&1 | grep -oE "\[DROPDBG\] t=[0-9]+ .*" | head -20
 ```
 

@@ -96,7 +96,7 @@ const read = (name: string): BuildInfo | undefined => {
  * the question is whether the file was written by the compiler that would run *this* leg.
  *
  * Read once per workspace. The owner is derived from the dep file's name, which is how TypeScript names one
- * per tsconfig — `main` is a package, `api-test` is `api`'s second config.
+ * per tsconfig — `main` is a package, `server-test` is `server`'s second config.
  */
 const versions = new Map<string, string>();
 const typeScriptFor = (depFile: string): string => {
@@ -136,8 +136,8 @@ let declared: Map<string, DepFileSource> | undefined;
  * Where a dep file's name comes from, which is the only non-guess answer to "whose reads are these".
  *
  * TypeScript writes one dep file per tsconfig and each config declares the name itself, through
- * `tsBuildInfoFile` — so this is read from a declaration, not inferred from the dep file's name (`api-test`
- * starts with `api-`), a convention nothing would hold up and two readers depend on: the compiler-version
+ * `tsBuildInfoFile` — so this is read from a declaration, not inferred from the dep file's name (`server-test`
+ * starts with `server-`), a convention nothing would hold up and two readers depend on: the compiler-version
  * check below, and the gate deciding which leg answers for a dep file.
  *
  * **Enumerated from `PACKAGE_DIRS`, never by searching the tree.** `.claude/worktrees/` holds entire

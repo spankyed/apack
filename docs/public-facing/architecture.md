@@ -31,7 +31,7 @@ The app is built from packages whose imports point down only (`npm run check:spe
 | `@elmdb/ears` | The EARS engine (`createEarsEngine`), its types, the database port; `@elmdb/ears/database`, which opens elmdb databases | No `@apackdev/*` package |
 | `@apackdev/sdk` | The pack contract and pack runtime: the lookups of what packs registered, service contracts, event sends, logging and error reports over the bound bus, the SDK entities and their repositories, the `HostRuntime` port | `@elmdb/ears` |
 | `@apackdev/host` (private) | The app runtime: the five app services (`/services`), the app's own state (`/app-state`), the registered packs and pack runtime (`/packs`, `/packs/runtime`), the bus (`/bus`), migrations (`/migrations`), API keys (`/secrets`) | `@apackdev/sdk`, `@elmdb/ears` |
-| `packages/api` | Transport (`node:http`, `ws`, tRPC routers, the log stream), process boot and composition | All of the above |
+| `packages/server` | Transport (`node:http`, `ws`, tRPC routers, the log stream), process boot and composition | All of the above |
 | `packages/renderer` | The frontend composition: binds the frontend port | |
 
 Packs import `@apackdev/sdk` and `@apackdev/ui`, never `@apackdev/host`, and reach `@elmdb/ears`, the SDK's dependency, through the SDK. What an app owns is an instance its composition root creates and binds: the engine, the registered packs (`createPackRegistry()`, and in the renderer `createFePackRegistry()`) and the host services. No SDK, EARS or host module keeps them at module scope.
@@ -66,7 +66,7 @@ The source directory must be built first: installing a directory with neither a 
 
 ### Backend boot
 
-`setupBackend()` in `packages/api/src/setup/backend.ts` runs, in order. The API holds only transport, process boot and this composition: the app runtime it calls lives in `@apackdev/host` (pack loading, lifecycle, reload and writing in `@apackdev/host/packs/runtime`, the migrations runners in `@apackdev/host/migrations`, the bus in `@apackdev/host/bus`).
+`setupBackend()` in `packages/server/src/setup/backend.ts` runs, in order. The API holds only transport, process boot and this composition: the app runtime it calls lives in `@apackdev/host` (pack loading, lifecycle, reload and writing in `@apackdev/host/packs/runtime`, the migrations runners in `@apackdev/host/migrations`, the bus in `@apackdev/host/bus`).
 
 0. Opens the app's data and binds the app (`openAppStore()`): it creates the app's registered packs (`createPackRegistry()` from `@apackdev/host/packs`), which the SDK's lookups read once bound, and the rest of the steps register into it.
 1. Registers the host `packs` system.
@@ -294,7 +294,7 @@ The pack test harness uses the same bridge with the pack's own SDK instance.
 The SDK reaches the running app through one typed port, `HostRuntime` (`@apackdev/sdk/runtime`),
 bound once per process with `bindHost`. It supplies the event transport, EARS engine, registered packs,
 app version and host service implementations. `createHostRuntime(...)` in `@apackdev/host/services`
-assembles it; `setupBackend()` in `packages/api/src/runtime/index.ts` opens and binds the app store.
+assembles it; `setupBackend()` in `packages/server/src/runtime/index.ts` opens and binds the app store.
 Packs receive their accepted service selection rather than this internal port: logger, emitter,
 repository and caller-bound settings are implicit; onboarding, app data, run history, inference,
 secrets and filesystem require `consumes.services` declarations. Onboarding is separate from app data.

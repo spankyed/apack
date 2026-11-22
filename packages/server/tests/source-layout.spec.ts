@@ -31,7 +31,7 @@ const read = <T>(what: string, xs: T[]): T[] => [...population(`${what} in api/s
 const entries = () => read('entries',
   fs.readdirSync(SRC, { withFileTypes: true }).filter((e) => !e.name.startsWith('.')));
 
-describe('packages/api/src', () => {
+describe('packages/server/src', () => {
   it('holds one folder per job, and no folder named for a layer', () => {
     const folders = entries().filter((e) => e.isDirectory()).map((e) => e.name).sort();
 

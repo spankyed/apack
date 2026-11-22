@@ -6,7 +6,7 @@ always on purpose. This table is so those decisions can be read in one place rat
 five files — and so that a gap nobody decided shows up as an odd cell.
 
 **The cells are data, not prose.** They live in `@apackdev/sdk/testing/serialisation-matrix` — a source-only
-export, so no pack can resolve it — and three suites assert their own rows against it: `@app/api`'s
+export, so no pack can resolve it — and three suites assert their own rows against it: `@app/server`'s
 `encoder.spec.ts`, `@apackdev/cli`'s `db-output.spec.ts` and `@apackdev/sdk`'s `serialisation-matrix.spec.ts`. No
 package may import all five passes (`@app/internal-repo-checks` is allowed `@apackdev/sdk` and `@apackdev/host` only), which
 is why it is declared once and checked from three places rather than derived in one. A wrong cell fails the suite

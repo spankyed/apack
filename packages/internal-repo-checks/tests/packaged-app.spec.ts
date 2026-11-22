@@ -57,7 +57,7 @@ it.skipIf(process.platform === 'win32')('preserves the app exit status and captu
 it.skipIf(process.platform !== 'darwin')('collects the selected bundle and profile rather than the installed production app', async () => {
   const { root, app } = fixture();
   const selected = selectPackagedApp({ channel: 'preview', app, dataDir: path.join(root, 'data') });
-  const server = path.join(selected.appDir, 'packages/api/dist/server.js');
+  const server = path.join(selected.appDir, 'packages/server/dist/server.js');
   fs.mkdirSync(path.dirname(server), { recursive: true });
   fs.writeFileSync(server, 'preview-api');
   fs.writeFileSync(path.join(app, 'Contents/Info.plist'), '<plist/>');

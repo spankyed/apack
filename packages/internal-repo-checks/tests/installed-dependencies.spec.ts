@@ -42,7 +42,7 @@ describe('one copy of what the app loads once', () => {
   it('says nothing when EARS and elmdb are each one copy, however many links reach it', () => {
     expect(duplicateCopies(aCheckout({}, {
       'node_modules/@elmdb/ears': linked('../elmdb/packages/ears'),
-      'packages/api/node_modules/@elmdb/ears': linked('../elmdb/packages/ears'),
+      'packages/server/node_modules/@elmdb/ears': linked('../elmdb/packages/ears'),
       'node_modules/elmdb': linked('../elmdb/crates/elmdb-node'),
       '../elmdb/packages/ears': { version: '0.0.0' },
     }))).toEqual([]);
@@ -68,7 +68,7 @@ describe('one copy of what the app loads once', () => {
 
 describe('node_modules against package-lock.json', () => {
   it('says nothing when npm recorded installing what the lockfile pins', () => {
-    const pinned = { 'node_modules/msgpackr': entry('2.1.4'), 'packages/api': { link: true } };
+    const pinned = { 'node_modules/msgpackr': entry('2.1.4'), 'packages/server': { link: true } };
     expect(lockfileDrift(aCheckout(pinned, pinned))).toBeUndefined();
   });
 

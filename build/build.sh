@@ -26,9 +26,9 @@ if [[ "$OSTYPE" == "darwin"* ]]; then IS_MAC=true
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then IS_WIN=true
 fi
 
-validate_api_package() {
-  if [ ! -d "$1/packages/api" ]; then
-    echo -e "  ❌ Build validation failed: API package not found"
+validate_server_package() {
+  if [ ! -d "$1/packages/server" ]; then
+    echo -e "  ❌ Build validation failed: server package not found"
     exit 1
   fi
   # electron-builder's dependency collector has silently dropped modules before
@@ -130,15 +130,15 @@ if $IS_MAC; then
     echo "  Code signing: disabled (set APPLE_TEAM_ID to enable)"
   fi
   npx electron-builder build --config electron-builder.mjs --mac --arm64
-  validate_api_package "dist/mac-arm64/${APP_NAME}.app/Contents/Resources/app"
+  validate_server_package "dist/mac-arm64/${APP_NAME}.app/Contents/Resources/app"
 elif $IS_WIN; then
   echo "  Platform: Windows (unsigned)"
   npx electron-builder build --config electron-builder.mjs --win --x64
-  validate_api_package "dist/win-unpacked/resources/app"
+  validate_server_package "dist/win-unpacked/resources/app"
 else
   echo "  Platform: Linux"
   npx electron-builder build --config electron-builder.mjs --linux --x64
-  validate_api_package "dist/linux-unpacked/resources/app"
+  validate_server_package "dist/linux-unpacked/resources/app"
 fi
 echo -e "${GREEN}✓${NC} Application packaged"
 echo ""

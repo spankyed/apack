@@ -118,7 +118,7 @@ export interface FileDuration {
  * Every file the run reported, attributed to the suite that holds it.
  *
  * The reporter states the project, so attribution is a lookup rather than a recovery — a path alone is
- * ambiguous for `tests/source-layout.spec.ts`, which both `api` and `renderer` hold.
+ * ambiguous for `tests/source-layout.spec.ts`, which both `server` and `renderer` hold.
  *
  * Skipped modules are dropped here rather than in the reporter. A skipped file reports a duration of 0
  * rather than no duration, and counting those as readings would pull a half's quantile bar down with

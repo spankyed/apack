@@ -271,7 +271,7 @@ export function findExtensionlessOwnModules(
  * `pack-own-aliases` owns every `@/` specifier — each over a pack's tests as well as its sources. Several
  * rules claiming one import means only the first to run gets read.
  */
-const APP_SPECIFIER = /^(?:\.\.?\/)+(?:[\w.-]+\/)*(?:api|apack-host|apack-cli)\/src(?:\/|$)/;
+const APP_SPECIFIER = /^(?:\.\.?\/)+(?:[\w.-]+\/)*(?:server|apack-host|apack-cli)\/src(?:\/|$)/;
 
 /**
  * `file:line: specifier` for each app module a pack's unit tests load. Tests of app code belong to
@@ -297,9 +297,9 @@ export const LAYERS: {
     dir: 'packages/apack-host',
     allowed: ['@apackdev/sdk'],
     // The API: its package, its `@/` alias, or its sources by relative path
-    forbidden: /^(?:@app\/api(?:\/|$)|@\/|(?:\.\.?\/)+(?:[\w.-]+\/)*api\/(?:src|scripts)(?:\/|$))/,
+    forbidden: /^(?:@app\/server(?:\/|$)|@\/|(?:\.\.?\/)+(?:[\w.-]+\/)*server\/(?:src|scripts)(?:\/|$))/,
   },
-  { name: '@app/api', dir: 'packages/api', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/server', dir: 'packages/server', allowed: ['@apackdev/sdk', '@apackdev/host'] },
   { name: '@app/renderer', dir: 'packages/renderer', allowed: ['@apackdev/sdk', '@apackdev/host', '@apackdev/ui'] },
   // Published alongside the SDK rather than above it: a component takes its contracts and host-shared state
   // from `@apackdev/sdk/fe`, and the other direction is already refused by the SDK's own row
@@ -492,7 +492,7 @@ export function findUnimportedDependencies(root = repoRoot, runtimeOnly = RUNTIM
 export const ELMDB_RULES: { dirs: string[]; forbidden?: RegExp; rule?: PackRuleKey }[] = [
   // The host and the API open the database through @elmdb/ears/database
   {
-    dirs: ['packages/apack-host/src', 'packages/apack-host/tests', 'packages/apack-host/scripts', 'packages/api/src', 'packages/api/tests', 'packages/api/scripts'],
+    dirs: ['packages/apack-host/src', 'packages/apack-host/tests', 'packages/apack-host/scripts', 'packages/server/src', 'packages/server/tests', 'packages/server/scripts'],
     forbidden: /^elmdb(?:\/|$)/,
   },
   // Packs and their tests don't use the app's database. Named rather than spelled: this population is a pack's, so
@@ -963,7 +963,7 @@ export function findPackageScriptImports(root = repoRoot): string[] {
     const own = path.join(packagesDir, pkg) + path.sep;
 
     // Per file, so a relative specifier is resolved against the file that wrote it rather than guessed at
-    // from its shape. `packages/api/scripts/db/` is nested, so `../../src/x` there lands inside the package
+    // from its shape. `packages/server/scripts/db/` is nested, so `../../src/x` there lands inside the package
     // while `../../../scripts/x` from one level up leaves it — the same prefix, different answers.
     return [...sourceFiles(scriptsDir)].flatMap((file) => {
       const outsideThePackage: Rule = (node) => {
@@ -1053,7 +1053,7 @@ const RULE_LIST = [
   {
     id: 'findAppImportsInPackTests',
     over: PACK_TEST_DIRS,
-    repoOnly: { kind: 'inapplicable', note: "Its subject is a relative import into this repo's api, host or CLI sources, which only a pack inside this monorepo can write; `@apackdev/host` and every `@/` specifier belong to `host-imports` and `pack-own-aliases`, which the CLI's pack-test command runs over a pack's tests" },
+    repoOnly: { kind: 'inapplicable', note: "Its subject is a relative import into this repo's server, host or CLI sources, which only a pack inside this monorepo can write; `@apackdev/host` and every `@/` specifier belong to `host-imports` and `pack-own-aliases`, which the CLI's pack-test command runs over a pack's tests" },
     find: () => findAppImportsInPackTests(PACK_TEST_DIRS),
     // Dirs-shaped, so a per-file run can answer for it too, which is also what lets the sweeps call it
     overPaths: (paths, root = repoRoot) => findAppImportsInPackTests(paths, root),

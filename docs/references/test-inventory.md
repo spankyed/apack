@@ -27,7 +27,7 @@ are in the [test placement guide](../../tests/README.md).
 | `@apackdev/sdk` | 56 | 15.1s | — | 15.1s |
 | `@apackdev/cli` | 53 | 13.5s | 157.2s | **170.8s** |
 | `@app/internal-repo-checks` | 18 | 2.9s | 9.8s | 12.7s |
-| `@app/api` | 15 | 5.6s | — | 5.6s |
+| `@app/server` | 15 | 5.6s | — | 5.6s |
 | `@apackdev/ears` | 9 | 2.4s | — | 2.4s |
 | `@app/renderer` | 8 | 0.1s | — | 0.1s |
 | `@app/internal-publish-checks` | 8 | 0.0s | 28.0s | 28.1s |
@@ -166,7 +166,7 @@ because its subject belongs to no single package.
 | # | What | Size |
 |---|---|---|
 | 1 | ~~`@apackdev/testing` and `@apackdev/ui` have no suite~~ — **resolved** in Phase 2: both have one, four specs and one describe moved to them, and `npm run spec` reaches their source instead of crashing | done |
-| 2 | ~~`@app/api`'s only test directory is `unit/`~~ — **resolved** in Phase 4: split on measured cost into `unit/` (5 specs, 4–22ms) and `runtime/` (10, 100–1120ms); the cheap five run alone in 2.1s | done |
+| 2 | ~~`@app/server`'s only test directory is `unit/`~~ — **resolved** in Phase 4: split on measured cost into `unit/` (5 specs, 4–22ms) and `runtime/` (10, 100–1120ms); the cheap five run alone in 2.1s | done |
 | 3 | ~~`secrets.spec.ts` mocks host's vault by relative path~~ — **resolved** in Phase 4: `@apackdev/host` publishes `./secrets/vault`, so it is a specifier. The mock stays: host's own suite covers the vault, this covers what a renderer learns, and Decision 10's sentence now says so | done |
 | 4 | `@apackdev/ui` has 33 recorded component contracts and no behavioural test; exactly one spec in the repo mounts a Vue component | coverage gap |
 | 5 | ~~`@app/default-setup` is the only package with colocated specs~~ — **resolved** in Phase 5: the six moved under `tests/`, the `src/**` include and the `__tests__/` variant are gone | done |

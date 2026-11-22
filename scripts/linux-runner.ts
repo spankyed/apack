@@ -58,7 +58,7 @@ const FILTERS = [
   ...['apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli'].flatMap((pkg) =>
     [`--exclude=/packages/${pkg}/dist`, `--exclude=/packages/${pkg}/publish`]),
   '--exclude=/packages/default-setup/dist', '--exclude=/packages/default-setup/.apack',
-  ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
+  ...['server', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
   '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
   '--exclude=/.apack/performance',
   // Scratch, at any depth: a test run's temp dirs and a package build's staging, which other chain steps create and

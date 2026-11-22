@@ -25,7 +25,7 @@ await prepareCheckoutProfile(process.cwd());
 // ── 1. Start the API build, the pack's build watcher and the renderer server concurrently ──
 
 // API backend build (skips tsc, single ESM format, no DTS/minify)
-const apiBuild = spawn('npm', ['run', 'build:api:dev'], {
+const apiBuild = spawn('npm', ['run', 'build:server:dev'], {
   stdio: 'inherit',
   shell: true,
 });
@@ -89,8 +89,8 @@ await apiBuildDone;
 // Two builds because only the first is a precondition: Electron must not spawn against a missing bundle,
 // so that one is awaited and this one runs for as long as the session does. `APACK_DEV_RELOAD` is what
 // tells Electron to watch for its writes, since a watcher here could not restart the API — main owns that
-// child. The watched paths are in `build:dev:watch`, and `packages/api/tsup.config.ts` says why there.
-const apiWatch = spawn('npm', ['run', 'build:dev:watch', '--workspace', '@app/api'], {
+// child. The watched paths are in `build:dev:watch`, and `packages/server/tsup.config.ts` says why there.
+const apiWatch = spawn('npm', ['run', 'build:dev:watch', '--workspace', '@app/server'], {
   stdio: 'inherit',
   shell: true,
 });

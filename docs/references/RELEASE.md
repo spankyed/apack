@@ -194,10 +194,10 @@ The command creates `diagnostics/production/<timestamp>/` with production logs, 
 If the UI disappears or Force Quit does not show the app, check for orphaned API child processes:
 
 ```bash
-ps -axo pid,ppid,stat,lstart,command | rg 'apack|packages/api/dist/server.js'
+ps -axo pid,ppid,stat,lstart,command | rg 'apack|packages/server/dist/server.js'
 ```
 
-An orphaned API child looks like `apack .../packages/api/dist/server.js` with parent PID `1`. Kill it before relaunching:
+An orphaned API child looks like `apack .../packages/server/dist/server.js` with parent PID `1`. Kill it before relaunching:
 
 ```bash
 kill -9 <pid>
