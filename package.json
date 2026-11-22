@@ -90,6 +90,7 @@
     "packages:ensure": "tsx scripts/ensure-packages-built.ts",
     "packages:build": "npm run build:package -w @apackdev/sdk -w @apackdev/ui -w @apackdev/testing -w @apackdev/cli",
     "packages:check": "tsx scripts/packages-check.ts",
+    "packages:stage-toolchain": "tsx scripts/stage-authoring-toolchain.ts",
     "packages:version": "changeset version && npm install --package-lock-only",
     "packages:publish": "tsx scripts/publish-packages.ts",
     "release": "bash build/release/release.sh",
