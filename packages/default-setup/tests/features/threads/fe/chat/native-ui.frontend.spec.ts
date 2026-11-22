@@ -19,7 +19,7 @@ beforeEach(() => {
 })
 let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
-async function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
+async function mount(props: { statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
   const state = reactive(props)
   const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn(), toolsExpanded = vi.fn(), clientInput = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
@@ -61,6 +61,44 @@ it('hides empty and base-engine-only surfaces, and leaves the CWD-only state com
   f.state.statusLine = '/fixture'; await nextTick()
   expect(f.root.querySelectorAll<HTMLButtonElement>('button:not([aria-label="Session tools"])')).toHaveLength(1)
   expect(f.root.querySelector('button')?.textContent).toBe('/fixture')
+})
+
+it('returns to the composer when the focused native status is withdrawn', async () => {
+  const f = await mount({ nativeStatus: 'Release review\nChecklist ready' })
+  const editor = f.root.querySelector('textarea')!
+  editor.value = 'Keep my release notes.'
+  f.returnFocus.mockImplementation(() => editor.focus())
+  const status = f.root.querySelector<HTMLElement>('[aria-label="Claude session status"]')!
+  status.focus()
+  expect(document.activeElement).toBe(status)
+
+  f.state.nativeStatus = 'Release review\nChecklist updated'
+  await nextTick()
+  expect(document.activeElement).toBe(status)
+  expect(f.returnFocus).not.toHaveBeenCalled()
+
+  f.state.nativeStatus = undefined
+  await nextTick()
+  expect(f.root.querySelector('[aria-label="Claude session status"]')).toBeNull()
+  expect(document.activeElement).toBe(editor)
+  expect(f.returnFocus).toHaveBeenCalledOnce()
+  expect(editor.value).toBe('Keep my release notes.')
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+it.each(['another control', 'an inactive window'])('does not redirect focus from %s when native status clears', async where => {
+  const f = await mount({ statusLine: '/release', nativeStatus: 'Checklist ready' })
+  const status = f.root.querySelector<HTMLElement>('[aria-label="Claude session status"]')!
+  const workspace = f.root.querySelector<HTMLButtonElement>('button')!
+  if (where === 'another control') workspace.focus()
+  else status.focus()
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(where === 'another control')
+  try {
+    f.state.nativeStatus = undefined
+    await nextTick()
+    expect(f.returnFocus).not.toHaveBeenCalled()
+    if (where === 'another control') expect(document.activeElement).toBe(workspace)
+  } finally { windowFocus.mockRestore() }
 })
 
 it('keeps keyboard focus and activation on the same native button when siblings reorder', async () => {

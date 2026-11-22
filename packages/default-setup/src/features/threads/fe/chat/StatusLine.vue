@@ -11,7 +11,7 @@
       </button>
     </div>
     <p v-if="nativeUi?.billing" role="status" aria-label="Claude billing status" data-testid="claude-billing-status" class="mt-1 min-w-0 break-words text-[11px] leading-4" :class="nativeUi.billing?.info.isUsingOverage || nativeUi.billing?.info.status === 'rejected' ? 'text-amber-300' : 'text-neutral-400'" :title="nativeUi.billing ? 'Observed ' + new Date(nativeUi.billing.observedAt).toISOString() : undefined">{{ claudeBillingText(nativeUi.billing) }}</p>
-    <div v-if="nativeStatus" role="status" aria-label="Claude session status" tabindex="0" data-testid="composer-native-status" class="mt-1 max-h-12 shrink-0 min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded focus-visible:outline focus-visible:outline-blue-400 text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
+    <div v-if="nativeStatus" ref="statusOutput" role="status" aria-label="Claude session status" tabindex="0" data-testid="composer-native-status" class="mt-1 max-h-12 shrink-0 min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded focus-visible:outline focus-visible:outline-blue-400 text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
     <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-80 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
@@ -49,6 +49,11 @@ const displayPath = computed(() => {
   return segments.length > 2 ? segments.at(-1) : props.statusLine
 })
 const emit = defineEmits<{ 'tools-expanded': [expanded: boolean]; click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
+const statusOutput = ref<HTMLElement | null>(null)
+watch(() => props.nativeStatus, text => {
+  const output = statusOutput.value
+  if (!text && output && document.activeElement === output && document.hasFocus()) emit('return-focus')
+})
 const strip = ref<HTMLElement | null>(null), minimumHeight = ref<number>(), naturalMinimumHeight = ref<number>()
 const stripMinimumHeight = computed(() => {
   const natural = toolsOpen.value && naturalMinimumHeight.value ? `min(${naturalMinimumHeight.value}px, calc(var(--composer-available-height) * 0.5))` : undefined
