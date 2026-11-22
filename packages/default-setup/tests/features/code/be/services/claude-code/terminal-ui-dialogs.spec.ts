@@ -27,7 +27,7 @@ function fixture() {
   Object.assign(native, { themeRoots: { ai: () => new Map([[fileStdout, { container: { current: fileFiber } }]]) } })
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
-  const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};Object.assign(control,{async questionFixture(){const d=nativeDialog(await initialize(),'permission_ask_user_question');const frame={token:'original-question-frame',client:'question-client',item:d.item,revision:d.revision,sessionId:d.sessionId};clients.set(frame.client,{});questionFrames.set(frame.client,frame);return {id:d.item.id,revision:d.revision,session_id:d.sessionId,render_token:frame.token}}})`, {
+  const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};Object.assign(control,{async questionFixture(){const d=nativeDialog(await initialize(),'permission_ask_user_question');const frame={token:'original-question-frame',client:'question-client',item:d.item,revision:d.revision,sessionId:d.sessionId,shownInput:d.payload.input};clients.set(frame.client,{});questionFrames.set(frame.client,frame);return {id:d.item.id,revision:d.revision,session_id:d.sessionId,render_token:frame.token}}})`, {
     nativeFunctionHash: (hash: string) => hash, nativeFunctionName: (name: string) => name, process: { stdout: fileStdout }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
     clients: new Map(), originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
@@ -264,6 +264,42 @@ it('rejects a question only through its original current drawing, separately fro
  expect(f.answer).toHaveBeenCalledWith('dialog-1',{behavior:'deny'})
  await expect(deny()).rejects.toThrow('changed or expired')
  expect(f.answer).toHaveBeenCalledOnce()
+})
+
+it('delivers exact clarification feedback to the addressed native question once', async () => {
+  const f = fixture()
+  f.item.kind = 'permission_ask_user_question'
+  const questions = [{ question: 'First?', options: [{ preview: 'Example' }] }, { question: 'Second?', options: [] }]
+  Object.assign(f.item.payload, { toolName: 'AskUserQuestion', questions, input: { questions } })
+  const admitCardAnswer = vi.fn((_card: unknown, answer: unknown) => ({ kind: 'admitted', input: answer }))
+  Object.assign(f.native, { questionTool: { admitCardAnswer } })
+  const request = await (f.control as typeof f.control & { questionFixture(): Promise<Record<string, unknown>> }).questionFixture()
+  const answer = { answers: { 'First?': 'Alpha' }, annotations: { 'First?': { notes: ' Context for Alpha ' } } }
+  const clarify = (extra = {}) => f.control({ subtype: 'apack_answer_question_dialog', ...request, decision: 'clarify', answer, ...extra }, new AbortController())
+  await expect(clarify({ render_token: undefined })).rejects.toThrow('requires its drawing')
+  await expect(clarify({ render_token: 'retired' })).rejects.toThrow('drawing changed or expired')
+  await expect(clarify({ answer: { ...answer, response: 'Discarded draft' } })).rejects.toThrow('eligible notes')
+  expect(f.answer).not.toHaveBeenCalled()
+  await expect(clarify()).resolves.toEqual({ answered: true })
+  expect(admitCardAnswer).toHaveBeenLastCalledWith({ questions }, answer)
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', {
+    behavior: 'deny',
+    feedback: [
+      'The user wants to clarify these questions.',
+      '    This means they may have additional information, context or questions for you.',
+      '    Take their response into account and then reformulate the questions if appropriate.',
+      '    Start by asking them what they would like to clarify.',
+      '',
+      '    Questions asked:',
+      '- "First?"',
+      '  Answer: Alpha',
+      '  User notes: Context for Alpha',
+      '- "Second?"',
+      '  (No answer provided)',
+    ].join('\n'),
+  })
+  await expect(clarify()).rejects.toThrow('changed or expired')
+  expect(f.answer).toHaveBeenCalledOnce()
 })
 
 it('publishes original turn identity alongside an empty pending-control list', async () => {

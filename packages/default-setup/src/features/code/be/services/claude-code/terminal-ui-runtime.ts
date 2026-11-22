@@ -932,6 +932,22 @@ function questionCanonicalAnswer(n,dialog,request){
  const answer={...original,answers:remap(admitted.input.answers),...(admitted.input.annotations!==undefined?{annotations:remap(admitted.input.annotations)}:{}),...(admitted.input.response!==undefined?{response:admitted.input.response}:{}),...(admitted.input.followUp!==undefined?{followUp:admitted.input.followUp}:{})};
  return n.questionTool.admitCardAnswer(original,answer);
 }
+// Pinned AskUserQuestion clarification builder (Darwin $rt / Linux zrt).
+function questionClarification(shown,admitted){
+ const summary=shown.questions.map(question=>{
+  const value=admitted.answers?.[question.question];
+  const lines=['- "'+question.question+'"',value?'  Answer: '+value:'  (No answer provided)'];
+  const notes=!question.multiSelect&&question.options?.some(option=>option.preview!==undefined)
+    ? admitted.annotations?.[question.question]?.notes?.trim():undefined;
+  if(notes)lines.push('  User notes: '+notes);
+  return lines.join('\n');
+ }).join('\n');
+ return {behavior:'deny',feedback:'The user wants to clarify these questions.\n'
+  +'    This means they may have additional information, context or questions for you.\n'
+  +'    Take their response into account and then reformulate the questions if appropriate.\n'
+  +'    Start by asking them what they would like to clarify.\n\n'
+  +'    Questions asked:\n'+summary};
+}
 function questionPresentation(n,payload){
  const previewFormat=n.questionOptions.yjr()??null,previews=[];
  for(const question of payload.questions)for(const option of question.options??[]){
@@ -1208,10 +1224,21 @@ async function control(request,abort){
   abort.signal.throwIfAborted();
   const d=nativeDialog(n,'permission_ask_user_question');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
-  const admitted=questionCanonicalAnswer(n,d,request);
-  if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
-  // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
-  d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
+  if(request.decision!==undefined&&request.decision!=='clarify')throw Error('Invalid native question decision');
+  if(request.decision==='clarify'){
+   if(typeof request.render_token!=='string')throw Error('Native question clarification requires its drawing');
+   const frame=questionAnswerFrame(d,request);
+   const admitted=n.questionTool.admitCardAnswer(frame.shownInput,request.answer);
+   if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
+   if(admitted.input.response!==undefined||admitted.input.followUp!==undefined)throw Error('Native clarification requires answers and eligible notes');
+   d.store.answer(d.item.id,questionClarification(frame.shownInput,admitted.input));
+  }else{
+   const admitted=questionCanonicalAnswer(n,d,request);
+   if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
+   // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
+   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});
+  }
+  dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
  }
  if(request.subtype==='apack_task_control'){

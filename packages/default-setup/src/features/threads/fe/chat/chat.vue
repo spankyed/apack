@@ -144,7 +144,7 @@
               @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'"
+            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'" :can-clarify="nativeComposerOwner?.view?.kind === 'main'"
               @press="pressNativeUi" @field="editNativeUi" @started="startNativeQuestionDraft"
               @respond="answerNativeQuestion"
               @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
@@ -840,12 +840,12 @@ function startNativeQuestionDraft(token: string, identity: import('#features/cod
   nativeQuestionDraft.value = { messageId: question.messageId, token }
   editNativeUi({ actionId: question.frame.draftActionId, revision: 1, kind: 'change', value: token })
 }
-function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
+function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify') {
   const question = pendingNativeQuestion.value
   if (!question?.frame || question.messageId !== identity.messageId) return
   const token = identity.token
   if (!token) return
-  send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
+  send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, ...(decision ? { nativeQuestionDecision: decision } : {}), nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
 }
 
 function rejectNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {

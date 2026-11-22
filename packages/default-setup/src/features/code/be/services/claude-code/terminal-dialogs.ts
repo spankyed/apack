@@ -60,6 +60,7 @@ export interface ClaudeNativeQuestionDialogResponse {
   revision: string
   sessionId: string
   answer: Record<string, unknown>
+  decision?: 'clarify'
   renderToken?: string
   draftStarted?: boolean
 }

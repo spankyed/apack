@@ -232,7 +232,7 @@ export interface MessageReferences {
 export type BlockResponse =
   | { buttonId: 'accept' | 'decline' | 'cancel'; content?: Record<string, import('#features/code/common/mcp-elicitation-form.ts').ClaudeMcpFormValue> }
   | { validationFailed: true }
-  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
+  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionDecision?: 'clarify'; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
   /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
   | { approved: boolean; reason?: string }
   /** Cancel path: InteractionContainer `handleCancel`. */

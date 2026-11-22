@@ -4,7 +4,7 @@ import NativeQuestionPanel from '#features/threads/fe/chat/NativeQuestionPanel.v
 
 function mount(card: Record<string, unknown>, presentation?: ClaudeQuestionPresentation) {
   const root = document.createElement('div'); document.body.append(root)
-  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token',canReject:false,cancelLabel:undefined as string|undefined }), respond = vi.fn(), pause = vi.fn(), reject = vi.fn(), started = vi.fn()
+  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token',canReject:false,canClarify:false,cancelLabel:undefined as string|undefined }), respond = vi.fn(), pause = vi.fn(), reject = vi.fn(), started = vi.fn()
   const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onReject: reject, onPause: pause, onStarted: started }) }); app.mount(root)
   const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
   const input = async (selector: string, text: string) => { const element = root.querySelector<HTMLInputElement>(selector)!; element.value = text; element.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
@@ -123,4 +123,24 @@ it('keeps explicit native rejection separate from returning to parent notes',asy
   f.button('Reject question').click();expect(f.reject).toHaveBeenCalledOnce();expect(f.respond).not.toHaveBeenCalled()
   f.props.disabled=true;await nextTick();expect(f.button('Reject question').disabled).toBe(true)
  }finally{f.close()}
+})
+
+it('carries an earlier draft answer into a separate clarification decision', async () => {
+  const f = mount({ questions: [
+    { question: 'First?', header: 'First', options: [option('Alpha'), option('Beta')] },
+    { question: 'Second?', header: 'Second', options: [option('Gamma'), option('Delta')] },
+  ] })
+  try {
+    expect(f.button('Chat about this')).toBeUndefined()
+    f.props.canClarify = true
+    await nextTick()
+    f.root.querySelector<HTMLInputElement>('input[value="Alpha"]')!.click()
+    f.button('Next').click()
+    await nextTick()
+    await f.input('textarea[aria-label="General response"]', 'My draft response')
+    expect(f.button('Chat about this').disabled).toBe(true)
+    await f.input('textarea[aria-label="General response"]', '')
+    f.button('Chat about this').click()
+    expect(f.respond).toHaveBeenCalledWith({ answers: { 'First?': 'Alpha' }, annotations: {} }, 'clarify')
+  } finally { f.close() }
 })

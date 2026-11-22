@@ -47,7 +47,7 @@ export async function action(
     if (native.problem) persistClaudeState(services, threadId, { pendingControlRequest: { ...pending, nativeTerminal: { ...native, problem: undefined } } });
     try {
       if (!response || typeof response !== 'object' || !response.nativeQuestionAnswer || typeof response.nativeQuestionAnswer !== 'object') throw new Error('Missing native card answer');
-      await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer, ...(typeof response.nativeQuestionRenderToken === 'string' ? { renderToken: response.nativeQuestionRenderToken, draftStarted: response.nativeQuestionDraftStarted === true } : {}) });
+      await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer, ...(response.nativeQuestionDecision === 'clarify' ? { decision: 'clarify' } : {}), ...(typeof response.nativeQuestionRenderToken === 'string' ? { renderToken: response.nativeQuestionRenderToken, draftStarted: response.nativeQuestionDraftStarted === true } : {}) });
     } catch {
       if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId) {
         services.chat.updateMessageState(pending.approvalMessageId as EntityId, { responseTimestamp: undefined, blockResponse: undefined });

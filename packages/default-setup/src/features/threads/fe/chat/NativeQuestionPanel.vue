@@ -32,6 +32,7 @@
     <footer>
       <div class="decision-status">
         <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
+        <button v-if="canClarify && current && parsed?.questions.every(question => !question.kind || question.kind === 'choice')" type="button" class="quiet" :disabled="disabled || hasUnsupportedClarificationDraft" :title="hasUnsupportedClarificationDraft ? 'Submit answers to include your general response or notes.' : undefined" @click="submit(false, 'clarify')">Chat about this</button>
         <span v-if="pending" role="status" class="muted">Waiting for Claude…</span>
       </div>
       <div class="navigation">
@@ -51,10 +52,10 @@ import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem
 import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
-const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
+const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; canClarify?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
 const disabled = computed(() => props.disabled || props.pending === true)
 const displayError = computed(() => describeClaudeUiProblem(props.error, 'decision'))
-const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer]; started: [token?: string]; pause: []; reject: [] }>()
+const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer, decision?: 'clarify']; started: [token?: string]; pause: []; reject: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
 watch(() => [JSON.stringify(props.card), props.presentation, props.renderToken], () => {
   if (!answering.value) { acceptedCard.value = props.card; acceptedPresentation.value = props.presentation; acceptedToken.value = props.renderToken }
@@ -70,6 +71,9 @@ watch(() => JSON.stringify(acceptedCard.value), () => { const card = parsed.valu
 const current = computed(() => parsed.value?.questions[step.value])
 const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', customOpen: false, notes: '' })
 const isChoice = computed(() => !current.value?.kind || current.value.kind === 'choice')
+const hasUnsupportedClarificationDraft = computed(() => !!generalResponse.value.trim() || !!parsed.value?.questions.some((question, index) =>
+  drafts[index]?.notes.trim() && (question.multiSelect || !question.options.some(option => option.preview !== undefined))
+))
 async function openCustomAnswer() {
   if (disabled.value || !isChoice.value) return
   const draft = state.value
@@ -93,10 +97,11 @@ function choose(label: string) {
   draft.selected = current.value.multiSelect ? draft.selected.includes(label) ? draft.selected.filter(value => value !== label) : [...draft.selected, label] : [label]
 }
 function setNumber(event: Event) { markStarted(); state.value.custom = (event.target as HTMLInputElement).value; state.value.selected = [] }
-function submit(followUp = false) {
-  if (!parsed.value || disabled.value) return
+function submit(followUp = false, decision?: 'clarify') {
+  if (!parsed.value || disabled.value || decision === 'clarify' && hasUnsupportedClarificationDraft.value) return
   markStarted()
-  const answers: NonNullable<ClaudeQuestionAnswer['answers']> = {}, annotations: NonNullable<ClaudeQuestionAnswer['annotations']> = {}
+  const answers: NonNullable<ClaudeQuestionAnswer['answers']> = Object.create(null)
+  const annotations: NonNullable<ClaudeQuestionAnswer['annotations']> = Object.create(null)
   parsed.value.questions.forEach((question, index) => {
     const draft = drafts[index]
     if (draft.custom.trim()) answers[question.question] = draft.custom.trim()
@@ -105,7 +110,9 @@ function submit(followUp = false) {
     const preview = selected && previewFor(question.question, selected.label, selected.preview) ? selected.preview : undefined
     if (preview || draft.notes.trim()) annotations[question.question] = { ...(preview ? { preview } : {}), ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {}) }
   })
-  emit('respond', { answers, annotations, ...(generalResponse.value.trim() ? { response: generalResponse.value.trim() } : {}), ...(followUp ? { followUp: true } : {}) })
+  const answer = { answers, annotations, ...(generalResponse.value.trim() ? { response: generalResponse.value.trim() } : {}), ...(followUp ? { followUp: true } : {}) }
+  if (decision) emit('respond', answer, decision)
+  else emit('respond', answer)
 }
 function advance() {
   if (disabled.value || !parsed.value || numberInput.value && !numberInput.value.reportValidity()) return
@@ -139,7 +146,7 @@ textarea, input[type=number] { width:100%; padding:7px 9px; border:1px solid #55
 textarea { resize:vertical; } details { margin-top:10px; } summary { cursor:pointer; margin-bottom:5px; }
 pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:8px; background:#191919; border-radius:6px; font-size:11px; }
 footer { display:flex; flex:none; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid rgb(255 255 255 / .07); }
-.decision-status { display:flex; align-items:center; gap:8px; min-width:0; }
+.decision-status { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; min-width:0; }
 .decision-status [role=status] { white-space:nowrap; }
 .problem { margin:0 0 12px; padding:8px 10px; border:1px solid #555; border-radius:6px; }
 .navigation { display:flex; gap:6px; } button { border-radius:6px; padding:7px 10px; font-size:12px; background:#3b3b3b; cursor:pointer; }
