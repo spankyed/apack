@@ -148,15 +148,39 @@ it('does not publish a held old submission as belonging to the fresh session',as
 it('fences the old prompt before waiting on fresh-session readiness delivery',async()=>{
  const f=mainSessionFixture(),read=held<any>(),ready=held<{ok:boolean;text:string}>(),fresh='77777777-7777-4777-8777-777777777777'
  f.api.prompt.read.mockImplementationOnce(()=>read.promise)
- f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);f.requests.push({path,body});if(path==='/ui-ready'&&body.sessionId===fresh)return ready.promise;return{ok:true,text:JSON.stringify(path==='/poll'?{id:'old-command',text:'draft'}:{})}})
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);f.requests.push({path,body});if(path==='/ui-ready'&&body.sessionId===fresh)return ready.promise;return{ok:true,text:JSON.stringify(path==='/poll'&&body.sessionId!==fresh?{id:'old-command',text:'draft'}:{})}})
  await f.start();f.tick();await vi.waitFor(()=>expect(f.api.prompt.read).toHaveBeenCalledOnce())
  const starting=f.start(fresh);await vi.waitFor(()=>expect(f.requests.some(r=>r.path==='/ui-ready'&&r.body.sessionId===fresh)).toBe(true))
  read.resolve({text:''});await flushPlugin();expect(f.api.prompt.fill).not.toHaveBeenCalled()
- expect(f.requests.filter(row=>row.path==='/poll'&&row.body.sessionId===fresh)).toHaveLength(0)
+ // Neither a timer wake nor another hook can negotiate the fresh session while readiness is held.
+ f.tick();await f.fire('ui.render');f.tick();await flushPlugin()
+ const freshPolls=()=>f.requests.filter(row=>row.path==='/poll'&&row.body.sessionId===fresh)
+ expect(freshPolls()).toHaveLength(0)
  expect(f.api.clock.every).toHaveBeenCalledTimes(2)
  ready.resolve({ok:true,text:'{}'});await starting
+ await vi.waitFor(()=>expect(freshPolls()).toHaveLength(1))
+ expect(f.requests.filter(row=>row.path==='/result')).toHaveLength(0)
 })
 
+
+it('holds an already-started render producer while module readiness is pending',async()=>{
+ const f=mainSessionFixture(),ready=held<{ok:boolean;text:string}>()
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{
+  const path=new URL(url).pathname
+  f.requests.push({path,body:JSON.parse(init.body)})
+  return path==='/ui-ready'?ready.promise:{ok:true,text:'{}'}
+ })
+ await f.fire('ui.render')
+ const polls=()=>f.requests.filter(row=>row.path==='/poll')
+ await vi.waitFor(()=>expect(polls()).toHaveLength(1))
+ const starting=f.start()
+ await vi.waitFor(()=>expect(f.requests.some(row=>row.path==='/ui-ready')).toBe(true))
+ f.tick();await flushPlugin()
+ expect(polls()).toHaveLength(1)
+ ready.resolve({ok:false,text:'{}'});await starting
+ f.tick();await vi.waitFor(()=>expect(polls()).toHaveLength(2))
+ expect(polls()[1]!.body.dropped).toEqual({'ui-ready':1})
+})
 
 it('does not report a retired turn completion as the fresh session becoming idle',async()=>{
  const f=mainSessionFixture(),completion=held<{completed:boolean}>(),fresh='77777777-7777-4777-8777-777777777777'

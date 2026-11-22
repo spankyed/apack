@@ -131,6 +131,7 @@ let producerSessionId: string | undefined;
 let timer: ClaudePluginTimer | undefined;
 let retired = false;
 let started = false;
+let pendingReadiness = 0;
 let inFlight = false;
 /** The app's command this program is filling, until `prompt.submit` reports what the CLI did with it. */
 let submission: { id: string } | undefined;
@@ -376,7 +377,7 @@ async function exchange($: ClaudePluginApi, ownGeneration: number) {
   const sub = policy.disableAllHooks ? null : helpers.subagentStatusLine;
   if (ownGeneration !== generation) return;
   const shellPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
-  if (ownGeneration !== generation) return;
+  if (ownGeneration !== generation || pendingReadiness) return;
   // Reported by value, and taken off the counters only once the app has them: a notification that fails
   // while this exchange is in flight is counted for the next one rather than lost to the subtraction.
   const reported = Object.keys(dropped).length ? { ...dropped } : undefined;
@@ -493,7 +494,7 @@ async function begin($: ClaudePluginApi) {
   const ownGeneration = ++generation;
   started = true;
   const exchangeWhenReady = () => {
-    if (ownGeneration !== generation || retired || inFlight || Date.now() < retryAfter) return;
+    if (pendingReadiness || ownGeneration !== generation || retired || inFlight || Date.now() < retryAfter) return;
     // A leased child reports to the observer, which is reading it: its cadence is its own (every fourth
     // tick), and the app's answer has nothing to say about it.
     if (!backgroundLease && !reconnecting && Date.now() < reportDueAt) return;
@@ -554,9 +555,15 @@ export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration
     }
   });
   on('session.start', async ($, event, next) => {
-    const startExchange = await begin($);
-    await notify($, 'ui-ready', {});
-    // Readiness retires prior app commands; negotiation must not race that notification.
+    // A render hook can start the producer first. Gate that producer's timer as well as this hook.
+    pendingReadiness++;
+    let startExchange: (() => void) | undefined;
+    try {
+      startExchange = await begin($);
+      await notify($, 'ui-ready', {});
+    } finally {
+      pendingReadiness--;
+    }
     startExchange?.();
     return next(event);
   });
