@@ -334,7 +334,7 @@ const checks = ([kept, open]: Kept): Array<readonly [string, () => void | Promis
   }],
 ])
 
-await run([...stores.flatMap((kept) => checks(kept).map(([name, body]) => [`${kept[0]}: ${name}`, body] as const)),await run([...listed,
+await run([...stores.flatMap((kept) => checks(kept).map(([name, body]) => [`${kept[0]}: ${name}`, body] as const)),
   ['in elmdb: a view of the rows is delivered after the step that wrote them, and whoever was answered can already read them', async () => {
     const store = elmdb()
     before?.close()
