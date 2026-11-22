@@ -100,7 +100,7 @@ function projectClaudePromptLines(doc: ProseMirrorNode, projected: readonly Clau
 export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNullable<ClaudeUiPromptFrame['decorations']>, serialize: ClaudePromptSerializer, sourcePositions?: ReadonlyMap<number, number>, sourceOffsets?: ReadonlyMap<number, number>): DecorationSet {
   const drawn: Decoration[] = [], projected: ClaudePromptProjection[] = []
   const positions = new Map<string, number | undefined>()
-  const position = (offset: number, bias: -1 | 0 | 1) => {
+  const mapOffset = (offset: number, bias: -1 | 0 | 1) => {
     if (sourcePositions) {
       const exact = sourcePositions.get(offset)
       if (exact !== undefined) return exact
@@ -114,6 +114,17 @@ export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNulla
     const address = `${offset}:${bias}`
     if (!positions.has(address)) positions.set(address, findClaudePromptPosition(doc, offset, serialize, bias))
     return positions.get(address)
+  }
+  const position = (offset: number, bias: -1 | 0 | 1) => {
+    const at = mapOffset(offset, bias)
+    if (at === undefined) return
+    const resolved = doc.resolve(at), index = resolved.textOffset
+    if (!index) return at
+    const text = resolved.parent.child(resolved.index()).text!
+    const before = text.charCodeAt(index - 1), after = text.charCodeAt(index)
+    if (before < 0xD800 || before > 0xDBFF || after < 0xDC00 || after > 0xDFFF) return at
+    // A paint boundary cannot split one Unicode character across DOM nodes.
+    return bias ? at + bias : undefined
   }
   for (const run of runs) {
     if (run.virtualText && run.start === run.end) {

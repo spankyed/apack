@@ -543,6 +543,27 @@ it('keeps a delayed selection and its key scoped to the currently focused editor
 })
 
 
+it('keeps emoji intact when native structural paint lands inside a UTF-16 surrogate pair', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const text = '*   A😀B'
+    const emoji = text.indexOf('😀')
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor: text.length,
+      decorations: [
+        { start: emoji + 1, end: emoji + 1, virtualText: 'hint' },
+        { start: emoji + 1, end: text.length, italic: true },
+        { start: emoji, end: emoji + 2, bold: true },
+      ],
+    } })
+    expect(serialize(editor.state.doc)).toBe('- A😀B')
+    expect(editor.view.dom.querySelector('.claude-prompt-virtual')).toBeNull()
+    expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['😀', 'B'])
+    expect(editor.view.dom.textContent).toBe('A😀B')
+  } finally { bridge.dispose() }
+})
+
 it('maps decoration boundaries inside noncanonical code fences without changing code or caret', () => {
   editor.commands.setContent('safe')
   const send=vi.fn(),problem=vi.fn(),bridge=bindClaudePromptEditor(editor,send,problem)
