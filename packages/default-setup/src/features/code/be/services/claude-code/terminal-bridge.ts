@@ -604,6 +604,16 @@ export async function createClaudeTerminalBridge(options: {
       get activeTurnId() { return busy && !closed ? activeTurnId : undefined },
       get endingTurnId() { return busy ? endingTurnId : undefined },
       get ready() { return ready && !closed },
+      get rendererEpoch() { return transportEpoch },
+      async waitForRendererRestart(previousEpoch: string) {
+        const deadline = Date.now() + 12000
+        while (!closed && Date.now() < deadline) {
+          if (transportEpoch !== previousEpoch && nativePolling && !relaunching) return
+          await new Promise(resolve => setTimeout(resolve, 50))
+        }
+        throw new Error(closed ? 'Claude closed during its renderer restart' : transportEpoch === previousEpoch
+          ? 'Claude stayed on the current renderer' : 'Claude restarted but its controls did not reconnect')
+      },
       get focus() { return focus },
       get billing() { return closed ? undefined : billing.value },
       get preview() { return closed ? undefined : preview },

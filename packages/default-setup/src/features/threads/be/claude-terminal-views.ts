@@ -522,7 +522,12 @@ export function createClaudeTerminalViews(dependencies: {
         const answer: NonNullable<ClaudeTerminalViewSnapshot['noticeAnswer']> = { id: response.id, revision: response.revision, status: 'pending',...(response.decision==='credit'?{requestId:response.credit.requestId}:{}) }
         target.noticeAnswer = answer; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.noticeAnswer === answer
-        void owner.answerNotice(response).then(() => { if (current()) { target.noticeAnswer = { ...answer, status: 'done' }; publish(key, target) } }).catch(error => { if (current()) { target.noticeAnswer = { ...answer, status: 'error', problem: error instanceof Error ? error.message : 'Native notice decision failed' }; publish(key, target) } })
+        void (async () => {
+          const resume = response.decision === 'fullscreen_accept' ? await dependencies.beforeViewChange?.(target.client, event.threadId) : undefined
+          try {
+            if (current()) await owner.answerNotice(response)
+          } finally { resume?.() }
+        })().then(() => { if (current()) { target.noticeAnswer = { ...answer, status: 'done' }; publish(key, target) } }).catch(error => { if (current()) { target.noticeAnswer = { ...answer, status: 'error', problem: error instanceof Error ? error.message : 'Native notice decision failed' }; publish(key, target) } })
         return
       }
       if (event.type === 'CLAUDE_TERMINAL_TASK') {

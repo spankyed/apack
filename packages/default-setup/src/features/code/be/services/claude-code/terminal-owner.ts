@@ -147,6 +147,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
+  let restartingFullscreen = false
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
@@ -371,7 +372,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         } finally { cancellingMcpForm = false }
       },
       async refreshNotice() {
-        if (closed || continuation || !bridge.ready && !bridge.nativePid) return
+        if (closed || restartingFullscreen || continuation || !bridge.ready && !bridge.nativePid) return
         const sessionId = bridge.projection.sessionId
         const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown; retirements?: unknown; handoffPending?: unknown }
         if (closed || sessionId !== bridge.projection.sessionId) return
@@ -387,7 +388,19 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async answerNotice(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
         if(response.decision==='credit')claudeCreditRequest.parse(response.credit)
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, ...(response.decision === 'credit' ? {credit:response.credit} : response.decision === 'auto_rules_select' ? { selected_values: response.selectedValues } : {}) }) as { answered?: unknown; handoffPending?: unknown; notice?: unknown }
+        const sendNoticeDecision = () => bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, ...(response.decision === 'credit' ? {credit:response.credit} : response.decision === 'auto_rules_select' ? { selected_values: response.selectedValues } : {}) }) as Promise<{ answered?: unknown; handoffPending?: unknown; notice?: unknown }>
+        if (response.decision === 'fullscreen_accept') {
+          if (restartingFullscreen) throw new Error('Claude is already changing its terminal renderer')
+          restartingFullscreen = true
+          const previousEpoch = bridge.rendererEpoch
+          try {
+            if ((await sendNoticeDecision()).answered !== true) throw new Error('Native fullscreen offer was not acknowledged')
+            await bridge.waitForRendererRestart(previousEpoch)
+            if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
+          } finally { restartingFullscreen = false }
+          return
+        }
+        const result = await sendNoticeDecision()
         if (result.answered !== true) throw new Error('Native notice was not acknowledged')
         if(response.decision==='credit'){
           if(!Object.hasOwn(result,'notice'))throw Error('Native credit state was not acknowledged')
