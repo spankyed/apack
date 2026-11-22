@@ -201,3 +201,26 @@ it('projects original main-session compaction as journal-addressed system histor
   }
   expect(projectClaudeTerminalHistory({ sessionId, row: { ...summary, message: { content: [] } } })).toBeUndefined()
 })
+
+it('restores the caption of a native queued document using its replay UUID and original timestamp', () => {
+  const sourceUuid = '33333333-3333-4333-8333-333333333333'
+  const caption = 'Add the release checklist to this review.'
+  const document = {type: 'document', source: {type: 'text', media_type: 'text/plain', data: 'document bytes'}}
+  const enqueueTime = '2026-11-22T12:21:37.012Z'
+  const attachment = {type: 'queued_command', commandMode: 'prompt', source_uuid: sourceUuid,
+    timestamp: enqueueTime, prompt: [{type: 'text', text: caption}, document]}
+  const queued = {type: 'attachment', sessionId, uuid, entrypoint: 'sdk-cli',
+    timestamp: '2026-11-22T12:21:37.320Z', attachment}
+  expect(projectClaudeTerminalHistory({sessionId, row: queued})).toEqual({
+    uuid: sourceUuid, sessionId, sender: 'user', text: caption, timestamp: Date.parse(enqueueTime), blocks: [],
+    context: {cliUuid: sourceUuid, claudeNativeQueuedPrompt: true, claudeTerminalMessage: {uuid: sourceUuid, sessionId},
+      claudeNativeUserMessage: {uuid: sourceUuid, sessionId, text: caption, origin: {kind: 'unclassified'}}},
+  })
+  for (const excluded of [{isMeta: true}, {commandMode: 'task-notification'}, {forwardedIntent: {}}, {taskDelivery: {}},
+    {origin: {kind: 'peer'}}, {origin: {kind: 'unclassified'}}, {origin: 'human'}, {prompt: [document]}]) {
+    expect(projectClaudeTerminalHistory({sessionId, row: {...queued, attachment: {...attachment, ...excluded}}})).toBeUndefined()
+  }
+  for (const excluded of [{sessionId: 'foreign'}, {isSidechain: true}, {agentId: 'child'}, {parent_tool_use_id: 'tool'}]) {
+    expect(projectClaudeTerminalHistory({sessionId, row: {...queued, ...excluded}})).toBeUndefined()
+  }
+})

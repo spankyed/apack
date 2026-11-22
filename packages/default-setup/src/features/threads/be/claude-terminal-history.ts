@@ -22,6 +22,32 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
 } | undefined {
   const source = entry.row
+  const attachment = object(source.attachment)
+  if (source.type === 'attachment' && attachment?.type === 'queued_command') {
+    const origin = object(attachment.origin)
+    const uuid = attachment.source_uuid ?? source.uuid
+    if (source.sessionId !== entry.sessionId || source.isSidechain === true || source.agentId !== undefined || source.parent_tool_use_id
+      || (source.entrypoint !== 'cli' && source.entrypoint !== 'sdk-cli')
+      || source.isMeta === true || attachment.isMeta === true || attachment.commandMode !== 'prompt'
+      || attachment.forwardedIntent !== undefined || attachment.taskDelivery !== undefined
+      || (attachment.origin !== undefined && origin?.kind !== 'human')
+      || typeof uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(uuid)) return
+    // The native transcript displays text from the drained prompt, while replay retains the document.
+    // Only the caption belongs in app history. Preserve the original human UUID used by replay.
+    const prompt = attachment.prompt
+    const text = typeof prompt === 'string' ? prompt : Array.isArray(prompt)
+      ? prompt.map(object).flatMap(block => block?.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('\n')
+      : ''
+    if (!text.trim()) return
+    const nativeTime = typeof attachment.timestamp === 'string' ? Date.parse(attachment.timestamp) : Number.NaN
+    const journalTime = typeof source.timestamp === 'string' ? Date.parse(source.timestamp) : Number.NaN
+    const timestamp = Number.isFinite(nativeTime) ? nativeTime : journalTime
+    return { uuid, sessionId: entry.sessionId, sender: 'user', text, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: uuid, claudeNativeQueuedPrompt: true,
+        claudeTerminalMessage: { uuid, sessionId: entry.sessionId, ...(origin ? { origin } : {}) },
+        claudeNativeUserMessage: { uuid, sessionId: entry.sessionId, text, origin: { kind: origin ? 'composer' : 'unclassified' } } } }
+  }
   const compaction = source.type === 'system' && source.subtype === 'compact_boundary' ? 'boundary'
     : source.type === 'user' && source.isCompactSummary === true ? 'summary' : undefined
   if (compaction) {

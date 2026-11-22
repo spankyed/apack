@@ -22,7 +22,7 @@ export function disposeClaudeTerminalHistory() {
 
 /** Mirror the process, independent of mounted windows; UUIDs make repeated journal rows idempotent. */
 export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean, readLaunch: () => Promise<ClaudeNativeLaunch | undefined>) {
-  const nativeMessages = new Map<string, { id: EntityId; terminal: boolean; timestamp?: number; order?: number }>()
+  const nativeMessages = new Map<string, { id: EntityId; terminal: boolean; queuedPrompt?: boolean; timestamp?: number; order?: number }>()
   const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
   const results = new Map<string, { text: string; error: boolean; uuid?: string; agentId?: string; assistantUuid?: string }>()
@@ -72,7 +72,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     const ids = [context?.cliUuid, object(context?.claudeNativeUserMessage)?.uuid,
       ...(Array.isArray(context?.claudeNativeMessages) ? context.claudeNativeMessages.map(value => object(value)?.uuid) : []),
       ...(message.blocks ?? []).flatMap(block => { const rows = object(block.props)?.nativeMessages; return Array.isArray(rows) ? rows.map(value => object(value)?.uuid) : [] })]
-    for (const id of ids) if (typeof id === 'string' && sessionId) nativeMessages.set(JSON.stringify([sessionId, id]), { id: message.id, terminal: !!terminal, ...(typeof terminal?.timestamp === 'number' && Number.isFinite(terminal.timestamp) ? {timestamp:terminal.timestamp} : {}), ...(typeof terminal?.order === 'number' && Number.isSafeInteger(terminal.order) && terminal.order > 0 ? {order:terminal.order} : {}) })
+    for (const id of ids) if (typeof id === 'string' && sessionId) nativeMessages.set(JSON.stringify([sessionId, id]), { id: message.id, terminal: !!terminal, queuedPrompt: context?.claudeNativeQueuedPrompt === true, ...(typeof terminal?.timestamp === 'number' && Number.isFinite(terminal.timestamp) ? {timestamp:terminal.timestamp} : {}), ...(typeof terminal?.order === 'number' && Number.isSafeInteger(terminal.order) && terminal.order > 0 ? {order:terminal.order} : {}) })
   }
   let nativeOrder = 0
   for (const message of nativeMessages.values()) nativeOrder = Math.max(nativeOrder, message.order ?? 0)
@@ -98,12 +98,13 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     if (!row || row.sender === 'assistant' && retired.has(JSON.stringify([row.sessionId, row.uuid])) || row.sender === 'user' && rewoundUsers.has(JSON.stringify([row.sessionId, row.uuid])) || isRetiredRefusalNotice(row, JSON.stringify([row.sessionId, row.uuid]))) return
     const key = JSON.stringify([row.sessionId, row.uuid]), existing = nativeMessages.get(key)
     const references = row.sender === 'user' ? acceptedReferences.get(key) ?? row.references : row.references
-    if (existing && !existing.terminal) return
+    const queuedPrompt = row.context.claudeNativeQueuedPrompt === true
+    if (existing && (!existing.terminal || (queuedPrompt && !existing.queuedPrompt))) return
     const timestamp = row.timestamp ?? existing?.timestamp, order = existing?.order ?? ++nativeOrder
     const terminal = object(row.context.claudeTerminalMessage)!
     // Preserve the recovered clock and ordinal when a later journal update omits them.
     row.context.claudeTerminalMessage = {...terminal, order, ...(timestamp !== undefined ? {timestamp} : {})}
-    if (existing) nativeMessages.set(key, {...existing, order, timestamp})
+    if (existing) nativeMessages.set(key, {...existing, queuedPrompt, order, timestamp})
     for (const block of row.blocks) {
       if (block.type !== 'tool-activity') continue
       const entries = block.props.entries as ToolActivityEntry[]
@@ -136,7 +137,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       const result = repository.chatCommands.addMessage({ threadId, sender: row.sender, text: row.text, blocks: row.blocks, context: row.context, references, ...(timestamp !== undefined ? {timestamp} : {}) })
       // addMessage trims the human entry path; a native row's exact text is already accepted.
       if (result.text !== row.text) repository.chatCommands.updateMessageState({ messageId: result.id, updates: { text: row.text } })
-      nativeMessages.set(key, { id: result.id, terminal: true, order, timestamp })
+      nativeMessages.set(key, { id: result.id, terminal: true, queuedPrompt, order, timestamp })
     }
   }
   async function flush() {
@@ -174,7 +175,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
             }
           }
           const projected = projectClaudeTerminalHistory(entry)
-          if (projected?.sender === 'user' && typeof entry.row.timestamp === 'string') { const time = Date.parse(entry.row.timestamp); if (Number.isFinite(time)) lastTurnAt = Math.max(lastTurnAt ?? 0, time) }
+          if (projected?.sender === 'user' && projected.timestamp !== undefined) lastTurnAt = Math.max(lastTurnAt ?? 0, projected.timestamp)
           upsert(entry)
         }
         for (const [key, entry] of pendingTools) {

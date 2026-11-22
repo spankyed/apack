@@ -75,3 +75,17 @@ it('shows a compact summary after its original boundary even if Claude created i
  const latest=repository.chatQueries.chatPage(thread.id,1)!;
  expect(latest.messageIds).toEqual([rows[1].id]);expect(latest.hasMore).toBe(true);
 })
+
+it('imports a drained prompt once and prefers an original direct user row with the same UUID', () => {
+ const sessionId = '11111111-1111-4111-8111-111111111111'
+ const uuid = '22222222-2222-4222-8222-222222222222'
+ const thread = repository.threadCommands.create({topic: 'Queued document', instructions: ''})
+ const queued = {sessionId, type: 'attachment', entrypoint: 'sdk-cli', uuid: '33333333-3333-4333-8333-333333333333',
+  attachment: {type: 'queued_command', commandMode: 'prompt', source_uuid: uuid, prompt: 'Queued caption'}}
+ const other = {...queued, attachment: {...queued.attachment, source_uuid: '44444444-4444-4444-8444-444444444444', prompt: 'Drained caption'}}
+ const direct = {sessionId, uuid, type: 'user', message: {content: 'Direct user row'}}
+ expect(importClaudeSessionMessages({threadId: thread.id, sessionId, transcript: [queued, other, other, direct]})).toBe(2)
+ const rows = repository.chatQueries.threadData(thread.id)!.messages!
+ expect(rows.map(row => row.text).sort()).toEqual(['Direct user row', 'Drained caption'])
+ expect(rows.find(row => row.text === 'Direct user row')?.context?.cliUuid).toBe(uuid)
+})

@@ -434,3 +434,29 @@ it('retires conversation controls after a durable fork while the original termin
   await (owner.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
   expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, nativeContinuation: continuation, chatState: 'paused' })
 })
+
+it.each([false, true])('keeps one original user row when queued replay arrives first: %s', async queuedFirst => {
+  const uuid = '22222222-2222-4222-8222-222222222222'
+  const direct = { sessionId, row: { sessionId, uuid, type: 'user', message: { content: 'Original user row' } } }
+  const queued = { sessionId, row: { sessionId, type: 'attachment', entrypoint: 'sdk-cli',
+    uuid: '33333333-3333-4333-8333-333333333333',
+    attachment: { type: 'queued_command', commandMode: 'prompt', source_uuid: uuid, prompt: 'Queued caption' } } }
+  let release!: () => Promise<void>
+  const readJournal = vi.fn().mockResolvedValueOnce({
+    entries: queuedFirst ? [queued, direct, queued] : [direct, queued], pending: false, problems: [],
+  }).mockResolvedValue({ entries: [], pending: false, problems: [] })
+  const emptyDialogs = async () => []
+  const owner = {
+    state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false, readJournal,
+    getWorkflowDialogs: emptyDialogs, getGenericToolPermissionDialogs: emptyDialogs,
+    getToolPermissionDialogs: emptyDialogs, getFileDialogs: emptyDialogs,
+    getBashDialogs: emptyDialogs, getQuestionDialogs: emptyDialogs, getPlanDialogs: emptyDialogs,
+    beforeRelease(listener: () => Promise<void>) { release = listener },
+  } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
+  await release()
+  expect(fake.messages).toHaveLength(1)
+  expect(fake.messages[0]).toMatchObject({ sender: 'user', text: 'Original user row', context: { cliUuid: uuid } })
+  expect(fake.messages[0].context).not.toHaveProperty('claudeNativeQueuedPrompt')
+})
