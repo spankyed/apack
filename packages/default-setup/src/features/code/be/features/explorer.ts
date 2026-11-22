@@ -4,6 +4,7 @@ import { defineHandlers } from '@apackdev/sdk/framework'
 import { safeEvents } from '@apackdev/sdk/helpers'
 import { broadcast } from '#generated/events.ts';
 import { assign, fromCallback, setup, type AnyActorRef } from 'xstate'
+import { dirname, isAbsolute } from 'node:path'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
 import { OpenFileWatcher } from '../services/open-file-watcher.ts'
@@ -53,7 +54,7 @@ function fileFailure(error: unknown, path: string | undefined): AskError {
  * Runs a file operation over the explorer's folder: refused when there is none, and its failure told as a file
  * failure of the path it was at (`fileFailure`)
  */
-async function overFiles<T>({ repository }: CodeExplorerSystemContext, path: string | undefined, run: (repository: FileSystemRepository) => Promise<T>): Promise<T> {
+async function overFiles<T>({ repository }: Pick<CodeExplorerSystemContext, 'repository'>, path: string | undefined, run: (repository: FileSystemRepository) => Promise<T>): Promise<T> {
   if (!repository) throw new AskError('file', 'No directory selected.', { code: 'INVALID_PATH', ...(path !== undefined && { path }) })
   try {
     return await run(repository)
@@ -62,11 +63,17 @@ async function overFiles<T>({ repository }: CodeExplorerSystemContext, path: str
   }
 }
 
+/** A file named by an absolute path does not need to change the explorer's selected folder. */
+function overNamedFile<T>(context: CodeExplorerSystemContext, path: string, run: (repository: FileSystemRepository) => Promise<T>): Promise<T> {
+  const repository = context.repository ?? (isAbsolute(path) ? new FileSystemRepository(dirname(path)) : null)
+  return overFiles({ repository }, path, run)
+}
+
 /** The explorer asks, answered here over the folder this machine holds */
 const answers = handlers.answers<ExplorerAsks>({
   'explorer.LIST_FILES': ({ args, context }) => overFiles(context, args.path, repository =>
     repository.listDirectory(args.path || context.baseDirectory || '')),
-  'explorer.READ_FILE': ({ args: { path }, context, self }) => overFiles(context, path, async (repository) => {
+  'explorer.READ_FILE': ({ args: { path }, context, self }) => overNamedFile(context, path, async (repository) => {
     // Watched from before it is read, so a change made while it is being read is one to what the editor holds
     openFiles(self)?.send({ type: 'OPEN', path })
     try {
@@ -76,7 +83,7 @@ const answers = handlers.answers<ExplorerAsks>({
       throw error
     }
   }),
-  'explorer.WRITE_FILE': ({ args: { path, content }, context }) => overFiles(context, path, async (repository) => {
+  'explorer.WRITE_FILE': ({ args: { path, content }, context }) => overNamedFile(context, path, async (repository) => {
     await repository.writeFile(path, content)
     return { path }
   }),
