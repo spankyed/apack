@@ -101,7 +101,7 @@ const instanceLifetimes=createNativeInstanceLifetimes(scope=>{
  if(isComposerComponent(scope.component))composerFrames.delete(JSON.stringify([scope.client_id,scope.component,scope.instance_id]));
 });
 function publish(event){
- try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}
+ try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event,ownerEpoch:config.transportEpoch}));}catch{}
 }
 // Match native remote replay: latest status per plugin, bounded recent transients for first attach.
 const noticeStatuses=new Map(),noticeTransient=[],noticeMethods=new WeakSet();
@@ -429,7 +429,7 @@ async function askHost(subtype,args){
    let bytes=0;const chunks=[];response.on('data',chunk=>{bytes+=chunk.length;if(bytes>nativeUiTextMessageMaxBytes)response.destroy();else chunks.push(chunk);});
    response.on('error',()=>resolve(undefined));response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString());resolve(response.statusCode===200&&value.request_id===id&&value.pid===process.pid&&value.sessionId===current.sessionId?value.result:undefined);}catch{resolve(undefined);}});
   });request.on('error',()=>resolve(undefined));request.on('timeout',()=>request.destroy());
-  request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,request_id:id,sequence:++hostSequence,request:{subtype,surface:'desktop',client_id:args.clientId,...(args.text!==undefined?{text:args.text}:{}),...(args.mode!==undefined?{mode:args.mode}:{}),...(args.ifEmpty===true?{ifEmpty:true}:{}),...(args.focus===true?{focus:true}:{}),...(args.decorations!==undefined?{decorations:args.decorations}:{})}}));
+  request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,ownerEpoch:config.transportEpoch,request_id:id,sequence:++hostSequence,request:{subtype,surface:'desktop',client_id:args.clientId,...(args.text!==undefined?{text:args.text}:{}),...(args.mode!==undefined?{mode:args.mode}:{}),...(args.ifEmpty===true?{ifEmpty:true}:{}),...(args.focus===true?{focus:true}:{}),...(args.decorations!==undefined?{decorations:args.decorations}:{})}}));
  });
 }
 function restoreHosts(n){
@@ -1714,7 +1714,7 @@ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(c
 
 
 async function ownerPost(path,body){
- return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Object.assign(Error('Native owner broker refused'),{status:response.statusCode});resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:JSON.parse(readFileSync(configUrl,'utf8')).sessionId,...body}));});
+ return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Object.assign(Error('Native owner broker refused'),{status:response.statusCode});resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:JSON.parse(readFileSync(configUrl,'utf8')).sessionId,...body,ownerEpoch:config.transportEpoch}));});
 }
 function ownerAgents(facts){
  const result=new Map();

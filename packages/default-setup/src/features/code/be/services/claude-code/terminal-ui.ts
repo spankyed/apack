@@ -19,7 +19,7 @@ export function createClaudeTerminalUiTransport(options: {
   transportEpoch: string
   current(): { pid: number; sessionId: string } | undefined
 }) {
-  let closed = false, sequence = 0
+  let closed = false, sequence = 0, epoch = options.transportEpoch
   const requestsByValue = new Map<object, Set<ClientRequest>>(), heldRequests = new WeakSet<ClientRequest>()
   const pending = new Set<ClientRequest>(), listeners = new Set<(event: Record<string, unknown>) => void>()
   const hosts = new Map<string, ClaudePromptHost>(), hostRequests = new Map<string, { clientId: string; cancel(): void }>(), hostSequences = new Set<number>()
@@ -40,6 +40,7 @@ export function createClaudeTerminalUiTransport(options: {
     if (typeof value.render_token !== 'string' || stagingQuestionImages) throw new Error('A live native question drawing is required to attach images')
     const mediaId = randomUUID()
     const directory = join(dirname(options.socketPath), 'question-media-' + mediaId)
+    const stagingEpoch = epoch
     stagingQuestionImages = true
     let created = false
     try {
@@ -49,7 +50,7 @@ export function createClaudeTerminalUiTransport(options: {
         await writeFile(join(directory, String(index)), Buffer.from(image.data, 'base64'), { mode: 0o600, flag: 'wx' })
       }
       const current = options.current()
-      if (closed || current?.pid !== owner.pid || current.sessionId !== owner.sessionId) throw new Error('Native question owner changed while attaching images')
+      if (closed || epoch !== stagingEpoch || current?.pid !== owner.pid || current.sessionId !== owner.sessionId) throw new Error('Native question owner changed while attaching images')
       return await transport.request({ ...value, question_images: undefined, question_media: { id: mediaId, types: images.map(image => image.mediaType) } })
     } finally {
       stagingQuestionImages = false
@@ -65,7 +66,8 @@ export function createClaudeTerminalUiTransport(options: {
       if (pending.size >= 64) return Promise.reject(new Error('Native UI request limit reached'))
       if (value.subtype === 'ui_detach' && typeof value.client_id === 'string') promptHosts.detach(value.client_id)
       if (value.subtype === 'ui_attach' && typeof value.client_id === 'string') value = { ...value, answers: promptHosts.answers(value.client_id) }
-      const id = randomUUID(), body = JSON.stringify({ id, sequence: ++sequence, ownerPid: owner.pid, sessionId: owner.sessionId, transportEpoch: options.transportEpoch, request: value })
+      const requestEpoch = epoch
+      const id = randomUUID(), body = JSON.stringify({ id, sequence: ++sequence, ownerPid: owner.pid, sessionId: owner.sessionId, transportEpoch: requestEpoch, request: value })
       const textRpc = CLAUDE_UI_PROMPT_RPC_SUBTYPES.some(subtype => subtype === value.subtype)
       const requestMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 1048576
       const responseMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES
@@ -84,7 +86,7 @@ export function createClaudeTerminalUiTransport(options: {
           response.on('end', () => {
             try {
               const current = options.current()
-              if (closed || current?.pid !== owner.pid || current.sessionId !== owner.sessionId) throw new Error('Native UI owner changed before its reply')
+              if (closed || epoch !== requestEpoch || current?.pid !== owner.pid || current.sessionId !== owner.sessionId) throw new Error('Native UI owner changed before its reply')
               const result = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>
               if (result.id !== id || result.pid !== owner.pid || result.sessionId !== owner.sessionId) throw new Error('Native UI reply identity does not match its owner')
               if (response.statusCode !== 200) throw new Error(typeof result.error === 'string' ? result.error : 'Native UI request was refused')
@@ -118,6 +120,12 @@ export function createClaudeTerminalUiTransport(options: {
       }
     },
     get hasPromptHosts() { return hosts.size > 0 },
+    replaceEpoch(next: string) {
+      epoch = next
+      for (const request of hostRequests.values()) request.cancel()
+      hostSequences.clear(); highestHostSequence = 0
+      for (const request of pending) request.destroy(new Error('Native UI was restarted'))
+    },
     /** Reuse prompt validation/deadlines per ask; the outer sequence window supplies replay protection. */
     receiveHost(value: Record<string, unknown>, complete: (result: unknown, current: boolean) => void): boolean {
       const owner = options.current(), request = value.request as Record<string, unknown> | undefined

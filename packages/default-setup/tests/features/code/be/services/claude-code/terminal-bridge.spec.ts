@@ -92,6 +92,29 @@ it('refuses foreign native owners, children and sessions before accepting status
   expect((await request('/native-status', event)).status).toBe(200)
   expect(bridge!.projection.mainStatus).toBe('native output')
 })
+it('replaces same-PID transport state only for the owned renderer relaunch epoch', async () => {
+  await create()
+  const old = await config()
+  const event = await observed()
+  expect((await request('/native-status', event)).status).toBe(200)
+  expect(bridge!.projection.mainStatus).toBe('native output')
+  const restart = { sessionId: session, pid: process.pid, previousEpoch: old.transportEpoch }
+  expect((await request('/observer-relaunch', { ...restart, pid: process.pid + 1 })).status).toBe(409)
+  expect((await request('/observer-relaunch', { ...restart, sessionId: randomUUID() })).status).toBe(409)
+  expect((await request('/observer-relaunch', restart, 'foreign')).status).toBe(403)
+  expect((await request('/observer-relaunch', restart)).status).toBe(200)
+  const next = await config()
+  expect(next.transportEpoch).not.toBe(old.transportEpoch)
+  expect(next.generations.main).not.toBe(old.generations.main)
+  expect(bridge!.projection.mainStatus).toBeUndefined()
+  expect((await request('/observer-relaunch', restart)).status).toBe(409)
+  expect((await request('/native-status', { ...event, ownerEpoch: old.transportEpoch })).status).toBe(409)
+  expect((await request('/observer-ready', { sessionId: session, pid: process.pid, ownerEpoch: next.transportEpoch })).status).toBe(200)
+  const replacement = { ...(await observed()), startedAt: '200', ownerEpoch: next.transportEpoch }
+  expect((await request('/native-status', replacement)).status).toBe(200)
+  expect(bridge!.projection.mainStatus).toBe('native output')
+})
+
 it('accepts a native result preceding its metadata, then fences obsolete commands and generations', async () => {
   await create()
   const event = await observed('new main')

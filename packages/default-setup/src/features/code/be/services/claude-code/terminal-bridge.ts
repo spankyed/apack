@@ -73,7 +73,7 @@ export async function createClaudeTerminalBridge(options: {
   const initialPolicy = options.settings.sources.find(source => source.source === 'policySettings' || source.source === 'policy')?.settings ?? {}
   let helperPolicyKey = JSON.stringify([initialPolicy.allowManagedHooksOnly === true, initialPolicy.disableAllHooks === true, options.settings.effective.disableAllHooks === true])
   let policyGeneration = randomUUID()
-  const transportEpoch = randomBytes(16).toString('hex')
+  let transportEpoch = randomBytes(16).toString('hex'), relaunched = false, relaunching = false
   const generations = { main: randomUUID(), subagent: randomUUID() }
   const waiting: Record<string, unknown>[] = []
   let saveObserver: (() => Promise<void>) | undefined
@@ -252,8 +252,38 @@ export async function createClaudeTerminalBridge(options: {
         response.once('close', () => {if (id && !response.writableEnded) nativeEditor?.disconnect(id)})
         return
       }
+      if (request.url === '/observer-relaunch') {
+        if (relaunching || value.sessionId !== projection.sessionId || value.pid !== observerPid || observerPid === undefined
+          || value.previousEpoch !== transportEpoch || !saveObserver || !await options.ownsProcess?.(observerPid)) return reply(409, {})
+        // Same PID is insufficient after exec: retire requests, helper samples and the old UI socket.
+        if (closed || relaunching || value.previousEpoch !== transportEpoch || value.sessionId !== projection.sessionId) return reply(409, {})
+        relaunching = true
+        try {
+          await rm(uiSocketPath, { force: true })
+          if (closed || value.sessionId !== projection.sessionId) return reply(409, {})
+          transportEpoch = randomBytes(16).toString('hex')
+          relaunched = true
+          ui.replaceEpoch(transportEpoch)
+          billingSequence = 0
+          nativeViewSequence = 0; nativeViewRecord = undefined; nativeView = undefined
+          focusSequence = 0; focusRecord = undefined; focus = undefined
+          previewSequence = 0; previewRecord = undefined; preview = undefined
+          activitySequence = 0; activityRecord = undefined; activity = undefined
+          promptQueue = undefined; nativePolling = false
+          generations.main = randomUUID(); generations.subagent = randomUUID()
+          projection.clearOutput()
+          if (pending) settle(new Error('Claude restarted its terminal renderer; the draft was retained'))
+          await saveObserver()
+          options.changed()
+          return reply(200, {})
+        } finally { relaunching = false }
+      }
+      if ((relaunched || relaunching) && (request.url?.startsWith('/native-') && !request.url.startsWith('/native-editor')
+        || request.url === '/ui-event' || request.url === '/ui-host' || request.url === '/view-enter'
+        || request.url === '/poll' && value.directOwner === true || request.url === '/observer-ready')
+        && (relaunching || value.ownerEpoch !== transportEpoch)) return reply(409, {})
       if (request.url === '/observer-ready') {
-        if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
+        if (value.sessionId !== (relaunched ? projection.sessionId : options.sessionId) || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
       }
       if (request.url === '/native-billing') {

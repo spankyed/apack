@@ -7,7 +7,7 @@ export function installNativeHelperObserver({resolveConfig,readPolicy,readComman
  let signalledMain;
  let heldConfig,activation,retainedMainStartedAt=-1n,latestMainStartedAt=-1n,latestMainObservation,mainObservationPending=false,closed=false,warned=false;
  const warn=()=>{if(!warned){warned=true;process.stderr.write('apack: native helper observation could not initialize\n')}};
- async function publish(path,body){const config=heldConfig.config;await new Promise(resolve=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>{response.resume();response.on('end',resolve)});request.on('error',resolve);request.on('timeout',()=>{request.destroy();resolve()});request.end(JSON.stringify(body))})}
+ async function publish(path,body){const config=heldConfig.config;await new Promise(resolve=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>{response.resume();response.on('end',resolve)});request.on('error',resolve);request.on('timeout',()=>{request.destroy();resolve()});request.end(JSON.stringify({...body,ownerEpoch:config.transportEpoch}))})}
  const original=ChildProcess.prototype.spawn;
  function ensureConfig(){
   if(heldConfig||closed)return heldConfig;
