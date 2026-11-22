@@ -2,10 +2,11 @@ import { _packEntityTypes, _packRelationTypes, _packRoles } from '@apackdev/sdk/
 import type { Contract } from './contract.ts';
 import * as path from 'path';
 import { setup } from 'xstate';
+import { satisfies } from 'semver';
 import { defineSystem } from '@apackdev/sdk/framework';
 import { broadcast, tell } from '../../../events.ts';
 import { getAppVersion, resolveAppEnvironment } from '@apackdev/sdk/env';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT, parsePackDependency } from '@apackdev/sdk/build';
 import { HOST_PACK_ID, PACK_ID_PATTERN, resolveName } from '@apackdev/sdk/ids';
 import { packRecord, packRecords, recordInstalled, recordUpdateInstalled, setPackEnabled } from '../../../packs/installed.ts';
 import { reportError } from '@apackdev/sdk/logger';
@@ -65,6 +66,8 @@ function toInstalledPackSummaries(registry: PackRegistry): InstalledPackSummary[
   const references = new Map(registry.catalog.references().filter(entry => entry.origin === 'installed')
     .map(entry => [entry.featureRef, entry.declaration]));
   const records = packRecords();
+  const installed = new Map(catalog.packs.map(entry => [entry.snapshot.manifest.id, entry]));
+  const unusable = new Set(catalog.problems.map(problem => problem.id));
   const base = (id: string, dir: string, enabled: boolean) => {
     const record = packRecord(id, records);
     const source = catalog.appPackSources.find(source => source.id === id);
@@ -77,7 +80,7 @@ function toInstalledPackSummaries(registry: PackRegistry): InstalledPackSummary[
       availableVersion: record.updatesWith === 'app' ? undefined : record.availableVersion,
       updateCheckError: record.updatesWith === 'app' ? undefined : record.updateCheckError,
       appUpdate, appSourceProblem: record.updatesWith === 'app' ? sourceProblem || (!source ? 'App source is unavailable' : undefined) : undefined,
-      loadProblem: registry.loadProblem(id), ...contentOffersOf(id),
+      loadProblem: registry.loadProblem(id), dependencyProblems: [], ...contentOffersOf(id),
     };
   };
   const packs: InstalledPackSummary[] = catalog.packs.map(({ snapshot, integrity, dir, enabled }) => {
@@ -89,9 +92,23 @@ function toInstalledPackSummaries(registry: PackRegistry): InstalledPackSummary[
       services: Object.keys(feature.services ?? {}),
     }));
     const extensions = manifest.extensions;
+    const dependencyProblems = Object.entries(manifest.dependencies ?? {}).flatMap(([id, spec]) => {
+      const { range } = parsePackDependency(spec);
+      const requires = `Requires ${id}${range === '*' ? '' : ` (${range})`}.`;
+      if (unusable.has(id)) return [`${requires} Its installed build is unavailable.`];
+      const provider = installed.get(id);
+      if (!provider) return [`${requires} Install the named pack.`];
+      const { version } = provider.snapshot.manifest;
+      if (range !== '*' && !satisfies(version, range, { includePrerelease: true })) {
+        return [`${requires} Installed version ${version} is incompatible.`];
+      }
+      if (!provider.enabled) return [`${requires} Enable the installed pack.`];
+      const problem = registry.loadProblem(id);
+      return problem ? [`${requires} The installed pack failed to load. ${problem}`] : [];
+    });
     return {
       ...base(manifest.id, dir, enabled), name: manifest.name, version: manifest.version,
-      description: manifest.description, hostVersion: manifest.hostVersion,
+      description: manifest.description, hostVersion: manifest.hostVersion, dependencyProblems,
       permissions: [...(manifest.permissions ?? [])], entities: { ..._packEntityTypes(manifest) },
       entityCount: Object.keys(_packEntityTypes(manifest)).length,
       hasFrontend: !!integrity && hasOwn(integrity.files, PACK_LAYOUT.feEntry),
