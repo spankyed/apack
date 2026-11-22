@@ -1384,13 +1384,23 @@ declare const ClaudeMemoryDialogSchema: z.ZodObject<{
     }, z.core.$strip>;
 }, z.core.$strip>;
 
+type ClaudeMemoryFileAction = {
+    kind: 'createInstruction' | 'openFolder';
+    path: string;
+};
+
 type ClaudeMemoryRequest = {
     threadId: string;
     mountId: string;
     attachmentId: string;
     ownerId: string;
     sessionId: string;
-    enabled?: boolean;
+    action: {
+        kind: 'read';
+    } | {
+        kind: 'setAutoMemory';
+        enabled: boolean;
+    } | ClaudeMemoryFileAction;
 };
 
 type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>;
@@ -9772,6 +9782,7 @@ type ThreadsAsks = {
         answer: {
             dialog?: ClaudeMemoryDialog;
             saved?: boolean;
+            path?: string;
         };
     };
     SET_CLAUDE_PERMISSION_MODE: {

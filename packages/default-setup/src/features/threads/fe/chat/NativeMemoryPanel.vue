@@ -33,9 +33,19 @@
                   <p :title="file.path" class="truncate font-mono text-xs text-neutral-400">{{ file.path }}</p>
                 </div>
                 <button v-if="file.exists" type="button" :aria-label="'Edit ' + file.label" class="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-blue-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-blue-400" @click="editFile(file.path)">Edit file</button>
+                <button v-else-if="file.kind === 'user' || file.kind === 'project'" type="button" :aria-label="'Create ' + file.label" :disabled="pending" class="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-blue-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="operate({kind: 'createInstruction', path: file.path})">Create file</button>
                 <span v-else class="shrink-0 pr-2.5 text-xs text-neutral-500">Missing</span>
               </li>
             </ul>
+            <template v-if="dialog.folders.length">
+              <h3 class="mb-1 mt-4 text-xs font-medium text-neutral-300">Memory folders</h3>
+              <ul class="divide-y divide-white/10">
+                <li v-for="folder in dialog.folders" :key="folder.path" class="flex items-center justify-between gap-3 py-2.5">
+                  <p :title="folder.path" class="min-w-0 truncate font-mono text-xs text-neutral-400">{{ folder.path }}</p>
+                  <button type="button" :aria-label="folder.label" :disabled="pending" class="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-blue-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="operate({kind: 'openFolder', path: folder.path})">{{ folder.label }}</button>
+                </li>
+              </ul>
+            </template>
             <template v-if="dialog.memories?.length">
               <h3 class="mb-1 mt-4 text-xs font-medium text-neutral-300">Saved memories</h3>
               <ul class="divide-y divide-white/10">
@@ -68,7 +78,7 @@ import { ask } from '#generated/events.ts'
 import type { ClaudeMemoryRequest } from '../../be/types.ts'
 import type { ClaudeMemoryDialog } from '#features/code/be/services/claude-code/host-controls.ts'
 
-const props = defineProps<{ target: Omit<ClaudeMemoryRequest, 'enabled'>; busy?: boolean }>()
+const props = defineProps<{ target: Omit<ClaudeMemoryRequest, 'action'>; busy?: boolean }>()
 const emit = defineEmits<{ close: [restoreFocus: boolean] }>()
 const dialog = shallowRef<ClaudeMemoryDialog>()
 const problem = ref<string>()
@@ -77,14 +87,27 @@ const lifetime = new AbortController()
 onMounted(() => { void load() })
 onBeforeUnmount(() => lifetime.abort())
 
-async function load(enabled?: boolean) {
+function load(enabled?: boolean) {
+  return operate(enabled === undefined ? { kind: 'read' } : { kind: 'setAutoMemory', enabled })
+}
+
+async function operate(action: ClaudeMemoryRequest['action']) {
   if (pending.value) return
   pending.value = true
   problem.value = undefined
   try {
-    const outcome = await ask('threads', { type: 'CLAUDE_MEMORY', ...props.target, enabled }, { signal: lifetime.signal })
+    const outcome = await ask('threads', { type: 'CLAUDE_MEMORY', ...props.target, action }, { signal: lifetime.signal })
     if (lifetime.signal.aborted) return
     if (!outcome.ok) { problem.value = outcome.failure.message; return }
+    if (outcome.value.path) {
+      if (action.kind === 'createInstruction') editFile(outcome.value.path)
+      if (action.kind === 'openFolder') {
+        const shell = window.electronAPI?.shell
+        if (!shell) throw new Error('Opening a memory folder requires the desktop app')
+        await shell.openPath(outcome.value.path)
+      }
+      return
+    }
     dialog.value = outcome.value.dialog
     if (!dialog.value) problem.value = 'Preference saved. Refresh to read the effective status.'
   } catch (error) {

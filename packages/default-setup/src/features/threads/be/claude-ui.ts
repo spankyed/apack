@@ -5,6 +5,7 @@ import { services, type EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
 import { selectClaudeTranscriptRows } from '#features/code/be/services/claude-code/ui-transcript-rows.ts'
 import { randomUUID, createHash } from 'node:crypto'
+import { prepareClaudeMemoryPath } from '#features/code/be/services/claude-code/memory-files.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse } from '#generated/types.ts'
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { getClaudeUiOwner } from '#features/code/be/services/claude-code/ui-owner.ts'
@@ -180,8 +181,8 @@ export async function submitClaudeParentCommand(client: string, threadId: string
 
 /** Keep a settings request bound to the initiating window's live main attachment. */
 export async function operateClaudeMemory(request: ClaudeMemoryRequest, client: string | undefined, signal: AbortSignal) {
-  const { threadId, mountId, attachmentId, sessionId, ownerId, enabled } = request
-  if (!client || !validId(mountId) || !validId(attachmentId) || (enabled !== undefined && typeof enabled !== 'boolean')) {
+  const { threadId, mountId, attachmentId, sessionId, ownerId, action } = request
+  if (!client || !validId(mountId) || !validId(attachmentId) || !action) {
     throw new Error('A Claude memory operation requires a current window and view')
   }
   const view = views.get(keyOf(client, mountId))
@@ -196,11 +197,20 @@ export async function operateClaudeMemory(request: ClaudeMemoryRequest, client: 
       || owner.state.view?.kind !== 'main') throw new Error('Claude memory view changed')
   }
   current()
-  if (enabled === undefined) {
+  if (action.kind === 'read') {
     const dialog = await owner.getMemoryDialog()
     current()
     return { dialog }
   }
+  if (action.kind === 'createInstruction' || action.kind === 'openFolder') {
+    if (typeof action.path !== 'string') throw new Error('Invalid Claude memory path')
+    const dialog = await owner.getMemoryDialog()
+    const path = await prepareClaudeMemoryPath(dialog, action, current)
+    current()
+    return { path }
+  }
+  if (action.kind !== 'setAutoMemory' || typeof action.enabled !== 'boolean') throw new Error('Invalid Claude memory operation')
+  const { enabled } = action
   await owner.setAutoMemory(enabled)
   try {
     current()

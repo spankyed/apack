@@ -711,7 +711,7 @@ export type ClaudeMemoryRequest = {
   attachmentId: string;
   ownerId: string;
   sessionId: string;
-  enabled?: boolean;
+  action: { kind: 'read' } | { kind: 'setAutoMemory'; enabled: boolean } | import('#features/code/be/services/claude-code/memory-files.ts').ClaudeMemoryFileAction;
 };
 
 /**
@@ -719,7 +719,7 @@ export type ClaudeMemoryRequest = {
  * asks, answered to the window that made them.
  */
 export type ThreadsAsks = {
-  CLAUDE_MEMORY: { args: ClaudeMemoryRequest; answer: { dialog?: import('#features/code/be/services/claude-code/host-controls.ts').ClaudeMemoryDialog; saved?: boolean } };
+  CLAUDE_MEMORY: { args: ClaudeMemoryRequest; answer: { dialog?: import('#features/code/be/services/claude-code/host-controls.ts').ClaudeMemoryDialog; saved?: boolean; path?: string } };
   SET_CLAUDE_PERMISSION_MODE: { args: { threadId: string; mode: PermissionMode } };
   CREATE_THREAD: { args: { topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }; answer: { id: EARS.EntityId } };
   UPDATE_THREAD_STATUS: { args: { threadId: string; status: string } };
