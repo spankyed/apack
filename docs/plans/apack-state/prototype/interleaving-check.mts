@@ -1,7 +1,7 @@
 // The risk in this design is order: an answer that comes after its state was left, progress that passes a broadcast,
 // a click that lands between two things. A check that runs one order proves that order. These run every one.
 //
-//   npx tsx docs/plans/apack-spec/prototype/interleaving-check.mts
+//   npx tsx docs/plans/apack-state/prototype/interleaving-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { run } from './checks.mts'
 import { explore, replay, sample, type Schedule } from './schedule.mts'

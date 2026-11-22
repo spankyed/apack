@@ -1,6 +1,6 @@
 // What the kernel does with a change to data. Each check drives a running state and reads what came of it.
 //
-//   npx tsx docs/plans/apack-spec/prototype/kernel-check.mts
+//   npx tsx docs/plans/apack-state/prototype/kernel-check.mts
 import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { run as runChecks, system } from './checks.mts'
 import { given, reaching, said, WROTE_TO_WHAT_WAS_READ } from './state.mts'

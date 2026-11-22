@@ -5,7 +5,7 @@
 // templates and compiled by Vue's compiler, which is how the app writes them. A template reads a state without
 // `.value`, since Vue unwraps a ref that a component's setup returns by name.
 //
-//   npx tsx docs/plans/apack-spec/prototype/vue-check.mts
+//   npx tsx docs/plans/apack-state/prototype/vue-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { compile } from '@vue/compiler-dom'
 import * as runtime from '@vue/runtime-core'

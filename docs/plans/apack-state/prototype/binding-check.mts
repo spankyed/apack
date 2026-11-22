@@ -1,7 +1,7 @@
 // What the Vue binding rests on. A reader is handed the state's own values, a field at a time, and runs again when
 // the state replaces a field it read. `effect` here stands for a component's render.
 //
-//   npx tsx docs/plans/apack-spec/prototype/binding-check.mts
+//   npx tsx docs/plans/apack-state/prototype/binding-check.mts
 import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { computed, effect } from '@vue/reactivity'
 import { mirror } from './mirror.mts'

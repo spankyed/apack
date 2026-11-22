@@ -1,6 +1,6 @@
-# The apack-spec prototype
+# The apack-state prototype
 
-What [`../../apack-spec.md`](../../apack-spec.md) describes, as code that runs. The design on one page, with a
+What [`../../apack-state.md`](../../apack-state.md) describes, as code that runs. The design on one page, with a
 complete example, is [`../design.md`](../design.md). It is evidence for a plan, not part of
 the app: nothing imports it, and no check covers it.
 
@@ -31,7 +31,7 @@ the app: nothing imports it, and no check covers it.
 | `store.mts` | Rows as the rule about them is checked: one interface, and rows kept in memory behind it. `transact` is all the kernel is given of it |
 | `store-elmdb.mts` | The same interface over the app's engine, elmdb, on a temporary database. Needs the checkout's dependencies |
 | `rows-check.mts` | A step as one unit of the database: a handler's rows, data and what it sent kept together, on both stores. Runs, for about 12 seconds |
-| `rows-property.mts` | The same rule as a property: runs of handlers made from a seed, held against a model of a few lines. Runs, for about 6 seconds, and names the seed of a run that differs |
+| `rows-property.mts` | The same rule as a property: runs of handlers made from a seed, held against a model of a few lines, one after another and under way together. Runs, for about 25 seconds, and names the seed of a run that differs |
 | `views-check.mts` | A window hears of a step after its views show it: views over the link, and what a step sends windows held until they have been sent its rows. Under every ordering in memory, and on elmdb. Runs, for about 10 seconds |
 | `rows-cost.mts` | What a unit around a step and around each handler costs on elmdb, beside the engine alone, and what holding an answer for the views costs a window. A measurement: it prints, and refuses nothing |
 | `writes-survey.mts`, `writes-shape.mts` | Where the app writes to the database, and how each function that writes does it, read from syntax trees. Each takes the checkout to read |
@@ -48,96 +48,96 @@ the app: nothing imports it, and no check covers it.
 Run from the repo root.
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/search.mts
+npx tsx docs/plans/apack-state/prototype/search.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/threads.mts
+npx tsx docs/plans/apack-state/prototype/threads.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/views.mts
+npx tsx docs/plans/apack-state/prototype/views.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/draft-check.mts
+npx tsx docs/plans/apack-state/prototype/draft-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/kernel-check.mts
+npx tsx docs/plans/apack-state/prototype/kernel-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/binding-check.mts
+npx tsx docs/plans/apack-state/prototype/binding-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/vue-check.mts
+npx tsx docs/plans/apack-state/prototype/vue-check.mts
 ```
 
 ```bash
-npx vue-tsc --noEmit -p docs/plans/apack-spec/prototype/vue-fixture/tsconfig.json
+npx vue-tsc --noEmit -p docs/plans/apack-state/prototype/vue-fixture/tsconfig.json
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/progress-check.mts
+npx tsx docs/plans/apack-state/prototype/progress-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/leaving-check.mts
+npx tsx docs/plans/apack-state/prototype/leaving-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/failure-check.mts
+npx tsx docs/plans/apack-state/prototype/failure-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/answer-check.mts
+npx tsx docs/plans/apack-state/prototype/answer-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/starts-check.mts
+npx tsx docs/plans/apack-state/prototype/starts-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/commit.mts
+npx tsx docs/plans/apack-state/prototype/commit.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/awaits-check.mts
+npx tsx docs/plans/apack-state/prototype/awaits-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/internal-check.mts
+npx tsx docs/plans/apack-state/prototype/internal-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/makes-check.mts
+npx tsx docs/plans/apack-state/prototype/makes-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/follows-check.mts
+npx tsx docs/plans/apack-state/prototype/follows-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/interleaving-check.mts
+npx tsx docs/plans/apack-state/prototype/interleaving-check.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/append-cost.mts
+npx tsx docs/plans/apack-state/prototype/append-cost.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/graph.mts docs/plans/apack-spec/prototype/threads.mts
+npx tsx docs/plans/apack-state/prototype/graph.mts docs/plans/apack-state/prototype/threads.mts
 ```
 
 ```bash
-npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
+npx tsx docs/plans/apack-state/prototype/xstate-survey.mts "$PWD"
 ```
 
 Typecheck, every `.mts` file here. The options are `tsconfig.json`'s, which the fixture's extends, and the files are
 whichever are in the directory, so one added is checked without being named:
 
 ```bash
-npx tsc -p docs/plans/apack-spec/prototype
+npx tsc -p docs/plans/apack-state/prototype
 ```

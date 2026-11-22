@@ -4,7 +4,7 @@
 // made straight to the engine, so that what the kernel adds is the difference: one more unit around each thing a step
 // handles, which is a savepoint once the step has written.
 //
-//   npx tsx docs/plans/apack-spec/prototype/rows-cost.mts
+//   npx tsx docs/plans/apack-state/prototype/rows-cost.mts
 import { cpus } from 'node:os'
 import { reaching, system, type ViewHost } from './state.mts'
 import { elmdb } from './store-elmdb.mts'

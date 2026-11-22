@@ -1,17 +1,15 @@
-# apack-spec: one state primitive in place of XState
+# apack-state: one state primitive in place of XState
 
-Status: proposed, 2026-11-21, in Claude Code session `c6ebd24e-7b7d-4f7d-b520-9232e3b95ea5`. Not approved. Nothing in
-`packages/` is changed: what exists is a prototype under [`apack-spec/prototype/`](apack-spec/prototype/) and this
-record of the design it reached and the work it implies.
+Status: accepted as the direction, 2026-11-22. Nothing in `packages/` runs on it: what exists is a prototype under
+[`apack-state/prototype/`](apack-state/prototype/), and this record of the design it reached, what proves it, and
+the work it implies. The app's code was brought to this design's vocabulary on XState first
+([What is already done on XState](#what-is-already-done-on-xstate)), and the next work is the kernel in the tree
+([Order of work](#order-of-work)).
 
-Related: [answers-in-the-contract.md](answers-in-the-contract.md) and spankyed/apack#583 moved the app toward asks
-while staying on XState, and spankyed/apack#591 replaced #583 with the asking side this design wants.
-[Alongside results-are-asks](#alongside-results-are-asks) says what this design takes from that work, what it leaves,
-what the two share, and [what #591 delivered](#what-591-delivered), which is where the next work starts.
-
-**The design as it stands, on one page, with a complete example: [apack-spec/design.md](apack-spec/design.md).** This
-file is the longer record: why, every decision with what it replaced, what the prototype proves, and what is not
-built.
+**The design on one page, with a complete example: [apack-state/design.md](apack-state/design.md).** This file is
+the longer record, in this order: why, the design and its rules, rows and the database, every decision with what it
+replaced, what the prototype proves, what is done, what to build around it, what is not built, what it costs, and
+the order of work.
 
 ## Why
 
@@ -50,7 +48,7 @@ Specific costs recorded in the source today:
 
 **What is left for the kernel, now that the app's vocabulary is this design's.** On `97ee092630`, 2026-11-22, the
 app's components read through `useState`, its machines make their asks by name, and a send is `tell` or
-`broadcast`, all on XState ([What #591 delivered](#what-591-delivered)). That took the daily cost out: the selectors,
+`broadcast`, all on XState ([What is already done on XState](#what-is-already-done-on-xstate)). That took the daily cost out: the selectors,
 the ids of asks, the events an answer arrived as. What XState with those helpers still cannot do is what the kernel
 is for:
 
@@ -156,14 +154,14 @@ points at.
    failure without writing a `catch`, which could take a `Left`. A `run` that only sets things up need not say; what it
    throws is reported and the state stays as entered.
 
-   **Nothing a pack's code throws stops the kernel.** A handler that throws changes nothing and is reported, and the
+5. **Nothing a pack's code throws stops the kernel.** A handler that throws changes nothing and is reported, and the
    state takes the next event as before; what it had already sent is sent, as a process that crashes has sent what it
    sent. A release, a subscriber, or what hears progress or a view that throws is reported and the rest still run.
 
-   **A move that also changes data changes the data first**, so the work of the state it enters reads the data as the
+6. **A move that also changes data changes the data first**, so the work of the state it enters reads the data as the
    handler left it.
 
-   **What a state holds is a value, and it is frozen.** Every plain object and list a state holds is frozen, all
+7. **What a state holds is a value, and it is frozen.** Every plain object and list a state holds is frozen, all
    the way down, when it becomes the state's. A handler changes data by returning a change, never by writing to what
    it was handed, and one that writes throws on that line, changes nothing and is reported. A component is handed
    these same objects ([What a component reads](#what-a-component-reads)) and cannot write to them either. It costs
@@ -210,7 +208,7 @@ points at.
    message is where the rule is learnt. A write made where the value was read is for a pack rule to refuse before it
    runs (Not built).
 
-   **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
+8. **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
    state without what it marks `given`. Code that gets past them with a cast meets the same rule when it runs, and
    the whole change is refused: nothing is changed and no state is left or entered. An edit to a draft is refused at
@@ -219,8 +217,8 @@ points at.
    leaves the state at, which the definition says without running anything. This costs nothing where it does not
    fire, because a draft builds a new value beside the old one and never changes it: refusing is keeping the old
    one.
-5. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
-6. **An ask's answer and the change it makes are one thing.** A handler that only answers returns the answer. One
+9. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
+10. **An ask's answer and the change it makes are one thing.** A handler that only answers returns the answer. One
    that also changes something returns `answered(answer, next)`, where `next` is what every other handler returns:
    where to be, and what data changes. The change is made in the step the answer leaves in, so whoever asked sees
    the change when they have the answer, and is never told of a change that was not made: a change that is refused
@@ -234,16 +232,16 @@ points at.
    data as it is then, in one step, and it may refuse: an edit that throws one of the ask's refusals answers with that
    refusal and changes nothing. So the work is done holding nothing, and the check and the write are one step at the
    end.
-7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
+11. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
    `disconnected`. An ask whose asker has gone, because the state that asked was left or its system stopped, ends
    where it is awaited by throwing `Left`. The code that asked unwinds as cancelled code does everywhere: its `finally`
    runs, what it held is let go, and nothing after the ask runs. The kernel takes the `Left` at the top of `run` and
    says in the trace that an ask was left; it is not a failure. The answerer's `signal` aborts, and a handler that was
    itself asking unwinds the same way and answers `abandoned`.
-8. **A refusal is a kind, a message, and the data that kind declares.** `refuses` names kinds alone
+12. **A refusal is a kind, a message, and the data that kind declares.** `refuses` names kinds alone
    (`'not-found' | 'no-access'`) or each kind with what it carries (`{ 'name-taken': { existingId: string } }`). The
    handler has to give that data to `refuse`, and an asker reads it once it has checked the kind.
-9. **Work has one owner, and stops when its owner does.** A state's `run` is the state's, and stops when the state is
+13. **Work has one owner, and stops when its owner does.** A state's `run` is the state's, and stops when the state is
    left. An ask's handler is the ask's, and stops when whoever asked has gone, or when the state answering is left.
    So where work is put says how long it lasts. What is done for whoever asked, a search or checking what they sent,
    goes in the ask's handler: nobody wants it once they have gone. What has to be finished whoever is still there, a
@@ -257,7 +255,7 @@ points at.
    so work that stopped part-way has changed nothing; and a handler that does reach its end has its change made even
    if whoever asked has gone, because the work was done and the data should say so. A handler that throws because its
    `signal` aborted has stopped, and is reported as that and not as a failure.
-10. **What a state starts, follows and awaits is declared, and which of them are live follows from its data.**
+14. **What a state starts, follows and awaits is declared, and which of them are live follows from its data.**
     These three are standing: each goes on for as long as the data says so. Nothing is started, followed or read
     by hand. A state declares each, and each says which fields of the data it
     depends on, in one of two ways. With `from`, there is one, and it reads the fields named: it is asked again when
@@ -298,10 +296,6 @@ points at.
     **From outside a handler** a started state is reached the same way, `system.child(handle, 'thread', threadId)`,
     typed from what its starter declares. That is what a component uses. Such a handle is a name: its state runs
     only while its starter is the case and its key is there, so what is read through it is nothing until then.
-
-    **A field is named, not worked out.** Which there are is looked at again only when that field changes, which the
-    kernel already knows, so it costs nothing while anything else changes. There is no function to throw. And the
-    graph can say a thread runs for each key of `titles`. A set that is part of another is a field of its own.
 
     **A started state is given its data once, as it starts.** The fields it marks `given` in its own data are what
     its starter has to give, from the key and the starter's data, and leaving one out does not compile. It is not
@@ -369,7 +363,7 @@ points at.
 | `report(event)` | A state that was started | The state that started it, and only that one | No |
 
 Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state also declares the
-states it starts, and reaches each through `child`: rule 10.
+states it starts, and reaches each through `child`: rule 14.
 
 **Who may send a state what.** A state is declared with the events others may send it, and takes them under `on`.
 The events it sends itself as its own work goes on, a result found or a piece arrived, are declared apart, in its
@@ -450,7 +444,7 @@ threads.value.at                              // read again when it moves
 threads.value.data.messages                   // read again when the state replaces `messages`
 ```
 
-That is safe to hand out because the kernel freezes what a state holds, all the way down (rule 4). An object a
+That is safe to hand out because the kernel freezes what a state holds, all the way down (rule 7). An object a
 component reads is found by `includes`, can be cloned, is the same one when it is sent back, and throws if it is
 written to. What is not plain data, a class instance or a component, is handed over as it is.
 
@@ -459,7 +453,7 @@ inside a field it read: two components that read different keys of one record bo
 render that finds nothing different costs the render and not the page. Where that is too much there are two ways to
 be exact, and neither wraps a value:
 
-- **One of many is a state of its own** (`starts`, rule 10), with a mirror of its own. A change in one card renders
+- **One of many is a state of its own** (`starts`, rule 14), with a mirror of its own. A change in one card renders
   that card, however many there are.
 - **`computed(() => threads.data.messages[id])`** gives the same object for as long as that list is not replaced,
   since the kernel makes a new object only for what a change touched, and a computed does not pass on a value that
@@ -515,7 +509,7 @@ What it is built to get right is where bindings to a renderer usually go wrong:
   is swapped before anything reads through it, the new one taken before the old one is let go.
 - **Nothing is left behind.** A component that goes takes its reading with it, and the last reader of a state takes
   the mirror.
-- **A component reads and sends, and does not ask.** An ask is work, and work has an owner (rule 9), which a
+- **A component reads and sends, and does not ask.** An ask is work, and work has an owner (rule 13), which a
   component is not. What a component needs done it sends to a state, whose `run` does it.
 
 This is the binding the app has on XState (`@apackdev/sdk`'s `useState`), with the same things promised, so a
@@ -532,7 +526,7 @@ Two things it costs, neither of which anything catches:
 ### Following a view
 
 Data a window shows from the database stays a view. A component reads one with `useView`, unchanged: it has nothing to
-do with states. A surface that has to follow one from its machine declares it under `follows` (rule 10), which is what
+do with states. A surface that has to follow one from its machine declares it under `follows` (rule 14), which is what
 `fromView` becomes:
 
 ```ts
@@ -799,8 +793,32 @@ far more in a log. It needs the step to be a transaction first, and nothing abov
 
 ## What the prototype proves
 
-Everything below is in [`apack-spec/prototype/`](apack-spec/prototype/) and runs from the repo root; its README has the
-commands. Types and kernel together are about 600 lines, and the draft 139.
+Everything below is in [`apack-state/prototype/`](apack-state/prototype/) and runs from the repo root; its README
+has the commands. Types and kernel together are about 1,600 lines, and the draft 145. What runs, each file
+reporting its own count:
+
+| File | Checks | What it holds the kernel to |
+|---|---|---|
+| `kernel-check.mts` | 21 | A change: which fields changed, each refusal, what is frozen |
+| `draft-check.mts` | 19 | The draft a nested change is edited in |
+| `answer-check.mts` | 13 | An answer and the change it comes with |
+| `failure-check.mts` | 13 | What a handler or a state's work throws |
+| `leaving-check.mts` | 8 | An ask whose asker has gone |
+| `interleaving-check.mts` | 8 | Scenarios under every ordering |
+| `progress-check.mts` | 6 | Progress gathered, and its place among other messages |
+| `internal-check.mts` | 7 | Who may send a state what |
+| `starts-check.mts` | 15 | The states a state starts |
+| `follows-check.mts` | 16 | The views a state follows |
+| `awaits-check.mts` | 12 | The reads a state awaits |
+| `makes-check.mts` | 15 | The writes a state makes |
+| `binding-check.mts` | 18 | What a reader is handed |
+| `vue-check.mts` | 24 | Vue components, rendered and counted |
+| `rows-check.mts` | 48 | A step as one unit of the database, in memory and on elmdb |
+| `rows-property.mts` | 4 properties | The same rule over runs made from a seed, in order and under way together |
+| `views-check.mts` | 10 | A window hears of a step after its views show it |
+
+Five examples run beside them and compare what each step leaves: `search.mts`, `threads.mts`, `views.mts`,
+`commit.mts` and `library.mts`. `vue-tsc` checks a component file with a template.
 
 - **Two real features are ported.** The code search, backend and surface (`search.mts`), runs: results stream, a second
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
@@ -863,14 +881,16 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
   and which handler says to make which.
-- **A step is one unit of the database** (`rows-check.mts`, 46 checks). Every check is run twice: against rows in
+- **A step is one unit of the database** (`rows-check.mts`, 48 checks). Every check is run twice: against rows in
   memory (`store.mts`) and against elmdb through `@elmdb/ears` on a temporary database (`store-elmdb.mts`), with the
   kernel given the `transact` of each and nothing else. A row and the data that counts it are kept together, and a
   subscriber told of the step can read the row. A step that writes nothing never takes the writer. A handler that
   throws after two writes leaves neither, and in the same step the handler beside it keeps its own, in one commit.
   An ask refused after it wrote has written nothing. A change that refuses, and a change the kernel will not make,
   take back their own rows and the handler's. Work that throws at once has written nothing, and so has where work
-  goes when it fails, if that throws. A write after an `await` throws on its line, saying what to do, and the same
+  goes when it fails, if that throws. What a state hears from a read it awaits and from a write it made, as each
+  goes on and as each ends, are four handlers more: each in turn writes and then throws, and has written nothing
+  while the other three wrote. A write after an `await` throws on its line, saying what to do, and the same
   write returned in the change is kept with the data. Work left before it returned writes nothing. What an ask wrote
   before it waited is kept when it is refused after. Two commands, each a unit of its own, are kept with the count
   in one commit, and a handler that refuses after they returned takes back what they wrote. Outside any step a
@@ -880,14 +900,17 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   answered is told it was abandoned, and one made after is told there is nothing to take it. Under all 420
   orderings of two imports, a create, a note and a handler that throws, the count a state holds is the number of
   rows kept, on each store. And on elmdb, a watch of the rows is delivered after the step that wrote them.
-- **The rule as a property** (`rows-property.mts`). Runs of ten handlers each, made from a seed: each writes, tells
-  itself more, and ends made, thrown, refused or with a change that cannot be made, as an event, an ask, or an ask
-  that waits. Each run is held against a model of a few lines that knows nothing of the kernel: the rows kept, the
-  count, whether each ask was answered as made, and that nobody was told of a step while it was still writing.
-  1,500 runs hold in memory and 150 on elmdb, and a run that differs is reported with its seed. Its first two
-  failures were the model's, which had the events a handler sends itself handled before its change and depth
-  first: they are handled after, in the order they were sent.
-- **A window hears of a step after its views show it** (`views-check.mts`, 9 checks). A backend that keeps threads
+- **The rule as a property** (`rows-property.mts`). Runs of handlers made from a seed: each writes, tells itself
+  more, and ends made, thrown, refused or with a change that cannot be made, as an event, an ask, or an ask that
+  waits. **One after another**, ten to a run, each run is held against a model of a few lines that knows nothing of
+  the kernel and says the order as well: the rows kept, the count, whether each ask was answered as made, and that
+  nobody was told of a step while it was still writing. 1,500 runs hold in memory and 150 on elmdb. Its first two
+  failures were the model's, which had the events a handler sends itself handled before its change and depth first:
+  they are handled after, in the order they were sent. **Under way together**, six to a run from two windows, each
+  ask that waits waiting on work a schedule ends when it chooses: the order is then the schedule's, so the model
+  follows what was handled in the order it was, and says what the rule makes of each. 200 runs under 25 orderings
+  each hold in memory, and 20 under 10 on elmdb. A run that differs is reported with its seed.
+- **A window hears of a step after its views show it** (`views-check.mts`, 10 checks). A backend that keeps threads
   as rows, runs a view that counts them, answers an ask to make one and broadcasts that it did. A window that
   follows the view over the link notes the count each time it is answered and each time it is told. With the views
   told in a lane of their own, so that the schedule chooses when: asked for one thread after the other, the count is
@@ -895,12 +918,15 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   ordering in each in which the window hears first, which is what shows the scenario can fail. On elmdb, whose
   views run on its own clock, three threads in a row are each in the view when the window is answered. What a
   state hears from a view is a handler too: one that writes and then throws has written nothing, on both stores.
-- **What a change to the kernel would let through.** Seventeen changes to a copy of the kernel, each taking out one
+  And a window that closes while its answer is held is told it was disconnected and is sent nothing after, while
+  the window beside it is told and the backend goes on answering.
+- **What a change to the kernel would let through.** Nineteen changes to a copy of the kernel, each taking out one
   part of the above, each fail a check: rows never undone; an event's, an ask's, a late change's, an edit's or a
-  failed handler's failure counted as made; a stray field counted as made; a view's hearing that throws counted as
-  made; a step that is not a unit; what leaves before the rows are kept; states that go on after rows are lost; an
-  ask after the stop left waiting; nothing held for windows; and everything held released at once. Three of them
-  passed every check until one was written for them, and two were caught by the property and by nothing else.
+  failed handler's failure counted as made; a stray field counted as made; what a view, an ask's progress or an
+  ask's ending threw counted as made; a step that is not a unit; what leaves before the rows are kept; states that
+  go on after rows are lost; an ask after the stop left waiting; nothing held for windows; and everything held
+  released at once. Three of them passed every check until one was written for them, and two were caught by the
+  property and by nothing else.
 - **A check that fails says so, and does not hang** (`checks.mts`). All seventeen check files run their checks
   through one runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails
   part-way leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps
@@ -923,7 +949,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   it asks for is refused and reported; one view may lead another, two that lead each other are refused where the
   circle closes, and a change from anywhere else follows a view again as before; and stopping stops all of it. Six mistakes do not compile. `views.mts`, the
   threads surface's three kinds of view, has no call that follows or stops following one.
-- **An answer and its change cannot disagree** (`answer-check.mts`, 13 checks): an ask that only answers changes
+- **An answer and its change cannot disagree** (`answer-check.mts`, 13 checks with the three below): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
   fails the ask and changes nothing; two asks that each add one after a wait both count; and an ask whose answering
@@ -931,7 +957,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   count is exactly the number of answers that said they added. Giving fields after an `await`, a move that leaves out
   what the entered state needs, and an answer of the wrong type do not compile.
 
-  **A change may refuse** (3 more checks in the same file). A put that waits and a remove of the same id, under both
+  **A change may refuse** (three of those checks). A put that waits and a remove of the same id, under both
   orderings there are: a put that is answered was stored, and one that was not is told the id had gone, with the id.
   Both outcomes were run. The same put checking only before its work passes under the first ordering and is answered
   for nothing stored under the second, which exploring finds. `threads.mts` had that fault: it checked the thread
@@ -958,7 +984,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   entered state's `run` before the data was applied, so `run` read the old value. `search.mts` had it and its output
   did not show it.
 - **The three examples check what they leave behind.** `search.mts`, `threads.mts` and `views.mts` print what happened
-  for reading, and after each step compare where every state is and what it holds against what it should (5, 10 and
+  for reading, and after each step compare where every state is and what it holds against what it should (5, 16 and
   13 comparisons). Before this they printed and exited 0 whatever happened, which is how the defect above ran
   unseen. A search result carries the text it matched, so the comparison says which search found it; putting the
   defect back in a copy of the kernel fails `search.mts` at "it searched for the second query".
@@ -1022,7 +1048,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
-  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds eighteen on
+  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds twenty-one on
   what the kernel does with a change: subscribers told which fields of a state changed in a step and told nothing when
   a handler changed nothing, a move that edits a draft, and each refused edit reported with the data left as it was.
   A change that cannot be made is refused whole: an edit that adds or removes a field, reported with the line that
@@ -1044,162 +1070,45 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 - **Steps were measured against plain actor delivery** on an earlier version of the prototype: an observer saw states
   disagree twice without steps and never with them. That measurement is not in this folder.
 
-## Alongside results-are-asks
+## What is already done on XState
 
-[answers-in-the-contract.md](answers-in-the-contract.md) and spankyed/apack#583 make every result an ask while staying
-on XState. Its answering side and this design are one idea: asks declared in the contract, a table with one handler
-per ask, a handler that returns its answer and throws its refusal, and `failed` and `unavailable` as every ask's.
+The app's code was brought to this design's vocabulary before any kernel was written, so that code written now reads
+as it will after the move and the move rewrites as little as it can. All of it is merged.
 
-### Taken from it
+| What | Where | State |
+|---|---|---|
+| An ask is declared `{ args, answer, refuses, progress }`, refused with `throw refuse(kind, message, data?)`, and its handler's `signal` aborts when whoever asked goes | spankyed/apack#591, #593 | Done, in the SDK and every contract |
+| An asker awaits: no surface handles an answer as an event | #591 | Done. A state invokes `fromAsk`, which is this design's `run` |
+| A component reads its machine with `useState`, as `{ at, data }`, and names no actor | #596 | Done: about 350 `useSelector` calls in 75 files. The `machine-selectors` pack rule refuses `@xstate/vue` in a pack |
+| What `useState` hands a component is typed read-only | #606 | Done: 57 files, with no write to a machine's data found |
+| An ask that is not a state's own work is declared under `makes` and made by name, and which are under way is `making` | #597, #599 | Done, in all thirteen machines that had such asks. `useAsk` is gone: a component does not ask |
+| A send is `tell` or `broadcast` | #600 | Done |
+| A spec drives a feature at its boundary | | Partly: specs of asks ask, and many still read an actor's context |
 
-| In #583 | Here |
-|---|---|
-| A refusal carries data declared per kind | Rule 8, and in the prototype |
-| The bus answers an ask nothing took | `unavailable` |
-| A handler's `signal` aborts when the asking window goes | The same, and also when the asker's own state is left |
-| Tests ask through the harness (`app.ask`) | `system.ask`; a harness over this keeps that method |
+Two things were considered and left out. **A machine defined through the SDK**, re-exporting XState's `setup` and
+`assign`: it would put XState's way of writing a machine under this design's name, and every machine written through
+it would be in the shape the move is away from. A machine stays XState's, named as XState's, until its feature is
+ported whole. **Taking the commit and pull-request machines apart by concern**: that carries over one for one, a
+state for each concern, and done on XState first it is done twice.
 
-### Left out, and why
-
-| In #583 | Why not here |
-|---|---|
-| `ASK_ANSWERED` and `ASK_FAILED` as events, with `isAnswered`, `answerOf` and `AnswersOf` | A second way to receive an answer. Every transition then needs a guard naming its ask. An asker awaits `ask` in a state's `run`, or in the handler of an ask it is answering |
-| Answers wired through the machine (`answers.actions`, `answers.on`) | `asks` is a table of the state. A system with no states inside is that table and nothing else |
-| `waiting`, read by a handler to learn whether anyone asked | A handler does not branch on transport. What every window should hear is a `broadcast`, whoever asked. A write nobody waits for is told or asked, by whether losing it matters ([Communication](#communication)) |
-| A feed beside the answer (`sendToWindow(client, …)`) | `progress`, declared on the ask and heard only by its asker |
-| A cancelled ask whose handler keeps running, and a `superseded` refusal | Leaving the asker's state aborts the handler's `signal` |
-| A disk error mapped to `not-found` or `no-access` where declared | A handler names its own refusals. A mapping the handler does not show is one a reader has to know about |
-
-### What the two should share
-
-Code written on XState now should read the same after a move to this design. That is a matter of names and of where
-pack code touches XState.
-
-**One vocabulary.** #583 says `ask` for an ask's fields, `fails` and `failure`. Renaming once, on XState, is cheaper
-than renaming again here.
-
-| Concept | Name in both |
-|---|---|
-| An ask's declaration | `{ args, answer, refuses, progress }` |
-| Asking | `ask(name, ask, args)`, resolving to an `Outcome` |
-| Refusing | `throw refuse(kind, message, data?)` |
-| Telling the asker before the answer | `progress(update)` |
-| Stopping work nobody waits for | the handler's `signal` |
-| Telling a system | `tell` |
-| Telling a surface in every window | `broadcast` |
-
-**Seams the SDK owns.** Each of these is work on XState today, and each removes a line the move would otherwise touch.
-
-- **Handlers are plain functions in tables beside the machine**: asks, and events keyed by name with each handler given
-  its own event. A single-state system is then two tables and a trivial machine.
-- **A component reads state with `useState`, in the shape it is to keep** ([What a component reads](#what-a-component-reads)):
-  `const { state, send } = useState(…)`, with `state` holding `{ at, data }`. On XState it is computed from the
-  actor's snapshot. It does not depend on which kernel runs underneath, so a component moves to it once, and the
-  move to this design does not touch the component again. A component never calls `useSelector` on an actor, and
-  never names the actor.
-- **A component reads and sends, and does not ask.** What it needs done it sends to a state, whose work asks. An ask
-  made from a component has no owner to stop it or to say where the state goes if it fails.
-- **A loading flag is a state that invokes the ask**, and an independent concern is an actor of its own, never a
-  parallel state. Whether something is under way is where a state is. It is not an id in a list the machine keeps,
-  and a component does not import the id of an ask to find out.
-
-One seam that was here is taken out: **a machine defined through the SDK**, re-exporting XState's `setup` and
-`assign` at first, with a pack rule against importing `xstate`. It would put XState's way of writing a machine, a
-config of fixed targets and named actions, under this design's name, and every machine written through it would be
-written in the shape the move is away from. A machine stays XState's, named as XState's, until its feature is ported
-whole.
-- **A spec drives a feature at its boundary**: events in, `ask`, state read through the SDK. 132 spec files import
-  XState, and one that reads an actor's context is rewritten by the move.
-
-What does not carry over is authoring in this design's syntax on XState's runtime. A handler here chooses where to go
-when it runs, and XState's targets are fixed in the machine's config.
-
-### What #591 delivered
-
-spankyed/apack#591 is step 1 of the [order of work](#order-of-work), on XState. Its work list and the recipe it
-followed are `docs/plans/asks-shape.md` on that branch. Read against the tables above:
-
-| Shared item | State after #591 |
-|---|---|
-| `{ args, answer, refuses, progress }`, `refuse(...)`, `progress(...)`, the handler's `signal` | Done, in the SDK and every contract |
-| An asker awaits: no `ASK_ANSWERED` or `ASK_FAILED` handled by a surface | Done, in three forms. A state invokes `fromAsk`, which is this design's `run` and is the one to keep. An ask is spawned under an id and handled where it ends, and a component awaits `ask`/`useAsk`: neither carries over (below) |
-| A feed beside the answer | Gone: the search and the git transfers say `progress` |
-| Leaving the asker's state aborts the handler | Done: the asker's abort reaches the handler's `signal`, and a stopped ask is not answered |
-| `waiting` | Gone from a handler's arguments |
-| A loading flag is a state that invokes the ask | Done where an ask was touched |
-| `tell` and `broadcast` | Done after it, in spankyed/apack#600 |
-| Handlers as tables beside the machine | Not done, on purpose: an ask is taken by the state that lists it (`answers.on`), which is this design's `asks` per state. A child machine answers its own asks |
-| A component reads state with `useState` | Done after it, in spankyed/apack#596 |
-| A component does not ask | Done after it, in spankyed/apack#599: `useAsk` is gone |
-| A machine is defined through the SDK; no `xstate` import in a pack | Taken out of the seams (above) |
-| A spec drives a feature at its boundary | Partly: specs of asks ask, and many still read an actor's context |
-
-spankyed/apack#593, stacked on #591, finished what #591 listed as open: no surface machine is `type: 'parallel'`, and
-an ask that can be under way beside others is spawned under an id, with the ids under way kept in the machine's
-context.
-
-**What of this is not to be built on.** A flat XState machine has nowhere to say that a push is under way while a
-file is being staged, so #593 gave it a list: `asking` in the context, written by `enqueueAsks` in place of XState's
-`enqueueActions`, an id for each ask from `askId`, how one ended arriving as `xstate.done.actor.<id>` and matched by
-its prefix, and `endedAsk` to find which. It works, and it is the part of the asks work this design replaces. On
-`1226110b42`, 2026-11-21, by text search outside specs: 154 calls of `askId`, 161 of `enqueueAsks`, 180 transitions
-on `xstate.done.actor`, 407 of `useSelector`, and 8 of `useAsk`. The commit surface's machine is 1,778 lines with 183
-uses of the three; its panel has 63 `useSelector` lines and imports the ids of asks to show a spinner.
-
-Here an ask that is not a state's own work is declared ([rule 10](#rules)): a read under `awaits`, with the fields
-it depends on, and a write under `makes`, made with `make`. Which writes are under way is the kernel's to keep, and
-a component reads it. There is no id, no list kept by hand, and no event for how an ask ended, and `commit.mts` is a
-slice of that surface written this way. So this record is not extended to new code, and nothing new is built on `asking`, `askId` or `endedAsk`. It
-goes when its surface is ported.
-
-**The cleanup of `master`, on XState, is four PRs.** The aim was that code written now reads as it will after the
-move, and that what #593 added is replaced and not only left alone.
-
-1. **spankyed/apack#596: every component reads its machine with `useState`**, in the shape it is to keep:
-   `const { state, send } = useState(…)`, with `state` holding `{ at, data }`. About 350 `useSelector` calls in 75
-   files moved, and the `machine-selectors` pack rule refuses `@xstate/vue` in a pack. One `useSelector` is left, in
-   the renderer: a surface's `fallbackPanel.isShown` is handed a whole snapshot, as that contract takes it.
-2. **spankyed/apack#597: `makes`, proven on the commit surface.** Its 54 asks are declared once and made by name;
-   which are under way is `making`, read through `useState`, and the panel imports no id. The spike held: one
-   transition on `xstate.done.actor.made.*` takes how every made ask ended, clears it from `making`, and raises
-   `made.<name>`, which a guard and a target are written for like any event. The machine went from 1,778 lines to
-   about 1,620, and lost three fields that tracked asks by id.
-3. **spankyed/apack#599: `makes` through the other twelve machines**, and the four settings forms, whose import and
-   export are asks their surface makes. `useAsk` and `asks-under-way.ts` left the SDK, and two pack rules hold it:
-   `ask-ends` refuses a transition on `xstate.done.actor`, and `swallowed-ask-ends` a `'*'` transition written
-   without the one that settles asks beside it. A contract names the asks it publishes with their kinds
-   (`MakingOf<{ export: 'one'; nodeDetails: 'each' }>`), which is this design's `makes` in the shape.
-4. **spankyed/apack#600: `sendToSystem` is `tell` and `broadcastToSurface` is `broadcast`.**
-
-What that taught, which changes this plan:
+What it taught, which this design now has:
 
 - **A mirror hands out the state's own values, or it breaks identity.** The first `useState` copied the context
-  into a deep reactive mirror written in place, as `mirror.mts` does, to render per nested key. Moving real
-  components onto it showed what a copy costs. A machine that drops told failures with `includes` never matched the
-  copies sent back. `structuredClone` refused a proxy. The shell's `Surface` holds component definitions, which were
-  copied. A toast watching a result did not run when the result was replaced by an equal one. A mirrored object sent
-  in an event put the mirror's own storage into the machine's context. What shipped holds each field as the
-  machine's own value, neither copied nor made reactive, and writes a field when the machine replaced it, which is
-  what a `useSelector` over the field did. The cost is that two components reading different keys inside one field
-  both render when it is replaced. **[What a component reads](#what-a-component-reads) is now written for that**, and the
-  prototype's mirror is built that way.
-- **A read made on an event is a `makes`.** The helper does not tell a read from a write, so the reads moved with
-  the writes and `asks-under-way.ts` could go without `awaits`. What was not built on XState is a read that asks
-  again when a field changes.
+  into a deep reactive mirror. On real components a machine that drops what it is told by `includes` never matched
+  the copies sent back, `structuredClone` refused a proxy, component definitions held in data were copied, and a
+  watch did not run when a result was replaced by an equal one. [What a component reads](#what-a-component-reads)
+  is written for what shipped.
+- **A read made on an event is a `makes`.** The helper does not tell a read from a write. What was not built on
+  XState is a read that asks again when a field changes, which is `awaits`.
 - **A read asked again replaces the one before, by construction.** Where a machine kept a map from an ask's id to
-  what it was about, the ask is keyed by that and the map is gone. Several reads whose answers used to race are now
-  one at a time.
-- **XState's wildcard is the one thing that can break it silently.** A state's `'*'` is tried before its parent's
-  transitions, so it takes an ask's end and the ask stays under way for good. A rule holds it. This design has no
-  such fall-through to guard.
+  what it was about, the ask is keyed by that and the map is gone.
+- **XState's wildcard can break it silently.** A state's `'*'` is tried before its parent's transitions, so it
+  takes an ask's end and the ask stays under way for good. A pack rule holds it. This design has no such
+  fall-through to guard.
 
-`makes` and `useState` are helpers a machine and a component use. They are not a way of defining a machine, which
-stays XState's ([the seam that was taken out](#what-the-two-should-share)).
-
-Not done: taking apart the commit and pull-request machines by concern. That carries over one for one, a state for
-each concern, and done on XState first it is done twice. They are split as they are ported.
-
-Then step 2 of the order of work.
+What is on `master` and is not to be built on: XState's `makes` keeps which asks are under way in the machine's
+context and hears how one ended as `xstate.done.actor.made.*`. Here that record is the kernel's, and there is no
+event for how an ask ended. It goes with each surface as it is ported.
 
 ## What to build around it
 
@@ -1284,7 +1193,7 @@ projects. Each would loosen the fit to this app.
     none of their messages. What is saved to restore from has to hold what each started state held as well. What
     it must carry is what the shell does on a reconnect today, which is why it waits for the shell. Three rules are
     settled:
-    - **what is restored is looked at before anything is entered**, as a move is (rule 4): a state there is not, a
+    - **what is restored is looked at before anything is entered**, as a move is (rule 8): a state there is not, a
       field missing or a field no state has, and it is refused whole, the state starts afresh, and that is said. A
       definition that changed since the value was saved is the ordinary case of this, and is what React's fast
       refresh does with a component whose shape changed;
@@ -1333,7 +1242,7 @@ projects. Each would loosen the fit to this app.
   two reads and three writes. What the slice does not show is the other 49, and whether "a state when what the surface takes
   changes, an awaited ask otherwise" stays a clear rule across them. The asks the panel reads as under way by id
   today (a commit, a checkout, a worktree change, signing in) are the ones to try it on.
-- **What is left of what a state starts and follows.** Rule 10 is built and checked on two examples. Not built: the
+- **What is left of what a state starts and follows.** Rule 14 is built and checked on two examples. Not built: the
   brain, the bus and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per
   registration.
 - **A check for a cycle of asks.** Two systems that each answer by asking the other wait on each other without end,
@@ -1342,7 +1251,7 @@ projects. Each would loosen the fit to this app.
   link without end are a step each, and nothing bounds that; a schedule stops a run that has not come to rest. This
   one is left as it is on purpose. A count of how many things led to this one, cut off at a limit, was considered:
   an agent's loop is one thing leading to the next for as long as it runs, and so is reading results a page at a
-  time, so a limit would stop what the app is for. A circle of views is different, and is refused (rule 10), because
+  time, so a limit would stop what the app is for. A circle of views is different, and is refused (rule 14), because
   what a view is asked for is declared and a circle among declarations is a mistake whatever its length.
 - **Undoing what a handler sent before it threw.** Its change is not made, and what it told others is still told.
 - **Field names unique along a path** are assumed and not enforced.
@@ -1355,22 +1264,21 @@ projects. Each would loosen the fit to this app.
     kept around `transact` (`store-elmdb.mts`), and it is the same there.
   - *A pack rule:* a handler that opens a `transact` after an `await` is refused by `apack pack validate`, beside
     the rules that are there. It has no subject until a handler is written against the kernel.
-  - *The views and the bus on one connection.* The hold rests on what a view delivers and what a step sends coming
-    down one ordered connection, and on the host saying when the views have been sent what was kept: for elmdb,
-    its `watchesSettled`. Whether the API's view subscriptions and its bus share a socket today is to read when the
-    host is ported, and they are put on one if not.
+  - *The host saying when the views have been sent what was kept.* The hold rests on what a view delivers and what
+    a step sends coming down one ordered connection. They do: a window has one socket (`createWSClient`,
+    `packages/renderer/src/transport/index.ts`), and its view subscriptions (`views.watch`) and its bus subscription
+    (`bus.sub`) are both tRPC subscriptions over it, read on `origin/master` at `e8cfccf4a5`. What the host has to
+    add is the word that the views have been sent: for elmdb, its `watchesSettled`.
   - *A watch somebody is waiting on.* elmdb runs a watch again no sooner than a frame after it last ran, which
     bounds what a churning view costs and is what a run of asks that each write pays, a frame a link. A way to have
     the watches a held answer waits on run at once, within the slice a flush already keeps to, would make that the
-    time the view takes to read. It is a change to elmdb's scheduler, and is made if a ported feature has such a
-    run that cannot be one ask.
+    time the view takes to read. It is a change to elmdb's scheduler, designed in elmdb's
+    `docs/roadmap/waited-watches.md` (spankyed/elmdb#216) and not built.
   - *A step that must be on disk before it answers.* `transact` takes `durable: true`; a handler has no way to ask
     for it yet. It is one more key on what a handler returns, and is added when a handler needs it.
   - *Restart.* Nothing here kills a system between something done outside and the row that records it. That is
     checked against the first ported feature that does both, since what is to be found again differs by feature.
   - *A flow action's writes and the brain's step*, settled with the brain.
-  - *What an ask it made, or a read it awaits, tells a state* is a handler like the rest, and returns whether it was
-    made as they do. No check writes a row in one and then throws.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edge.** Reading a state that has ended throws.
@@ -1409,7 +1317,8 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
 
 1. **Bring the XState code to the shared vocabulary and seams.** Done, and merged: spankyed/apack#591 and #593 for
    asks, #596 for `useState`, #597 and #599 for `makes`, #600 for `tell` and `broadcast`
-   ([What #591 delivered](#what-591-delivered)). A machine goes on naming XState until it is ported.
+   ([What is already done on XState](#what-is-already-done-on-xstate)). A machine goes on naming XState until it
+   is ported.
 2. **Build the kernel in the tree**, with no dependencies, as its own workspace, from the prototype and with its
    checks: the schedule and every ordering, the refusals, what must not compile. Not a sibling repository: its API
    is the pack contract. It takes the `transact` a step is run in ([Rows](#rows)) as something it is given, so
@@ -1436,5 +1345,6 @@ such changes are kept few, and the branch is brought up to `master` often enough
 
 ## The name
 
-`apack-spec` is a working name. "Spec" already means a test file here (`npm run spec`, `*.spec.ts`), so the name is
-ambiguous in speech and should be settled before a package is created.
+`apack-state`, and as a package `@apackdev/state`. What a pack author writes is a state and what a component reads
+is one, so the package is named for it: `state<…>()({ … })`, `useState`, `@apackdev/state`. The runtime inside it,
+which runs states in steps, is the kernel.

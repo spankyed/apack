@@ -3,7 +3,7 @@
 // the order they arrive in is the order they were sent in. Checked against rows in memory under every ordering, and
 // against elmdb, whose views run on its own clock.
 //
-//   npx tsx docs/plans/apack-spec/prototype/views-check.mts
+//   npx tsx docs/plans/apack-state/prototype/views-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { rest, run, system } from './checks.mts'
 import { explore, type Schedule } from './schedule.mts'
@@ -143,6 +143,46 @@ await run([
       ok(traced.some((line) => line.startsWith('DEFECT') && line.includes('hearing broke')))
     } finally { store.close() }
   }] as const),
+  ['a window that closes while its answer is held is told it was disconnected, is sent nothing after, and the backend goes on', async () => {
+    const store = memory()
+    // The views are sent what was kept when this check says so, and not before.
+    const waiting: Array<() => void> = []
+    const traced: string[] = []
+    const trace = (line: string): void => { traced.push(line) }
+    const backend = system({ side: 'backend', transact: store.transact, views: viewsOf(store), viewsSent: (then) => { waiting.push(then) }, trace })
+    backend.start('threads', threads(store))
+    const closing = system({ side: 'window', name: 'the window that closes', trace })
+    const link = closing.connect(backend)
+    const closed = closing.start('panel', panel)
+    const staying = system({ side: 'window', name: 'the window that stays', trace })
+    staying.connect(backend)
+    const stayed = staying.start('panel', panel)
+    const turn = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve) })
+    for (let turns = 0; turns < 6; turns++) await turn()
+    const asked = closing.ask(closed, 'ADD', { id: 'a' })
+    // Until the thread is kept: its answer and the broadcast are held, with the views not yet said to be sent.
+    for (let turns = 0; turns < 20 && store.count('thread') === 0; turns++) await turn()
+    strictEqual(store.count('thread'), 1)
+    ok(waiting.length > 0, 'nothing was held')
+    deepStrictEqual([closing.read(closed).data.atAnswer, staying.read(stayed).data.atEvent], [[], []])
+    link.close()
+    const outcome = await asked
+    ok(outcome.ok && outcome.value === false)
+    // Now the views are sent it: what was held goes, to the window that is there and not to the one that is not.
+    for (const then of waiting.splice(0)) then()
+    for (let turns = 0; turns < 6; turns++) await turn()
+    for (const then of waiting.splice(0)) then()
+    await rest()
+    deepStrictEqual(staying.read(stayed).data.atEvent.length, 1)
+    deepStrictEqual(closing.read(closed).data.atEvent, [])
+    deepStrictEqual(traced.filter((line) => line.startsWith('DEFECT')), [])
+    // And the backend still answers: the window that stayed asks, and is answered.
+    const again = staying.ask(stayed, 'ADD', { id: 'b' })
+    for (let turns = 0; turns < 20 && waiting.length === 0; turns++) await turn()
+    for (const then of waiting.splice(0)) then()
+    ok((await again).ok)
+    strictEqual(store.count('thread'), 2)
+  }],
   ['a window that closes before its ask crosses is told so, and neither side is left waiting', async () => {
     const store = memory()
     const { backend, window, handle, link } = made(store, true)

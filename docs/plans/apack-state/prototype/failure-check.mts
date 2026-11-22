@@ -1,7 +1,7 @@
 // What happens when code that is not the kernel's throws. A state's work that fails goes where the state says. A
 // handler that throws changes nothing. And none of it stops the kernel, which goes on taking what comes next.
 //
-//   npx tsx docs/plans/apack-spec/prototype/failure-check.mts
+//   npx tsx docs/plans/apack-state/prototype/failure-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { rest, run, system } from './checks.mts'
 import { system as unlimited } from './state.mts'

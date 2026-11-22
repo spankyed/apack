@@ -2,7 +2,7 @@
 // stands for it, so nothing in the data has to be taken out when it ends. Which are under way is the kernel's to
 // keep, and is read beside the data.
 //
-//   npx tsx docs/plans/apack-spec/prototype/makes-check.mts
+//   npx tsx docs/plans/apack-state/prototype/makes-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { effect } from '@vue/reactivity'
 import { rest, run, system } from './checks.mts'

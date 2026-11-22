@@ -1,6 +1,6 @@
 // What a growing collection costs, and why progress arrives in batches.
 //
-//   npx tsx docs/plans/apack-spec/prototype/append-cost.mts
+//   npx tsx docs/plans/apack-state/prototype/append-cost.mts
 //
 // A value is replaced, never mutated, so appending copies the array it appends to. One change per item is then
 // quadratic. The first half measures that on the draft alone. The second streams results through a real ask, from a

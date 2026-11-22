@@ -1,7 +1,7 @@
 // Where the app writes to the database. Reads the syntax tree of every source file: a call counts when its callee is
 // a write primitive imported from an EARS module, or a method of a repository's `...Commands`.
 import { createRequire } from 'node:module'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 // Run from a checkout that has `typescript` installed: npx tsx <this file> <the checkout to read>
 const root = process.argv[2] ?? process.cwd()
@@ -11,7 +11,10 @@ const EARS = /(^#generated\/ears$)|(@apackdev\/sdk\/ears)|(^@elmdb\/ears)|(\/ear
 const OUTSIDE = /inference|filesystem|terminal|child_process|@apackdev\/git|\/git\b|node:fs|execFile|spawn/
 const files: string[] = []
 const walk = (dir: string): void => { for (const name of readdirSync(dir)) { if (name === 'node_modules' || name === 'dist' || name === '__generated__' || name === 'tests') continue; const at = join(dir, name); if (statSync(at).isDirectory()) walk(at); else if (/\.(ts|mts)$/.test(name) && !/\.(spec|d)\.ts$/.test(name)) files.push(at) } }
-for (const pkg of ['packages/default-setup/src', 'packages/apack-host/src', 'packages/apack-sdk/src', 'packages/api/src']) walk(join(root, pkg))
+// The server's package was `packages/api` at the commit the plan's figures were read on: whichever is there is read.
+for (const pkg of ['packages/default-setup/src', 'packages/apack-host/src', 'packages/apack-sdk/src', 'packages/server/src', 'packages/api/src']) {
+  if (existsSync(join(root, pkg))) walk(join(root, pkg))
+}
 const kind = (file: string): string => {
   const f = relative(root, file)
   if (/default-setup\/src\/features\/[^/]+\/be\/repository\//.test(f)) return 'pack: a repository (where commands are defined)'
@@ -26,7 +29,7 @@ const kind = (file: string): string => {
   if (/apack-host\/src\/(services|settings|app-state|migrations|backup|database)\//.test(f)) return 'host: ' + f.split('/')[3]
   if (/apack-host\/src\/features\//.test(f)) return 'host: its own features'
   if (/apack-host\/src\//.test(f)) return 'host: other (' + f.split('/').slice(3, 4).join('/') + ')'
-  return 'api'
+  return 'server'
 }
 type Row = { primitives: number; commands: number; files: Set<string>; withOutside: Set<string>; inTransact: number }
 const rows = new Map<string, Row>()

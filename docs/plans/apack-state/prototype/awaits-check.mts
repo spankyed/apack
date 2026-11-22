@@ -1,7 +1,7 @@
 // The asks a state awaits. These are reads: one is there because the data says so, for as long as it does. It names
 // the fields it reads, or the field with one for each of its keys, and which are asked follows from the data.
 //
-//   npx tsx docs/plans/apack-spec/prototype/awaits-check.mts
+//   npx tsx docs/plans/apack-state/prototype/awaits-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { rest, run, system } from './checks.mts'
 import { commit, git, type CommitEvent } from './commit.mts'

@@ -1,7 +1,7 @@
-# apack-spec: the design on one page
+# apack-state: the design on one page
 
 This is the design as it stands, with no history. How it got here, what was tried first and what is not built are in
-[the plan](../apack-spec.md). Everything shown here runs in [`prototype/`](prototype/).
+[the plan](../apack-state.md). Everything shown here runs in [`prototype/`](prototype/).
 
 ## A state
 

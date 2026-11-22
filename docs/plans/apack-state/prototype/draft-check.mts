@@ -1,6 +1,6 @@
 // What a draft has to get right. Each check is a way a hand-built one goes wrong.
 //
-//   npx tsx docs/plans/apack-spec/prototype/draft-check.mts
+//   npx tsx docs/plans/apack-state/prototype/draft-check.mts
 import { deepStrictEqual, notStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { run } from './checks.mts'
 import { produce } from './draft.mts'

@@ -1,7 +1,7 @@
 // An ask that changes something as it answers: `answered(answer, next)`. The answer and the change are one thing.
 // Whoever asked is never told of a change that was not made, and never sees the answer ahead of the change.
 //
-//   npx tsx docs/plans/apack-spec/prototype/answer-check.mts
+//   npx tsx docs/plans/apack-state/prototype/answer-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
 import { rest, run, system } from './checks.mts'

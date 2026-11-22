@@ -1,7 +1,7 @@
 // What happens to an ask when whoever made it goes: the state that asked is left while the answer is still coming.
 // The ask ends where it is awaited, with `Left`, so the code that asked unwinds the way cancelled code does everywhere.
 //
-//   npx tsx docs/plans/apack-spec/prototype/leaving-check.mts
+//   npx tsx docs/plans/apack-state/prototype/leaving-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { rest, run, system } from './checks.mts'
 import { given, Left, reaching } from './state.mts'

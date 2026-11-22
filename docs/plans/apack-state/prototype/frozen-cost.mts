@@ -2,7 +2,7 @@
 // prints and refuses nothing. The kernel freezes what a state holds, so every list a handler or a component reads is
 // one of these, and the draft's copy of a list is the `spread` row.
 //
-//   npx tsx docs/plans/apack-spec/prototype/frozen-cost.mts
+//   npx tsx docs/plans/apack-state/prototype/frozen-cost.mts
 //
 // Each figure is the least of several rounds, since a busy machine can only make a round slower.
 

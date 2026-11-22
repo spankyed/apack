@@ -2,7 +2,7 @@
 // none of the three is. Every check is run twice: against rows kept in memory, and against the app's engine, elmdb,
 // on a temporary database. The kernel is given the `transact` of each and nothing else.
 //
-//   npx tsx docs/plans/apack-spec/prototype/rows-check.mts
+//   npx tsx docs/plans/apack-state/prototype/rows-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { rest, run, system } from './checks.mts'
 import { explore, type Schedule } from './schedule.mts'
@@ -146,6 +146,50 @@ const threads = (store: Rows, read: (path: string) => Promise<string> = async (p
 const settled = async (store: ReturnType<typeof elmdb>): Promise<void> => {
   const alive = setInterval(() => {}, 1_000)
   try { await store.engine.admin.watchesSettled() } finally { clearInterval(alive) }
+}
+
+// --- what a state is told by an ask it made, or by a read it awaits ------------------------------------------------
+
+type SourceAsks = { FIND: { args: { q: string }; answer: string; progress: string } }
+type Sourced = { systems: { source: { events: never; asks: SourceAsks } }; surfaces: {}; views: {} }
+const sourced = reaching<Sourced>()
+/** Says it has begun, waits a turn, and answers. */
+const source = sourced<{}, never, SourceAsks>()({
+  asks: { FIND: async ({ q }, { progress }) => { progress(`began ${q}`); await new Promise((resolve) => { setImmediate(resolve) }); return `found ${q}` } },
+})
+type KeeperEvents = { type: 'SET'; query: string } | { type: 'SAVE' }
+type Keeper = { data: { query: string; got: string[] }; makes: { save: 'one' } }
+/**
+ * Awaits a read of what its query names and makes a write when told to, and writes a row each time it hears from
+ * either and each time one ends. A query that says so has it throw after writing, in the one place it names.
+ */
+const keeper = (store: Rows) => {
+  const note = (where: string, query: string): void => {
+    store.put('thread', `${where}:${query}`, { topic: where })
+    if (query === `breaks in ${where}`) throw new Error(`${where} broke`)
+  }
+  return sourced<Keeper, KeeperEvents>()({
+    data: { query: '', got: [] },
+    on: {
+      SET: ({ query }) => ({ data: { query } }),
+      SAVE: (_, { make }) => { make('save') },
+    },
+    awaits: (asking) => ({
+      lookup: asking('source', 'FIND', {
+        from: ['query'],
+        args: ({ query }) => query !== '' && { q: query },
+        heard: (_updates, { data }) => { note('read heard', data.query) },
+        ended: (_outcome, { data }) => { note('read ended', data.query); return { data: { got: [...data.got, data.query] } } },
+      }),
+    }),
+    makes: ({ one }) => ({
+      save: one('source', 'FIND', {
+        args: ({ query }) => ({ q: `save ${query}` }),
+        heard: (_updates, { data }) => { note('write heard', data.query) },
+        ended: (_outcome, { data }) => { note('write ended', data.query) },
+      }),
+    }),
+  })
 }
 
 type Kept = readonly [name: string, open: () => Rows]
@@ -368,6 +412,34 @@ const checks = ([kept, open]: Kept): Array<readonly [string, () => void | Promis
     deepStrictEqual(store.get('thread', 'a'), { topic: 'noted' })
     sys.send(handle, { type: 'TOUCH' })
     strictEqual(sys.read(handle).data.touched, 1)
+  }],
+  ['what a state hears from a read it awaits and from a write it made are handlers too: each that writes and then throws has written nothing', async () => {
+    before?.close()
+    const store = before = open()
+    const traced: string[] = []
+    const sys = system({ side: 'backend', transact: store.transact, trace: (line) => { traced.push(line) } })
+    sys.start('source', source)
+    const handle = sys.start('keeper', keeper(store))
+    const wrote = (where: string, query: string): boolean => store.get('thread', `${where}:${query}`) !== undefined
+    const places = ['read heard', 'read ended', 'write heard', 'write ended'] as const
+    // With nothing breaking, all four write.
+    sys.send(handle, { type: 'SET', query: 'fine' })
+    await rest()
+    sys.send(handle, { type: 'SAVE' })
+    await rest()
+    deepStrictEqual(places.map((where) => wrote(where, 'fine')), [true, true, true, true])
+    // Each in turn throws after it has written: its row is gone, and the other three wrote.
+    for (const broken of places) {
+      const query = `breaks in ${broken}`
+      sys.send(handle, { type: 'SET', query })
+      await rest()
+      sys.send(handle, { type: 'SAVE' })
+      await rest()
+      deepStrictEqual(places.map((where) => wrote(where, query)), places.map((where) => where !== broken), `with ${query}`)
+    }
+    // A read that ended by throwing changed nothing: its query is not among those it got.
+    deepStrictEqual(sys.read(handle).data.got, ['fine', 'breaks in read heard', 'breaks in write heard', 'breaks in write ended'])
+    strictEqual(traced.filter((line) => line.startsWith('DEFECT')).length, 4)
   }],
 ])
 

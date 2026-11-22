@@ -1,7 +1,7 @@
 // Progress is gathered, and nothing else is. These checks hold the order: what a window hears, it hears in the order
 // it was sent, whatever kind of message each was.
 //
-//   npx tsx docs/plans/apack-spec/prototype/progress-check.mts
+//   npx tsx docs/plans/apack-state/prototype/progress-check.mts
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { run, system } from './checks.mts'
 import { given, reaching, type State } from './state.mts'

@@ -1,6 +1,6 @@
 // Read-only survey: how this repo uses XState, read from the AST rather than from text.
 //
-//   npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
+//   npx tsx docs/plans/apack-state/prototype/xstate-survey.mts "$PWD"
 import { createRequire } from 'node:module'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'

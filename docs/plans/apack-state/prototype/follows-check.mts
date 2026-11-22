@@ -1,7 +1,7 @@
 // The views a state follows. They are declared, and which are followed, and what each is asked for, come from the
 // data: nothing follows or stops following one by hand. What a view delivers goes to a handler.
 //
-//   npx tsx docs/plans/apack-spec/prototype/follows-check.mts
+//   npx tsx docs/plans/apack-state/prototype/follows-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { run, system } from './checks.mts'
 import { reaching, type ViewHost, type ViewUpdate } from './state.mts'

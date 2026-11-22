@@ -6,9 +6,10 @@
 // A run is generated from a seed and held against a model that knows nothing of the kernel: a few lines that say what
 // the rule says. A run that differs is reported with its seed, and `SEED=<n>` runs that one alone.
 //
-//   npx tsx docs/plans/apack-spec/prototype/rows-property.mts
+//   npx tsx docs/plans/apack-state/prototype/rows-property.mts
 import { deepStrictEqual } from 'node:assert'
 import { rest, run, system } from './checks.mts'
+import { sample, type Schedule } from './schedule.mts'
 import { answered, reaching } from './state.mts'
 import { memory, type Rows } from './store.mts'
 import { elmdb } from './store-elmdb.mts'
@@ -68,17 +69,53 @@ const asked = (model: Model, does: Does, waits: boolean): boolean => {
   return made
 }
 
+/**
+ * The same rule over what was handled in the order it was, for runs in which that order is not one the model can
+ * say: asks under way together, each waiting on something that ends when a schedule gets to it. What the rule says
+ * of each thing handled does not depend on what came between.
+ */
+const follow = (trace: readonly Handled[]): Model => {
+  const model: Model = { rows: new Map(), count: 0 }
+  /** The rows as an ask that does not wait found them: what its change goes back to if it is not made. */
+  let asking: Map<string, number> | undefined
+  for (const entry of trace) {
+    const { does } = entry
+    const before = new Map(model.rows)
+    if (entry.what === 'changed') {
+      write(model.rows, does.inChange)
+      if (does.changeEnds === 'made') model.count += does.adds
+      else model.rows = entry.waited ? before : asking!
+      continue
+    }
+    write(model.rows, does.writes)
+    if (entry.what === 'began waiting') continue
+    if (entry.what === 'told') { if (does.ends === 'made') model.count += does.adds; else model.rows = before; continue }
+    // An ask that does not wait: undone now unless it goes on to its change, which is the next thing handled.
+    if (does.ends === 'made') asking = before; else model.rows = before
+  }
+  return model
+}
+
 // --- the same, done by states -------------------------------------------------------------------------------------
 
 type Events = { type: 'DO'; does: Does }
 type Asks = { RUN: { args: { does: Does }; answer: number; refuses: 'no' }; WAIT: { args: { does: Does }; answer: number; refuses: 'no' } }
 const state = reaching()
-const subject = (store: Rows) => {
+/** What was handled, as it was: an event, an ask, an ask that waits as it begins, or the change that came with an answer. */
+type Handled = { readonly what: 'told' | 'asked' | 'began waiting'; readonly does: Does } | { readonly what: 'changed'; readonly does: Does; readonly waited: boolean }
+interface Watched {
+  /** Told of each thing as it is handled, in the order it is. */
+  handled?(entry: Handled): void
+  /** What an ask that waits waits for. A turn of the event loop, unless a schedule is to say when. */
+  wait?(does: Does): Promise<unknown>
+}
+const subject = (store: Rows, { handled, wait = () => new Promise((resolve) => { setImmediate(resolve) }) }: Watched = {}) => {
   const put = (writes: readonly Write[]): void => { for (const [id, value] of writes) { if (value === null) store.remove('thread', id); else store.put('thread', id, { value }) } }
   return state<{ data: { count: number } }, Events, Asks>()({
     data: { count: 0 },
     on: {
       DO: ({ does }, { data, send }) => {
+        handled?.({ what: 'told', does })
         put(does.writes)
         for (const sent of does.sends) send({ type: 'DO', does: sent })
         if (does.ends === 'throws' || does.ends === 'refuses') throw new Error('the handler threw')
@@ -88,12 +125,14 @@ const subject = (store: Rows) => {
     },
     asks: {
       RUN: ({ does }, { send, refuse }) => {
+        handled?.({ what: 'asked', does })
         put(does.writes)
         for (const sent of does.sends) send({ type: 'DO', does: sent })
         if (does.ends === 'throws') throw new Error('the handler threw')
         if (does.ends === 'refuses') throw refuse('no', 'the handler refused')
         if (does.ends === 'stray') return answered(does.adds, { data: { nothing: 1 } } as never)
         return answered(does.adds, { data: (draft) => {
+          handled?.({ what: 'changed', does, waited: false })
           put(does.inChange)
           if (does.changeEnds === 'throws' || does.changeEnds === 'stray') throw new Error('the change threw')
           if (does.changeEnds === 'refuses') throw refuse('no', 'the change refused')
@@ -101,12 +140,14 @@ const subject = (store: Rows) => {
         } })
       },
       WAIT: async ({ does }, { send, refuse }) => {
+        handled?.({ what: 'began waiting', does })
         put(does.writes)
         for (const sent of does.sends) send({ type: 'DO', does: sent })
-        await new Promise((resolve) => { setImmediate(resolve) })
+        await wait(does)
         if (does.ends === 'throws' || does.ends === 'stray') throw new Error('the handler threw')
         if (does.ends === 'refuses') throw refuse('no', 'the handler refused')
         return answered(does.adds, { data: (draft) => {
+          handled?.({ what: 'changed', does, waited: true })
           put(does.inChange)
           if (does.changeEnds === 'throws' || does.changeEnds === 'stray') throw new Error('the change threw')
           if (does.changeEnds === 'refuses') throw refuse('no', 'the change refused')
@@ -177,10 +218,49 @@ const holds = async (seed: number, open: () => Rows): Promise<void> => {
   } finally { store.close() }
 }
 
+/**
+ * One run with everything under way together: two lanes of things done, and each ask that waits waiting on work the
+ * schedule ends when it chooses. Run under orderings picked from the seed.
+ */
+const together = (seed: number, open: () => Rows) => (schedule: Schedule) => {
+  const ops = generate(seed, 6)
+  const store = open()
+  const trace: Handled[] = []
+  const waits = new Map<Does, Promise<unknown>>()
+  for (const [at, { how, does }] of ops.entries()) if (how === 'asked, and it waits') waits.set(does, schedule.work(`what ask ${at + 1} waits on`, undefined))
+  const sys = system({ side: 'backend', transact: store.transact, later: schedule.later })
+  const handle = sys.start('subject', subject(store, { handled: (entry) => { trace.push(entry) }, wait: (does) => waits.get(does) ?? Promise.resolve() }))
+  let toldWhileWriting = 0
+  sys.subscribe(() => { if (store.writing) toldWhileWriting++ })
+  const answers = new Map<number, boolean>()
+  const doing = ops.map(({ how, does }, at) => [`${how} ${at + 1}`, (): void => {
+    if (how === 'told') sys.send(handle, { type: 'DO', does })
+    else void sys.ask(handle, how === 'asked' ? 'RUN' : 'WAIT', { does }).then((outcome) => { answers.set(at, outcome.ok) })
+  }] as const)
+  schedule.does('one window', ...doing.filter((_, at) => at % 2 === 0))
+  schedule.does('another window', ...doing.filter((_, at) => at % 2 === 1))
+  return () => {
+    try {
+      const model = follow(trace)
+      const rows = Object.fromEntries(IDS.flatMap((id) => { const row = store.get('thread', id); return row ? [[id, row['value']]] : [] }))
+      const expected = new Map(ops.flatMap(({ how, does }, at) => (how === 'told' ? [] : [[at, does.ends === 'made' && does.changeEnds === 'made'] as const])))
+      deepStrictEqual({ rows, count: sys.read(handle).data.count, answers: [...answers].sort(), toldWhileWriting }, { rows: Object.fromEntries(model.rows), count: model.count, answers: [...expected].sort(), toldWhileWriting: 0 })
+    } finally { store.close() }
+  }
+}
+const interleaved = async (seeds: number, orderings: number, open: () => Rows): Promise<void> => {
+  for (const seed of only === undefined ? Array.from({ length: seeds }, (_, at) => at + 1) : [only]) {
+    const found = await sample(together(seed, open), { seed, runs: orderings })
+    if (found.failure) throw new Error(`seed ${seed} differs from the model: ${String(found.failure.error).split('\n').slice(0, 14).join(' ')}\n        after: ${found.failure.taken.join(' → ')}`)
+  }
+}
+
 const only = process.env['SEED'] === undefined ? undefined : Number(process.env['SEED'])
 const over = async (runs: number, open: () => Rows): Promise<void> => { for (const seed of only === undefined ? Array.from({ length: runs }, (_, at) => at + 1) : [only]) await holds(seed, open) }
 
 await run([
   ['in memory: 1,500 runs of ten handlers each keep the rows, the count and the answers the model says', () => over(1_500, () => memory())],
   ['in elmdb: 150 runs of ten handlers each keep the rows, the count and the answers the model says', () => over(150, elmdb)],
+  ['in memory, under way together: 200 runs of six, each under 25 orderings, keep what the model says of what was handled', () => interleaved(200, 25, () => memory())],
+  ['in elmdb, under way together: 20 runs of six, each under 10 orderings, keep what the model says of what was handled', () => interleaved(20, 10, elmdb)],
 ])

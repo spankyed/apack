@@ -1,7 +1,7 @@
 // Static analysis of states written on the prototype. Nothing here runs one: it asks the TypeScript checker what
 // each handler can return, reads the moves off those types, and reads who each state reaches off its code.
 //
-//   npx tsx docs/plans/apack-spec/prototype/graph.mts docs/plans/apack-spec/prototype/search.mts
+//   npx tsx docs/plans/apack-state/prototype/graph.mts docs/plans/apack-state/prototype/search.mts
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 
