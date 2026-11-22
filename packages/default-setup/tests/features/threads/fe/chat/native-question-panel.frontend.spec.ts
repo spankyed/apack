@@ -14,6 +14,8 @@ const option = (label: string, preview?: string) => ({ label, description: label
 it('retains custom/multi/annotation drafts across navigation and identical owner projections', async () => {
   const f = mount({ questions: [{ question: 'First?', header: 'First', options: [option('Alpha'), option('Beta')] }, { question: 'Second?', header: 'Second', multiSelect: true, options: [option('Gamma', '<script>literal</script>'), option('Delta')] }] })
   try {
+    f.button('Write your own answer').click(); await nextTick()
+    expect(document.activeElement).toBe(f.root.querySelector('.answer textarea'))
     await f.input('.answer textarea', 'Custom Alpha'); f.button('Next').click(); await nextTick()
     const inputs = f.root.querySelectorAll<HTMLInputElement>('input[type=checkbox]'); inputs[0].click(); inputs[1].click(); await nextTick()
     await f.input('textarea[aria-label="Notes for this question"]', 'Native notes')
@@ -64,6 +66,7 @@ it('adopts pre-input rewrites but freezes the displayed card and token after fir
   try {
     f.props.card = questions('Displayed?'); f.props.renderToken = 'displayed-token'; await nextTick()
     expect(f.root.textContent).toContain('Displayed?')
+    f.button('Write your own answer').click(); await nextTick()
     await f.input('.answer textarea', 'Kept draft')
     f.props.card = questions('Later?'); f.props.renderToken = 'later-token'; await nextTick()
     expect(f.root.textContent).toContain('Displayed?'); expect(f.root.textContent).not.toContain('Later?')
@@ -97,6 +100,7 @@ it('updates and clears original tool notices during an answer without changing i
   const presentation = {previewFormat:null,extendedQuestions:false,optionalDescriptions:true,previews:[],notice:'plugin: <b>Review</b>'}
   const f=mount({questions:[{question:'Audience?',header:'Audience',options:[option('Developers'),option('Operators')]}]},presentation)
   try {
+    f.button('Write your own answer').click(); await nextTick()
     await f.input('.answer textarea','Keep my answer')
     expect(f.root.querySelector('[role=note]')?.textContent).toBe(presentation.notice)
     expect(f.root.querySelector('[role=note] b')).toBeNull()
