@@ -145,6 +145,34 @@ it('carries an earlier draft answer into a separate clarification decision', asy
   } finally { f.close() }
 })
 
+it('clarifies mixed forms without treating an untouched number default as an answer', async () => {
+  const f = mount({ questions: [
+    { question: 'Language?', header: 'Language', kind: 'choice', options: [option('TypeScript'), option('Python')] },
+    { question: 'Name?', header: 'Name', kind: 'text' },
+    { question: 'Count?', header: 'Count', kind: 'number', min: 1, max: 10, defaultValue: 3 },
+  ] })
+  try {
+    f.props.canClarify = true
+    await nextTick()
+    f.root.querySelector<HTMLInputElement>('input[value="TypeScript"]')!.click()
+    f.button('Next').click()
+    await nextTick()
+    await f.input('.answer textarea', 'Notebook')
+    f.button('Chat about this').click()
+    expect(f.respond).toHaveBeenLastCalledWith({ answers: { 'Language?': 'TypeScript', 'Name?': 'Notebook' }, annotations: {} }, 'clarify')
+
+    f.button('Next').click()
+    await nextTick()
+    expect(f.root.querySelector<HTMLInputElement>('input[type=number]')?.value).toBe('3')
+    f.button('Chat about this').click()
+    expect(f.respond).toHaveBeenLastCalledWith({ answers: { 'Language?': 'TypeScript', 'Name?': 'Notebook' }, annotations: {} }, 'clarify')
+
+    await f.input('input[type=number]', '6')
+    f.button('Chat about this').click()
+    expect(f.respond).toHaveBeenLastCalledWith({ answers: { 'Language?': 'TypeScript', 'Name?': 'Notebook', 'Count?': '6' }, annotations: {} }, 'clarify')
+  } finally { f.close() }
+})
+
 it('keeps question images with the held card and sends only files still attached', async () => {
   const f = mount({ questions: [
     { question: 'First?', header: 'First', options: [option('Alpha'), option('Beta')] },

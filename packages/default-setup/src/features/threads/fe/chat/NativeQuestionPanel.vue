@@ -46,7 +46,7 @@
     <footer>
       <div class="decision-status">
         <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
-        <button v-if="canClarify && current && parsed?.questions.every(question => !question.kind || question.kind === 'choice')" type="button" class="quiet" :disabled="disabled || hasUnsupportedClarificationDraft" :title="hasUnsupportedClarificationDraft ? 'Submit answers to include your general response or notes.' : undefined" @click="submit(false, 'clarify')">Chat about this</button>
+        <button v-if="canClarify && current" type="button" class="quiet" :disabled="disabled || hasUnsupportedClarificationDraft" :title="hasUnsupportedClarificationDraft ? 'Submit answers to include your general response or notes.' : undefined" @click="submit(false, 'clarify')">Chat about this</button>
         <span v-if="pending" role="status" class="muted">Waiting for Claude…</span>
       </div>
       <div class="navigation">
@@ -82,10 +82,10 @@ const generalResponse = ref('')
 const step = ref(0), numberInput = ref<HTMLInputElement>(), customInput = ref<HTMLTextAreaElement>()
 const questionId = useId()
 type DraftImage = ClaudeQuestionImage & { id: string; name: string; size: number }
-const drafts = reactive<{ selected: string[]; custom: string; customOpen: boolean; notes: string; images: DraftImage[] }[]>([])
-watch(() => JSON.stringify(acceptedCard.value), () => { const card = parsed.value; generalResponse.value = ''; step.value = 0; drafts.splice(0, drafts.length, ...(card?.questions.map(question => ({ selected: [], custom: question.kind === 'number' && question.defaultValue !== undefined ? String(question.defaultValue) : '', customOpen: false, notes: '', images: [] })) ?? [])) }, { immediate: true })
+const drafts = reactive<{ selected: string[]; custom: string; customOpen: boolean; notes: string; images: DraftImage[]; numberConfirmed: boolean }[]>([])
+watch(() => JSON.stringify(acceptedCard.value), () => { const card = parsed.value; generalResponse.value = ''; step.value = 0; drafts.splice(0, drafts.length, ...(card?.questions.map(question => ({ selected: [], custom: question.kind === 'number' && question.defaultValue !== undefined ? String(question.defaultValue) : '', customOpen: false, notes: '', images: [], numberConfirmed: false })) ?? [])) }, { immediate: true })
 const current = computed(() => parsed.value?.questions[step.value])
-const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', customOpen: false, notes: '', images: [] })
+const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', customOpen: false, notes: '', images: [], numberConfirmed: false })
 const isChoice = computed(() => !current.value?.kind || current.value.kind === 'choice')
 const hasUnsupportedClarificationDraft = computed(() => !!generalResponse.value.trim() || !!parsed.value?.questions.some((question, index) =>
   drafts[index]?.notes.trim() && (question.multiSelect || !(viewPresentation.value
@@ -160,15 +160,23 @@ function choose(label: string) {
   draft.custom = ''; draft.customOpen = false
   draft.selected = current.value.multiSelect ? draft.selected.includes(label) ? draft.selected.filter(value => value !== label) : [...draft.selected, label] : [label]
 }
-function setNumber(event: Event) { markStarted(); state.value.custom = (event.target as HTMLInputElement).value; state.value.selected = [] }
+function setNumber(event: Event) {
+  markStarted()
+  state.value.custom = (event.target as HTMLInputElement).value
+  state.value.numberConfirmed = true
+  state.value.selected = []
+}
 function submit(followUp = false, decision?: 'clarify') {
-  if (!parsed.value || disabled.value || decision === 'clarify' && hasUnsupportedClarificationDraft.value) return
+  if (!parsed.value || disabled.value) return
+  if (decision === 'clarify' && (hasUnsupportedClarificationDraft.value || numberInput.value && !numberInput.value.reportValidity())) return
   markStarted()
   const answers: NonNullable<ClaudeQuestionAnswer['answers']> = Object.create(null)
   const annotations: NonNullable<ClaudeQuestionAnswer['annotations']> = Object.create(null)
   parsed.value.questions.forEach((question, index) => {
     const draft = drafts[index]
-    if (draft.custom.trim()) answers[question.question] = draft.custom.trim()
+    // A displayed number default is still unanswered until the user edits or advances it.
+    const includeDraft = decision !== 'clarify' || question.kind !== 'number' || draft.numberConfirmed
+    if (includeDraft && draft.custom.trim()) answers[question.question] = draft.custom.trim()
     else if (draft.selected.length) answers[question.question] = question.multiSelect ? [...draft.selected] : draft.selected[0]
     const selected = question.options.find(option => draft.selected.includes(option.label) && option.preview)
     const preview = selected && previewFor(question.question, selected.label, selected.preview) ? selected.preview : undefined
@@ -183,6 +191,7 @@ function submit(followUp = false, decision?: 'clarify') {
 function advance() {
   if (disabled.value || !parsed.value || numberInput.value && !numberInput.value.reportValidity()) return
   markStarted()
+  if (current.value?.kind === 'number') state.value.numberConfirmed = true
   if (step.value + 1 < parsed.value.questions.length) step.value++
   else submit()
 }
