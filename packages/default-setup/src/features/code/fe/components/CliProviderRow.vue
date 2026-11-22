@@ -8,6 +8,8 @@
         <span class="text-sm font-medium text-gray-200">{{ label }}</span>
         <CheckCircle
           v-if="status === 'success'"
+          role="img"
+          aria-label="CLI available"
           class="w-3.5 h-3.5 text-green-400"
         />
         <XCircle
@@ -36,6 +38,8 @@
     <input
       type="text"
       :value="modelValue"
+      :aria-label="label + ' path'"
+      :disabled="status === 'testing'"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value.trim())"
       :placeholder="placeholder"
       class="w-full px-3 py-1.5 bg-neutral-800/60 border border-neutral-700/50 rounded-md text-white placeholder-neutral-600 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 hover:border-neutral-600 transition-all"

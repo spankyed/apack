@@ -261,7 +261,7 @@ export type FeatureSettingsUpdated = {
 // @public
 export const HOST_SURFACE_EVENT_TYPES: {
     'host/application': readonly ["CLIENT_CONNECTED", "APPLICATION_HOTKEYS", "SURFACE_VISIBILITY_UPDATED", "COMMANDS_UPDATED", "ONBOARDING_COMPLETE", "OPEN_SURFACE"];
-    'host/settings': readonly ["CLI_TEST_RESULT", "HELP.OPEN"];
+    'host/settings': readonly ["HELP.OPEN"];
 };
 
 // @public
@@ -299,12 +299,6 @@ export type HostSurfaceEvents = {
     'host/settings': {
         type: 'HELP.OPEN';
         target: HelpTarget;
-    } | {
-        type: 'CLI_TEST_RESULT';
-        provider: string;
-        success: boolean;
-        error?: string;
-        resolvedPath?: string;
     };
 };
 

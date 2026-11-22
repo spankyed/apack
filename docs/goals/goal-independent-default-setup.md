@@ -37,6 +37,7 @@ The owner approved one branch and one ready-for-review PR per independently test
 | Work | Repository and head branch | PR base |
 |---|---|---|
 | 1. Consume the release layout | `spankyed/apack` · `session/starter-release-layout` | `master` |
+| 2. Move CLI provider settings to Code | `spankyed/apack` · `session/starter-code-settings` | `master` |
 | 2. Preserve replacement choices | `spankyed/apack` · `session/starter-replacement` | `master` |
 | 3a. Supply retrievable authoring packages, if producer-side changes are needed | `spankyed/apack` · `session/starter-toolchain` | `master` |
 | 3b. Transfer the production pack | `spankyed/default-setup` · `session/production-starter` | `main` |
@@ -77,7 +78,7 @@ Package the in-tree starter as an ordinary archive for preview, beta, and produc
 
 ### Phase 2. Prove a replacement survives an app upgrade
 
-Use the Phase 1 build with a differently named starter and with no starter. Move CLI path settings and their test action to the Code feature. Today General Settings saves to a literal pack ID while the test action resolves a role. Give generic testing helpers an explicit feature target. Packs and Settings are host-owned and must remain reachable. [Settings writes](../../packages/renderer/src/views/settings/canvas/components/GeneralSettings/CliProviders.vue) · [Test action dispatch](../../packages/apack-host/src/features/settings/fe/machine.ts) · [Testing helper](../../packages/apack-testing/src/engine/session.ts) · [Host surfaces](../../packages/apack-host/src/features/declaration.ts)
+Use the Phase 1 build with a differently named starter and with no starter. The Code feature owns CLI path settings and their test action. Give generic testing helpers an explicit feature target. Packs and Settings are host-owned and must remain reachable. [Code settings](../../packages/default-setup/src/features/code/fe/components/CliProviders.vue) · [Code test action](../../packages/default-setup/src/features/code/be/system.ts) · [Testing helper](../../packages/apack-testing/src/engine/session.ts) · [Host surfaces](../../packages/apack-host/src/features/declaration.ts)
 
 **Done when** two packaged app versions establish the following on disposable profiles:
 

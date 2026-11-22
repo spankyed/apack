@@ -78,6 +78,12 @@
     </CollapsibleSection>
     </div>
 
+    <div class="border-t border-neutral-800 pt-8">
+      <CollapsibleSection label="CLI Providers" :default-open="true" class="mb-8">
+        <CliProviders :paths="props.settings?.cliPaths" @update-setting="emit('update-setting', $event)" />
+      </CollapsibleSection>
+    </div>
+
     <!-- GitHub Section -->
     <div class="border-t border-neutral-800 pt-8">
     <CollapsibleSection label="GitHub" :default-open="true" class="mb-8">
@@ -774,6 +780,7 @@ import KeyboardShortcutInput from '@apackdev/ui/components/KeyboardShortcutInput
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import DirectorySelect from '@apackdev/ui/design/DirectorySelect'
 import GitHubAccount from './features/github/GitHubAccount.vue'
+import CliProviders from './components/CliProviders.vue'
 
 import { useSettingsDraft, untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'

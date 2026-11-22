@@ -24,9 +24,6 @@
 
     <p v-if="error" class="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" data-testid="secrets-error">{{ error }}</p>
 
-    <!-- CLI Providers -->
-    <CliProviders />
-
     <!-- Divider -->
     <div class="border-t border-neutral-800 my-8"></div>
 
@@ -110,7 +107,6 @@ import { openLink, secretsClient, useState, useSurface } from '@apackdev/sdk/fe'
 import { providerLabels } from '@apackdev/sdk/models'
 import type { SecretMetadata, SecretProvider } from '@apackdev/sdk/services'
 import { API_KEY_URLS, REQUIRED_PROVIDERS } from '@/views/settings/constants'
-import CliProviders from './CliProviders.vue'
 import SecretKeyRow from './SecretKeyRow.vue'
 import NewSecretRow from './NewSecretRow.vue'
 import { errorMessage } from '@apackdev/sdk/utils/pure';

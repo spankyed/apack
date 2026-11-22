@@ -18,7 +18,7 @@ import { featureSettings } from '#generated/settings.ts';
 import type { Contract, CommitAsks, SearchAsks, ActionsAsks, PromptsAsks, PullRequestAsks, GitHubAsks, ExplorerAsks, TerminalAsks } from './contract.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
-import { broadcast, sendToWindow } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
 import { terminalService } from './services/terminal.ts';
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
@@ -89,6 +89,20 @@ export const answers = codeSpec.answers<keyof SearchAsks | keyof ActionsAsks | k
     baseDirectory: context.baseDirectory,
     settings: featureSettings.forFeature('code').get(),
   }),
+  TEST_CLI_PROVIDER: async ({ args: { provider, path } }) => {
+    if (!isCliName(provider)) return { success: false, error: `Unknown CLI provider: ${provider}` };
+    const settings = featureSettings.forFeature('code');
+    const testedPath = path ?? settings.get().cliPaths[provider];
+    const result = await testCli(provider, testedPath);
+    if (result.success) {
+      const current = settings.get().cliPaths[provider];
+      // A test can finish before the form save, or after another window changed the setting.
+      if ((current ?? '') === (testedPath ?? '')) settings.set({ path: ['cliPaths', provider], value: result.resolvedPath });
+    } else {
+      cliLogger.error(`CLI test failed for "${provider}"`, { error: result.error });
+    }
+    return result;
+  },
   /** Everything under the folder the user opened, for the picker */
   'commit.LIST_REPOSITORIES': async ({ context }) => {
     const folder = context.openedDirectory ?? context.baseDirectory
@@ -229,28 +243,6 @@ export const systemMachine = setup({
       broadcast('code', { type: 'BASE_DIRECTORY_CHANGED', baseDirectory: newPath });
     },
 
-    /**
-     * Resolves a CLI and records where it was found, in this feature's own settings. It lives here because
-     * `resolve-cli` and the stored paths are this feature's; the Settings view asks for it and is told the result.
-     */
-    testCliProvider: ({ event, client }) => {
-      const { provider } = codeSpec.typeOf('TEST_CLI_PROVIDER', event);
-      // The Settings view of the window that asked; with no window, the Settings view in every window
-      const answer = (result: { success: boolean; error?: string; resolvedPath?: string }) => {
-        const tested = { type: 'CLI_TEST_RESULT' as const, provider, ...result };
-        if (client) sendToWindow(client, 'host/settings', tested); else broadcast('host/settings', tested);
-      };
-
-      if (!isCliName(provider)) return answer({ success: false, error: `Unknown CLI provider: ${provider}` });
-
-      const paths = featureSettings.forFeature('code').get().cliPaths;
-      void testCli(provider, paths[provider]).then((result) => {
-        if (result.success) featureSettings.forFeature('code').set({ path: ['cliPaths', provider], value: result.resolvedPath });
-        else cliLogger.error(`CLI test failed for "${provider}"`, { error: result.error });
-        answer(result);
-      });
-    },
-
     updateSettings: ({ event, context, self }) => {
       const ev = { settings: codeSpec.typeOf('FEATURE_SETTINGS_UPDATED', event).settings as CodeSettings }
 
@@ -351,7 +343,6 @@ export const systemMachine = setup({
         // Taken here rather than at the root, where every event this state does not name would be routed past them
         ...answers.on,
         // Handle settings updates
-        TEST_CLI_PROVIDER: { actions: 'testCliProvider' },
         CHECK_FOR_EXTERNAL_CHANGES: { actions: 'checkForExternalChanges' },
         FEATURE_SETTINGS_UPDATED: {
           actions: [

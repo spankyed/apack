@@ -909,6 +909,19 @@ type CodeSettings = SettingsOf<'code'>;
 
 /** What a window asks the code system itself */
 type CodeSystemAsks = {
+    TEST_CLI_PROVIDER: {
+        args: {
+            provider: string;
+            path?: string;
+        };
+        answer: {
+            success: true;
+            resolvedPath: string;
+        } | {
+            success: false;
+            error: string;
+        };
+    };
     /** What a window's code surface starts from: the directory and the settings. Its panels ask for what they show */
     GET_CODE_START: {
         answer: CodeConnectedData;
@@ -3008,11 +3021,6 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingTerminalEvents | Inco
     type: 'SELECT_REPOSITORY';
     path: string;
 }
-/** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
- | {
-    type: 'TEST_CLI_PROVIDER';
-    provider: string;
-}
 /**
  * Something may have changed on disk that no file event reported: a window gained focus, a terminal command
  * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
@@ -3893,14 +3901,6 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingCommitEvents | Outgoi
  | {
     type: 'BASE_DIRECTORY_CHANGED';
     baseDirectory: string;
-}
-/** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
- | {
-    type: 'CLI_TEST_RESULT';
-    provider: string;
-    success: boolean;
-    error?: string;
-    resolvedPath?: string;
 };
 
 type OutgoingCommitEvents = 

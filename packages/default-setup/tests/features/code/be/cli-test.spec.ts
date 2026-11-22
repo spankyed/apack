@@ -1,43 +1,40 @@
 import { featureSettings } from '#generated/settings.ts';
-// Testing a CLI provider belongs to the code feature: `resolve-cli` is its own, and so are the stored paths
-// (`features['default-setup/code'].cliPaths`). The Settings view asks for it and is told the result, which is why
-// the settings surface declares it in its inbox (`accepts`, beside the surface). It lived in the settings system until settings
-// became the app's.
-//
-// What this covers is the system's part: who is answered, and what is stored. Whether a CLI is installed on this
-// machine is not, so the known provider is pointed at a program every test run has — the Node running it, which
-// answers `--version` — and nothing of the machine's own is looked for or run.
 import { describe, expect, it } from 'vitest';
 import { startApp } from '@apackdev/testing/harness';
 
-const cliPaths = () => featureSettings.forFeature('code').get().cliPaths ?? {};
+const cliPaths = () => featureSettings.forFeature('code').get().cliPaths;
 
 describe('TEST_CLI_PROVIDER', () => {
-  // A name no CLI answers to is the user's to fix, so it is answered rather than reported as a system error
-  it('answers an unknown provider on the settings surface, and stores nothing', async () => {
-    const app = await startApp({ systems: ['code', 'host/settings'] });
+  it('answers an unknown provider and stores nothing', async () => {
+    const app = await startApp({ systems: ['code'] });
     await app.connect();
+    const answer = await app.ask('code', { type: 'TEST_CLI_PROVIDER', provider: 'not-a-cli' }, { client: 'c-main' });
 
-    await app.send('code', { type: 'TEST_CLI_PROVIDER', provider: 'not-a-cli' });
-
-    expect(await app.nextEmit('host/settings', 'CLI_TEST_RESULT')).toMatchObject({
-      type: 'CLI_TEST_RESULT', provider: 'not-a-cli', success: false, error: 'Unknown CLI provider: not-a-cli',
+    expect(answer).toEqual({
+      ok: true, value: { success: false, error: 'Unknown CLI provider: not-a-cli' },
     });
     expect(cliPaths()['not-a-cli']).toBeUndefined();
   });
 
-  // The code system takes the event, and its answer reaches the settings surface rather than its own
-  it('tests a known provider at its stored path, answers the settings surface and keeps the path', async () => {
-    const app = await startApp({ systems: ['code', 'host/settings'] });
+  it('tests the requested path without replacing a different saved value', async () => {
+    const app = await startApp({ systems: ['code'] });
     await app.connect();
-    featureSettings.forFeature('code').set({ path: ['cliPaths', 'codex'], value: process.execPath });
+    const settings = featureSettings.forFeature('code');
+    settings.set({ path: ['cliPaths', 'codex'], value: '/old/location' });
+    settings.set({ path: ['cliPaths', 'git'], value: '/another/provider' });
 
-    await app.send('code', { type: 'TEST_CLI_PROVIDER', provider: 'codex' });
+    // Node answers --version, so the test never probes a machine-installed provider.
+    const answer = await app.ask('code', {
+      type: 'TEST_CLI_PROVIDER', provider: 'codex', path: process.execPath,
+    }, { client: 'c-main' });
 
-    expect(await app.nextEmit('host/settings', 'CLI_TEST_RESULT')).toMatchObject({
-      type: 'CLI_TEST_RESULT', provider: 'codex', success: true, resolvedPath: process.execPath,
-    });
-    expect(app.emitted('code').filter((e) => e.type === 'CLI_TEST_RESULT')).toEqual([]);
-    expect(cliPaths().codex).toBe(process.execPath);
+    expect(answer).toEqual({ ok: true, value: { success: true, resolvedPath: process.execPath } });
+    expect(cliPaths()).toMatchObject({ codex: '/old/location', git: '/another/provider' });
+
+    settings.set({ path: ['cliPaths', 'codex'], value: process.execPath });
+    await expect(app.ask('code', {
+      type: 'TEST_CLI_PROVIDER', provider: 'codex', path: process.execPath,
+    }, { client: 'c-main' })).resolves.toEqual(answer);
+    expect(cliPaths()).toMatchObject({ codex: process.execPath, git: '/another/provider' });
   });
 });
