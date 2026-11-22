@@ -187,8 +187,8 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
       // Verify the caret separately, then project paint inward through canonical serialization.
       located = locate([frame.cursor])
       if (!located) return
+      // A diff timeout leaves only the exact caret position available for paint.
       sourceOffsets = normalizedClaudePromptOffsets(frame.text, canonicalText, offsets)
-      if (!sourceOffsets) return
     }
     if (!located) return
     let {doc} = located
