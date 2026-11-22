@@ -271,7 +271,7 @@ export default /** @type import('electron-builder').Configuration */
     '!**/node_modules/**/docs/**',
     '!**/node_modules/**/CHANGELOG*',
     '!**/node_modules/**/.eslintrc*',
-    ...(metadata.shippedPackLayouts ? ['!packages/default-setup/**'] : []),
+    '!packages/default-setup/**',
     ...APP_WORKSPACES.map(name => ({
       from: path.join(buildRoot, 'packages', name, 'dist'), to: `packages/${name}/dist`, filter: ['**/*'],
     })),
@@ -285,11 +285,11 @@ export default /** @type import('electron-builder').Configuration */
   // Extra resources
   extraResources: [
     {from: path.join(buildRoot, 'build-manifest.json'), to: 'app/build-manifest.json'},
-    ...(metadata.shippedPackLayouts ? [{
+    {
       from: path.join(buildRoot, SHIPPED_PACKS_DIRECTORY),
       to: `app/${SHIPPED_PACKS_DIRECTORY}`,
       filter: ['**/*'],
-    }] : []),
+    },
     ...speechResources,
     // `apack` launcher for "Install 'apack' command in PATH"; runs packages/apack-cli/dist/package
     ...(process.platform === 'darwin'

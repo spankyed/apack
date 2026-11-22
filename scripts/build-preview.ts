@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createBuildSession, readBuildManifest } from '../build/build-metadata.ts';
@@ -16,15 +15,12 @@ if (process.argv.includes('--help')) {
   const npmCli = process.env.npm_execpath;
   if (!npmCli) throw new Error('Run preview builds with npm run build:preview -- --version <x.y.z>');
   env.APACK_BUILD_ROOT = createBuildSession(env);
-  const metadata = { ...readBuildManifest(env.APACK_BUILD_ROOT), shippedPackLayouts: true };
-  fs.writeFileSync(path.join(env.APACK_BUILD_ROOT, 'build-manifest.json'), JSON.stringify(metadata, null, 2) + '\n');
+  const metadata = readBuildManifest(env.APACK_BUILD_ROOT);
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
   const commands: [command: 'npm' | 'npx', args: string[]][] = [
     ['npm', ['run', 'packages:ensure']],
     ['npm', ['run', 'build:default-setup']],
-    ['npx', ['tsx', 'packages/apack-cli/scripts/export-built-pack.ts',
-      path.join(root, 'packages', 'default-setup'), path.join(env.APACK_BUILD_ROOT, 'pack-archives')]],
-    ['npx', ['tsx', 'scripts/stage-preview-starter.ts']],
+    ['npx', ['tsx', 'scripts/stage-shipped-starter.ts']],
     ['npm', ['run', 'build:runtime']],
   ];
   if (process.platform === 'darwin') commands.push(['npm', ['run', 'build:speech-macos']]);

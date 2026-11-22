@@ -51,7 +51,7 @@ export function createBuildSession(env: NodeJS.ProcessEnv = process.env): string
   const parent = path.resolve('.temp/app-builds');
   fs.mkdirSync(parent, { recursive: true });
   const root = fs.mkdtempSync(path.join(parent, `${metadata.channel}-`));
-  fs.writeFileSync(path.join(root, 'build-manifest.json'), JSON.stringify(metadata, null, 2) + '\n');
+  fs.writeFileSync(path.join(root, 'build-manifest.json'), JSON.stringify({ ...metadata, shippedPackLayouts: true }, null, 2) + '\n');
   return root;
 }
 
@@ -68,7 +68,7 @@ export function appBuildOutput(workspace: AppWorkspace): string {
   return path.join(root, 'packages', workspace, 'dist');
 }
 
-function buildOutputHashes(root: string, shippedPackLayouts: boolean): Record<string, string> {
+function buildOutputHashes(root: string): Record<string, string> {
   const files = APP_WORKSPACES.flatMap(workspace => {
     const dir = path.join(root, 'packages', workspace, 'dist');
     const entries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
@@ -78,15 +78,12 @@ function buildOutputHashes(root: string, shippedPackLayouts: boolean): Record<st
     if (!output.length) throw new Error(`Missing build output: ${workspace}`);
     return output;
   });
-  if (shippedPackLayouts) {
-    const dir = path.join(root, SHIPPED_PACKS_DIRECTORY);
-    if (fs.existsSync(dir)) {
-      for (const entry of fs.readdirSync(dir, { recursive: true, withFileTypes: true })) {
-        const file = path.join(entry.parentPath, entry.name);
-        if (entry.isFile()) files.push(file);
-        else if (!entry.isDirectory()) throw new Error(`Unexpected shipped pack output: ${file}`);
-      }
-    }
+  const shipped = path.join(root, SHIPPED_PACKS_DIRECTORY);
+  if (!fs.existsSync(shipped)) throw new Error(`Missing shipped pack staging directory: ${shipped}`);
+  for (const entry of fs.readdirSync(shipped, { recursive: true, withFileTypes: true })) {
+    const file = path.join(entry.parentPath, entry.name);
+    if (entry.isFile()) files.push(file);
+    else if (!entry.isDirectory()) throw new Error(`Unexpected shipped pack output: ${file}`);
   }
   files.push(path.join(root, 'build-manifest.json'));
   return Object.fromEntries(files.sort().map(file => [
@@ -123,17 +120,16 @@ export function recordBundledPackages(workspace: AppWorkspace, packages: { name:
  * run's, and one missing is a bundler that no longer records, whose packages the notices would leave out.
  */
 export function sealBuildSession(root: string): void {
-  const metadata = readBuildManifest(root);
   const unrecorded = APP_WORKSPACES.filter(workspace => !fs.existsSync(bundledPackagesFile(root, workspace)));
   if (unrecorded.length) {
     throw new Error(`No record of the packages ${unrecorded.join(', ')} inlined: each bundler's config records them (recordBundledPackages)`);
   }
-  fs.writeFileSync(path.join(root, 'build-integrity.json'), JSON.stringify(buildOutputHashes(root, metadata.shippedPackLayouts === true), null, 2) + '\n');
+  fs.writeFileSync(path.join(root, 'build-integrity.json'), JSON.stringify(buildOutputHashes(root), null, 2) + '\n');
 }
 
 export function verifyBuildOutputs(root: string, appDir = root): void {
   const expected = JSON.parse(fs.readFileSync(path.join(root, 'build-integrity.json'), 'utf8'));
-  const actual = buildOutputHashes(appDir, readBuildManifest(root).shippedPackLayouts === true);
+  const actual = buildOutputHashes(appDir);
   if (!isDeepStrictEqual(actual, expected)) throw new Error('Build outputs differ from the completed staging build');
 }
 

@@ -1,5 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { extractPackArchive, isHostCompatible, readPackBuild } from '@apackdev/host/packs';
 import { SHIPPED_PACKS_DIRECTORY } from '@apackdev/host/packs/assets';
 import { readBuildManifest } from '../build/build-metadata.ts';
@@ -24,9 +26,14 @@ export async function stageShippedPack(archive: string, sha256: string, dest: st
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   const root = process.env.APACK_BUILD_ROOT;
-  if (!root) throw new Error('Preview starter staging requires an app build session');
+  if (!root) throw new Error('Starter staging requires an app build session');
   const { version } = readBuildManifest(root);
   const archiveDir = path.join(root, 'pack-archives');
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  execFileSync(process.execPath, [
+    '--import', 'tsx', 'packages/apack-cli/scripts/export-built-pack.ts',
+    path.join(repo, 'packages', 'default-setup'), archiveDir,
+  ], { cwd: repo, stdio: 'inherit' });
   const archives = fs.readdirSync(archiveDir).filter(name => name.endsWith('.tgz'));
   if (archives.length !== 1) throw new Error(`Expected one starter archive in ${archiveDir}`);
   const archive = path.join(archiveDir, archives[0]!);

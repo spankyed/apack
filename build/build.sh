@@ -93,6 +93,7 @@ if [ -z "$SKIP_DEFAULT_SETUP_BUILD" ]; then
 else
   echo -e "${BLUE}[3/7]${NC} Skipping default-setup compilation (SKIP_DEFAULT_SETUP_BUILD set)"
 fi
+npx tsx scripts/stage-shipped-starter.ts
 echo ""
 
 # Step 4: Build TypeScript/Vite packages
