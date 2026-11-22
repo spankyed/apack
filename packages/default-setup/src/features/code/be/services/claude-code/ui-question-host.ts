@@ -78,7 +78,7 @@ export function createClaudeQuestionHost(options: {
       if (Array.isArray(event.instances) && !event.instances.some(value => value && typeof value === 'object' && (value as Record<string, unknown>).component === 'AskUserQuestion' && (value as Record<string, unknown>).instance_id === entry!.row.requestId)) return
       invalidate()
     },
-    async answer(messageId: string, token: string, answer: import('../../../common/native-question.ts').ClaudeQuestionAnswer): Promise<void> {
+    async answer(messageId: string, token: string, answer: import('../../../common/native-question.ts').ClaudeQuestionAnswer, decision?: 'clarify'): Promise<void> {
       const target = entry
       if (!target || !valid(target) || !options.source?.answer || target.answering || target.row.messageId !== messageId || !target.frame.shownInput || token !== (target.heldToken ?? target.frame.token)) return
       const parsed = ClaudeQuestionAnswerSchema.safeParse(answer)
@@ -87,7 +87,7 @@ export function createClaudeQuestionHost(options: {
       try {
         await target.holding
         if (!valid(target) || token !== (target.heldToken ?? target.frame.token)) return
-        await options.source.answer({...target.row, answer: {...target.frame.shownInput, ...parsed.data}, renderToken: token, draftStarted: !!target.heldToken})
+        await options.source.answer({...target.row, answer: {...target.frame.shownInput, ...parsed.data}, ...(decision ? { decision } : {}), renderToken: token, draftStarted: !!target.heldToken})
         if (valid(target)) { entry = undefined; publish() }
       } catch (error) {
         if (valid(target)) { target.frame.problem = error instanceof Error ? error.message : 'Native question answer failed'; publish() }

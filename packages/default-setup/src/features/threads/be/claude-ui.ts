@@ -429,9 +429,9 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     bind(view);void view.mount?.rejectQuestion(event.messageId,event.token);return
   }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {
-    if (!view || !view.backgroundView || typeof event.messageId !== 'string' || event.messageId.length > 512 || typeof event.token !== 'string' || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 131072) return
+    if (!view || !view.backgroundView || typeof event.messageId !== 'string' || event.messageId.length > 512 || !validId(event.token) || (event.decision !== undefined && event.decision !== 'clarify') || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 131072) return
     bind(view)
-    void view.mount?.answerQuestion(event.messageId, event.token, event.answer)
+    void view.mount?.answerQuestion(event.messageId, event.token, event.answer, event.decision)
     return
   }
   if (event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD') {

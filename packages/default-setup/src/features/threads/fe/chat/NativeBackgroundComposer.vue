@@ -1,7 +1,7 @@
 <template>
   <div ref="root" class="background-native-composer" @keydown.capture="event => actionKey(event, root ?? null)" @focusout="event => actionKey.leave(event, root ?? null)">
     <NativeBackgroundApproval v-if="state?.approval" :key="state.approval.id" :frame="state.approval" :disabled="disabled" @answer="answerApproval" @leave="leaveApproval" @open-native="openApproval" />
-    <NativeQuestionDrawing v-else-if="state?.question" :key="state.question.messageId" :frame="state.question" :disabled="disabled || !!state.question.pending" :error="state.question.problem" cancel-label="Back to parent notes" can-reject @reject="rejectQuestion"
+    <NativeQuestionDrawing v-else-if="state?.question" :key="state.question.messageId" :frame="state.question" :disabled="disabled || !!state.question.pending" :error="state.question.problem" cancel-label="Back to parent notes" can-reject can-clarify @reject="rejectQuestion"
       @press="press" @field="field" @started="started" @respond="answer" @pause="leaveQuestion" />
     <NativeAgentComposer v-show="!state?.question && !state?.approval" audience="background" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="disabled || !attachment?.attachmentId || !['live', 'rendering'].includes(state?.status ?? '')"
       :mount-id="mountId" :attachment-id="attachment?.attachmentId" :prompt-revision="attachment?.promptRevision" :prompt="attachment?.prompt"
@@ -67,9 +67,9 @@ function answerApproval(frameId: string, answer: ClaudeUiApprovalAnswer) {
   const frame = state.value?.approval
   if (mountId.value && frame?.id === frameId) sendToThreads({type: 'CLAUDE_UI_APPROVAL_ANSWER', ...identity(), frameId: frame.id, answer})
 }
-function answer(value: ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
+function answer(value: ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify') {
   const question = state.value?.question
-  if (mountId.value && question?.messageId === identity.messageId) sendToThreads({type: 'CLAUDE_UI_QUESTION_ANSWER', threadId: props.threadId, mountId: mountId.value, messageId: identity.messageId, token: identity.token, answer: value})
+  if (mountId.value && question?.messageId === identity.messageId) sendToThreads({type: 'CLAUDE_UI_QUESTION_ANSWER', threadId: props.threadId, mountId: mountId.value, messageId: identity.messageId, token: identity.token, answer: value, ...(decision ? { decision } : {})})
 }
 function leaveApproval(frameId: string) { if (state.value?.approval?.id === frameId) emit('leave') }
 function openApproval(frameId: string) { if (state.value?.approval?.id === frameId) emit('open-native') }

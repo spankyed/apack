@@ -73,7 +73,7 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
         async answer(request) {
           const current = desktop.controls.value; const q = current?.kind === 'question' ? current.dialog : undefined
           if (!q || q.id !== request.id || q.revision !== request.revision || q.sessionId !== request.sessionId) throw new Error('Background question changed')
-          const result = await desktop.transport.request({subtype: 'apack_answer_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, answer: request.answer, render_token: request.renderToken, draft_started: request.draftStarted}) as {answered?: unknown}
+          const result = await desktop.transport.request({subtype: 'apack_answer_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, answer: request.answer, decision: request.decision, render_token: request.renderToken, draft_started: request.draftStarted}) as {answered?: unknown}
           if (result.answered !== true) throw new Error('Background question answer was not acknowledged')
           desktop.controls.settled(request.id, request.revision)
         },

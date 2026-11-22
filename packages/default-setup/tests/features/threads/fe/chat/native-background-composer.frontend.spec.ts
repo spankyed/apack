@@ -44,6 +44,8 @@ it('renders the original child question and routes answers without changing the 
  expect(send).toHaveBeenCalledWith(expect.objectContaining({type:'CLAUDE_UI_FIELD',mountId:mounted.mountId,actionId:'draft-action',value:'issued-token'}))
  ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Submit answers')!.click()
  expect(send).toHaveBeenCalledWith({type:'CLAUDE_UI_QUESTION_ANSWER',threadId:'thread',mountId:mounted.mountId,messageId:question.messageId,token:'issued-token',answer:{answers:{'Which branch?':'Alpha'},annotations:{}}})
+ ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Chat about this')!.click()
+ expect(send).toHaveBeenLastCalledWith({type:'CLAUDE_UI_QUESTION_ANSWER',threadId:'thread',mountId:mounted.mountId,messageId:question.messageId,token:'issued-token',decision:'clarify',answer:{answers:{'Which branch?':'Alpha'},annotations:{}}})
  ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Back to parent notes')!.click()
  expect(leave).toHaveBeenCalledOnce()
  expect(send.mock.calls.some(([event])=>event.type==='RESPOND_TO_BLOCK'||event.type==='CLAUDE_TERMINAL_INPUT')).toBe(false)

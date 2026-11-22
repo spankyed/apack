@@ -661,7 +661,7 @@ export type ClaudeUiViewRequest =
   | { type: 'CLAUDE_UI_QUESTION_REJECT'; threadId: string; mountId: string; messageId: string; token: string }
   | { type: 'CLAUDE_UI_QUESTION_PAUSE'; threadId: string; mountId: string; messageId: string; token: string }
   | { type: 'CLAUDE_UI_DECISION_PAUSE'; threadId: string; mountId: string; scope: import('#features/code/common/native-decision-pause.ts').ClaudeDecisionPauseScope }
-  | { type: 'CLAUDE_UI_QUESTION_ANSWER'; threadId: string; mountId: string; messageId: string; token: string; answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer }
+  | { type: 'CLAUDE_UI_QUESTION_ANSWER'; threadId: string; mountId: string; messageId: string; token: string; decision?: 'clarify'; answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer }
   | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string; href?: string };
 
 /**

@@ -4359,6 +4359,7 @@ type ClaudeUiViewRequest = ({
     mountId: string;
     messageId: string;
     token: string;
+    decision?: 'clarify';
     answer: ClaudeQuestionAnswer;
 } | {
     type: 'CLAUDE_UI_PRESS';
