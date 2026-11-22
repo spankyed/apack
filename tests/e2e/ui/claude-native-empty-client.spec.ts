@@ -115,8 +115,15 @@ test('keeps an empty keyboard Client reachable and retires hidden input without 
     await expect.poll(async()=>(await receipts()).at(-1)).toMatchObject({count,key:freshKey})
     const geometry=await client.evaluate(node=>{const r=node.getBoundingClientRect();return {width:r.width,height:r.height,hit:node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))}})
     expect(geometry.width).toBeGreaterThan(32);expect(geometry.height).toBeGreaterThan(24);expect(geometry.hit).toBe(true)
+    const focusRing = await client.evaluate(node => {
+      const outline = getComputedStyle(node, '::after')
+      return { active: node.contains(document.activeElement), shadow: outline.boxShadow, pointerEvents: outline.pointerEvents }
+    })
+    expect(focusRing.active).toBe(true)
+    expect(focusRing.shadow).toMatch(/inset/)
+    expect(focusRing.pointerEvents).toBe('none')
     await expect(composer).toHaveText(draft);expect((await context()).turns).toBe(1);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    readings.push({size,token,count,geometry});await capture('apack-empty-client-reopened-'+size.width+'.png')
+    readings.push({size,token,count,geometry,focusRing});await capture('apack-empty-client-reopened-'+size.width+'.png')
     if(index===0)await tools.click()
   }
   await clients.first().press('r');count++
