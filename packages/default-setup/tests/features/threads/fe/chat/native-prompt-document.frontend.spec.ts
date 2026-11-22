@@ -618,6 +618,26 @@ it('maps decoration boundaries inside noncanonical code fences without changing 
   bridge.dispose()
 })
 
+it('adopts a keyboard selection before the editor restores its earlier range on focus', () => {
+  editor.commands.setContent('keep this draft');
+  const dom = editor.view.dom;
+  document.body.append(dom);
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn());
+  const selection = document.getSelection()!;
+  try {
+    dom.focus();
+    const text = dom.querySelector('p')!.firstChild!;
+    dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+    // Chromium moves the DOM selection before delivering its deferred selectionchange.
+    selection.setBaseAndExtent(text, 1, text, 5);
+    dom.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+    expect(editor.state.selection.toJSON()).toMatchObject({ anchor: 2, head: 6 });
+  } finally {
+    bridge.dispose();
+    dom.remove();
+  }
+});
+
 it('keeps a newer browser caret when a native acknowledgement arrives before selectionchange', () => {
   editor.commands.setContent('worker draft')
   document.body.append(editor.view.dom)

@@ -88,6 +88,12 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const next = TextSelection.between(editor.state.doc.resolve(anchor), editor.state.doc.resolve(head))
     editor.view.dispatch(editor.state.tr.setSelection(next).setMeta('claude-prompt-by', 'person'))
   }
+  // ProseMirror's deferred focus repair can paint an earlier range before Chromium
+  // delivers selectionchange. Adopt the browser's navigation result at keyup.
+  const navigationFinished = (event: KeyboardEvent) => {
+    if (!event.isComposing && /^(Arrow(Up|Down|Left|Right)|Home|End|Page(Up|Down))$/.test(event.key)) synchronizeSelection()
+  }
+  dom.addEventListener('keyup', navigationFinished, true)
   // Browser selection changes can arrive in a later task than their key/pointer event.
   // Capture before ProseMirror's document observer publishes the resulting selection.
   const selectionChanged = () => {
@@ -309,6 +315,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       for (const event of events) dom.removeEventListener(event, intent, true)
       dom.ownerDocument.removeEventListener('selectionchange', selectionChanged, true)
       dom.removeEventListener('keydown', formattingKey, true)
+      dom.removeEventListener('keyup', navigationFinished, true)
       dom.removeEventListener('compositionend', compositionEnd)
       dom.removeEventListener('compositionstart', compositionStart)
       dom.removeEventListener('keydown', acceptSuggestion, true)
