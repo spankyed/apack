@@ -371,6 +371,7 @@ async function initialize(){
   const questionTool=(await import('/$bunfs/root/chunk-at6jwec6.js')).yQ;
   const questionOptions=await import('/$bunfs/root/chunk-hdxpvbx1.js');
   const questionText=await import('/$bunfs/root/chunk-xh5v0djg.js');
+  const questionDialog=await import('/$bunfs/root/chunk-a14ghztk.js');
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   const paths=await import('/$bunfs/root/chunk-27d659a1.js');
   const planConsent=await import('/$bunfs/root/chunk-3m4t81ea.js');
@@ -382,12 +383,12 @@ async function initialize(){
   const planProactivity=await import('/$bunfs/root/chunk-ck4jw7jw.js');
 
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
   engine.I9e.onInvalidate(instances=>{nativeClients.suspend(instances);for(const[client,frame]of questionFrames)if(!instances||instances.some(item=>item.surface==='desktop'&&item.component==='AskUserQuestion'&&item.requestId===frame.requestId))questionFrames.delete(client);try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -933,11 +934,14 @@ function questionCanonicalAnswer(n,dialog,request){
  return n.questionTool.admitCardAnswer(original,answer);
 }
 // Pinned AskUserQuestion clarification builder (Darwin $rt / Linux zrt).
-function questionClarification(shown,admitted){
- const summary=shown.questions.map(question=>{
+function questionClarification(n,payload,shown,admitted){
+ const summary=shown.questions.map((question,index)=>{
+  // Native h4/G6 keeps displayed answer keys but uses the original asked question in feedback.
+  const asked=(payload.questions[index]??question).question;
+  const title=payload.isEngineConfirm?n.questionDialog.VQo(asked).title:n.questionText.Xi(asked).text;
   const value=admitted.answers?.[question.question];
-  const lines=['- "'+question.question+'"',value?'  Answer: '+value:'  (No answer provided)'];
-  const notes=!question.multiSelect&&question.options?.some(option=>option.preview!==undefined)
+  const lines=['- "'+title+'"',value?'  Answer: '+value:'  (No answer provided)'];
+  const notes=!question.multiSelect&&question.options?.some(option=>questionPreviewKind(n,option.preview)!=='empty')
     ? admitted.annotations?.[question.question]?.notes?.trim():undefined;
   if(notes)lines.push('  User notes: '+notes);
   return lines.join('\n');
@@ -948,12 +952,16 @@ function questionClarification(shown,admitted){
   +'    Start by asking them what they would like to clarify.\n\n'
   +'    Questions asked:\n'+summary};
 }
+function questionPreviewKind(n,preview){
+ if(typeof preview!=='string')return 'empty';
+ return preview.length>2000?'withheld':!n.questionText.zL(preview)?'empty':n.questionText.VL(preview)?'withheld':'full';
+}
 function questionPresentation(n,payload){
  const previewFormat=n.questionOptions.yjr()??null,previews=[];
  for(const question of payload.questions)for(const option of question.options??[]){
   if(typeof option.preview!=='string')continue;
   // Frozen terminal h4 producer: its 2000-character display cap and native text helpers.
-  const kind=option.preview.length>2000?'withheld':!n.questionText.zL(option.preview)?'empty':n.questionText.VL(option.preview)?'withheld':'full';
+  const kind=questionPreviewKind(n,option.preview);
   previews.push({question:question.question,option:option.label,kind,...(kind==='full'?(previewFormat==='html'?{html:option.preview}:{markdown:n.questionText._gt(option.preview)}):{})});
  }
  const originalNotice=n.runtime?.RFe?.noticesStore().getState().get(payload.requestId);
@@ -1231,7 +1239,7 @@ async function control(request,abort){
    const admitted=n.questionTool.admitCardAnswer(frame.shownInput,request.answer);
    if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
    if(admitted.input.response!==undefined||admitted.input.followUp!==undefined)throw Error('Native clarification requires answers and eligible notes');
-   d.store.answer(d.item.id,questionClarification(frame.shownInput,admitted.input));
+   d.store.answer(d.item.id,questionClarification(n,d.payload,frame.shownInput,admitted.input));
   }else{
    const admitted=questionCanonicalAnswer(n,d,request);
    if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);

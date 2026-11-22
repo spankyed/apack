@@ -72,7 +72,9 @@ const current = computed(() => parsed.value?.questions[step.value])
 const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', customOpen: false, notes: '' })
 const isChoice = computed(() => !current.value?.kind || current.value.kind === 'choice')
 const hasUnsupportedClarificationDraft = computed(() => !!generalResponse.value.trim() || !!parsed.value?.questions.some((question, index) =>
-  drafts[index]?.notes.trim() && (question.multiSelect || !question.options.some(option => option.preview !== undefined))
+  drafts[index]?.notes.trim() && (question.multiSelect || !(viewPresentation.value
+    ? viewPresentation.value.previews.some(preview => preview.question === question.question && preview.kind !== 'empty')
+    : question.options.some(option => option.preview?.trim())))
 ))
 async function openCustomAnswer() {
   if (disabled.value || !isChoice.value) return

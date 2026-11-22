@@ -508,11 +508,18 @@ export const claudeNativeLinuxBindings: {
         "Uvn": "Akn"
       }
     },
+    "chunk-a14ghztk.js": {
+      "module": "chunk-43x7jc34.js",
+      "exports": {
+        "VQo": "hQo"
+      }
+    },
     "chunk-xh5v0djg.js": {
       "module": "chunk-e1wp9qx0.js",
       "exports": {
         "_gt": "ngt",
         "VL": "jL",
+        "Xi": "Xi",
         "zL": "HL"
       }
     },
