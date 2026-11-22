@@ -1558,7 +1558,18 @@ export const chatCommands = {
     if (updates.text !== undefined) discardMessageText(messageId);
 
     const now = Date.now();
-    write(messageId).setMany(updates);
+    // A refused interaction explicitly clears these fields so the live card can accept another reply.
+    const responseFields = ['responseTimestamp', 'blockResponse'] as const;
+    const retired = responseFields.filter(field => Object.hasOwn(updates, field) && updates[field] === undefined);
+    if (retired.length) {
+      transact(() => {
+        const messageWrite = write(messageId);
+        for (const field of retired) messageWrite.delete(field);
+        messageWrite.setMany(updates);
+      });
+    } else {
+      write(messageId).setMany(updates);
+    }
 
     // When a message becomes queued, move it to the end of its thread's
     // CONTAINS relation so it always appears last — even after a reload.

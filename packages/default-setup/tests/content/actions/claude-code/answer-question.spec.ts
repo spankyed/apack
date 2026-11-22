@@ -51,19 +51,28 @@ describe('CC: Answer Question', () => {
 
 it.each(['matching', 'replaced', 'refused'])('routes native card answers through only the matching owner (%s)', async mode => {
   const { id, respond } = setup('current')
-  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName: 'AskUserQuestion',
+  const replyMessage = repository.chatCommands.addMessage({ threadId: id, sender: 'assistant', text: 'Original?' })
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: replyMessage.id, toolName: 'AskUserQuestion',
     originalInput: { questions: [{ question: 'Original?' }] }, nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog-1', revision: 'revision' } } } } })
-  const answerQuestionDialog = vi.fn(async () => { if (mode === 'refused') throw Error('Native refused') }), update = vi.fn()
+  const answerQuestionDialog = vi.fn(async () => { if (mode === 'refused') throw Error('Native refused') })
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ respond })), getNativeTerminal: vi.fn(() => ({ state: { ownerId: mode === 'replaced' ? 'replacement' : 'owner', sessionId: 'session' }, answerQuestionDialog })) } as never })
-  mockService<Services, 'chat'>('chat', { updateMessageState: update, sendBlockMessage: vi.fn() })
+  mockService<Services, 'chat'>('chat', {
+    updateMessageState: (messageId, updates) => { repository.chatCommands.updateMessageState({ messageId, updates }) },
+    sendBlockMessage: vi.fn(),
+  })
   const answer = { answers: { 'Original?': ['Alpha', 'Beta'] }, annotations: { 'Original?': { notes: 'A note' } } }
-  const result = await action({ threadId: id, requestId: 'current', originalInput: { questions: [] }, response: { nativeQuestionAnswer: answer } }, services)
+  const response = { nativeQuestionAnswer: answer, nativeQuestionRenderToken: 'drawing', nativeQuestionDecision: 'clarify' }
+  repository.chatCommands.updateMessageBlockResponse({ messageId: replyMessage.id, response })
+  expect(repository.chatQueries.messageById(replyMessage.id)?.responseTimestamp).toBeDefined()
+  const result = await action({ threadId: id, requestId: 'current', originalInput: { questions: [] }, response }, services)
   expect(result.success).toBe(mode === 'matching'); expect(respond).not.toHaveBeenCalled()
   if (mode === 'replaced') expect(answerQuestionDialog).not.toHaveBeenCalled()
-  else expect(answerQuestionDialog).toHaveBeenCalledWith({ id: 'dialog-1', revision: 'revision', sessionId: 'session', answer })
+  else expect(answerQuestionDialog).toHaveBeenCalledWith({ id: 'dialog-1', revision: 'revision', sessionId: 'session', answer, decision: 'clarify', renderToken: 'drawing', draftStarted: false })
   if (mode === 'refused') {
     expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toMatchObject({ requestId: 'current' })
-    expect(update).toHaveBeenCalledWith('approval', { responseTimestamp: undefined, blockResponse: undefined })
+    const current = repository.chatQueries.messageById(replyMessage.id)
+    expect(current?.responseTimestamp).toBeUndefined()
+    expect(current?.blockResponse).toBeUndefined()
   }
 })
 
