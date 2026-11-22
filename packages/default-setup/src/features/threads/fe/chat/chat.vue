@@ -33,7 +33,7 @@
         @resize="handleDashboardResize"
       />
       <!-- Chat column (right, or full width when dashboard hidden) -->
-      <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
+      <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'native-chat-column--padded': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
         <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" @background-composing="nativeBackgroundComposing = $event">
@@ -1294,6 +1294,7 @@ function closeMemory(restoreFocus: boolean) {
 <style scoped>
 .compact-conversation-navigation { display: none; }
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
+.native-chat-column--padded { padding-top: 0.5rem; }
 .chat-composer-area--background { flex-basis: 0; min-height: min(14rem, 55%); }
 /* The child owns input while replying; parent notes stay mounted for an exact return. */
 .chat-composer-area--background.chat-composer-area--background-reply { flex: 0 1 5rem; min-height: 0; max-height: 20%; }
@@ -1334,9 +1335,9 @@ function closeMemory(restoreFocus: boolean) {
   .native-chat-shell[data-native-workspace-owner="agent"] {
     min-height: min(32rem, max(25rem, calc(100vh - 14rem)));
   }
-  /* Set aside more Agent transcript space beside the draft and the thread footer. */
-  .native-chat-shell[data-native-workspace-owner="agent"]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {
-    min-height: min(32rem, max(26rem, calc(100vh - 13rem)));
+  /* The compact native launcher already provides a top inset above the Agent controls. */
+  .native-chat-shell[data-native-workspace-owner="agent"] .native-chat-column--padded {
+    padding-top: 0;
   }
   .chat-composer-area--background { min-height: min(12.5rem, 55%); }
   .native-chat-shell:has([data-native-notice]) { min-height: calc(100vh - 3rem); }
