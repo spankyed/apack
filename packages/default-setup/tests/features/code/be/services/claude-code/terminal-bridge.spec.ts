@@ -768,3 +768,41 @@ it('carries a prepared pending nonce on an existing main-view heartbeat after na
  expect((await request('/submission',{sessionId:session,id:poll.value.id,drop:'late'})).status).toBe(409)
  expect((await request('/poll',{sessionId:session,agents:[]})).value.reportEveryMs).toBe(0)
 })
+
+it('settles a busy parent submission only after an addressed native queue receipt', async () => {
+  const enter = vi.fn()
+  await create(enter)
+  const main = {sessionId: session, pid: process.pid, sequence: 1, view: {kind: 'main'}}
+  await request('/native-view', main)
+  await request('/native-activity', {sessionId: session, pid: process.pid, sequence: 1,
+    activity: {pendingAgents: 0, pendingWorkflows: 0}, activeTurnId: 'running-turn'})
+  const owner = {sessionId: session, agents: [], directOwner: true, busy: true, turn: {id: 'running-turn', cancelled: false}}
+  await request('/poll', owner)
+  await expect(bridge!.submit('/clear')).rejects.toThrow('Claude is busy')
+  await expect(bridge!.submit('With portrait', [{mediaType: 'image/png', data: 'YQ=='}])).rejects.toThrow('Claude is busy')
+
+  const result = bridge!.submit('Review the queued release checklist')
+  expect((await request('/poll', owner)).value).not.toHaveProperty('id')
+  expect((await request('/native-view', {...main, pid: process.pid + 1})).status).toBe(409)
+  expect((await request('/native-view', main)).value).toEqual({})
+  const {value: {prepareQueuedPrompt: prompt}} = await request('/native-view', {...main, heartbeat: true})
+  expect(prompt).toEqual({id: expect.any(String), text: 'Review the queued release checklist'})
+  expect((await request('/native-view', main)).value).toEqual({})
+  const queued = '33333333-3333-4333-8333-333333333333'
+  const resultReport = {sessionId: session, id: prompt.id, pid: process.pid, filled: true}
+  const receipt = {sessionId: session, id: prompt.id, pid: process.pid, queued}
+  expect((await request('/submission', receipt)).status).toBe(409)
+  expect((await request('/result', {...resultReport, pid: process.pid + 1})).status).toBe(409)
+  expect((await request('/result', resultReport)).status).toBe(200)
+  expect((await request('/native-view', main)).value).toEqual({pendingSubmissionId: prompt.id, queue: true})
+  expect(enter).toHaveBeenCalledOnce()
+  expect((await request('/submission', {...receipt, pid: process.pid + 1})).status).toBe(409)
+  expect((await request('/submission', {...receipt, queued: 'invalid'})).status).toBe(409)
+  expect((await request('/submission', {...receipt, id: 'old-submission'})).status).toBe(409)
+  await request('/submission', {sessionId: session, id: prompt.id, accepted: true})
+  expect((await request('/owner-pending', {sessionId: session})).value).toEqual({pending: true, id: prompt.id})
+  expect((await request('/submission', receipt)).status).toBe(200)
+  await expect(result).resolves.toEqual({sessionId: session, uuid: queued, text: 'Review the queued release checklist', queued: true})
+  expect((await request('/submission', receipt)).status).toBe(409)
+  expect(bridge!.busy).toBe(true)
+})

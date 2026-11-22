@@ -72,6 +72,7 @@
             @pause="pauseWork"
             @open-revert-menu="openRevertMenu"
           />
+          <p v-if="queuedNotice && isBusy && !composerProblem" class="px-3 text-xs text-neutral-400" role="status">Sent to Claude’s queue.</p>
           <p v-if="composerProblem && !nativeDraftTooLong" class="px-3 text-xs text-neutral-500" role="status">{{ composerProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
@@ -437,6 +438,8 @@ watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
+const queuedNotice = ref(false)
+watch(() => props.isBusy, busy => { if (!busy) queuedNotice.value = false })
 const rejectedNativeDraft = shallowRef<{ doc: ProseMirrorNode; sessionId: string; sessionChanged: boolean }>()
 const composerProblem = computed(() => {
   const rejected = rejectedNativeDraft.value
@@ -460,7 +463,7 @@ watch(() => props.nativeUi?.agentInput, state => {
 })
 defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks') })
 let composerEpoch = 0
-watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
+watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined; queuedNotice.value = false }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch++ })
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
 // Restore only this native session's parent input before adopting it into a fresh prompt host.
@@ -935,6 +938,7 @@ const handleSubmit = async () => {
   if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
   submitting.value = true
   submissionProblem.value = undefined
+  queuedNotice.value = false
   rejectedNativeDraft.value = undefined
   try {
     if (bridge) {
@@ -991,6 +995,7 @@ const handleSubmit = async () => {
         return
       }
       if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+      queuedNotice.value = props.isBusy && !!result && 'queued' in result
     } else {
       emit('send-message', md, references)
     }

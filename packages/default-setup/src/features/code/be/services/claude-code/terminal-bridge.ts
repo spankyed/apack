@@ -112,12 +112,20 @@ export async function createClaudeTerminalBridge(options: {
   const uiTransport: typeof ui.transport = {...ui.transport, request: value => nativeEditor ? nativeEditor.request(value) : ui.transport.request(value)}
   let backgroundObserver: ClaudeBackgroundStatusObserver | undefined
   const linkedBackground = () => { const target = options.backgroundTarget?.(); return target?.parentSessionId === projection.sessionId ? target : undefined }
-  let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; waitingForInteraction?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
+  let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; queue: boolean; prepared?: boolean; entered?: boolean; waitingForInteraction?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
     if (!current) return
     pending = undefined; clearTimeout(current.timer)
     if (error) current.reject(error); else if (receipt) current.resolve(receipt); else current.reject(new Error('Native submission had no stored prompt receipt'))
+  }
+  function acceptQueuedSubmission(id: unknown, uuid: unknown) {
+    const current = pending
+    if (!current?.queue || !current.entered || current.sessionId !== projection.sessionId || current.id !== id
+      || typeof uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(uuid)) return false
+    settle(undefined, { sessionId: current.sessionId, uuid, text: current.text, queued: true })
+    options.changed()
+    return true
   }
   const pendingControlSchema = z.object({
     control: ClaudeBackgroundControlSchema.nullable(),
@@ -133,6 +141,11 @@ export async function createClaudeTerminalBridge(options: {
     if (!current) return
     if (current.entered) {
       try {
+        if (current.queue) {
+          const outcome = object(await uiTransport.request({ subtype: 'apack_prompt_outcome', submission_id: current.id }))
+          if (closed || pending !== current || projection.sessionId !== current.sessionId) return
+          if (acceptQueuedSubmission(current.id, outcome?.queued)) return
+        }
         const state = pendingControlSchema.parse(await uiTransport.request({ subtype: 'apack_pending_control' }))
         if (closed || pending !== current || projection.sessionId !== current.sessionId) return
         if (state.turn?.cancelled || state.control && state.control.dialog.sessionId !== current.sessionId) throw new Error('Native interaction owner changed')
@@ -313,13 +326,15 @@ export async function createClaudeTerminalBridge(options: {
           }
         }
         if (!observerPid && (mainCommand || subagentCommand) && !observerProblem) observerProblem = 'Native helper output could not be observed in this terminal'
-        if (pending?.entered && pending.prepared) {
+        if (pending?.entered && pending.prepared && !pending.queue) {
           const submission = pending
           const outcome = object(await uiTransport.request({ subtype: 'apack_prompt_outcome', submission_id: submission.id }))
-          if (pending === submission && submission.sessionId === projection.sessionId && typeof outcome?.drop === 'string') settle(new Error('Native prompt refused: ' + outcome.drop))
+          if (pending === submission && submission.sessionId === projection.sessionId) {
+            if (typeof outcome?.drop === 'string') settle(new Error('Native prompt refused: ' + outcome.drop))
+          }
         }
         ready = true; options.changed()
-        if (pending && !pending.sent && pending.sessionId === projection.sessionId) {
+        if (pending && !pending.queue && !pending.sent && pending.sessionId === projection.sessionId) {
           const submission = pending; submission.sent = true
           if (value.directOwner === true || ui.hasPromptHosts || submission.images.length) {
             try {
@@ -367,8 +382,16 @@ export async function createClaudeTerminalBridge(options: {
         nativeViewSequence = value.sequence as number
         nativeViewRecord = record
         if (JSON.stringify(next) !== JSON.stringify(nativeView)) { preview = undefined; focus = undefined; nativeView = next; options.changed() }
-        // The existing heartbeat can settle native non-query refusals after plugin polling stops.
-        return reply(200, next.kind === 'main' && pending?.entered && pending.prepared && pending.sessionId === value.sessionId ? { pendingSubmissionId: pending.id } : {})
+        const submission = pending
+        if (next.kind !== 'main' || !submission || submission.sessionId !== value.sessionId) return reply(200, {})
+        // While a turn is running, the CLI can service its view heartbeat even when the hook does not poll.
+        if (submission.queue && !submission.sent && value.heartbeat === true) {
+          submission.sent = true
+          return reply(200, { prepareQueuedPrompt: { id: submission.id, text: submission.text } })
+        }
+        return reply(200, submission.entered && submission.prepared ? {
+          pendingSubmissionId: submission.id, ...(submission.queue ? { queue: true } : {}),
+        } : {})
       }
       if (request.url === '/ui-ready') {
         await uiTransport.request({ subtype: 'apack_observe_notices' }); return reply(200, {})
@@ -416,8 +439,11 @@ export async function createClaudeTerminalBridge(options: {
       if (request.url === '/submission') {
         if (!pending?.entered || value.id !== pending.id) return reply(409, {})
         if (typeof value.drop === 'string') settle(new Error('Native prompt refused: ' + value.drop))
-        else if (value.accepted === true && pending.accepted) settle(undefined, pending.accepted)
-        else settle(new Error('Native prompt did not produce a stored user message'))
+        else if (value.queued !== undefined) {
+          if (observerPid === undefined || value.pid !== observerPid || !acceptQueuedSubmission(value.id, value.queued)) return reply(409, {})
+        } else if (value.accepted === true && pending.accepted) settle(undefined, pending.accepted)
+        // The original prompt hook can finish screening before a waiting command has a user row.
+        else if (!pending.queue || value.accepted !== true) settle(new Error('Native prompt did not produce a stored user message'))
         return reply(200, {})
       }
       if (request.url === '/native-status') {
@@ -436,9 +462,14 @@ export async function createClaudeTerminalBridge(options: {
         busy = value.running; options.changed(); return reply(200, {})
       }
       if (request.url !== '/result' || !pending || pending.entered || !pending.sent || value.id !== pending.id || pending.sessionId !== projection.sessionId) return reply(409, {})
+      if (pending.queue && (observerPid === undefined || value.pid !== observerPid || nativeView?.kind !== 'main')) return reply(409, {})
       if (value.filled !== true) settle(new Error('Native prompt rejected the draft; existing terminal input was preserved'))
       else {
-        try { pending.entered = true; options.enter() } catch { settle(new Error('Native terminal closed before submission')) }
+        try {
+          if (pending.queue) pending.prepared = true
+          pending.entered = true
+          options.enter()
+        } catch { settle(new Error('Native terminal closed before submission')) }
       }
       reply(200, {})
     } catch { if (!response.headersSent) reply(400, {}); else response.destroy() }
@@ -496,11 +527,13 @@ export async function createClaudeTerminalBridge(options: {
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
         if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(new Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
         if (closed || !ready || !text.trim() && !images.length) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
-        if (pending || busy || nativeEditor?.active) return Promise.reject(new Error(CLAUDE_BUSY_DRAFT_MESSAGE))
+        const queue = busy && !!activeTurnId && !endingTurnId && nativeView?.kind === 'main'
+          && !images.length && !/^[!\/]/.test(text.trimStart())
+        if (pending || busy && !queue || nativeEditor?.active) return Promise.reject(new Error(CLAUDE_BUSY_DRAFT_MESSAGE))
         if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {
           const timer = submissionTimer(images.length > 0)
-          pending = { id: randomUUID(), sessionId: projection.sessionId, text, images: images.map(image => ({ ...image })), sent: false, timer, resolve, reject }
+          pending = { id: randomUUID(), sessionId: projection.sessionId, text, images: images.map(image => ({ ...image })), sent: false, queue, timer, resolve, reject }
         })
       },
       async close() {

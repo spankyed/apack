@@ -468,6 +468,14 @@ async function promptOutcome(n,id){
  const message=messages.findLast(row=>row.promptSubmitEnding&&!preparedPrompt.before.has(row.uuid));
  if(!message){
   const candidates=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!interruptions.Sh(row)&&!preparedPrompt.before.has(row.uuid)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result')));
+  if(candidates.length===0&&preparedPrompt.queue){
+   const {queue,beforeQueue,text}=preparedPrompt;
+   // Original zp / Gp identifies the main Agent by its real session-bound ID.
+   const matches=queue.getCommandQueueSnapshot().filter(item=>item.mode==='prompt'&&n.runtime.zp(item)&&item.origin?.kind==='human'
+    &&item.isMeta!==true&&item.screeningPending!==true&&typeof item.uuid==='string'&&!beforeQueue.has(item.uuid)
+    &&(item.preExpansionValue??item.value)===text.trim());
+   if(matches.length===1)return {queued:matches[0].uuid};
+  }
   if(candidates.length===0){const reason=nativeUnknownCommandRefusal(n,messages);return reason===undefined?{}:{drop:reason};}
   if(candidates.length!==1)return {};
   const row=candidates[0],content=typeof row.message.content==='string'?[{type:'text',text:row.message.content}]:row.message.content;
@@ -476,7 +484,7 @@ async function promptOutcome(n,id){
  const ending=message.promptSubmitEnding.ending;
  return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
 }
-async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
+async function prepareTerminalPrompt(n,text,id,allowEmpty=false,queueRequested=false){
  if(typeof text!=='string'||!allowEmpty&&!text.trim()||text.length>nativeUiTextMaxLength)throw Error('Native terminal draft is invalid');
  if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
  const context=originalContext??n.runtime.ey(),composer=context?.composer;
@@ -485,6 +493,9 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
  const prior=(await composer.read()).text;
  if(prior&&prior!==preparedPrompt?.text)return {filled:false};
  const before=new Set((context.messages?.()??[]).map(row=>row.uuid));
+ const queue=queueRequested?context.toolContext(new AbortController()).messageQueue:undefined;
+ if(queueRequested&&typeof queue?.getCommandQueueSnapshot!=='function')throw Error('Native prompt queue is unavailable');
+ const beforeQueue=queue?new Set(queue.getCommandQueueSnapshot().map(item=>item.uuid)):undefined;
  const normalize=n.runtime.ilo();
  const core={name:'core',isCore:true,budgetMs:0,run:async input=>{
   const value=normalize(input.text);let decorations=input.decorations;
@@ -499,7 +510,7 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
  }};
  const result=await n.runtime.$i('prompt.fill',{core:{'prompt.fill':core}})({text,mode:'replace',origin:{kind:'plugin',name:'apack-native-terminal'}});
  const actual=(await composer.read()).text,filled=result.isFilled===true&&actual===text;
- if(filled)preparedPrompt={id,text:actual,before};
+ if(filled)preparedPrompt={id,text:actual,before,queue,beforeQueue};
  return {filled};
 }
 function nativeTurnControl(n,request,signal,sessionId){
@@ -1189,7 +1200,7 @@ async function control(request,abort){
   if(request.remember===true)preparedPrompt.text=box.text;
   return {...box,images};
  }
- if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id,request.allow_empty===true);
+ if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id,request.allow_empty===true,request.queue===true);
  let boundQuestion;
  if(request.subtype==='apack_render_question_dialog'){
   abort.signal.throwIfAborted();boundQuestion=nativeDialog(n,'permission_ask_user_question');
@@ -1465,10 +1476,15 @@ async function followNativeOwnerSession(gate){
  await ownerPost('/poll',{...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true});
  ownerIndependent=true;
 }
-async function reportPendingPromptRefusal(id){
+async function reportPendingPromptOutcome(id,includeAccepted=false){
  if(typeof id!=='string'||!id)return;
  const outcome=await control({subtype:'apack_prompt_outcome',submission_id:id},new AbortController());
  if(typeof outcome?.drop==='string')await ownerPost('/submission',{id,drop:outcome.drop});
+ else if(typeof outcome?.queued==='string')await ownerPost('/submission',{id,queued:outcome.queued,pid:process.pid});
+ else if(includeAccepted&&outcome?.accepted){
+  await ownerPost('/append',{...outcome.accepted,submissionId:id});
+  await ownerPost('/submission',{id,accepted:true});
+ }
 }
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
@@ -1480,7 +1496,17 @@ const ownerTimer=setInterval(async()=>{
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
-  if(refreshView){const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;viewHeartbeat=0;await reportPendingPromptRefusal(response?.pendingSubmissionId);}
+  if(refreshView){
+   const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence,heartbeat:true});
+   reportedView=viewKey;viewHeartbeat=0;
+   const command=response?.prepareQueuedPrompt;
+   if(command){
+    let filled=false;
+    try{filled=(await control({subtype:'apack_prepare_prompt',text:command.text,submission_id:command.id,queue:true},new AbortController())).filled===true;}catch{}
+    await ownerPost('/result',{id:command.id,filled,pid:process.pid});
+   }
+   await reportPendingPromptOutcome(response?.pendingSubmissionId,response?.queue===true);
+  }
   const billingKey=JSON.stringify([gate.sessionId,gate.billing]);
   if(gate.billing&&billingKey!==settledBillingKey){
    try{
@@ -1516,6 +1542,7 @@ const ownerTimer=setInterval(async()=>{
   if(pending.id){
    const outcome=await control({subtype:'apack_prompt_outcome',submission_id:pending.id},new AbortController());
    if(outcome.drop)await ownerPost('/submission',{id:pending.id,drop:outcome.drop});
+   else if(outcome.queued)await ownerPost('/submission',{id:pending.id,queued:outcome.queued,pid:process.pid});
    else if(outcome.accepted){await ownerPost('/append',{...outcome.accepted,submissionId:pending.id});await ownerPost('/submission',{id:pending.id,accepted:true});}
   }
  }catch(error){if(error?.apackPlanRestore===true)await ownerPost('/observer-error',{message:error.message}).catch(()=>{});}finally{ownerReading=false;}
