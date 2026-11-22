@@ -1,4 +1,5 @@
 import './native-prompt-decorations.css'
+import { claudeTextGraphemes } from './native-text-layout.ts'
 import { claudeUiColor } from './native-ui-paint.ts'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
@@ -96,6 +97,28 @@ function projectClaudePromptLines(doc: ProseMirrorNode, projected: readonly Clau
   return DecorationSet.create(doc, drawn)
 }
 
+/** Text marks do not create character boundaries. Inline atoms and breaks do. */
+function splitGraphemes(parent: ProseMirrorNode) {
+  const splits = new Map<number, { start: number; end: number }>()
+  let text = '', start = 0
+  const finish = () => {
+    if (/[^\x20-\x7e]/.test(text)) {
+      for (const part of claudeTextGraphemes(text)) {
+        const from = start + part.index, to = from + part.segment.length
+        for (let offset = from + 1; offset < to; offset++) splits.set(offset, { start: from, end: to })
+      }
+    }
+    text = ''
+  }
+  parent.forEach((node, offset) => {
+    if (!node.isText) { finish(); return }
+    if (!text) start = offset
+    text += node.text!
+  })
+  finish()
+  return splits
+}
+
 /** Decorations are presentation only: no marks, draft characters or submitted text are added. */
 export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNullable<ClaudeUiPromptFrame['decorations']>, serialize: ClaudePromptSerializer, sourcePositions?: ReadonlyMap<number, number>, sourceOffsets?: ReadonlyMap<number, number>): DecorationSet {
   const drawn: Decoration[] = [], projected: ClaudePromptProjection[] = []
@@ -115,16 +138,17 @@ export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNulla
     if (!positions.has(address)) positions.set(address, findClaudePromptPosition(doc, offset, serialize, bias))
     return positions.get(address)
   }
+  const textblockSplits = new WeakMap<ProseMirrorNode, ReturnType<typeof splitGraphemes>>()
   const position = (offset: number, bias: -1 | 0 | 1) => {
     const at = mapOffset(offset, bias)
     if (at === undefined) return
-    const resolved = doc.resolve(at), index = resolved.textOffset
-    if (!index) return at
-    const text = resolved.parent.child(resolved.index()).text!
-    const before = text.charCodeAt(index - 1), after = text.charCodeAt(index)
-    if (before < 0xD800 || before > 0xDBFF || after < 0xDC00 || after > 0xDFFF) return at
-    // A paint boundary cannot split one Unicode character across DOM nodes.
-    return bias ? at + bias : undefined
+    const { parent, parentOffset } = doc.resolve(at)
+    if (!parent.isTextblock) return at
+    let splits = textblockSplits.get(parent)
+    if (!splits) { splits = splitGraphemes(parent); textblockSplits.set(parent, splits) }
+    const cluster = splits.get(parentOffset)
+    if (!cluster) return at
+    if (bias) return at - parentOffset + (bias > 0 ? cluster.end : cluster.start)
   }
   for (const run of runs) {
     if (run.virtualText && run.start === run.end) {

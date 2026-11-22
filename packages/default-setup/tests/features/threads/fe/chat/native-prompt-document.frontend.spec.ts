@@ -564,6 +564,47 @@ it('keeps emoji intact when native structural paint lands inside a UTF-16 surrog
   } finally { bridge.dispose() }
 })
 
+it.each([
+  ['👩‍💻', 2],
+  ['e\u0301', 1],
+  ['🇨🇦', 2],
+] as const)('keeps the displayed grapheme %s intact across native list normalization', (grapheme, split) => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const text = '*   A' + grapheme + 'B'
+    const start = text.indexOf(grapheme)
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor: text.length,
+      decorations: [
+        { start: start + split, end: start + split, virtualText: 'hint at invalid boundary' },
+        { start: start + split, end: text.length, italic: true },
+        { start: 4, end: start + split, underline: true },
+        { start, end: start + grapheme.length, bold: true },
+      ],
+    } })
+    expect(serialize(editor.state.doc)).toBe('- A' + grapheme + 'B')
+    expect(editor.view.dom.querySelector('.claude-prompt-virtual')).toBeNull()
+    expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['A', grapheme, 'B'])
+    expect(editor.view.dom.textContent).toBe('A' + grapheme + 'B')
+  } finally { bridge.dispose() }
+})
+
+it('does not treat an editor mark boundary as a grapheme boundary for native paint', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'e', marks: [{ type: 'bold' }] },
+    { type: 'text', text: '\u0301B' },
+  ] }] })
+  const drawn = drawClaudePromptDecorations(editor.state.doc, [
+    { start: 1, end: 1, virtualText: 'hint at a mark edge' },
+    { start: 1, end: 3, italic: true },
+  ], serialize, new Map([[1, 2], [3, 4]]))
+  const [decoration] = drawn.find()
+  expect(drawn.find()).toHaveLength(1)
+  expect([decoration!.from, decoration!.to]).toEqual([3, 4])
+  expect(editor.state.doc.textContent).toBe('e\u0301B')
+})
+
 it('maps decoration boundaries inside noncanonical code fences without changing code or caret', () => {
   editor.commands.setContent('safe')
   const send=vi.fn(),problem=vi.fn(),bridge=bindClaudePromptEditor(editor,send,problem)

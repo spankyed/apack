@@ -5,13 +5,17 @@ export interface ClaudeTextCut { head: number; tail: number; ellipsis: boolean }
 export type ClaudeTextMeasure = (start: number, end: number) => number
 export interface ClaudeTextMetrics { width: number; range: ClaudeTextMeasure }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+export function claudeTextGraphemes(text: string) { return graphemes.segment(text) }
+
 /** Offsets address original UTF-16 text; cuts never split a displayed grapheme. */
 export function claudeTextCut(text: string, width: number, mode: ClaudeUiTextWrap, metrics: ClaudeTextMetrics, ellipsisWidth: number): ClaudeTextCut {
   const measure = metrics.range
   const full = { head: text.length, tail: text.length, ellipsis: false }
   if (mode === 'wrap' || metrics.width <= width) return full
   if (width < ellipsisWidth || width <= 0) return { head: 0, tail: text.length, ellipsis: false }
-  const edges = [0, ...Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.index + part.segment.length)]
+  const edges = [0, ...Array.from(claudeTextGraphemes(text), part => part.index + part.segment.length)]
   function prefix(budget: number) {
     if (budget <= 0) return 0
     let low = 0, high = edges.length - 1
