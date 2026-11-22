@@ -73,8 +73,9 @@ describe('installing the packs the app ships', () => {
     expect(readAppPackSources(flat).sources[0]).toMatchObject({
       id: original.id, sourceRevision: original.sourceRevision, files: original.files,
     });
-    expect(await installShippedPacks(flat, packsDir, { installedPacksFile: recordsFile() }))
-      .toEqual([{ id: original.id, outcome: 'installed' }]);
+    await restoreShippedPack(original.id, staged, packsDir, {
+      installedPacksFile: recordsFile(), expectedSourceRevision: original.sourceRevision,
+    });
     expect(readPackIntegrity(path.join(packsDir, original.id))).toEqual(readPackIntegrity(staged));
     expect(await outcomes()).toEqual(['shipped-pack=unchanged']);
   });
