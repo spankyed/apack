@@ -281,6 +281,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-hqtnbrjd.js": {
       "module": "chunk-a7b8k0bt.js",
       "exports": {
+        "ql": "Vl",
         "zp": "Gp",
         "Tf": "Rf",
         "fdt": "sdt",
@@ -512,6 +513,18 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-43x7jc34.js",
       "exports": {
         "VQo": "hQo"
+      }
+    },
+    "chunk-5f274gcf.js": {
+      "module": "chunk-vbmn12d9.js",
+      "exports": {
+        "CM": "v0"
+      }
+    },
+    "chunk-ft699e6v.js": {
+      "module": "chunk-16jdrw7g.js",
+      "exports": {
+        "jS": "Hb"
       }
     },
     "chunk-xh5v0djg.js": {

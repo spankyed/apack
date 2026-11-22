@@ -663,9 +663,13 @@ export const threadsSystem = setup({
       // Retired one-shot decisions cannot regain authority through a delayed frontend response.
       if (message.responseTimestamp && (message.context?.claudeNativeQuestion || message.blocks?.some(block => block.type === 'question' || block.type === 'approval'))) return;
 
+      // Question image bytes are for the live native decision and the native transcript.
+      const storedResponse = message.context?.claudeNativeQuestion && response && typeof response === 'object' && 'nativeQuestionImages' in response
+        ? Object.fromEntries(Object.entries(response).filter(([key]) => key !== 'nativeQuestionImages'))
+        : response;
       repository.chatCommands.updateMessageBlockResponse({
         messageId: messageId as EARS.EntityId,
-        response
+        response: storedResponse
       });
 
       // Compute aside text for autoHide messages

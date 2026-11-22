@@ -840,12 +840,12 @@ function startNativeQuestionDraft(token: string, identity: import('#features/cod
   nativeQuestionDraft.value = { messageId: question.messageId, token }
   editNativeUi({ actionId: question.frame.draftActionId, revision: 1, kind: 'change', value: token })
 }
-function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify') {
+function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: import('#features/code/common/native-question.ts').ClaudeQuestionImage[]) {
   const question = pendingNativeQuestion.value
   if (!question?.frame || question.messageId !== identity.messageId) return
   const token = identity.token
   if (!token) return
-  send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, ...(decision ? { nativeQuestionDecision: decision } : {}), nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
+  send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, ...(decision ? { nativeQuestionDecision: decision } : {}), ...(images ? { nativeQuestionImages: images } : {}), nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
 }
 
 function rejectNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {

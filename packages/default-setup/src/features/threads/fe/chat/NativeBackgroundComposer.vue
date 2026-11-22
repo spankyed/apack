@@ -67,9 +67,9 @@ function answerApproval(frameId: string, answer: ClaudeUiApprovalAnswer) {
   const frame = state.value?.approval
   if (mountId.value && frame?.id === frameId) sendToThreads({type: 'CLAUDE_UI_APPROVAL_ANSWER', ...identity(), frameId: frame.id, answer})
 }
-function answer(value: ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify') {
+function answer(value: ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: import('#features/code/common/native-question.ts').ClaudeQuestionImage[]) {
   const question = state.value?.question
-  if (mountId.value && question?.messageId === identity.messageId) sendToThreads({type: 'CLAUDE_UI_QUESTION_ANSWER', threadId: props.threadId, mountId: mountId.value, messageId: identity.messageId, token: identity.token, answer: value, ...(decision ? { decision } : {})})
+  if (mountId.value && question?.messageId === identity.messageId) sendToThreads({type: 'CLAUDE_UI_QUESTION_ANSWER', threadId: props.threadId, mountId: mountId.value, messageId: identity.messageId, token: identity.token, answer: value, ...(decision ? { decision } : {}), ...(images ? { images } : {})})
 }
 function leaveApproval(frameId: string) { if (state.value?.approval?.id === frameId) emit('leave') }
 function openApproval(frameId: string) { if (state.value?.approval?.id === frameId) emit('open-native') }

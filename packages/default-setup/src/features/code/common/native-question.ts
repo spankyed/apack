@@ -17,6 +17,17 @@ export const ClaudeQuestionAnswerSchema = z.object({
   annotations: z.record(z.string(), z.object({preview: z.string().optional(), notes: z.string().optional()}).strict()).optional(),
   response: z.string().optional(), followUp: z.boolean().optional(),
 }).strict()
+export const CLAUDE_QUESTION_IMAGE_COUNT = 4
+export const CLAUDE_QUESTION_IMAGE_BYTES = 10 * 1024 * 1024
+export const CLAUDE_QUESTION_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
+export const ClaudeQuestionImagesSchema = z.array(z.object({
+  mediaType: z.enum(CLAUDE_QUESTION_IMAGE_TYPES),
+  data: z.string().min(4).max(Math.ceil(CLAUDE_QUESTION_IMAGE_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/).refine(data => data.length % 4 === 0),
+}).strict()).min(1).max(CLAUDE_QUESTION_IMAGE_COUNT).refine(images => images.reduce((bytes, { data }) =>
+  bytes + data.length / 4 * 3 - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0), 0) <= CLAUDE_QUESTION_IMAGE_BYTES)
+export type ClaudeQuestionImage = z.infer<typeof ClaudeQuestionImagesSchema>[number]
+
 export interface ClaudeQuestionAnswer {
   answers?: Record<string, string | string[]>
   annotations?: Record<string, { preview?: string; notes?: string }>

@@ -50,11 +50,13 @@ import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 import { claudeTerminalInlineModelRuntime } from './terminal-inline-model-runtime.ts'
 import { claudeTerminalActionKeyRuntime } from './terminal-action-key-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
+import { CLAUDE_QUESTION_IMAGE_BYTES, CLAUDE_QUESTION_IMAGE_COUNT, CLAUDE_QUESTION_IMAGE_TYPES } from '../../../common/native-question.ts'
+
 export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.raw`import http from 'node:http';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {dirname as nativeEditorDirname} from 'node:path';
 import {stripVTControlCharacters} from 'node:util';
-import {accessSync,constants as fsConstants,readFileSync,statSync} from 'node:fs';
+import {accessSync,constants as fsConstants,readFileSync,statSync,lstatSync,openSync,fstatSync,closeSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
 const nativeUiTextMaxLength=${CLAUDE_UI_TEXT_MAX_LENGTH};
@@ -372,6 +374,8 @@ async function initialize(){
   const questionOptions=await import('/$bunfs/root/chunk-hdxpvbx1.js');
   const questionText=await import('/$bunfs/root/chunk-xh5v0djg.js');
   const questionDialog=await import('/$bunfs/root/chunk-a14ghztk.js');
+  const questionImageModel=await import('/$bunfs/root/chunk-5f274gcf.js');
+  const questionImage=await import('/$bunfs/root/chunk-ft699e6v.js');
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   const paths=await import('/$bunfs/root/chunk-27d659a1.js');
   const planConsent=await import('/$bunfs/root/chunk-3m4t81ea.js');
@@ -383,12 +387,12 @@ async function initialize(){
   const planProactivity=await import('/$bunfs/root/chunk-ck4jw7jw.js');
 
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
   engine.I9e.onInvalidate(instances=>{nativeClients.suspend(instances);for(const[client,frame]of questionFrames)if(!instances||instances.some(item=>item.surface==='desktop'&&item.component==='AskUserQuestion'&&item.requestId===frame.requestId))questionFrames.delete(client);try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -952,6 +956,28 @@ function questionClarification(n,payload,shown,admitted){
   +'    Start by asking them what they would like to clarify.\n\n'
   +'    Questions asked:\n'+summary};
 }
+const questionImageTypes=new Set(${JSON.stringify(CLAUDE_QUESTION_IMAGE_TYPES)});
+async function questionMedia(n,dialog,media){
+ if(typeof media?.id!=='string'||!/^[a-f0-9-]{36}$/i.test(media.id)||!Array.isArray(media.types)||media.types.length<1||media.types.length>${CLAUDE_QUESTION_IMAGE_COUNT}||!media.types.every(type=>questionImageTypes.has(type)))throw Error('Invalid native question attachments');
+ const directory=new URL('./question-media-'+media.id+'/',configUrl),directoryStat=lstatSync(directory);
+ if(!directoryStat.isDirectory()||directoryStat.uid!==process.getuid?.()||(directoryStat.mode&0o077)!==0)throw Error('Unowned native question attachment directory');
+ let remaining=${CLAUDE_QUESTION_IMAGE_BYTES};
+ const images=media.types.map((mediaType,index)=>{
+  const fd=openSync(new URL(String(index),directory),fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW|fsConstants.O_NONBLOCK);
+  try{
+   const entry=fstatSync(fd);
+   if(!entry.isFile()||entry.uid!==process.getuid?.()||(entry.mode&0o077)!==0||entry.size<1||entry.size>remaining)throw Error('Invalid native question attachment');
+   const data=readFileSync(fd);
+   if(data.length!==entry.size)throw Error('Native question attachment changed');
+   remaining-=data.length;
+   return {data,mediaType};
+  }finally{closeSync(fd);}
+ });
+ const model=n.questionImageModel.CM(dialog.context.getAppState()),limits=n.runtime.ql(model);
+ const blocks=await Promise.all(images.map(image=>n.questionImage.jS({...image,limits})));
+ if(blocks.some(image=>image.block?.type!=='image'))throw Error('Claude could not prepare a question image');
+ return blocks.map(image=>image.block);
+}
 function questionPreviewKind(n,preview){
  if(typeof preview!=='string')return 'empty';
  return preview.length>2000?'withheld':!n.questionText.zL(preview)?'empty':n.questionText.VL(preview)?'withheld':'full';
@@ -1233,19 +1259,30 @@ async function control(request,abort){
   const d=nativeDialog(n,'permission_ask_user_question');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
   if(request.decision!==undefined&&request.decision!=='clarify')throw Error('Invalid native question decision');
+  let result;
   if(request.decision==='clarify'){
    if(typeof request.render_token!=='string')throw Error('Native question clarification requires its drawing');
    const frame=questionAnswerFrame(d,request);
    const admitted=n.questionTool.admitCardAnswer(frame.shownInput,request.answer);
    if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
    if(admitted.input.response!==undefined||admitted.input.followUp!==undefined)throw Error('Native clarification requires answers and eligible notes');
-   d.store.answer(d.item.id,questionClarification(n,d.payload,frame.shownInput,admitted.input));
+   result=questionClarification(n,d.payload,frame.shownInput,admitted.input);
   }else{
    const admitted=questionCanonicalAnswer(n,d,request);
    if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
    // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
-   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});
+   result={behavior:'allow',updatedInput:admitted.input};
   }
+  if(request.question_media!==undefined){
+   if(typeof request.render_token!=='string')throw Error('Native question attachments require their drawing');
+   const frame=questionAnswerFrame(d,request);
+   const contentBlocks=await questionMedia(n,d,request.question_media);
+   abort.signal.throwIfAborted();
+   const fresh=nativeDialog(n,'permission_ask_user_question');
+   if(fresh.item!==d.item||fresh.revision!==d.revision||questionAnswerFrame(fresh,request)!==frame)throw Error('Native question changed while preparing attachments');
+   result.contentBlocks=contentBlocks;
+  }
+  d.store.answer(d.item.id,result);
   dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
  }

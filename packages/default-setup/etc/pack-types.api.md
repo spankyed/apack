@@ -378,6 +378,7 @@ type BlockResponse = {
 } | {
     nativeQuestionAnswer: ClaudeQuestionAnswer;
     nativeQuestionDecision?: 'clarify';
+    nativeQuestionImages?: readonly ClaudeQuestionImage[];
     nativeQuestionRenderToken?: string;
     nativeQuestionDraftStarted?: boolean;
 }
@@ -2623,6 +2624,7 @@ interface ClaudeNativeQuestionDialogResponse {
     sessionId: string;
     answer: Record<string, unknown>;
     decision?: 'clarify';
+    images?: readonly ClaudeQuestionImage[];
     renderToken?: string;
     draftStarted?: boolean;
 }
@@ -3271,6 +3273,18 @@ interface ClaudeQuestionAnswer {
     response?: string;
     followUp?: boolean;
 }
+
+type ClaudeQuestionImage = z.infer<typeof ClaudeQuestionImagesSchema>[number];
+
+declare const ClaudeQuestionImagesSchema: z.ZodArray<z.ZodObject<{
+    mediaType: z.ZodEnum<{
+        "image/png": "image/png";
+        "image/jpeg": "image/jpeg";
+        "image/gif": "image/gif";
+        "image/webp": "image/webp";
+    }>;
+    data: z.ZodString;
+}, z.core.$strict>>;
 
 type ClaudeQuestionPresentation = z.infer<typeof ClaudeQuestionPresentationSchema>;
 
@@ -4360,6 +4374,7 @@ type ClaudeUiViewRequest = ({
     messageId: string;
     token: string;
     decision?: 'clarify';
+    images?: readonly ClaudeQuestionImage[];
     answer: ClaudeQuestionAnswer;
 } | {
     type: 'CLAUDE_UI_PRESS';

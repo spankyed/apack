@@ -1,3 +1,4 @@
+import { ClaudeQuestionImagesSchema } from '#features/code/common/native-question.ts'
 import { parseClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { createClaudeSelectionReply } from '#features/code/be/services/claude-code/ui-selection-reply.ts'
@@ -431,7 +432,9 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {
     if (!view || !view.backgroundView || typeof event.messageId !== 'string' || event.messageId.length > 512 || !validId(event.token) || (event.decision !== undefined && event.decision !== 'clarify') || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 131072) return
     bind(view)
-    void view.mount?.answerQuestion(event.messageId, event.token, event.answer, event.decision)
+    const images = event.images === undefined ? undefined : ClaudeQuestionImagesSchema.safeParse(event.images)
+    if (images && !images.success) return
+    void view.mount?.answerQuestion(event.messageId, event.token, event.answer, event.decision, images?.data)
     return
   }
   if (event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD') {

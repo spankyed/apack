@@ -3,7 +3,7 @@ import { ClaudeWorkflowApprovalSchema } from '../../../common/native-workflow-ap
 import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
 import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
 import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema } from '../../../common/native-file-approval.ts'
-import { ClaudeQuestionPresentationSchema } from '../../../common/native-question.ts'
+import { ClaudeQuestionPresentationSchema, type ClaudeQuestionImage } from '../../../common/native-question.ts'
 import { z } from 'zod'
 
 /**
@@ -61,6 +61,7 @@ export interface ClaudeNativeQuestionDialogResponse {
   sessionId: string
   answer: Record<string, unknown>
   decision?: 'clarify'
+  images?: readonly ClaudeQuestionImage[]
   renderToken?: string
   draftStarted?: boolean
 }

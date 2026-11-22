@@ -144,3 +144,31 @@ it('carries an earlier draft answer into a separate clarification decision', asy
     expect(f.respond).toHaveBeenCalledWith({ answers: { 'First?': 'Alpha' }, annotations: {} }, 'clarify')
   } finally { f.close() }
 })
+
+it('keeps question images with the held card and sends only files still attached', async () => {
+  const f = mount({ questions: [
+    { question: 'First?', header: 'First', options: [option('Alpha'), option('Beta')] },
+    { question: 'Second?', header: 'Second', options: [option('Gamma'), option('Delta')] },
+  ] })
+  try {
+    f.props.canClarify = true
+    f.button('Write your own answer').click()
+    await nextTick()
+    const picker = f.root.querySelector<HTMLInputElement>('input[type=file]')!
+    Object.defineProperty(picker, 'files', { value: [
+      new File([Uint8Array.of(0x11, 0x22, 0x33)], 'keep.png', { type: 'image/png' }),
+      new File([Uint8Array.of(0x44, 0x55, 0x66)], 'remove.png', { type: 'image/png' }),
+    ] })
+    picker.dispatchEvent(new Event('change', { bubbles: true }))
+    const remove = () => f.root.querySelector<HTMLButtonElement>('button[aria-label="Remove remove.png"]')
+    await vi.waitFor(() => expect(remove()).not.toBeNull())
+    remove()!.click()
+    f.root.querySelector<HTMLInputElement>('input[value="Alpha"]')!.click()
+    f.button('Next').click()
+    await nextTick()
+    f.button('Chat about this').click()
+    expect(f.started).toHaveBeenCalledWith('initial-token')
+    expect(f.respond).toHaveBeenCalledWith({ answers: { 'First?': 'Alpha' }, annotations: {} }, 'clarify',
+      [{ mediaType: 'image/png', data: 'ESIz' }])
+  } finally { f.close() }
+})

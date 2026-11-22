@@ -2,6 +2,9 @@ import { CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES, CLAUDE_UI_PROMPT_RPC_SUBTYPES, CL
 import { createClaudePromptHosts, type ClaudePromptHost } from './ui-prompt-host.ts'
 import { request as httpRequest, type ClientRequest } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { ClaudeQuestionImagesSchema } from '../../../common/native-question.ts'
 
 export interface ClaudeTerminalUiTransport {
   readonly promptHosts: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>
@@ -31,11 +34,34 @@ export function createClaudeTerminalUiTransport(options: {
     // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
     detach(id) { hosts.delete(id); for (const pending of [...hostRequests.values()]) if (pending.clientId === id) pending.cancel() },
   }
+  let stagingQuestionImages = false
+  async function answerWithImages(value: Record<string, unknown> & { subtype: string }, owner: { pid: number; sessionId: string }) {
+    const images = ClaudeQuestionImagesSchema.parse(value.question_images)
+    if (typeof value.render_token !== 'string' || stagingQuestionImages) throw new Error('A live native question drawing is required to attach images')
+    const mediaId = randomUUID()
+    const directory = join(dirname(options.socketPath), 'question-media-' + mediaId)
+    stagingQuestionImages = true
+    let created = false
+    try {
+      await mkdir(directory, { mode: 0o700 })
+      created = true
+      for (const [index, image] of images.entries()) {
+        await writeFile(join(directory, String(index)), Buffer.from(image.data, 'base64'), { mode: 0o600, flag: 'wx' })
+      }
+      const current = options.current()
+      if (closed || current?.pid !== owner.pid || current.sessionId !== owner.sessionId) throw new Error('Native question owner changed while attaching images')
+      return await transport.request({ ...value, question_images: undefined, question_media: { id: mediaId, types: images.map(image => image.mediaType) } })
+    } finally {
+      stagingQuestionImages = false
+      if (created) await rm(directory, { force: true, recursive: true })
+    }
+  }
   const transport: ClaudeTerminalUiTransport = {
     promptHosts,
     request(value) {
       const owner = options.current()
       if (closed || !owner) return Promise.reject(new Error('Native UI owner is unavailable'))
+      if (value.subtype === 'apack_answer_question_dialog' && value.question_images !== undefined) return answerWithImages(value, owner)
       if (pending.size >= 64) return Promise.reject(new Error('Native UI request limit reached'))
       if (value.subtype === 'ui_detach' && typeof value.client_id === 'string') promptHosts.detach(value.client_id)
       if (value.subtype === 'ui_attach' && typeof value.client_id === 'string') value = { ...value, answers: promptHosts.answers(value.client_id) }

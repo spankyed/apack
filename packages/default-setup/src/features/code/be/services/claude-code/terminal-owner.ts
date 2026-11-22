@@ -471,7 +471,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerQuestionDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer, decision: response.decision, render_token: response.renderToken, draft_started: response.draftStarted }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer, decision: response.decision, question_images: response.images, render_token: response.renderToken, draft_started: response.draftStarted }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native question was not acknowledged')
       },
       async getPlanDialogs() {

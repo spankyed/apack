@@ -232,7 +232,7 @@ export interface MessageReferences {
 export type BlockResponse =
   | { buttonId: 'accept' | 'decline' | 'cancel'; content?: Record<string, import('#features/code/common/mcp-elicitation-form.ts').ClaudeMcpFormValue> }
   | { validationFailed: true }
-  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionDecision?: 'clarify'; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
+  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionDecision?: 'clarify'; nativeQuestionImages?: readonly import('#features/code/common/native-question.ts').ClaudeQuestionImage[]; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
   /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
   | { approved: boolean; reason?: string }
   /** Cancel path: InteractionContainer `handleCancel`. */
@@ -661,7 +661,7 @@ export type ClaudeUiViewRequest =
   | { type: 'CLAUDE_UI_QUESTION_REJECT'; threadId: string; mountId: string; messageId: string; token: string }
   | { type: 'CLAUDE_UI_QUESTION_PAUSE'; threadId: string; mountId: string; messageId: string; token: string }
   | { type: 'CLAUDE_UI_DECISION_PAUSE'; threadId: string; mountId: string; scope: import('#features/code/common/native-decision-pause.ts').ClaudeDecisionPauseScope }
-  | { type: 'CLAUDE_UI_QUESTION_ANSWER'; threadId: string; mountId: string; messageId: string; token: string; decision?: 'clarify'; answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer }
+  | { type: 'CLAUDE_UI_QUESTION_ANSWER'; threadId: string; mountId: string; messageId: string; token: string; decision?: 'clarify'; images?: readonly import('#features/code/common/native-question.ts').ClaudeQuestionImage[]; answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer }
   | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string; href?: string };
 
 /**
