@@ -32,6 +32,46 @@ it('maps UTF-16 caret positions through Markdown marks, lists, code and paragrap
   }
 })
 
+it.each([
+  ['bold', 'Review  ', 'release notes', '**Review**  release notes'],
+  ['italic', 'Review     ', 'notes', '*Review*     notes'],
+  ['bold', '  ', 'release notes', '  release notes'],
+])('round-trips caret offsets around whitespace included in a %s mark', (type, marked, rest, markdown) => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: marked, marks: [{ type }] },
+    { type: 'text', text: rest },
+  ] }] })
+  const doc = editor.state.doc
+  expect(serialize(doc)).toBe(markdown)
+  for (let position = 1; position < doc.content.size; position++) {
+    const snapshot = captureClaudePromptDocument(doc, position, serialize)
+    expect(snapshot?.text).toBe(markdown)
+    expect(findClaudePromptPosition(doc, snapshot!.cursor, serialize)).toBe(position)
+  }
+})
+
+it('applies native paint before marked trailing space and moves the caret into that space', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'Review  ', marks: [{ type: 'bold' }] },
+    { type: 'text', text: 'release notes' },
+  ] }] })
+  const original = editor.state.doc
+  const text = '**Review**  release notes'
+  const cursor = '**Review** '.length
+  const problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor, decorations: [{ start: 2, end: 8, color: 'red' }],
+    } })
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(editor.state.doc).toBe(original)
+    expect(editor.state.selection.head).toBe(8)
+    expect(bridge.readDraft()).toMatchObject({ text, cursor })
+    expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+  } finally { bridge.dispose() }
+})
+
 it('rewrites ordinary text while preserving marks and refusing unrepresentable Markdown changes', () => {
   editor.commands.setContent('**hello** world')
   const snapshot = captureClaudePromptDocument(editor.state.doc, 3, serialize)!

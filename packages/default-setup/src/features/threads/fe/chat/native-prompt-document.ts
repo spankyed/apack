@@ -39,12 +39,25 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
   if (!resolved.parent.isTextblock) return
   let marker = '\uE000apackCursor\uE001'
   while (text.includes(marker)) marker += '\uE002'
-  const marked = doc.replace(position, position, new Slice(Fragment.from(doc.type.schema.text(marker, marks ?? resolved.marks())), 0, 0))
-  const encoded = serialize(marked)
+  const markerMarks = marks ?? resolved.marks()
+  const insertMarker = (withMarks: readonly Mark[]) => serialize(doc.replace(position, position,
+    new Slice(Fragment.from(doc.type.schema.text(marker, withMarks)), 0, 0)))
+  const encoded = insertMarker(markerMarks)
   let cursor = encoded.indexOf(marker)
   if (cursor < 0 || encoded.indexOf(marker, cursor + marker.length) >= 0) return
   const before = encoded.slice(0, cursor), after = encoded.slice(cursor + marker.length)
   if (before + after !== text) {
+    // Emphasis serializers move enclosed whitespace outside their delimiters. At that edge a
+    // marked probe can pull spaces back inside. Accept an unmarked probe only if it proves
+    // that the original serialized prompt is unchanged.
+    if (markerMarks.length && (/\s$/.test(resolved.nodeBefore?.text ?? '') || /^\s/.test(resolved.nodeAfter?.text ?? ''))) {
+      const alternate = insertMarker([])
+      const at = alternate.indexOf(marker)
+      if (at >= 0 && alternate.indexOf(marker, at + marker.length) < 0
+          && alternate.slice(0, at) + alternate.slice(at + marker.length) === text) {
+        return { text, cursor: at, doc, position }
+      }
+    }
     // Giving a blank paragraph text introduces Markdown paragraph separators.
     // Remove only that proven extra framing, and refuse ambiguous cursor offsets.
     if (resolved.depth !== 1 || resolved.parent.type.name !== 'paragraph' || resolved.parent.content.size) return
