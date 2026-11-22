@@ -5,6 +5,7 @@
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
+import { CLAUDE_QUESTION_IMAGE_REFUSAL } from '../../../features/code/common/native-ui-problem.ts';
 import { expirePendingControlRequest, getClaudeState, persistClaudeState, setRunning, updateChatState } from './_helpers/thread-context.ts';
 
 export const meta: ActionMeta = {
@@ -48,10 +49,13 @@ export async function action(
     try {
       if (!response || typeof response !== 'object' || !response.nativeQuestionAnswer || typeof response.nativeQuestionAnswer !== 'object') throw new Error('Missing native card answer');
       await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer, ...(response.nativeQuestionDecision === 'clarify' ? { decision: 'clarify' } : {}), ...(response.nativeQuestionImages !== undefined ? { images: response.nativeQuestionImages } : {}), ...(typeof response.nativeQuestionRenderToken === 'string' ? { renderToken: response.nativeQuestionRenderToken, draftStarted: response.nativeQuestionDraftStarted === true } : {}) });
-    } catch {
+    } catch (error) {
       if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId) {
         services.chat.updateMessageState(pending.approvalMessageId as EntityId, { responseTimestamp: undefined, blockResponse: undefined });
-        persistClaudeState(services, threadId, { pendingControlRequest: { ...pending, nativeTerminal: { ...native, problem: 'Claude Code did not accept that answer. Review it and try again.' } } });
+        const problem = response?.nativeQuestionImages !== undefined && error instanceof Error && error.message === CLAUDE_QUESTION_IMAGE_REFUSAL
+          ? CLAUDE_QUESTION_IMAGE_REFUSAL
+          : 'Claude Code did not accept that answer. Review it and try again.';
+        persistClaudeState(services, threadId, { pendingControlRequest: { ...pending, nativeTerminal: { ...native, problem } } });
       }
       return { success: false, reason: 'Native question changed or did not accept the answer' };
     }

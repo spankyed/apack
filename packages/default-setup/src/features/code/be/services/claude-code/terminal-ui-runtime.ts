@@ -1,3 +1,4 @@
+import { CLAUDE_QUESTION_IMAGE_REFUSAL } from '../../../common/native-ui-problem.ts'
 import { claudeTerminalHelperPolicyReaderRuntime } from './terminal-helper-policy-reader-runtime.ts'
 import { claudeTerminalEffortNudgeRuntime } from './terminal-effort-nudge-runtime.ts'
 import { claudeTerminalAutoModeSafetyRuntime } from './terminal-auto-mode-safety-runtime.ts'
@@ -975,7 +976,7 @@ async function questionMedia(n,dialog,media){
  });
  const model=n.questionImageModel.CM(dialog.context.getAppState()),limits=n.runtime.ql(model);
  const blocks=await Promise.all(images.map(image=>n.questionImage.jS({...image,limits})));
- if(blocks.some(image=>image.block?.type!=='image'))throw Error('Claude could not prepare a question image');
+ if(blocks.some(image=>image.block?.type!=='image'))throw Error(${JSON.stringify(CLAUDE_QUESTION_IMAGE_REFUSAL)});
  return blocks.map(image=>image.block);
 }
 function questionPreviewKind(n,preview){

@@ -1,3 +1,5 @@
+export const CLAUDE_QUESTION_IMAGE_REFUSAL = 'Claude Code could not prepare an attached image. Remove it or replace it, then submit again.';
+
 /** Keep transport diagnostics intact while describing an unconfirmed native interaction to the user. */
 export function describeClaudeUiProblem(problem: string | undefined, purpose: 'request' | 'decision' = 'request'): string | undefined {
   if (problem !== 'Native UI request timed out') return problem;
