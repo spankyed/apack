@@ -12,7 +12,7 @@ import { readClaudeUiActionKeys } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeTerminalUiTransport } from './terminal-ui.ts'
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
-import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
+import { CLAUDE_BUSY_DRAFT_MESSAGE, type ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 import { basename, isAbsolute } from 'node:path'
 import type { ClaudeNativeTranscript } from './terminal-journal.ts'
 import { createClaudeTerminalSession, parseClaudeTerminalMetadata, type ClaudeNativeSubmissionReceipt, type ClaudeNativeImage } from './terminal-session.ts'
@@ -495,7 +495,8 @@ export async function createClaudeTerminalBridge(options: {
       get busy() { return busy || !!pending || !!nativeEditor?.active },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
         if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(new Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
-        if (closed || !ready || pending || busy || nativeEditor?.active || !text.trim() && !images.length) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+        if (closed || !ready || !text.trim() && !images.length) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+        if (pending || busy || nativeEditor?.active) return Promise.reject(new Error(CLAUDE_BUSY_DRAFT_MESSAGE))
         if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {
           const timer = submissionTimer(images.length > 0)

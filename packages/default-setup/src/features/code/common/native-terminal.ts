@@ -1,3 +1,4 @@
+export const CLAUDE_BUSY_DRAFT_MESSAGE = 'Claude is busy. Your draft was kept.'
 export const CLAUDE_STALE_DRAFT_MESSAGE = 'The Claude session changed. Your draft was kept.'
 
 /** Native task ids and terminal owners are independent of apack thread ids. */

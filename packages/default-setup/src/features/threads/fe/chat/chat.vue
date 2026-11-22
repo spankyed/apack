@@ -161,6 +161,7 @@
               :prefill-text="prefillText"
               :prefill-references="prefillReferences"
               :is-busy="isBusy"
+              :native-send-waiting="nativeSendWaiting"
               :native-pause-requested="nativePauseRequested" :native-pause="nativePauseScope"
               @native-session-controls="nativeSession?.open()"
               :modes="threads.data.modes"
@@ -368,6 +369,12 @@ const nativeTerminalViews = computed(() => threads.value.data.nativeTerminalView
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => !nativeSessionBackgrounded.value && nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+// Native panels can disappear before their foreground work releases input.
+// When a turn has an identity, its Pause and command controls keep their own routing.
+const nativeSendWaiting = computed(() => {
+  const owner = nativeComposerOwner.value
+  return !!owner && (!!owner.inputBlocked || owner.busy && !owner.activeTurnId)
+})
 const nativePauseRequested = computed(() => {
   const owner = nativeComposerOwner.value
   const thread = currentThread.value

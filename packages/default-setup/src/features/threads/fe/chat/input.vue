@@ -44,6 +44,7 @@
         </div>
 
         <p v-if="nativeDecisionPending" role="status" class="px-5 pt-3 text-xs text-neutral-400">Choose how to continue above. Your draft is kept here.</p>
+        <p v-if="nativeSendWaiting && !submitting && !nativeDecisionPending && !nativePauseRequested && !disabled && (hasTextContent || hasAttachments)" role="status" class="px-5 pt-3 text-xs text-neutral-400">Claude is busy. You can keep editing.</p>
         <p v-if="disabled && disabledReason" role="status" class="px-5 pt-3 text-xs text-neutral-400">{{ disabledReason }}</p>
 
         <div v-if="nativePauseRequested" class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/10 px-5 py-2 text-xs">
@@ -203,7 +204,7 @@
               <Button
                 type="submit"
                 aria-label="Send"
-                :disabled="nativeBackgrounded || nativeDecisionPending || submitting || (!hasTextContent && !hasAttachments) || disabled"
+                :disabled="nativeBackgrounded || nativeDecisionPending || nativeSendWaiting || submitting || (!hasTextContent && !hasAttachments) || disabled"
                 class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
               >
                 <span class="hidden @lg:inline">Send</span>
@@ -223,7 +224,7 @@
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
-import { CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
+import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, shallowRef, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
@@ -281,6 +282,7 @@ const props = defineProps<{
   disabled?: boolean
   disabledReason?: string
   nativeDecisionPending?: boolean
+  nativeSendWaiting?: boolean
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */
@@ -914,7 +916,7 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
 watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch++ })
 
 const handleSubmit = async () => {
-  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || submitting.value) return
+  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || props.nativeSendWaiting || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
   const epoch = composerEpoch, bridge = promptEditor
@@ -961,6 +963,7 @@ const handleSubmit = async () => {
         editor.view.dispatch(tr)
       }
     } else if (props.nativeSubmit) {
+      if (props.nativeSendWaiting) throw new Error(CLAUDE_BUSY_DRAFT_MESSAGE)
       const sessionId = props.currentThread?.context?.claudeCode?.sessionId
       if (sessionId) nativeSubmission = { doc, sessionId }
       const result = await props.nativeSubmit(md, references)
