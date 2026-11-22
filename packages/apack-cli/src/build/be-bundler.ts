@@ -79,6 +79,8 @@ async function bundlePackSource<T extends EsbuildOptions>(
     external: [...HOST_EXTERNALS, ...HOST_RESOLVED_BINARIES],
     tsconfigRaw: configuration && esbuildTsconfig(configuration, tree?.path),
     minify: options.release ?? false,
+    // Inventory needs origins for minified bundles. The archive strips these maps.
+    ...(options.release && overrides.write !== false && { sourcemap: 'external', sourcesContent: false }),
     logLevel: 'silent',
     // `metafile.inputs` is this bundle's dep file, and the one place the five esbuild bundles share: a
     // caller asking for the record never has to remember the flag, and one that is not pays nothing
@@ -210,7 +212,7 @@ export async function bundlePackWorkers(
       outdir: path.join(outputDir, 'runtime', WORKERS_DIR),
       outExtension: { '.js': '.cjs' },
       external: [],
-      sourcemap: options.release ? false : true,
+      ...(options.release ? {} : { sourcemap: true }),
       plugins: [rejectBridgedImportsPlugin()],
     });
     return { success: true };
@@ -258,7 +260,7 @@ export async function bundlePackRuntime(
       entryPoints: [entryPath],
       format: 'cjs',
       outfile: path.join(runtimeDir, 'index.cjs'),
-      sourcemap: options.release ? false : true,
+      ...(options.release ? {} : { sourcemap: true }),
     });
     return { success: true };
   } catch (err) {

@@ -99,6 +99,8 @@ Establish locked, retrievable build inputs on a clean runner. Choose a monorepo 
 
 **Done when** the pack builds and tests outside the workspace without a global CLI, prepared sibling or accidental installed host. Compare declarations, facade, content and representative runtime behavior to the transfer baseline. Run the exact archive against the named host. Verify the notice inventory against the producer's lock and bundled components. Prove an interrupted release upload can be retried before a complete release becomes visible. Prepare the release candidate for the owner's publication decision. [Existing release upload sequence](../../packages/apack-cli/src/commands/release.ts)
 
+The standalone build exposed a notice scanner assumption about the pack’s npm name. The producer probe matched all 36 bundled dependency entries to the standalone lock. [Starter notice inventory](../references/evidence/starter-notice-inventory.md)
+
 ### Phase 4. Pin a released pack in the official distribution
 
 The input to this PR is an **owner-authorized, published** pack release. Download and install it through the ordinary consumer path, then pin the verified archive in the app. Route dev, preview, test and release through the lock. Include the selection and digests in build and performance cache identities. Collect notices and SBOM entries from the same release. [Production build](../../build/build.sh) · [Electron packaging](../../electron-builder.mjs) · [Notice collector](../../scripts/lib/third-party-notices.ts) · [Chain graph](../../scripts/lib/chain-steps.ts)

@@ -63,6 +63,18 @@ describe.each(LAYOUTS)('bundlePackFE host binding guard ($name)', (layout) => {
     expect(result.error).toContain('Import chain: src/entry.ts → @apackdev/sdk/logger');
   });
 
+  it('records release bundle origins without embedding source text or a map reference', async () => {
+    const { packDir, entry } = makePack(layout, 'export const value = 42;');
+    const outputDir = path.join(packDir, 'dist');
+    const result = await bundlePackFE({ packDir, outputDir, entryPoint: entry, release: true });
+
+    expect(result.success, result.error).toBe(true);
+    const map = JSON.parse(fs.readFileSync(path.join(outputDir, 'fe.js.map'), 'utf8'));
+    expect(map.sources).toEqual(expect.arrayContaining([expect.stringMatching(/entry\.ts$/)]));
+    expect(map.sourcesContent?.some(Boolean) ?? false).toBe(false);
+    expect(fs.readFileSync(path.join(outputDir, 'fe.js'), 'utf8')).not.toContain('sourceMappingURL');
+  });
+
   it('uses the host\'s @apackdev/ui instead of bundling it', async () => {
     const { packDir, entry } = makePack(layout, [
       "import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';",
