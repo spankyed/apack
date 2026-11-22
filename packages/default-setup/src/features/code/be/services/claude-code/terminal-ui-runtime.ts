@@ -634,13 +634,26 @@ async function promptOutcome(n,id){
  const ending=message.promptSubmitEnding.ending;
  return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
 }
-async function prepareTerminalPrompt(n,text,id,allowEmpty=false,queueRequested=false){
+function ownsActiveQueuedTurn(n,id){
+ const turn=n.runtime.lpe();
+ return !!turn&&turn.turnId===id&&turn.cancelled()===false;
+}
+function isSingleQueuedImagePaste(n,previous,next){
+ const old=new Set(n.engine.Hc(previous).map(marker=>marker.id));
+ const added=n.engine.Hc(next).filter(marker=>!old.has(marker.id)&&marker.match===n.engine.nX(marker.id));
+ if(added.length!==1)return false;
+ const {index,match}=added[0],left=next.slice(0,index),right=next.slice(index+match.length);
+ return left+right===previous||left.endsWith(' ')&&left.slice(0,-1)+right===previous
+  ||right.startsWith(' ')&&left+right.slice(1)===previous;
+}
+async function prepareTerminalPrompt(n,text,id,allowEmpty=false,queueRequested=false,queueTurnId){
  if(typeof text!=='string'||!allowEmpty&&!text.trim()||text.length>nativeUiTextMaxLength)throw Error('Native terminal draft is invalid');
  if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
  const context=originalContext??n.runtime.ey(),composer=context?.composer;
  if(context?.surface!=='terminal'||!composer)throw Error('Native terminal composer is not bound');
  if(context.toolContext(new AbortController()).getAppState().viewingAgentTaskId!==undefined)throw Error('Return to the native main view before submitting a parent prompt');
  const prior=(await composer.read()).text;
+ if(queueTurnId!==undefined&&(!queueRequested||!ownsActiveQueuedTurn(n,queueTurnId)))return {filled:false};
  if(prior&&prior!==preparedPrompt?.text)return {filled:false};
  const before=new Set((context.messages?.()??[]).map(row=>row.uuid));
  const queue=queueRequested?context.toolContext(new AbortController()).messageQueue:undefined;
@@ -648,6 +661,7 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false,queueRequested=f
  const beforeQueue=queue?new Set(queue.getCommandQueueSnapshot().map(item=>item.uuid)):undefined;
  const normalize=n.runtime.ilo();
  const core={name:'core',isCore:true,budgetMs:0,run:async input=>{
+  if(queueTurnId!==undefined&&((await composer.read()).text!==prior||!ownsActiveQueuedTurn(n,queueTurnId)))return false;
   const value=normalize(input.text);let decorations=input.decorations;
   if(decorations&&value!==input.text){
    const offsets=new Uint32Array(input.text.length+1);let from=0,to=0;
@@ -660,7 +674,7 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false,queueRequested=f
  }};
  const result=await n.runtime.$i('prompt.fill',{core:{'prompt.fill':core}})({text,mode:'replace',origin:{kind:'plugin',name:'apack-native-terminal'}});
  const actual=(await composer.read()).text,filled=result.isFilled===true&&actual===text;
- if(filled)preparedPrompt={id,text:actual,before,queue,beforeQueue};
+ if(filled)preparedPrompt={id,text:actual,before,queue,beforeQueue,queueTurnId};
  return {filled};
 }
 function nativeTurnControl(n,request,signal,sessionId){
@@ -1346,14 +1360,30 @@ async function control(request,abort){
   return {mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode};
  }
  if(request.subtype==='apack_prompt_outcome')return promptOutcome(n,request.submission_id);
+ if(request.subtype==='apack_release_queued_draft'){
+  const draft=preparedPrompt;
+  if(!draft?.queueTurnId||draft.id!==request.submission_id)return {released:false};
+  const composer=(originalContext??n.runtime.ey())?.composer;
+  const box=await composer?.read();
+  if(draft!==preparedPrompt||box?.text!==draft.text)return {released:false};
+  preparedPrompt=undefined;
+  await composer.write('','replace');
+  return {released:true};
+ }
  if(request.subtype==='apack_terminal_draft'){
-  if(preparedPrompt?.id!==request.submission_id)throw Error('Native prepared prompt identity changed');
+  const draft=preparedPrompt;
+  if(draft?.id!==request.submission_id)throw Error('Native prepared prompt identity changed');
   const box=await (originalContext??n.runtime.ey()).composer.read();
+  if(draft!==preparedPrompt)throw Error('Native prepared prompt identity changed');
   const images=[...box.text.matchAll(/\[image\s*#\d+\]/gi)].length;
-  if(request.remember===true)preparedPrompt.text=box.text;
+  if(request.remember===true){
+   if(draft.queueTurnId!==undefined&&!isSingleQueuedImagePaste(n,draft.text,box.text))throw Error('Native draft changed while attaching a queued image');
+   draft.text=box.text;
+  }
+  if(draft.queueTurnId!==undefined&&(!ownsActiveQueuedTurn(n,draft.queueTurnId)||request.confirm===true&&box.text!==draft.text))throw Error('Native turn or draft changed during image preparation');
   return {...box,images};
  }
- if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id,request.allow_empty===true,request.queue===true);
+ if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id,request.allow_empty===true,request.queue===true,request.queue_turn_id);
  let boundQuestion;
  if(request.subtype==='apack_render_question_dialog'){
   abort.signal.throwIfAborted();boundQuestion=nativeDialog(n,'permission_ask_user_question');
@@ -1656,7 +1686,12 @@ const ownerTimer=setInterval(async()=>{
    const command=response?.prepareQueuedPrompt;
    if(command){
     let filled=false;
-    try{filled=(await control({subtype:'apack_prepare_prompt',text:command.text,submission_id:command.id,queue:true},new AbortController())).filled===true;}catch{}
+    try{
+     if(command.prepared===true){
+      await control({subtype:'apack_terminal_draft',submission_id:command.id,confirm:true},new AbortController());
+      filled=true;
+     }else filled=(await control({subtype:'apack_prepare_prompt',text:command.text,submission_id:command.id,queue:true},new AbortController())).filled===true;
+    }catch{}
     await ownerPost('/result',{id:command.id,filled,pid:process.pid});
    }
    await reportPendingPromptOutcome(response?.pendingSubmissionId,response?.queue===true);

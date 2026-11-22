@@ -780,7 +780,7 @@ it('settles a busy parent submission only after an addressed native queue receip
   const owner = {sessionId: session, agents: [], directOwner: true, busy: true, turn: {id: 'running-turn', cancelled: false}}
   await request('/poll', owner)
   await expect(bridge!.submit('/clear')).rejects.toThrow('Claude is busy')
-  await expect(bridge!.submit('With portrait', [{mediaType: 'image/png', data: 'YQ=='}])).rejects.toThrow('Claude is busy')
+  await expect(bridge!.submit('/clear', [{mediaType: 'image/png', data: 'YQ=='}])).rejects.toThrow('Claude is busy')
 
   const result = bridge!.submit('Review the queued release checklist')
   expect((await request('/poll', owner)).value).not.toHaveProperty('id')
@@ -809,6 +809,69 @@ it('settles a busy parent submission only after an addressed native queue receip
   expect(bridge!.busy).toBe(true)
 })
 
+
+it.each([false, true])('queues a desktop image only while its original turn stays current (%s)', async replaceTurn => {
+  const enter = vi.fn()
+  let pasted = false
+  const pasteImage = vi.fn(path => {
+    expect(readFileSync(path)).toEqual(Buffer.from('a'))
+    pasted = true
+  })
+  await create(enter, pasteImage)
+  const main = {sessionId: session, pid: process.pid, sequence: 1, view: {kind: 'main'}, heartbeat: true}
+  const owner = {sessionId: session, agents: [], directOwner: true, busy: true}
+  await request('/native-view', main)
+  await request('/poll', {...owner, turn: {id: 'first-turn', cancelled: false}})
+  const configValue = await config()
+  const released = vi.fn()
+  const native = http.createServer(async (request, response) => {
+    const chunks: Buffer[] = []
+    for await (const chunk of request) chunks.push(chunk)
+    const body = JSON.parse(Buffer.concat(chunks).toString())
+    const operation = body.request
+    let result: object = {images: pasted ? 1 : 0}
+    if (operation.subtype === 'apack_prepare_prompt') {
+      expect(operation).toMatchObject({queue: true, queue_turn_id: 'first-turn', allow_empty: true})
+      result = {filled: true}
+    } else if (operation.subtype === 'apack_release_queued_draft') {
+      released(operation.submission_id)
+      result = {released: true}
+    }
+    response.writeHead(200, {'content-type': 'application/json'})
+    response.end(JSON.stringify({id: body.id, pid: body.ownerPid, sessionId: body.sessionId, result}))
+  })
+  await new Promise<void>(resolve => native.listen(configValue.uiSocketPath, resolve))
+  try {
+    const outcome = bridge!.submit('Review this image', [{mediaType: 'image/png', data: 'YQ=='}]).catch((error: unknown) => error)
+    expect((await request('/native-view', main)).value).toEqual({})
+    let preparedId = ''
+    await vi.waitFor(async () => {
+      const {value} = await request('/native-view', main)
+      const prepared = value.prepareQueuedPrompt
+      assert.ok(prepared && typeof prepared === 'object' && 'id' in prepared && typeof prepared.id === 'string')
+      preparedId = prepared.id
+      expect(prepared).toEqual({id: preparedId, prepared: true})
+    })
+    expect(enter).not.toHaveBeenCalled()
+    if (replaceTurn) await request('/poll', {...owner, turn: {id: 'replacement-turn', cancelled: false}})
+    await request('/result', {sessionId: session, pid: process.pid, id: preparedId, filled: true})
+    if (replaceTurn) {
+      expect(await outcome).toMatchObject({message: expect.stringContaining('Claude is busy')})
+      expect(released).toHaveBeenCalledExactlyOnceWith(preparedId)
+      expect(enter).not.toHaveBeenCalled()
+    } else {
+      const queued = randomUUID()
+      await request('/submission', {sessionId: session, pid: process.pid, id: preparedId, queued})
+      expect(await outcome).toEqual({sessionId: session, uuid: queued, text: 'Review this image', queued: true})
+      expect(enter).toHaveBeenCalledOnce()
+    }
+    expect(pasteImage).toHaveBeenCalledOnce()
+    expect((await readdir(bridge!.directory)).filter(name => name.endsWith('.png'))).toEqual([])
+  } finally {
+    native.closeAllConnections()
+    await new Promise<void>(resolve => native.close(() => resolve()))
+  }
+})
 
 it('clears the observed prompt queue on native view changes and rejects stale projections', async () => {
   await create()
