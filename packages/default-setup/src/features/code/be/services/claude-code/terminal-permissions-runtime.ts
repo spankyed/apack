@@ -27,11 +27,12 @@ function nativePermissionText(value,depth=0){
  if(typeof value==='object'&&value.props&&Object.hasOwn(value.props,'children'))return nativePermissionText(value.props.children,depth+1);
  throw Error('Native permission label is not supported');
 }
+const nativePermissionDirectoryOwners=['82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473','f253efbd23d08ded24b3b7a564dfe865d007cd97a0966e4ec7f3f75c79936b14'];
 function nativePermissionDirectory(controlsRoot,input,entry){
  if(!input){entry.permissionsDirectoryLease=undefined;return;}
  const owners=[];nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.onAddDirectory==='function'&&p.permissionContext)owners.push(f);});
  if(!owners.length){entry.permissionsDirectoryLease=undefined;return;}
- if(owners.length!==1||!['82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473','f253efbd23d08ded24b3b7a564dfe865d007cd97a0966e4ec7f3f75c79936b14'].includes(nativeModelFunctionHash(owners[0].type)))throw Error('Native directory producer changed');
+ if(owners.length!==1||!nativePermissionDirectoryOwners.includes(nativeModelFunctionHash(owners[0].type)))throw Error('Native directory producer changed');
  const owner=owners[0],fields=[];nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&p?.onChange===input.onChange&&p.onSubmit===input.onSubmit&&Array.isArray(p.suggestions))fields.push(f);});
  if(fields.length!==1||!['c6cd02efcbe63ca1098635b105cf87343f6514880c19f38944088c26ce479eb6','81590b4e10c20acc4a6bcf8648017370a77b06a1b08f034b8493ef2cd1b6cfb7'].includes(nativeModelFunctionHash(fields[0].type)))throw Error('Native directory field changed');
  const field=fields[0].memoizedProps,caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===38);
@@ -95,8 +96,11 @@ function nativePermissionSearch(owner,controlsRoot,ruleList,entry,local){
  return {lease,value:props.searchQuery,displayProps:displays[0]?.memoizedProps};
 }
 function nativePermissionsFrame(n,entry){
- entry.current();if(entry.closed||entry.answered||entry.commandName!=='permissions')throw Error('Native Permissions panel expired');
- const hash=nativeModelFunctionHash(entry.originalType),local=nativePermissionOwners.local.includes(hash);
+ entry.current();if(entry.closed||entry.answered||!['permissions','add-dir'].includes(entry.commandName))throw Error('Native Permissions panel expired');
+ const hash=nativeModelFunctionHash(entry.originalType),providedDirectory=entry.commandName==='add-dir';
+ if(providedDirectory&&!nativePermissionDirectoryOwners.includes(hash))throw Error('Native directory producer changed');
+ if(providedDirectory&&(typeof entry.originalProps?.directoryPath!=='string'||!entry.originalProps.directoryPath))throw Error('Use terminal controls to enter a working directory');
+ const local=providedDirectory||nativePermissionOwners.local.includes(hash);
  if(!local&&!nativePermissionOwners.remote.includes(hash))throw Error('Native Permissions producer changed');
  const owners=[];nativeIdeWalk(n.themeRoots.ai().get(process.stdout)?.container?.current,f=>{if(f.type===entry.originalType&&f.memoizedProps===entry.originalProps)owners.push(f);});
  if(owners.length!==1)throw Error('Native Permissions is not uniquely mounted');
@@ -132,6 +136,7 @@ function nativePermissionsFrame(n,entry){
  });
  if(pickers.length>1||inputs.length>1||pickers.length&&inputs.length)throw Error('Native Permissions controls are ambiguous');
  const picker=pickers[0],input=inputs[0],liveForm=nativePermissionDirectory(controlsRoot,input,entry)??nativePermissionAutoRule(controlsRoot,input,entry);
+ if(providedDirectory&&(!picker||typeof picker.props.onCancel!=='function'||picker.options.length!==3||picker.options.map(o=>o.value).join(',')!=='yes-session,yes-remember,no'))throw Error('Native directory decisions changed');
  const textRoots=[];let bodyFrame;
  if(!tabFrame){
   const frames=[];nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.title==='string'&&p.children!==undefined)frames.push(f);});
@@ -146,15 +151,15 @@ function nativePermissionsFrame(n,entry){
  if(!textRoots.length)textRoots.push(controlsRoot);
  for(const root of textRoots)nativeIdeWalk(root,f=>{const p=f.memoizedProps;if(liveForm?.problemProps&&p===liveForm.problemProps||search?.displayProps&&p===search.displayProps)return false;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text'&&(!n.terminalComponents?.n||f.type!==n.terminalComponents.n))return;const paragraph=nativePermissionParagraph(n,f);if(paragraph)paragraphs.push(paragraph);return false;},false);
  const title=tabFrame?.title??bodyFrame?.memoizedProps.title??'Permissions';
- let cancel=owner.child?.memoizedProps?.onCancel;
+ let cancel=providedDirectory?picker.props.onCancel:owner.child?.memoizedProps?.onCancel;
  if(typeof cancel!=='function'){
   const caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===(local?226:19));
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
  }
- const recent=nativePermissionRecent(controlsRoot,picker),decisions=local?nativePermissionDecisionState(owner):undefined;
+ const recent=nativePermissionRecent(controlsRoot,picker),decisions=local&&!providedDirectory?nativePermissionDecisionState(owner):undefined;
  const choices=recent?.choices??(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(p=>p.runs.reduce((size,run)=>size+run.text.length,0)>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
- const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
+ const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey??(providedDirectory?choices.find(o=>!o.disabled)?.value:undefined);
  const permissions={title,...decisions?{decisions}:{},...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...search?{search:search.value,searchScope:search.lease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:liveForm?.snapshot.kind==='directory'?'Add directory':liveForm?'Save rule':'Continue',...liveForm?{live:liveForm.snapshot}:{}}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
  if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody||prior.liveForm?.field!==liveForm?.field||prior.recent?.props!==recent?.props||prior.recent?.keyDown!==recent?.keyDown)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,liveForm,tabs,ruleList,search,recent,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};

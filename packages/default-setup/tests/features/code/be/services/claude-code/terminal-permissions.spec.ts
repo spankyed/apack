@@ -109,6 +109,48 @@ describe('original mounted Permissions authority', () => {
   })
 })
 
+function providedDirectoryFixture() {
+  const f = fixture()
+  f.entry.commandName = 'add-dir'
+  f.entry.originalProps.directoryPath = '/owned/reference-notes'
+  f.originalType.hash = '82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473'
+  const onChange = vi.fn(() => { f.entry.closed = true })
+  const onCancel = vi.fn(() => { f.entry.closed = true })
+  const options = [
+    { value: 'yes-session', label: 'Yes, for this session' },
+    { value: 'yes-remember', label: 'Yes, and remember this directory' },
+    { value: 'no', label: 'No' },
+  ]
+  f.root.child = { type: function Picker() {}, memoizedProps: { options, onChange, onCancel } }
+  return { ...f, onChange, onCancel, options }
+}
+
+it('uses the preselected directory choices and original default, with one callback per decision', async () => {
+  const f = providedDirectoryFixture()
+  const snapshot = f.read().snapshot
+  expect(snapshot.permissions.choices.map((choice: {value: string}) => choice.value)).toEqual(['yes-session', 'yes-remember', 'no'])
+  expect(snapshot.permissions.defaultFocusValue).toBe('yes-session')
+  await expect(f.act(snapshot.revision, { action: 'select', value: 'another-root' })).rejects.toThrow(/unavailable/)
+  await f.act(snapshot.revision, { action: 'select', value: 'yes-remember' })
+  await expect(f.act(snapshot.revision, { action: 'select', value: 'yes-session' })).rejects.toThrow(/expired/)
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('yes-remember')
+  expect(f.onCancel).not.toHaveBeenCalled()
+})
+
+it('cancels a preselected directory via its original picker and refuses changed or absent choices', async () => {
+  const f = providedDirectoryFixture()
+  f.options[0].value = 'forged'
+  expect(f.read).toThrow(/decisions changed/)
+  f.options[0].value = 'yes-session'
+  const path = f.entry.originalProps.directoryPath
+  delete f.entry.originalProps.directoryPath
+  expect(f.read).toThrow(/terminal controls/)
+  f.entry.originalProps.directoryPath = path
+  await f.act(f.read().snapshot.revision, { action: 'cancel' })
+  expect(f.onCancel).toHaveBeenCalledOnce()
+  expect(f.onChange).not.toHaveBeenCalled()
+})
+
 function tabFocusFixture(disabledChoice = false) {
   const f = fixture()
   const focus = { selectedTab: 'workspace', headerFocused: true, focusHeader: vi.fn(), blurHeader: vi.fn(() => { focus.headerFocused = false; mount() }), registerOptIn: vi.fn(), registerNavigationOwner: vi.fn() }

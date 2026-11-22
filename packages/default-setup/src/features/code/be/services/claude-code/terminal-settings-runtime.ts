@@ -17,7 +17,7 @@ ${claudeTerminalIdeRuntime}
 ${claudeTerminalPermissionsRuntime}
 function nativeSettingsPanel(request){
  const entry=agentCommandDialogs.get(request.panel_id);
- if(!entry||entry.kind!=='panel'||!['config','model','status','usage','help','theme','ide','permissions'].includes(entry.commandName)||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
+ if(!entry||entry.kind!=='panel'||!['config','model','status','usage','help','theme','ide','permissions','add-dir'].includes(entry.commandName)||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
  entry.current();
  if(!entry.store.getState().open.some(item=>item.id===entry.dialogId&&item.kind==='local_jsx'&&item.payload?.nodeId===entry.nodeId))throw Error('Native Settings panel replaced');
  return entry;
@@ -68,7 +68,7 @@ async function readNativeSettings(n,entry,signal){
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
  const entry=nativeSettingsPanel(request);
- if(entry.commandName==='permissions')return nativePermissionsPanel(n,entry,request,abort);
+ if(entry.commandName==='permissions'||entry.commandName==='add-dir')return nativePermissionsPanel(n,entry,request,abort);
  if(entry.commandName==='help')return nativeHelpPanel(n,entry,request,abort);
  if(entry.commandName==='ide')return nativeIdePanel(n,entry,request,abort);
  if(entry.commandName==='model')return nativeModelPanel(n,entry,request,abort);
