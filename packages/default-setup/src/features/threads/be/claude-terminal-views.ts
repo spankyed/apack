@@ -10,9 +10,7 @@ import type { MessageReferences } from './types.ts'
 import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
-import type { ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
-
-const staleClaudeDraft = 'The Claude session changed. Your draft was kept.'
+import { CLAUDE_STALE_DRAFT_MESSAGE, type ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 
 export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & (
   | { type: 'CLAUDE_TERMINAL_MOUNT' }
@@ -184,7 +182,7 @@ export function createClaudeTerminalViews(dependencies: {
     const state = view.owner?.state
     if (view.task && view.task.sessionId !== state?.sessionId) view.task = undefined
     if (view.submission?.status === 'pending' && view.draftSessionId && view.draftSessionId !== state?.sessionId) {
-      view.submission = { ...view.submission, status: 'rejected', problem: staleClaudeDraft }
+      view.submission = { ...view.submission, status: 'rejected', problem: CLAUDE_STALE_DRAFT_MESSAGE }
       view.draftSessionId = undefined
     }
     if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
@@ -439,7 +437,7 @@ export function createClaudeTerminalViews(dependencies: {
         target.submissionRevision = event.revision
         target.draftSessionId = undefined
         if (sessionId !== owner.state.sessionId || event.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) {
-          const problem = sessionId !== owner.state.sessionId ? staleClaudeDraft : CLAUDE_UI_TEXT_LIMIT_MESSAGE
+          const problem = sessionId !== owner.state.sessionId ? CLAUDE_STALE_DRAFT_MESSAGE : CLAUDE_UI_TEXT_LIMIT_MESSAGE
           target.submission = { ownerId: event.ownerId, revision: event.revision, status: 'rejected', problem }
           publish(key, target)
           return
@@ -449,7 +447,7 @@ export function createClaudeTerminalViews(dependencies: {
         target.submission = submission; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.submission === submission
         const requireSession = () => {
-          if (owner.state.sessionId !== sessionId) throw new Error(staleClaudeDraft)
+          if (owner.state.sessionId !== sessionId) throw new Error(CLAUDE_STALE_DRAFT_MESSAGE)
         }
         void Promise.resolve().then(async () => {
           if (!current()) return undefined

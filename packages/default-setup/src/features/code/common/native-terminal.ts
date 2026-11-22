@@ -1,3 +1,5 @@
+export const CLAUDE_STALE_DRAFT_MESSAGE = 'The Claude session changed. Your draft was kept.'
+
 /** Native task ids and terminal owners are independent of apack thread ids. */
 export interface ClaudeNativeTerminalTask {
   kind?: 'workflow' | 'shell' | 'mcp' | 'managed'

@@ -223,6 +223,7 @@
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
@@ -905,6 +906,8 @@ const handleSubmit = async () => {
   const editor = tiptapRef.value?.editor
   if (!editor) return
   const epoch = composerEpoch, bridge = promptEditor
+  const threadId = props.currentThread?.id
+  let nativeSubmissionDoc: typeof editor.state.doc | undefined
   if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
   submitting.value = true
   submissionProblem.value = undefined
@@ -945,6 +948,7 @@ const handleSubmit = async () => {
         editor.view.dispatch(tr)
       }
     } else if (props.nativeSubmit) {
+      nativeSubmissionDoc = doc
       const result = await props.nativeSubmit(md, references)
       if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
       if (result && 'review' in result) {
@@ -975,7 +979,11 @@ const handleSubmit = async () => {
     }
     attachments.clear()
   } catch (error) {
-    if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Message could not be sent'
+    const message = error instanceof Error ? error.message : 'Message could not be sent'
+    // A reset changes the composer epoch even when the same editor retains the submitted draft.
+    const retainedNativeDraft = message === CLAUDE_STALE_DRAFT_MESSAGE && threadId === props.currentThread?.id
+      && tiptapRef.value?.editor === editor && !editor.isDestroyed && nativeSubmissionDoc === editor.state.doc
+    if (epoch === composerEpoch || retainedNativeDraft) submissionProblem.value = message
   } finally { submitting.value = false }
 }
 
