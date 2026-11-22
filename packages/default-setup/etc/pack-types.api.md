@@ -911,8 +911,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -2584,8 +2584,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -2606,10 +2606,11 @@ interface ClaudeNativeProfile {
 interface ClaudeNativePromptQueue {
     revision: string;
     count: number;
-    next: {
+    items: {
         id: string;
         text: string;
-    };
+        editable: boolean;
+    }[];
 }
 
 type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>;
@@ -3509,14 +3510,23 @@ type ClaudeTerminalViewRequest = {
 } | {
     operation: 'retry_worker' | 'skip_worker';
     worker: ClaudeNativeWorkflowWorkerTarget;
-})) | {
-    type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW';
+})) | ({
     ownerId: string;
     sessionId: string;
     viewRevision: number;
     turnId: string;
     queueRevision: string;
     sequence: number;
+} & ({
+    type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW';
+} | {
+    type: 'CLAUDE_TERMINAL_QUEUE_EDIT';
+    itemId: string;
+})) | {
+    type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED';
+    ownerId: string;
+    sessionId: string;
+    itemId: string;
 } | {
     type: 'CLAUDE_TERMINAL_NOTICE';
     ownerId: string;
@@ -3580,6 +3590,12 @@ type ClaudeTerminalViewSnapshot = {
         queueRevision: string;
         status: 'done' | 'error' | 'pending';
         problem?: string;
+    };
+    queueDraft?: {
+        sessionId: string;
+        id: string;
+        text: string;
+        automatic: boolean;
     };
     noticeAnswer?: {
         id: string;
@@ -8249,8 +8265,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -12501,8 +12517,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

@@ -53,12 +53,33 @@
             @click="emit('native-session-controls')">Session controls</button>
         </div>
 
-        <section v-if="nativePromptQueue" class="flex min-w-0 items-baseline gap-2 border-b border-white/10 px-5 py-2 text-xs" aria-label="Claude prompt queue">
-          <span class="shrink-0 font-medium text-neutral-300">{{ nativePromptQueue.count }} queued</span>
-          <span class="min-w-0 flex-1 truncate text-neutral-400">{{ nativePromptQueue.next.text }}</span>
-          <button v-if="nativeQueueSendAvailable" type="button" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
-            :disabled="nativeQueueOperation?.status === 'pending'" @click="emit('native-queue-send-now', nativePromptQueue.revision)">Send now</button>
+        <section v-if="nativePromptQueue" class="border-b border-white/10 px-5 py-2 text-xs" aria-label="Claude prompt queue">
+          <div class="flex min-w-0 items-baseline gap-2">
+            <button v-if="nativePromptQueue.count > 1" type="button" :aria-expanded="queueExpanded"
+              class="shrink-0 rounded font-medium text-neutral-300 hover:text-white focus-visible:outline focus-visible:outline-2"
+              @click="queueExpanded = !queueExpanded">{{ nativePromptQueue.count }} queued <span aria-hidden="true">{{ queueExpanded ? '▴' : '▾' }}</span></button>
+            <span v-else class="shrink-0 font-medium text-neutral-300">1 queued</span>
+            <span v-if="!queueExpanded || nativePromptQueue.count === 1" class="min-w-0 flex-1 truncate text-neutral-400">{{ nativePromptQueue.items[0]?.text }}</span>
+            <button v-if="nativePromptQueue.count === 1 && nativePromptQueue.items[0]?.editable && nativeQueueSendAvailable"
+              type="button" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, nativePromptQueue.items[0].id)">Edit</button>
+            <button v-if="nativeQueueSendAvailable" type="button" class="ml-auto shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision)">Send now</button>
+          </div>
+          <ul v-if="queueExpanded && nativePromptQueue.count > 1" class="mt-1 max-h-24 space-y-0.5 overflow-y-auto">
+            <li v-for="item in nativePromptQueue.items" :key="item.id" class="flex min-w-0 items-center gap-2">
+              <span class="min-w-0 flex-1 truncate text-neutral-400">{{ item.text }}</span>
+              <button v-if="item.editable && nativeQueueSendAvailable" :aria-label="`Edit queued prompt: ${item.text}`" type="button"
+                class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+                :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, item.id)">Edit</button>
+            </li>
+          </ul>
         </section>
+        <details v-if="unappliedQueueEdit" class="px-5 py-1 text-xs text-neutral-300">
+          <summary class="cursor-pointer">Recovered queued prompt</summary>
+          <p class="max-h-24 overflow-y-auto whitespace-pre-wrap">{{ unappliedQueueEdit.text }}</p>
+          <button type="button" class="rounded underline focus-visible:outline focus-visible:outline-2" @click="restoreQueuedPrompt">Return to draft</button>
+        </details>
         <p v-if="nativeQueueOperation?.status === 'error'" role="alert" class="px-5 py-1 text-xs text-amber-200">{{ nativeQueueOperation.problem }}</p>
 
         <!-- Editor container -->
@@ -298,6 +319,7 @@ const props = defineProps<{
   nativePromptQueue?: import('#features/code/common/native-terminal.ts').ClaudeNativePromptQueue
   nativeQueueSendAvailable?: boolean
   nativeQueueOperation?: import('../../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot['queueOperation']
+  nativeQueueDraft?: import('../../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot['queueDraft']
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */
@@ -350,7 +372,8 @@ const emit = defineEmits<{
   (e: 'summarize-from-here', messageId: string): void
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
-  (e: 'native-queue-send-now', revision: string): void
+  (e: 'native-queue-action', revision: string, itemId?: string): void
+  (e: 'native-queue-edit-applied', itemId: string): void
   (e: 'native-agents-gesture', request: { mountId: string; revision: number }): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
   (e: 'native-ui-notice', event: import('#generated/types.ts').ClaudeUiNoticeEvent): void
@@ -451,6 +474,25 @@ const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptComplet
 const submitting = ref(false)
 const submissionProblem = ref<string>()
 const queuedNotice = ref(false)
+const queueExpanded = ref(false)
+watch(() => props.nativePromptQueue?.count, count => { if (count === undefined || count <= 1) queueExpanded.value = false })
+const appliedQueueEdit = ref<string>()
+const unappliedQueueEdit = computed(() => {
+  const restored = props.nativeQueueDraft
+  return restored?.id !== appliedQueueEdit.value ? restored : undefined
+})
+const queueActionPending = computed(() => props.nativeQueueOperation?.status === 'pending' || !!unappliedQueueEdit.value)
+function restoreQueuedPrompt() {
+  const restored = unappliedQueueEdit.value, editor = tiptapRef.value?.editor
+  if (!restored || !editor || !promptEditor || submitting.value || props.disabled || props.nativeDecisionPending) return
+  if (!promptEditor.restoreQueuedText(restored.text)) return
+  appliedQueueEdit.value = restored.id
+  emit('native-queue-edit-applied', restored.id)
+  editor.view.focus()
+}
+watch([unappliedQueueEdit, () => tiptapRef.value?.editor, submitting], () => {
+  if (unappliedQueueEdit.value?.automatic) restoreQueuedPrompt()
+}, {flush:'post'})
 watch(() => props.isBusy, busy => { if (!busy) queuedNotice.value = false })
 const rejectedNativeDraft = shallowRef<{ doc: ProseMirrorNode; sessionId: string; sessionChanged: boolean }>()
 const composerProblem = computed(() => {

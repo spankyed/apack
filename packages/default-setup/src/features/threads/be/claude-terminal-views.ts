@@ -21,7 +21,10 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
-  | { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW'; ownerId: string; sessionId: string; viewRevision: number; turnId: string; queueRevision: string; sequence: number }
+  | ({ ownerId: string; sessionId: string; viewRevision: number; turnId: string; queueRevision: string; sequence: number } & (
+      { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT'; itemId: string }
+    ))
+  | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED'; ownerId: string; sessionId: string; itemId: string }
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
@@ -91,6 +94,7 @@ export type ClaudeTerminalViewSnapshot = {
   background?: ClaudeBackgroundSessionState
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
   queueOperation?: { sequence: number; sessionId: string; viewRevision: number; queueRevision: string; status: 'pending' | 'done' | 'error'; problem?: string }
+  queueDraft?: { sessionId: string; id: string; text: string; automatic: boolean }
   noticeAnswer?: { id: string; revision: string; requestId?: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
   stop?: ClaudeTerminalStopState
@@ -163,6 +167,9 @@ export function createClaudeTerminalViews(dependencies: {
   prepareInput?(text: string, references?: MessageReferences): Promise<{ text: string; images: ClaudeNativeImage[] }>
 }) {
   const views = new Map<string, View>()
+  type QueueDraft = NonNullable<ClaudeTerminalViewSnapshot['queueDraft']>
+  const queueDrafts = new WeakMap<ClaudeNativeTerminalOwner, {draft: QueueDraft; view?: View}>()
+  const queueEditsInFlight = new WeakSet<ClaudeNativeTerminalOwner>()
   let timer: ReturnType<typeof setInterval> | undefined
   function retireAttachment(view: View) {
     view.attachmentAbort?.abort(); view.attachmentAbort = undefined
@@ -178,11 +185,23 @@ export function createClaudeTerminalViews(dependencies: {
     const view = views.get(key); if (view) retireAttachment(view)
     views.get(key)?.launch?.abort.abort()
     views.get(key)?.unsubscribe?.(); views.get(key)?.backgroundUnsubscribe?.(); views.delete(key)
+    const owner = view?.owner, recovered = owner && queueDrafts.get(owner)
+    if (recovered && recovered.view === view) {
+      recovered.view = undefined
+      recovered.draft = {...recovered.draft, automatic: false}
+      for (const [id, candidate] of views) if (candidate.owner === owner) publish(id, candidate)
+    }
     if (!views.size && timer) { clearInterval(timer); timer = undefined }
   }
   function publish(key: string, view: View) {
     if (views.get(key) !== view) return
     const state = view.owner?.state
+    const recovered = view.owner && queueDrafts.get(view.owner)
+    let queueDraft: ClaudeTerminalViewSnapshot['queueDraft']
+    if (recovered && recovered.draft.sessionId === state?.sessionId && state.view?.kind === 'main') {
+      recovered.view ??= view
+      if (recovered.view === view) queueDraft = recovered.draft
+    }
     if (view.task && view.task.sessionId !== state?.sessionId) view.task = undefined
     if (view.submission?.status === 'pending' && view.draftSessionId && view.draftSessionId !== state?.sessionId) {
       view.submission = { ...view.submission, status: 'rejected', problem: CLAUDE_STALE_DRAFT_MESSAGE }
@@ -202,7 +221,7 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -260,7 +279,7 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined
+    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -393,7 +412,16 @@ export function createClaudeTerminalViews(dependencies: {
         })
         return
       }
-      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW') {
+      if (event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED') {
+        const recovered = queueDrafts.get(owner)
+        if (!recovered || recovered.view !== target || recovered.draft.sessionId !== event.sessionId || owner.state.sessionId !== event.sessionId
+          || recovered.draft.id !== event.itemId) return
+        queueDrafts.delete(owner)
+        publish(key, target)
+        return
+      }
+      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT') {
+        const editing = event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT'
         const {sessionId, viewRevision, turnId, queueRevision, sequence} = event
         const previous = target.queueOperation
         const scopeCurrent = () => {
@@ -401,23 +429,38 @@ export function createClaudeTerminalViews(dependencies: {
           return state.status === 'live' && !state.inputBlocked && state.sessionId === sessionId
             && state.view?.kind === 'main' && state.view.revision === viewRevision && state.activeTurnId === turnId
             && !state.endingTurnId && state.promptQueue?.revision === queueRevision
+            && (!editing || queueDrafts.get(owner)?.draft.sessionId !== sessionId
+              && state.promptQueue.items.some(row => row.id === event.itemId && row.editable))
         }
         if (typeof queueRevision !== 'string' || !/^[a-f0-9]{64}$/.test(queueRevision) || typeof turnId !== 'string' || !turnId
-          || !scopeCurrent() || !Number.isSafeInteger(sequence) || sequence <= (previous?.sequence ?? 0) || previous?.status === 'pending') return
+          || editing && queueEditsInFlight.has(owner) || !scopeCurrent() || !Number.isSafeInteger(sequence) || sequence <= (previous?.sequence ?? 0) || previous?.status === 'pending') return
         const operation: NonNullable<ClaudeTerminalViewSnapshot['queueOperation']> = {sequence, sessionId, viewRevision, queueRevision, status: 'pending'}
+        if (editing) queueEditsInFlight.add(owner)
         target.queueOperation = operation; publish(key, target)
         const current = () => views.get(key) === target && dependencies.get(event.threadId) === owner
           && target.owner === owner && target.queueOperation === operation
         void Promise.resolve().then(async () => {
-          if (!current() || !scopeCurrent()) throw new Error('The Claude queue changed before Send now')
-          const result = await owner.uiTransport.request({subtype: 'apack_main_queue_send_now', session_id: sessionId,
-            view_revision: viewRevision, turn_id: turnId, queue_revision: queueRevision}) as {handled?: unknown}
-          if (result.handled !== true) throw new Error('Claude could not send the waiting prompts now')
-        }).then(() => {
-          if (current()) { target.queueOperation = {...operation, status: 'done'}; publish(key, target) }
+          if (!current() || !scopeCurrent()) throw new Error('The Claude queue changed before the request')
+          const result = await owner.uiTransport.request({
+            subtype: editing ? 'apack_main_queue_edit' : 'apack_main_queue_send_now',
+            session_id: sessionId, view_revision: viewRevision, turn_id: turnId, queue_revision: queueRevision,
+            ...(editing ? {item_id: event.itemId} : {}),
+          }) as {handled?: unknown; restored?: {id?: unknown; text?: unknown}}
+          if (result.handled !== true) throw new Error(editing ? 'Claude could not return the queued prompt' : 'Claude could not send the waiting prompts now')
+          if (!editing) return
+          if (result.restored?.id !== event.itemId || typeof result.restored.text !== 'string'
+            || result.restored.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) throw new Error('Claude did not return the selected draft')
+          return {id: event.itemId, text: result.restored.text}
+        }).then(restored => {
+          const sameView = current()
+          if (restored && dependencies.get(event.threadId) === owner && owner.state.sessionId === sessionId) {
+            queueDrafts.set(owner, {draft: {...restored, sessionId, automatic: sameView}, view: sameView ? target : undefined})
+          }
+          if (sameView) { target.queueOperation = {...operation, status: 'done'}; publish(key, target) }
+          else if (restored) for (const [id, candidate] of views) if (candidate.owner === owner) publish(id, candidate)
         }, error => {
           if (current()) { target.queueOperation = {...operation, status: 'error', problem: error instanceof Error ? error.message : 'Send now failed'}; publish(key, target) }
-        })
+        }).finally(() => { if (editing) queueEditsInFlight.delete(owner) })
         return
       }
       if (event.type === 'CLAUDE_TERMINAL_NOTICE') {

@@ -278,6 +278,7 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-a7b8k0bt.js",
       "exports": {
         "zp": "Gp",
+        "Tf": "Rf",
         "hgs": "Oms",
         "Ims": "qfs",
         "p_r": "Gyr",

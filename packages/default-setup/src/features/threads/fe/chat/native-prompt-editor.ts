@@ -139,13 +139,14 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     try { send({ revision, text: snapshot.text, cursor: snapshot.cursor, by: origin, ...(origin === 'person' && key ? { key } : {}) }) }
     catch (error) { finishPending(false); onProblem(error instanceof Error ? error.message : 'Claude input could not be sent') }
   }
-  function prepareDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number) {
+  type DraftFill = Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input']
+  function prepareDraft(input: DraftFill, expectedRevision: number, prepend = false) {
     if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
     if (!snapshot || input.ifEmpty && snapshot.text !== '') return
-    const offset = input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
+    const offset = prepend || input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
     const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
-    const cursor = offset + input.text.length
+    const cursor = prepend ? 0 : offset + input.text.length
     let runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
     const hints = runs.filter(run => run.start === run.end && run.virtualText)
     if (hints.length) {
@@ -191,8 +192,8 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     }
     return { next, text, offset, runs, before: snapshot.text }
   }
-  function placeDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number, origin: 'app' | 'person'): boolean {
-    const prepared = prepareDraft(input, expectedRevision)
+  function placeDraft(input: DraftFill, expectedRevision: number, origin: 'app' | 'person', prepend = false): boolean {
+    const prepared = prepareDraft(input, expectedRevision, prepend)
     if (!prepared) return false
     const { next, runs } = prepared
     const drawn = drawClaudePromptDecorations(next.doc, runs, serialize, next.sourcePositions, next.sourceOffsets)
@@ -246,6 +247,12 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     },
     fillDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number): boolean {
       return placeDraft(input, expectedRevision, 'app')
+    },
+    restoreQueuedText(text: string): boolean {
+      const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
+      if (!snapshot || !text) return false
+      // Keep the returned text separate from the existing draft in Markdown's block layout.
+      return placeDraft({mode: 'insert', text: snapshot.text ? text + '\n\n' : text}, revision, 'person', true)
     },
     showSuggestion(text: string, expectedRevision: number): boolean {
       if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision || !editor.isEmpty || !text.trim() || text.length > CLAUDE_UI_TEXT_MAX_LENGTH || (host && !host.canSuggest())) return false

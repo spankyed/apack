@@ -91,7 +91,7 @@ export async function createClaudeTerminalBridge(options: {
   const promptQueueSchema = z.object({
     revision: z.string().regex(/^[a-f0-9]{64}$/),
     count: z.number().int().positive(),
-    next: z.object({id: z.string().uuid(), text: z.string().max(240)}),
+    items: z.array(z.object({id: z.string().uuid(), text: z.string().max(240), editable: z.boolean()})).min(1).max(12),
   }).nullable()
   let promptQueue: ClaudeNativeTerminalState['promptQueue']
   let nativePolling = false

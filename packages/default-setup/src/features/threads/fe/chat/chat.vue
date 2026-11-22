@@ -164,7 +164,8 @@
               :is-busy="isBusy"
               :native-send-waiting="nativeSendWaiting"
               :native-prompt-queue="nativePromptQueue" :native-queue-send-available="nativeQueueSendAvailable"
-              :native-queue-operation="nativeQueueOperation" @native-queue-send-now="sendNativeQueueNow"
+              :native-queue-operation="nativeQueueOperation" :native-queue-draft="nativeQueueDraft"
+              @native-queue-action="operateNativeQueue" @native-queue-edit-applied="acknowledgeNativeQueueEdit"
               :native-pause-requested="nativePauseRequested" :native-pause="nativePauseScope"
               @native-session-controls="nativeSession?.open()"
               :native-memory-available="!!memoryTarget" @native-memory="showMemory = true"
@@ -390,13 +391,25 @@ const nativeQueueOperation = computed(() => {
   if (operation && state?.sessionId === operation.sessionId && state.view?.revision === operation.viewRevision
     && nativePromptQueue.value?.revision === operation.queueRevision) return operation
 })
+const nativeQueueDraft = computed(() => {
+  const view = nativeComposerView.value, owner = nativeComposerOwner.value, thread = currentThread.value
+  if (owner?.view?.kind === 'main' && view?.threadId === thread?.id
+    && view?.queueDraft?.sessionId === owner.sessionId && owner.sessionId === thread?.context?.claudeCode?.sessionId) return view.queueDraft
+})
+function acknowledgeNativeQueueEdit(itemId: string) {
+  const view = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (!view || !owner || nativeQueueDraft.value?.id !== itemId) return
+  send({type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED', ...view, ownerId: owner.ownerId, sessionId: owner.sessionId, itemId})
+}
 let nativeQueueSequence = 0
-function sendNativeQueueNow(queueRevision: string) {
+function operateNativeQueue(queueRevision: string, itemId?: string) {
   const view = nativeUiMount.value, owner = nativeComposerOwner.value
   if (!view || owner?.view?.kind !== 'main' || !owner.activeTurnId || !nativeQueueSendAvailable.value
-    || nativePromptQueue.value?.revision !== queueRevision || nativeQueueOperation.value?.status === 'pending') return
-  send({type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ...view, ownerId: owner.ownerId, sessionId: owner.sessionId,
-    viewRevision: owner.view.revision, turnId: owner.activeTurnId, queueRevision, sequence: ++nativeQueueSequence})
+    || nativePromptQueue.value?.revision !== queueRevision || nativeQueueOperation.value?.status === 'pending' || itemId && nativeQueueDraft.value) return
+  const request = {...view, ownerId: owner.ownerId, sessionId: owner.sessionId,
+    viewRevision: owner.view.revision, turnId: owner.activeTurnId, queueRevision, sequence: ++nativeQueueSequence}
+  if (itemId) send({type: 'CLAUDE_TERMINAL_QUEUE_EDIT', ...request, itemId})
+  else send({type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ...request})
 }
 const nativeSendWaiting = computed(() => {
   const owner = nativeComposerOwner.value

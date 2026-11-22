@@ -465,14 +465,21 @@ function isNativeMainHumanPrompt(n,item){
  return n.runtime.zp(item)&&item.mode==='prompt'&&item.origin?.kind==='human'
   &&item.isMeta!==true&&item.screeningPending!==true&&typeof item.uuid==='string';
 }
+function canEditNativeQueuedText(n,item){
+ return n.runtime.Tf(item)&&typeof item.value==='string'&&item.value.length<=nativeUiTextMaxLength&&Object.keys(item.pastedContents??{}).length===0
+  &&item.ideSelection===undefined;
+}
 function nativeMainPromptQueue(n,queue){
  const rows=queue.filter(item=>isNativeMainHumanPrompt(n,item)&&typeof (item.preExpansionValue??item.value)==='string');
- const first=rows[0];
- if(!first)return null;
- const text=(first.preExpansionValue??first.value).trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,'');
+ if(!rows.length)return null;
+ const items=rows.slice(0,12).map(item=>({
+  id:item.uuid,
+  text:(item.preExpansionValue??item.value).trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,''),
+  editable:canEditNativeQueuedText(n,item),
+ }));
  // Include waiting work that may join delivery even when the preview shows only human text.
  const revision=createHash('sha256').update(JSON.stringify(queue.map(item=>[item.uuid,item.mode,item.priority,item.screeningPending===true]))).digest('hex');
- return {revision,count:rows.length,next:{id:first.uuid,text}};
+ return {revision,count:rows.length,items};
 }
 let sentQueueRevision;
 function nativeQueueSendNowController(n){
@@ -498,7 +505,7 @@ function nativeQueueSendNowController(n){
  }
  return controllers.size===1?controllers.values().next().value:undefined;
 }
-async function sendNativeQueueNow(n,request,abort){
+async function dispatchNativeQueueAction(n,request,abort,run){
  await n.gate._Jo('desktop');
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal')return {handled:false};
@@ -506,15 +513,32 @@ async function sendNativeQueueNow(n,request,abort){
  abort.signal.throwIfAborted();
  const facts=nativeViewFacts(n,binding,abort),turn=n.runtime.lpe(),context=binding.toolContext(abort);
  if(facts.sessionId!==request.session_id||facts.sequence!==request.view_revision||facts.view.kind!=='main'
-  ||!turn||turn.turnId!==request.turn_id||turn.cancelled()||draft.text!==''||context.dialogStore.getState().open.length)return {handled:false};
- const queue=nativeMainPromptQueue(n,context.messageQueue.getCommandQueueSnapshot());
+  ||!turn||turn.turnId!==request.turn_id||turn.cancelled()||draft.text!==''||context.dialogStore.getState().open.length
+  ||binding!==(originalContext??n.runtime.ey()))return {handled:false};
+ const commands=context.messageQueue.getCommandQueueSnapshot(),queue=nativeMainPromptQueue(n,commands);
  if(!queue||queue.revision!==request.queue_revision)return {handled:false};
- const key=JSON.stringify([facts.sessionId,turn.turnId,queue.revision]);
- if(sentQueueRevision===key)return {handled:true};
- const controller=nativeQueueSendNowController(n);
- if(!controller||controller.sendQueuedNow('prompt')!==true)return {handled:false};
- sentQueueRevision=key;
- return {handled:true};
+ return run({facts,turn,queue,commands,messageQueue:context.messageQueue});
+}
+function sendNativeQueueNow(n,request,abort){
+ return dispatchNativeQueueAction(n,request,abort,({facts,turn,queue})=>{
+  const key=JSON.stringify([facts.sessionId,turn.turnId,queue.revision]);
+  if(sentQueueRevision===key)return {handled:true};
+  const controller=nativeQueueSendNowController(n);
+  if(!controller||controller.sendQueuedNow('prompt')!==true)return {handled:false};
+  sentQueueRevision=key;
+  return {handled:true};
+ });
+}
+function editNativeQueuedPrompt(n,request,abort){
+ return dispatchNativeQueueAction(n,request,abort,({commands,messageQueue,queue})=>{
+  if(!queue.items.some(row=>row.id===request.item_id&&row.editable)||messageQueue.isFoldInFlight(request.item_id))return {handled:false};
+  // The original edit index ranges over all editable rows, including ones outside this desktop preview.
+  const index=commands.filter(n.runtime.Tf).findIndex(item=>item.uuid===request.item_id);
+  if(index<0)return {handled:false};
+  const result=messageQueue.popEditableAt(index,'',0);
+  if(!result)return {handled:false};
+  return {handled:true,restored:{id:request.item_id,text:result.text}};
+ });
 }
 async function promptOutcome(n,id){
  const interruptions=await nativeInterruptionModule();
@@ -966,6 +990,7 @@ async function control(request,abort){
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_main_queue_send_now')return sendNativeQueueNow(n,request,abort);
+ if(request.subtype==='apack_main_queue_edit')return editNativeQueuedPrompt(n,request,abort);
  if(request.subtype==='apack_native_agents_gesture')return await dispatchNativeAgentsGesture(n,request);
  if(request.subtype==='apack_native_notice')return {...await readNativeNoticeSnapshot(n,abort.signal),handoffPending:nativeAgentsParkState(n)};
  if(request.subtype==='apack_answer_native_notice'){
