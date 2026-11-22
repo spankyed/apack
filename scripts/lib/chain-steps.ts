@@ -653,7 +653,7 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'apack-host': { packages: true, pack: true },
   // Boots the app runtime, which loads the built-in pack: `dist/runtime/index.cjs` and `settings.content.json`.
   // The runtime also imports root package metadata for the app version.
-  api: { pack: true, inputs: ['package.json'] },
+  server: { pack: true, inputs: ['package.json'] },
   // `pretest: ensure-packages-built`; `published-sdk-peers` reads the built `dist` and skips without it.
   // `repo`: six of its specs ask git what the repo holds — the chain's input coverage, spec placement,
   // the lint's scope, the import rules — so every one of them is about files this package does not own
