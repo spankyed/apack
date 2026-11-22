@@ -68,6 +68,39 @@ it('shows the original billing notice in ordinary chat and sends its exact decis
   expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('interrupt')
 })
 
+it('keeps IDE onboarding nonblocking and addresses both Continue and Escape to the same native offer', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick()
+  f.back.click(); await nextTick()
+  const draft = document.createElement('textarea')
+  draft.value = 'A draft in progress'
+  f.root.prepend(draft)
+  draft.focus()
+  const notice = {
+    id: 'ide-welcome', revision: 'welcome-revision', sessionId: 'session', kind: 'ide_onboarding',
+    title: 'Welcome to Claude Code for VS Code', paragraphs: ['installed extension v2.1.302'],
+    choices: [{ value: 'ide_welcome_dismiss', label: 'Continue' }],
+  } satisfies ClaudeNativeNotice
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  expect(document.activeElement).toBe(draft)
+  const welcome = f.root.querySelector('[aria-label="Claude IDE welcome"]')!
+  expect(welcome.querySelector('h3')?.textContent).toBe(notice.title)
+  expect(welcome.textContent).toContain(notice.paragraphs[0])
+  const button = welcome.querySelector('button')!
+  button.click()
+  const expected = { type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner', notice: {
+    id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'ide_welcome_dismiss',
+  } }
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining(expected))
+  const beforeEscape = actor.send.mock.calls.length
+  button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send).toHaveBeenCalledTimes(beforeEscape + 1)
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining(expected))
+  f.publish(f.snapshot); await nextTick()
+  expect(welcome.isConnected).toBe(false)
+  expect(draft.value).toBe('A draft in progress')
+})
+
 it('exposes a scoped cancel action before owner state exists and keeps retry disabled while cleanup is pending', async () => {
  const f=await fixture(),openingId=crypto.randomUUID();
  f.publish({opening:true,openingId,output:[]});await nextTick();expect(f.active).toHaveBeenLastCalledWith(false);

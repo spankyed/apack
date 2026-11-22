@@ -14,6 +14,7 @@ import { claudeTerminalBrowserPermissionRuntime } from './terminal-browser-permi
 import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
 import { claudeTerminalAutocompactOfferRuntime } from './terminal-autocompact-offer-runtime.ts'
 import { claudeTerminalGoalProposalRuntime } from './terminal-goal-proposal-runtime.ts'
+import { claudeTerminalIdeOnboardingRuntime } from './terminal-ide-onboarding-runtime.ts'
 import { claudeTerminalResumeReturnRuntime } from './terminal-resume-return-runtime.ts'
 import { claudeTerminalColdQuotaRuntime } from './terminal-cold-quota-runtime.ts'
 import { claudeTerminalRefusalRuntime } from './terminal-refusal-runtime.ts'
@@ -779,6 +780,7 @@ ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
 ${claudeTerminalPluginHintRuntime}
 ${claudeTerminalGoalProposalRuntime}
+${claudeTerminalIdeOnboardingRuntime}
 ${claudeTerminalResumeReturnRuntime}
 ${claudeTerminalColdQuotaRuntime}
 ${claudeTerminalLeftArrowRuntime}
@@ -1051,6 +1053,7 @@ async function readNativeNoticeSnapshot(n,signal){
   const resume=nativeResumeReturn(n);if(resume.item)return {notice:await projectNativeResumeReturn(n,resume),retirements:refusal.retirements};
   const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
   const agentsReview=nativeLeftArrowReview(n);if(agentsReview.item)return {notice:projectNativeLeftArrow(n,agentsReview),retirements:refusal.retirements};
+  const ideWelcome=nativeIdeOnboarding(n);if(ideWelcome){const welcome=await projectNativeIdeOnboarding(n,ideWelcome);if(welcome)return {notice:welcome,retirements:refusal.retirements};}
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
   const d=nativeBillingNotice(n);if(d.item)return {retirements:refusal.retirements,notice:{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}};
@@ -1147,6 +1150,7 @@ async function control(request,abort){
   if(['quota_resume','quota_new_conversation','quota_dismiss'].includes(request.decision)){answerNativeColdQuota(n,request);return {answered:true};}
   if(['newer_accept','newer_keep','newer_dismiss'].includes(request.decision)){answerNativeNewerModelOffer(n,request);return {answered:true};}
   if(['resume_compact','resume_continue','resume_never','resume_dismiss'].includes(request.decision)){answerNativeResumeReturn(n,request);return {answered:true};}
+  if(request.decision==='ide_welcome_dismiss'){answerNativeIdeOnboarding(n,request);return {answered:true};}
   if(['goal_accept','goal_decline'].includes(request.decision)){answerNativeGoalProposal(n,request);return {answered:true};}
   if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
   if(['yes','no','disable'].includes(request.decision)&&nativePluginHint(n).item){answerNativePluginHint(n,request);return {answered:true};}
