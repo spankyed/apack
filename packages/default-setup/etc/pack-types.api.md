@@ -1804,7 +1804,7 @@ type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | '
     credit: ClaudeCreditRequest;
 } | {
     selectedValues?: string[];
-    decision: 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'disable' | 'edit_prompt' | 'effort_accept' | 'effort_decline' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
+    decision: 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'disable' | 'edit_prompt' | 'effort_accept' | 'effort_decline' | 'goal_accept' | 'goal_decline' | 'ide_welcome_dismiss' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
 });
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
@@ -2479,6 +2479,17 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }>;
         label: z.ZodString;
     }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"ide_onboarding">;
+    choices: z.ZodTuple<[z.ZodObject<{
+        value: z.ZodLiteral<"ide_welcome_dismiss">;
+        label: z.ZodLiteral<"Continue">;
+    }, z.core.$strip>], null>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
     id: z.ZodString;
