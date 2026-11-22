@@ -38,26 +38,28 @@ test("a surface setting changed in Settings reaches the feature's surface, once"
   expect((await events()).filter((type) => type === 'FEATURE_SETTINGS_UPDATED')).toHaveLength(1);
 });
 
-// Settings → Secrets shows the code surface's CLI path overrides, read from the settings by the surface's name
-test('a surface setting changed in Settings is what its canvas reads', async ({ app, appPage }) => {
+test('the Code settings form saves paths and tests the current draft', async ({ app, appPage }) => {
   const override = `/e2e/addressing/${Date.now()}/claude`;
   await app.waitForSurface('default-setup/code');
   await app.navigate('host/settings');
-  await appPage.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
-    settings.send({ type: 'TAB.SELECT', tab: 'general' });
-    settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' });
-  });
+  await selectFeature(appPage, 'default-setup/code');
 
-  const inputs = appPage.getByPlaceholder('Path override (auto-detected if empty)');
-  const claude = appPage.locator('div').filter({ has: appPage.getByText('Claude Code CLI', { exact: true }) })
-    .filter({ has: inputs }).last().getByPlaceholder('Path override (auto-detected if empty)');
+  const claude = appPage.getByRole('textbox', { name: 'Claude Code CLI path' });
+  const codex = appPage.getByRole('textbox', { name: 'Codex CLI path' });
   await claude.fill(override);
-  // CLI Providers owns its save feedback; observe the accepted value at the receiving feature.
+  await codex.fill(process.execPath);
+  const codexRow = codex.locator('..');
+  await codexRow.getByRole('button', { name: 'Test' }).click();
+  await expect(codexRow.getByRole('img', { name: 'CLI available' })).toBeVisible();
+
   await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-    .get('default-setup/code').getSnapshot().context.settings.cliPaths?.['claude-code'])).toBe(override);
+    .get('default-setup/code').getSnapshot().context.settings.cliPaths)).toMatchObject({
+    'claude-code': override,
+    codex: process.execPath,
+  });
   await app.navigate('default-setup/code');
   await app.navigate('host/settings');
+  await selectFeature(appPage, 'default-setup/code');
   await expect(claude).toHaveValue(override);
 });
 

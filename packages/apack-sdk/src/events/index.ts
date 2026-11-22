@@ -388,13 +388,8 @@ export type HostSurfaceEvents = {
     // Opens a surface, by its ref, in the app's main windows (a popout keeps the surface it shows) and hands its actor
     // `events`; the shell waits for a surface whose pack's frontend is still loading
     | { type: 'OPEN_SURFACE'; surface: string; events?: Array<{ type: string; [key: string]: unknown }> };
-  /**
-   * The app's Settings view. A pack sends it what only that pack can find out about its own things, for the view to
-   * show — the code feature's CLI resolution, for one. The settings themselves are the app's.
-   */
-  'host/settings':
-    | { type: 'HELP.OPEN'; target: import('../framework/pack-help.ts').HelpTarget }
-    | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string };
+  /** Opens a help target in the app's Settings view. */
+  'host/settings': { type: 'HELP.OPEN'; target: import('../framework/pack-help.ts').HelpTarget };
 };
 
 /**
@@ -427,7 +422,7 @@ export const HOST_SYSTEM_EVENT_TYPES = {
  */
 export const HOST_SURFACE_EVENT_TYPES = {
   'host/application': eventTypes<HostSurfaceEvents['host/application']>()('CLIENT_CONNECTED', 'APPLICATION_HOTKEYS', 'SURFACE_VISIBILITY_UPDATED', 'COMMANDS_UPDATED', 'ONBOARDING_COMPLETE', 'OPEN_SURFACE'),
-  'host/settings': eventTypes<HostSurfaceEvents['host/settings']>()('CLI_TEST_RESULT', 'HELP.OPEN'),
+  'host/settings': eventTypes<HostSurfaceEvents['host/settings']>()('HELP.OPEN'),
 } satisfies Record<keyof HostSurfaceEvents, readonly string[]>;
 
 /**

@@ -56,7 +56,6 @@ export interface SettingsContext {
   /** The stored API keys, without values */
   secrets: SecretMetadata[];
   secretsStatus: SecretsStatus | null;
-  cliTestResults: Record<string, { status: 'idle' | 'testing' | 'success' | 'error'; resolvedPath?: string; error?: string }>;
   packContentImport: PackContentImport;
   activeTab: 'general' | 'packs' | 'features' | 'help';
   help: HelpContext;
@@ -71,7 +70,6 @@ type UIEvent =
   | { type: 'GENERAL_NAV.SELECT'; item: 'personal' | 'secrets' | 'projects' | 'application' | 'json' }
   // A surface by its ref: other packs send it too, so a bare name would be read as this pack's
   | { type: 'FEATURE.SELECT'; featureId: FeatureRef }
-  | { type: 'CLI.TEST'; provider: string }
   | { type: 'PACK_CONTENT.PREVIEW'; directory: string }
   | { type: 'PACK_CONTENT.TOGGLE_EXPAND'; key: string }
   | { type: 'PACK_CONTENT.TOGGLE_TYPE_ALL'; key: string }
@@ -90,7 +88,6 @@ export type SettingsEvents = UIEvent | Exclude<OutgoingSettingsEvents, { type: '
   | { type: 'PACK_CONTENT_PREVIEW_FAILED'; error: string }
   | { type: 'APP_RESET_COMPLETE' }
   | { type: 'APP_RESET_FAILED'; error: string }
-  | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string }
 const typeOf = safeEvents<SettingsEvents>()
 
 /** Window operations, including explicitly authorized host administration. */
@@ -140,32 +137,6 @@ export function createSettingsMachine(io: SettingsIO) {
         return { selectedFeatureId: context.selectedFeatureId };
       }
       return { selectedFeatureId: ev.featureId };
-    }),
-
-    testCliProvider: assign(({ context, event }) => {
-      const ev = typeOf('CLI.TEST', event);
-      // The code feature resolves CLIs: `resolve-cli` and the stored paths are its own
-      tell({ role: 'code' }, {
-        type: 'TEST_CLI_PROVIDER',
-        provider: ev.provider,
-      });
-      return {
-        cliTestResults: { ...context.cliTestResults, [ev.provider]: { status: 'testing' as const } },
-      };
-    }),
-
-    setCliTestResult: assign(({ context, event }) => {
-      const ev = typeOf('CLI_TEST_RESULT', event);
-      return {
-        cliTestResults: {
-          ...context.cliTestResults,
-          [ev.provider]: {
-            status: ev.success ? 'success' as const : 'error' as const,
-            resolvedPath: ev.resolvedPath,
-            error: ev.error,
-          },
-        },
-      };
     }),
 
     previewPackContent: assign(({ context, event }) => {
@@ -350,7 +321,6 @@ export function createSettingsMachine(io: SettingsIO) {
   context: () => ({
     secrets: [],
     secretsStatus: null,
-    cliTestResults: {},
     packContentImport: freshContentImport(),
     activeTab: 'general',
     help: createHelpContext(),
@@ -373,12 +343,6 @@ export function createSettingsMachine(io: SettingsIO) {
         },
         SECRETS_UPDATED: {
           actions: 'setSecrets',
-        },
-        'CLI.TEST': {
-          actions: 'testCliProvider',
-        },
-        'CLI_TEST_RESULT': {
-          actions: 'setCliTestResult',
         },
         'PACK_CONTENT.PREVIEW': {
           actions: 'previewPackContent',
