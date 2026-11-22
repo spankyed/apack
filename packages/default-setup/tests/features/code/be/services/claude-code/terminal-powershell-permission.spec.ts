@@ -40,7 +40,7 @@ function fixture(withFeedback = false) {
     return { option, report }
   }
   const memoRow = Array.from({ length: 35 }, (_, index) => index === 34 ? feedback : null)
-  const command = { kind: 'full', text: 'Write-Output "Local fixture"' }
+  const command = { kind: 'full', text: 'Write-Output "Local fixture"', marker: '' }
   const body = [false, 'Original reason', null, 'Do you want to proceed?', control]
   const panel = { title: 'PowerShell command', children: [null, { props: { commandDisplay: command } }, { props: { children: body } }, null] }
   const wrapper = { fitted: { description: 'Original description', body: { isStandingHeld: false } }, children: { props: panel } }
@@ -131,4 +131,17 @@ it('passes an edited prefix through the original field and fresh choice while pr
   expect(field.report).toHaveBeenCalledExactlyOnceWith('write-output "Local fixture"')
   expect(f.onChange).toHaveBeenCalledExactlyOnceWith('yes-prefix-edited')
   expect(f.command.text).toBe('Write-Output "Local fixture"')
+})
+
+it('presents the original withheld marker with one-time choices and leaves the raw command out of the preview', async () => {
+  const f = fixture(true)
+  f.command.kind = 'withheld'
+  f.command.marker = '(Original withheld marker)'
+  const shown = await f.show()
+  expect(shown.withheld).toBe(true)
+  expect(shown.presentation.details.at(-1)).toEqual({ label: 'Command', value: f.command.marker })
+  expect(JSON.stringify(shown.presentation)).not.toContain(f.command.text)
+  expect(shown.presentation.choices.map((choice: { value: string }) => choice.value)).toEqual(['yes', 'no'])
+  f.usePrefix(f.command.text)
+  expect(await f.show()).toBeUndefined()
 })

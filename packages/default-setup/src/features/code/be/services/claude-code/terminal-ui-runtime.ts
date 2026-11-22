@@ -1195,7 +1195,7 @@ async function control(request,abort){
   const shell=nativeDialog(n,'permission_powershell');
   if(shell.item){
    const shown=await nativePowerShellPresentation(n,shell);if(!shown)return {dialogs:[]};
-   return {dialogs:[{id:shell.item.id,revision:shell.revision,sessionId:shell.sessionId,requestId:shell.payload.requestId,toolName:'PowerShell',presentation:shown.presentation,reason:shown.reason||undefined,input:shell.payload.input}]};
+   return {dialogs:[{id:shell.item.id,revision:shell.revision,sessionId:shell.sessionId,requestId:shell.payload.requestId,toolName:'PowerShell',presentation:shown.presentation,reason:shown.reason||undefined,input:shown.withheld?{}:shell.payload.input}]};
   }
   const d=nativeDialog(n,'permission_prompt');if(!d.item)return {dialogs:[]};
   const shown=await nativeGenericPermissionChoices(n,d),{source,...presentation}=shown;

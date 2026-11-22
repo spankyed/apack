@@ -12,17 +12,19 @@ function nativePowerShellControl(n,d){
    if(hash!=='571833a5f9e749508b905ce6bf344ebd4101f40de73b03e68c1be7ead36819c3')throw Error('Native PowerShell permission renderer changed');
    const wrapper=fiber.child?.memoizedProps,panel=wrapper?.children?.props,children=panel?.children;
    const command=children?.[1]?.props?.commandDisplay,body=children?.[2]?.props?.children;
+   const withheld=command?.kind==='withheld';
+   const preview=withheld?command.marker:command?.kind==='full'?command.text:undefined;
    const selector=body?.[4],control=selector?.props;
    if(Array.isArray(children)&&children.length===4&&typeof panel.title==='string'&&panel.title.length>0&&panel.title.length<=4000&&
-      command?.kind==='full'&&typeof command.text==='string'&&command.text.length<=200000&&
+      typeof preview==='string'&&preview.length>0&&preview.length<=200000&&
       Array.isArray(body)&&body.length===5&&!body[0]&&!body[2]&&selector?.type?.name==='Xe'&&
       typeof control?.onChange==='function'&&typeof control.onCancel==='function'&&
-      Array.isArray(control.options)&&supportedPowerShellChoices(control.options)){
+      Array.isArray(control.options)&&(!withheld||control.options.length===2)&&supportedPowerShellChoices(control.options)){
     const memo=fiber.updateQueue?.memoCache?.data?.filter(row=>Array.isArray(row)&&row.length===35&&
      row[34]?.handleInputModeToggle===control.onInputModeToggle&&typeof row[34]?.setAcceptFeedback==='function'&&
      typeof row[34]?.setRejectFeedback==='function'&&typeof row[34]?.acceptFeedback==='string'&&typeof row[34]?.rejectFeedback==='string');
     const feedback=memo?.length===1?memo[0][34]:undefined;
-    matches.push({fiber,wrapper,panel,command,body,control,feedback});
+    matches.push({fiber,wrapper,panel,preview,withheld,body,control,feedback});
    }
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
@@ -42,7 +44,7 @@ function supportedPowerShellChoices(options){
 }
 async function nativePowerShellPresentation(n,d){
  const source=nativePowerShellControl(n,d);if(!source)return;
- const {fiber,wrapper,panel,command,body,control}=source;
+ const {fiber,wrapper,panel,preview,withheld,body,control}=source;
  const standingHeld=wrapper.fitted?.body?.isStandingHeld===true,choices=[];
  for(const option of control.options){
   if(standingHeld&&option.value!=='yes'&&option.value!=='no')continue;
@@ -51,14 +53,14 @@ async function nativePowerShellPresentation(n,d){
  }
  const details=[];
  if(typeof wrapper.fitted?.description==='string'&&wrapper.fitted.description)details.push({label:'Description',value:wrapper.fitted.description});
- details.push({label:'Command',value:command.text});
+ details.push({label:'Command',value:preview});
  const reason=await nativeGenericPermissionText(n,body[1]);
  const current=nativePowerShellControl(n,d);
  if(current?.control!==control||current?.fiber!==fiber||current?.panel!==panel)throw Error('Native PowerShell permission changed while formatting');
  const ready=typeof fiber.memoizedProps.wouldTakeAnswer==='function'&&fiber.memoizedProps.wouldTakeAnswer()===true;
  const title=panel.title;
- const token=createHash('sha256').update(JSON.stringify([d.revision,title,details,reason,choices,ready])).digest('hex');
- return {source:current,reason,presentation:{ready,choices,choiceDescriptions:{},defaultFocusValue:choices[0].value,canCancel:true,token,title,details}};
+ const token=createHash('sha256').update(JSON.stringify([d.revision,title,details,reason,choices,ready,withheld])).digest('hex');
+ return {source:current,reason,withheld,presentation:{ready,choices,choiceDescriptions:{},defaultFocusValue:choices[0].value,canCancel:true,token,title,details}};
 }
 function currentPowerShellAnswer(n,d){
  const current=nativeDialog(n,'permission_powershell');
