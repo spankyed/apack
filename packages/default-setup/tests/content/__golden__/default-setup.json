@@ -1648,7 +1648,7 @@
         "shortCode": "ACT-64"
       },
       "Collection:internal": {
-        "contentHash": "78414cdd8d24c4a3",
+        "contentHash": "45b4ae03b76a00f3",
         "displayOrder": 1000,
         "entityType": "Collection",
         "name": "internal"
@@ -1714,7 +1714,7 @@
               },
               {
                 "key": "cc-memory",
-                "value": "File name or add|remove <name>"
+                "value": "List native instructions and memory status, or use `auto on|off` to change the user Auto-memory preference"
               },
               {
                 "key": "cc-recap",
@@ -1783,7 +1783,7 @@
             ]
           }
         ],
-        "contentHash": "9b1b0a131439cb4b",
+        "contentHash": "fc828a391b51945a",
         "displayOrder": 2000,
         "documentType": "commands",
         "entityType": "Document",

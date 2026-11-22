@@ -911,8 +911,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1352,6 +1352,37 @@ declare const ClaudeMcpStatusSchema: z.ZodObject<{
         }, z.core.$loose>>>;
     }, z.core.$loose>>;
 }, z.core.$loose>;
+
+type ClaudeMemoryDialog = z.infer<typeof ClaudeMemoryDialogSchema>;
+
+/** The native host owns instruction visibility, memory sources, and effective toggle eligibility. */
+declare const ClaudeMemoryDialogSchema: z.ZodObject<{
+    files: z.ZodArray<z.ZodObject<{
+        kind: z.ZodString;
+        path: z.ZodString;
+        label: z.ZodString;
+        exists: z.ZodBoolean;
+    }, z.core.$strip>>;
+    folders: z.ZodArray<z.ZodObject<{
+        path: z.ZodString;
+        label: z.ZodString;
+    }, z.core.$strip>>;
+    memories: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        path: z.ZodString;
+        type: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>>>;
+    auto_memory: z.ZodObject<{
+        enabled: z.ZodBoolean;
+        toggleable: z.ZodBoolean;
+        status: z.ZodString;
+    }, z.core.$strip>;
+    auto_dream: z.ZodObject<{
+        shown: z.ZodBoolean;
+        status: z.ZodString;
+        detail: z.ZodString;
+    }, z.core.$strip>;
+}, z.core.$strip>;
 
 type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>;
 
@@ -2534,8 +2565,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -4403,14 +4434,11 @@ interface CliServiceType {
             scope: string;
             path: string;
         }>>;
-        /** List memory/CLAUDE.md files from known locations. */
-        listMemoryFiles(opts?: {
+        /** Persist the explicit Auto-memory preference through Claude's native user settings writer. */
+        setAutoMemory(enabled: boolean, opts: {
+            cwd: string;
             env?: NodeJS.ProcessEnv;
-        }): Promise<Array<{
-            name: string;
-            scope: string;
-            path: string;
-        }>>;
+        }): Promise<void>;
         /** Rename a Claude Code session through the native process. */
         renameSession(id: string, title: string, opts?: {
             cwd?: string;
@@ -8172,8 +8200,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -8687,6 +8715,8 @@ interface QueryHandle {
     controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
     /** Read structured context usage; summary avoids per-category token-count API calls. */
     getContextUsage(): Promise<ClaudeContextUsage>;
+    /** Read native instructions and effective memory availability without a model turn. */
+    getMemoryDialog(): Promise<ClaudeMemoryDialog>;
     /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
     getModels(): Promise<ClaudeModelCatalog>;
     /** Effective native settings for an explicit same-session terminal handoff. Backend only. */
@@ -9532,8 +9562,8 @@ interface TerminalTab extends OpenFile {
 type Thinking = z.infer<typeof ThinkingSchema>;
 
 declare const ThinkingSchema: z.ZodEnum<{
-    disabled: "disabled";
     enabled: "enabled";
+    disabled: "disabled";
     adaptive: "adaptive";
 }>;
 
@@ -12414,8 +12444,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

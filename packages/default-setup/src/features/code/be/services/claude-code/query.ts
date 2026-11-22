@@ -1,6 +1,6 @@
 import { ClaudeMcpElicitationAnswerSchema, type ClaudeMcpElicitationAnswer } from '#features/code/common/mcp-elicitation.ts'
 import { prepareClaudePrintClients } from './print-client-bridge.ts'
-import { ClaudeModelCatalogSchema, type ClaudeModelCatalog } from './host-controls.ts'
+import { ClaudeMemoryDialogSchema, ClaudeModelCatalogSchema, type ClaudeMemoryDialog, type ClaudeModelCatalog } from './host-controls.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudePromptHosts } from './ui-prompt-host.ts'
 import { createClaudeUiControls, type ClaudeUiControls } from './ui-controls.ts'
@@ -113,6 +113,8 @@ export interface QueryHandle {
   controlMcpServer(serverName: string, operation: 'reconnect' | 'enable' | 'disable'): Promise<ClaudeMcpStatus>
   /** Read structured context usage; summary avoids per-category token-count API calls. */
   getContextUsage(): Promise<ClaudeContextUsage>
+  /** Read native instructions and effective memory availability without a model turn. */
+  getMemoryDialog(): Promise<ClaudeMemoryDialog>
   /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
   getModels(): Promise<ClaudeModelCatalog>
   /** Effective native settings for an explicit same-session terminal handoff. Backend only. */
@@ -358,6 +360,11 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     async getContextUsage(): Promise<ClaudeContextUsage> {
       await initialized
       return ClaudeContextUsageSchema.parse(await hostControls.request({ subtype: 'get_context_usage', detail: 'summary' }))
+    },
+
+    async getMemoryDialog(): Promise<ClaudeMemoryDialog> {
+      await initialized
+      return ClaudeMemoryDialogSchema.parse(await hostControls.request({ subtype: 'get_memory_dialog' }))
     },
 
     async getSettings(): Promise<ClaudeSettings> {

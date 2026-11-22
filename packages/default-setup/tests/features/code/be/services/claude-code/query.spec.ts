@@ -285,6 +285,28 @@ describe('query() native control replies', () => {
     await handle.close()
   })
 
+  it('reads native memory status without sending a user message', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [], agents: [], models: [] },
+    } })
+    await handle.initialized
+    const memory = handle.getMemoryDialog()
+    await Promise.resolve()
+    const request = mock.writes[1] as { request_id: string; request: unknown }
+    expect(request.request).toEqual({ subtype: 'get_memory_dialog' })
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: request.request_id,
+      response: { files: [], folders: [], auto_memory: { enabled: true, toggleable: false, status: 'Managed' },
+        auto_dream: { shown: false, status: 'off', detail: '' } },
+    } })
+    await expect(memory).resolves.toMatchObject({ auto_memory: { enabled: true, toggleable: false } })
+    expect(mock.writes.some(value => (value as { type: string }).type === 'user')).toBe(false)
+    await handle.close()
+  })
+
   it('preserves user command UUIDs and forwards native queue lifecycle frames in order', async () => {
     const mock = makeMockStream()
     vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)

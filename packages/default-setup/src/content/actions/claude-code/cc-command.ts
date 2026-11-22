@@ -1,4 +1,4 @@
-import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
+import { claudeProfileOptions, sameClaudeProfile } from '../../../features/code/common/native-profile.ts';
 import { replayQueuedMessage } from './_helpers/stream-consumer.ts';
 /**
  * CC: Run Command — dispatcher for lightweight cc- commands (info, config, passthrough).
@@ -263,17 +263,63 @@ async function handleMemory(
   args: string[],
   services: Services,
   threadId?: string,
-): Promise<{ text: string; data?: any }> {
-  if (args[0] === 'add' || args[0] === 'remove') {
-    return { text: `Memory add/remove is only available in the Claude Code terminal. Use /memory ${args[0]} there.` };
+): Promise<{ text: string }> {
+  const editing = args.length > 0;
+  if (editing && (args.length !== 2 || args[0] !== 'auto' || !['on', 'off'].includes(args[1]!))) {
+    return { text: 'Use /cc-memory to list instructions, or /cc-memory auto on|off to change Auto-memory. Edit instruction files in your editor.' };
   }
-  const files = await services.cli.claudeCode.listMemoryFiles(claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined));
-  if (!files.length) return { text: 'No memory files found.' };
-  const lines = files.map((f: any) => {
-    const scope = f.scope ? ` [${f.scope}]` : '';
-    return `${f.name}${scope}  ${f.path}`;
-  });
-  return { text: lines.join('\n'), data: files };
+  const claude = services.cli.claudeCode;
+  const state = () => threadId ? getClaudeState(services, threadId) : undefined;
+  const prior = state();
+  const directory = (current: typeof prior) => current?.cwdOverride || current?.cwd || claude.getWorkingDir();
+  const cwd = directory(prior);
+  const profile = prior?.profile ?? claude.profile();
+  const opts = { cwd, ...claudeProfileOptions({profile}) };
+  const owner = threadId ? claude.getConversation(threadId)?.owner : undefined;
+  const sessionId = owner?.sessionId;
+  const current = () => {
+    const next = state();
+    return directory(next) === cwd && sameClaudeProfile(next?.profile ?? claude.profile(), profile)
+      && (!threadId || (!claude.getNativeTerminal(threadId) && claude.getConversation(threadId)?.owner === owner
+        && owner?.sessionId === sessionId));
+  };
+  const busy = () => threadId ? claude.isConversationBusy(threadId) : false;
+  if (threadId && claude.getNativeTerminal(threadId)) {
+    return { text: 'Memory controls are unavailable while the native terminal owns this conversation. Stop the native interface before running /cc-memory.' };
+  }
+  if (owner && owner.sessionCwd !== cwd) {
+    return { text: 'The active Claude conversation is in a different directory. Stop it before reading or changing memory for this project.' };
+  }
+  if (busy() && (editing || !owner)) {
+    return { text: 'Wait for the Claude conversation to become idle before using memory controls.' };
+  }
+  const handle = owner?.handle ?? await claude.query({ ...opts, strictMcpConfig: true, keepStdinOpen: true, noSessionPersistence: true });
+  try {
+    let memory = await handle.getMemoryDialog();
+    if (!current()) return { text: 'Claude conversation or profile changed while reading memory.' };
+    let notice = '';
+    if (editing) {
+      if (busy()) return { text: 'Wait for the Claude conversation to become idle before changing Auto-memory.' };
+      if (!memory.auto_memory.toggleable) return { text: `Auto-memory cannot be changed in this session: ${memory.auto_memory.status}` };
+      const enabled = args[1] === 'on';
+      await claude.setAutoMemory(enabled, opts);
+      notice = `Saved user Auto-memory preference: ${enabled ? 'on' : 'off'}.\n`;
+      try {
+        memory = await handle.getMemoryDialog();
+      } catch {
+        return { text: notice + 'Claude did not return the effective memory status. Run /cc-memory to refresh.' };
+      }
+      if (!current()) return { text: notice + 'The conversation changed. Run /cc-memory to read the current status.' };
+    }
+    const lines = memory.files.map(file => `${file.label} [${file.kind}]${file.exists ? '' : ' (missing)'}  ${file.path}`);
+    for (const folder of memory.folders) lines.push(`${folder.label}  ${folder.path}`);
+    for (const saved of memory.memories ?? []) lines.push(`${saved.name}${saved.type ? ` [${saved.type}]` : ''}  ${saved.path}`);
+    lines.push(`Auto-memory: ${memory.auto_memory.status}`);
+    if (memory.auto_dream.shown) lines.push(`Auto-dream: ${memory.auto_dream.status}${memory.auto_dream.detail ? ` · ${memory.auto_dream.detail}` : ''}`);
+    return { text: notice + lines.join('\n') };
+  } finally {
+    if (!owner) await handle.close();
+  }
 }
 
 async function handleSkills(

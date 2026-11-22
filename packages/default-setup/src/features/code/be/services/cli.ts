@@ -11,6 +11,7 @@ import { prepareClaudeNativeTerminal } from './claude-code/terminal-owner.ts'
 import type { ClaudeNativeTerminalOwner } from './claude-code/terminal-owner.ts'
 import type { ClaudeNativeTerminalHandoffOptions } from './claude-code/handle-store.ts'
 import { getModels } from './claude-code/models.ts'
+import { setClaudeAutoMemory } from './claude-code/memory.ts'
 import type { ClaudeModelCatalog } from './claude-code/host-controls.ts'
 import type { ClaudeConversation, ClaudeTurnConsumer } from './claude-code/conversation.ts'
 import { getSessionPlan, type ClaudeSessionPlanOptions } from './claude-code/plan.ts'
@@ -131,8 +132,8 @@ export interface CliServiceType {
     getModels(opts?: { cwd?: string; env?: NodeJS.ProcessEnv; includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
     /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
     listSkills(opts?: {env?: NodeJS.ProcessEnv}): Promise<Array<{ name: string; scope: string; path: string }>>
-    /** List memory/CLAUDE.md files from known locations. */
-    listMemoryFiles(opts?: {env?: NodeJS.ProcessEnv}): Promise<Array<{ name: string; scope: string; path: string }>>
+    /** Persist the explicit Auto-memory preference through Claude's native user settings writer. */
+    setAutoMemory(enabled: boolean, opts: { cwd: string; env?: NodeJS.ProcessEnv }): Promise<void>
     /** Rename a Claude Code session through the native process. */
     renameSession(id: string, title: string, opts?: { cwd?: string; env?: NodeJS.ProcessEnv }): Promise<void>
     /** Check whether a session JSONL file exists under the given (or default) project directory. */
@@ -384,40 +385,8 @@ function createCliService(): CliServiceType {
         }
         return results
       },
-      async listMemoryFiles(opts) {
-        const cwd = resolveCwd()
-        const results: Array<{ name: string; scope: string; path: string }> = []
-        const candidates = [
-          { filePath: path.join(configDir(claudeEnvironment(opts?.env)), 'CLAUDE.md'), name: 'CLAUDE.md', scope: 'user' },
-          { filePath: path.join(cwd, 'CLAUDE.md'), name: 'CLAUDE.md', scope: 'project' },
-          { filePath: path.join(cwd, 'CLAUDE.local.md'), name: 'CLAUDE.local.md', scope: 'local' },
-        ]
-        for (const { filePath, name, scope } of candidates) {
-          try {
-            await fs.promises.access(filePath)
-            results.push({ name, scope, path: filePath })
-          } catch { /* doesn't exist */ }
-        }
-        // Scan rules directories
-        const rulesDirs = [
-          { dir: path.join(configDir(claudeEnvironment(opts?.env)), 'rules'), scope: 'user' },
-          { dir: path.join(cwd, '.claude', 'rules'), scope: 'project' },
-        ]
-        for (const { dir, scope } of rulesDirs) {
-          try {
-            const entries = await fs.promises.readdir(dir, { withFileTypes: true })
-            for (const entry of entries) {
-              if (entry.isFile() && entry.name.endsWith('.md')) {
-                results.push({
-                  name: `rules/${entry.name}`,
-                  scope,
-                  path: path.join(dir, entry.name),
-                })
-              }
-            }
-          } catch { /* dir doesn't exist */ }
-        }
-        return results
+      async setAutoMemory(enabled, {cwd, env}) {
+        return setClaudeAutoMemory(enabled, {cwd, env: await prepareClaudeEnvironment(env)})
       },
       async renameSession(id, title, opts) {
         const cwd = opts?.cwd ?? resolveCwd()

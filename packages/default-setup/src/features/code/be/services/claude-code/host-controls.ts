@@ -44,6 +44,16 @@ export const ClaudeContextUsageSchema = z.object({
 }).passthrough()
 export type ClaudeContextUsage = z.infer<typeof ClaudeContextUsageSchema>
 
+/** The native host owns instruction visibility, memory sources, and effective toggle eligibility. */
+export const ClaudeMemoryDialogSchema = z.object({
+  files: z.array(z.object({ kind: z.string(), path: z.string(), label: z.string(), exists: z.boolean() })),
+  folders: z.array(z.object({ path: z.string(), label: z.string() })),
+  memories: z.array(z.object({ name: z.string(), path: z.string(), type: z.string().nullable() })).optional(),
+  auto_memory: z.object({ enabled: z.boolean(), toggleable: z.boolean(), status: z.string() }),
+  auto_dream: z.object({ shown: z.boolean(), status: z.string(), detail: z.string() }),
+})
+export type ClaudeMemoryDialog = z.infer<typeof ClaudeMemoryDialogSchema>
+
 /** Native acknowledgement distinguishes cancelled inputs from inputs still queued. */
 export const ClaudeInterruptReceiptSchema = z.object({
   still_queued: z.array(z.string()),
