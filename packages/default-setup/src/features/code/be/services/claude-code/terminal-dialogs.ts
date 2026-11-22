@@ -147,7 +147,7 @@ export interface ClaudeNativeToolPermissionDialogResponse {
   choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
 }
 
-/** Exact permission_prompt; the original native payload supplies the tool identity. */
+/** Mounted tool approval presented by the shared desktop card. The native payload supplies the tool identity. */
 export const ClaudeNativeGenericToolPermissionDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
   requestId: z.string().min(1).max(256), toolName: z.string().min(1).max(256),

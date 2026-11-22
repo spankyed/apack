@@ -6,7 +6,7 @@ export const ClaudeToolPermissionApprovalSchema = ClaudeFileApprovalPresentation
   title: z.string().min(1).max(4000),
   details: z.array(z.object({ label: z.string().max(128), value: z.string().max(200000), ansi: z.string().max(200000).optional() })).max(4),
 })
-/** Exact original generic permission_prompt, including native choice explanations. */
+/** Shared card presentation, including original focus and choice explanations when available. */
 export const ClaudeGenericToolPermissionApprovalSchema = ClaudeToolPermissionApprovalSchema.extend({
   defaultFocusValue: z.string().max(128).optional(),
   canCancel: z.boolean(),
