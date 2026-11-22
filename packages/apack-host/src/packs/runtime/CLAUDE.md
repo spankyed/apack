@@ -86,7 +86,7 @@ In `packages/apack-host/src/packs/` (`@apackdev/host/packs`):
 | `installer.ts` | Install from a directory, archive, URL or GitHub release (stage, verify, place); `installShippedPacks`; uninstall; `checkDependencies` |
 | `staging.ts` | Staging dir names, `recoverStagingDirs`, `prepareHostDataDirs` |
 | `updater.ts`, `github.ts` | Update checks against GitHub releases |
-| `host-info.ts` | Records the app version in the data dir for `apack pack install` |
+| `host-info.ts` | Records host compatibility for `apack pack install` and the profile’s initial shipped selection |
 
 The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries()`.
 
@@ -94,6 +94,7 @@ The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries(
 
 ```
 0. initializeLogCapture()          — console calls become log events, each printed once
+   recordShippedPackSeed()         — capture the initial catalog, including an empty selection, before opening the database
    openAppStore()                  — (runtime/index.ts) createPackRegistry(), the app's registered packs; open the app's
                                      elmdb database with the packs' schema and the run history's, each with its engine
                                      (openDatabaseStore, openRunHistory: @apackdev/host/database),
@@ -102,8 +103,8 @@ The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries(
 1. registerPack(hostRegistration) — the app's own features as the pack `host`: the application and packs systems and surfaces
 2. prepareHostDataDirs()           — record host version; recover staging in packs/
 3. forwardSecretsChanges()         — settings system hears of API key changes (@apackdev/host/secrets)
-4. installShippedPacks()           — install absent shipped ids unless deliberately removed; refresh only
-                                     app-owned copies when the shipped source revision changes
+4. installShippedPacks()           — seed only the initial selection and refresh app-managed packs;
+                                     offer newly shipped ids through Packs for explicit installation
 5. loadAppPacks()                  — discover + reconcile installed packs + load enabled, shipped ids first;
                                      registerPack() each, with where it was found (PackOrigin)
 6. registry.registerShutdownHook() — each pack's onShutdown, keyed by pack id

@@ -14,6 +14,7 @@ import { registry } from './runtime/test-host.ts';
 import { loadAppPacks } from '../../src/packs/runtime/loader.ts';
 import { reloadPackById } from '../../src/packs/runtime/reload.ts';
 import { readAppPackSources } from '../../src/packs/app-sources.ts';
+import { recordShippedPackSeed, shippedPackSeedIds } from '../../src/packs/host-info.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 
@@ -45,7 +46,92 @@ function shipPack(id: string, runtime = `exports.registration = { id: ${JSON.str
   return dir;
 }
 
-const outcomes = async () => (await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() })).map((r) => `${r.id}=${r.outcome}`);
+const outcomes = async () => (await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() })).map((r) => `${r.id}=${r.outcome}`);
+
+async function bootWithShippedSelection(sourceDir = shipped) {
+  const catalog = readAppPackSources(sourceDir);
+  const seedMissing = recordShippedPackSeed({ appDir: path.dirname(installedPacksFile), userDataDir: tmp, installedPacksFile },
+    shippedPackSeedIds(catalog));
+  return installShippedPacks(catalog, packsDir, { installedPacksFile, seedMissing });
+}
+
+describe('the first shipped selection belongs to the profile', () => {
+  it.each(['active', 'disabled', 'removed', 'fork'])('offers the next release’s starter alongside an existing $0 choice', async choice => {
+    const sourceA = shipPack('starter-a');
+    expect(await bootWithShippedSelection()).toEqual([{ id: 'starter-a', outcome: 'installed' }]);
+
+    if (choice === 'disabled') {
+      writeInstalledPacks(readInstalledPacks(installedPacksFile).map(record => ({ ...record, enabled: false })), installedPacksFile);
+    } else if (choice === 'removed') {
+      await uninstallPack('starter-a', packsDir, { installedPacksFile });
+    } else if (choice === 'fork') {
+      const fork = path.join(tmp, 'user-fork');
+      fs.cpSync(sourceA, fork, { recursive: true });
+      fs.appendFileSync(path.join(fork, 'dist', PACK_LAYOUT.runtimeEntry), '\n// User fork');
+      sealBuild(fork);
+      await installPackFromLocal(fork, packsDir, { installedPacksFile });
+    }
+    const before = readInstalledPacks(installedPacksFile);
+    const incumbent = path.join(packsDir, 'starter-a');
+    const revision = choice === 'removed' ? undefined : readPackBuild(incumbent).revision;
+    fs.rmSync(sourceA, { recursive: true });
+    const sourceB = shipPack('starter-b');
+
+    for (let restart = 0; restart < 2; restart++) {
+      expect(await bootWithShippedSelection()).toEqual([{ id: 'starter-b', outcome: 'offered' }]);
+      expect(fs.existsSync(path.join(packsDir, 'starter-b'))).toBe(false);
+      expect(readInstalledPacks(installedPacksFile)).toEqual(before);
+      if (revision === undefined) expect(fs.existsSync(incumbent)).toBe(false);
+      else expect(readPackBuild(incumbent).revision).toBe(revision);
+    }
+
+    await restoreShippedPack('starter-b', sourceB, packsDir, { installedPacksFile });
+    expect(await bootWithShippedSelection()).toEqual([{ id: 'starter-b', outcome: 'unchanged' }]);
+    expect(readInstalledPacks(installedPacksFile)).toEqual([...before, expect.objectContaining({ id: 'starter-b', updatesWith: 'app' })]);
+  });
+
+  it('retries a declared starter whose shipped build was invalid on first boot', async () => {
+    const source = shipPack('starter-a');
+    const runtime = path.join(source, 'dist', PACK_LAYOUT.runtimeEntry);
+    const contents = fs.readFileSync(runtime);
+    fs.unlinkSync(runtime);
+
+    expect(await bootWithShippedSelection()).toMatchObject([{ id: 'starter-a', outcome: 'failed' }]);
+
+    fs.writeFileSync(runtime, contents);
+    shipPack('starter-b');
+    expect(await bootWithShippedSelection()).toEqual([
+      { id: 'starter-a', outcome: 'installed' },
+      { id: 'starter-b', outcome: 'offered' },
+    ]);
+  });
+
+  it('records an empty selection and seeds B only on a fresh profile', async () => {
+    expect(await bootWithShippedSelection()).toEqual([]);
+    shipPack('starter-b');
+    expect(await bootWithShippedSelection()).toEqual([{ id: 'starter-b', outcome: 'offered' }]);
+    expect(await installShippedPacks(shipped, packsDir, { installedPacksFile, only: 'starter-b' }))
+      .toEqual([{ id: 'starter-b', outcome: 'offered' }]);
+    installedPacksFile = path.join(tmp, 'fresh', 'installed-packs.json');
+    packsDir = path.join(tmp, 'fresh', 'packs');
+    expect(await bootWithShippedSelection()).toEqual([{ id: 'starter-b', outcome: 'installed' }]);
+  });
+
+  it('retries the original selection after interruption without admitting a new offer', async () => {
+    const source = shipPack('starter-a');
+    const catalog = readAppPackSources(shipped);
+    const initial = recordShippedPackSeed({ appDir: path.dirname(installedPacksFile), userDataDir: tmp, installedPacksFile }, ['starter-a']);
+    expect(await installShippedPacks(catalog, packsDir, {
+      installedPacksFile, seedMissing: initial, beforePlace: () => { throw new Error('interrupted'); },
+    })).toMatchObject([{ id: 'starter-a', outcome: 'failed' }]);
+    expect(fs.existsSync(path.join(packsDir, 'starter-a'))).toBe(false);
+    expect(fs.existsSync(source)).toBe(true);
+    shipPack('starter-b');
+    expect(await bootWithShippedSelection()).toEqual([
+      { id: 'starter-a', outcome: 'installed' }, { id: 'starter-b', outcome: 'offered' },
+    ]);
+  });
+});
 
 describe('installing the packs the app ships', () => {
   it('installs into the packs dir, in the pack layout, on a first boot', async () => {
@@ -82,7 +168,7 @@ describe('installing the packs the app ships', () => {
 
   it('writes nothing on a second boot', async () => {
     shipPack('shipped-pack');
-    await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() });
+    await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() });
     const before = fs.statSync(path.join(packsDir, 'shipped-pack', PACK_LAYOUT.integrity)).mtimeMs;
 
     expect(await outcomes()).toEqual(['shipped-pack=unchanged']);
@@ -93,7 +179,7 @@ describe('installing the packs the app ships', () => {
   // happen while a shipped pack was loaded from `resources/` in place
   it('re-installs when the shipped copy differs from the installed one', async () => {
     const dir = shipPack('shipped-pack');
-    await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() });
+    await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() });
 
     fs.writeFileSync(path.join(dir, 'dist', PACK_LAYOUT.runtimeEntry), 'exports.registration = { id: "shipped-pack", v: 2 };');
     sealBuild(dir);
@@ -103,7 +189,7 @@ describe('installing the packs the app ships', () => {
 
   it('leaves local edits untouched when the shipped source has not changed', async () => {
     shipPack('shipped-pack');
-    await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() });
+    await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() });
     fs.writeFileSync(path.join(packsDir, 'shipped-pack', PACK_LAYOUT.runtimeEntry), '// a user got in here');
 
     expect(await outcomes()).toEqual(['shipped-pack=unchanged']);
@@ -113,7 +199,7 @@ describe('installing the packs the app ships', () => {
 
   it.each(['missing', 'malformed', 'wrong-owner', 'extra-link'])('does not repair invalid installed files at boot; build admission reports the defect: %s', async kind => {
     shipPack('shipped-pack');
-    await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() });
+    await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() });
     const dir = path.join(packsDir, 'shipped-pack');
     const file = path.join(dir, PACK_LAYOUT.integrity);
     if (kind === 'missing') fs.rmSync(file);
@@ -132,7 +218,7 @@ describe('installing the packs the app ships', () => {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, PACK_LAYOUT.manifest), JSON.stringify({ id: 'unbuilt-pack', name: 'Unbuilt', version: '1.0.0' }));
 
-    const [result] = await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() });
+    const [result] = await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() });
     expect(result).toMatchObject({ id: 'unbuilt-pack', outcome: 'failed' });
     expect(result!.error).toContain(`dist/${PACK_LAYOUT.runtimeEntry}`);
     expect(fs.existsSync(path.join(packsDir, 'unbuilt-pack'))).toBe(false);
@@ -191,20 +277,23 @@ describe('explicit installation ownership', () => {
     shipPack('shipped-pack');
     const file = path.join(packsDir, 'shipped-pack');
     fs.writeFileSync(file, 'user-owned file');
-    expect(await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() }))
+    expect(await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() }))
       .toMatchObject([{ outcome: 'failed', error: expect.stringContaining('not a directory') }]);
     expect(fs.readFileSync(file, 'utf8')).toBe('user-owned file');
     expect(fs.existsSync(recordsFile())).toBe(false);
   });
 
-  it('records the selected app source without retaining an unrelated remote update source', async () => {
-    shipPack('shipped-pack');
-    writeInstalledPacks([{ id: 'shipped-pack', enabled: false, installedFrom: 'old/repo',
-      availableVersion: '3.0.0', availableTag: 'v3.0.0', updateCheckError: 'old failure',
-    }], recordsFile());
-    expect(await outcomes()).toEqual(['shipped-pack=installed']);
+  it('keeps a missing user-owned pack offered until explicit Restore changes ownership', async () => {
+    const source = shipPack('shipped-pack');
+    const previous = { id: 'shipped-pack', enabled: false, updatesWith: 'user' as const, installedFrom: 'old/repo',
+      availableVersion: '3.0.0', availableTag: 'v3.0.0', updateCheckError: 'old failure' };
+    writeInstalledPacks([previous], recordsFile());
+
+    expect(await outcomes()).toEqual(['shipped-pack=offered']);
+    expect(readInstalledPacks(recordsFile(), { strict: true })).toEqual([previous]);
+    await restoreShippedPack('shipped-pack', source, packsDir, { installedPacksFile: recordsFile() });
     const record = readInstalledPacks(recordsFile(), { strict: true })[0];
-    expect(record).toMatchObject({ enabled: false, updatesWith: 'app' });
+    expect(record).toMatchObject({ enabled: true, updatesWith: 'app' });
     for (const key of ['installedFrom', 'availableVersion', 'availableTag', 'updateCheckError']) {
       expect(record).not.toHaveProperty(key);
     }
@@ -284,7 +373,7 @@ describe('explicit installation ownership', () => {
     fs.writeFileSync(path.join(source, 'dist', PACK_LAYOUT.runtimeEntry), 'exports.registration = { id: "shipped-pack", changed: true };');
     sealBuild(source);
     const accept = vi.fn(() => { throw new Error('runtime refused'); });
-    expect(await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile(), accept }))
+    expect(await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile(), accept }))
       .toMatchObject([{ outcome: 'failed', error: 'runtime refused' }]);
     expect(accept).toHaveBeenCalledOnce();
     expect(readPackBuild(path.join(packsDir, 'shipped-pack'))).toEqual(before);
@@ -308,7 +397,7 @@ describe('explicit installation ownership', () => {
     const parent = path.dirname(recordsFile());
     fs.chmodSync(parent, 0o500);
     try {
-      expect(await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() }))
+      expect(await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile() }))
         .toMatchObject([{ outcome: 'failed', error: expect.stringContaining('Cannot save installation decisions') }]);
       expect(readPackBuild(path.join(packsDir, 'shipped-pack'))).toEqual(before);
       expect(readInstalledPacks(recordsFile(), { strict: true })).toEqual(records);
@@ -317,7 +406,7 @@ describe('explicit installation ownership', () => {
 
   it('refuses a first candidate without leaving ownership or build behind', async () => {
     shipPack('shipped-pack');
-    expect(await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile(), accept: () => {
+    expect(await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile: recordsFile(), accept: () => {
       throw new Error('candidate refused');
     } })).toMatchObject([{ outcome: 'failed', error: 'candidate refused' }]);
     expect(fs.existsSync(recordsFile())).toBe(false);
@@ -382,7 +471,7 @@ it('preserves the running app-owned build, catalog and record when a shipped rel
 
 it('refuses an app update when ownership changes during preparation, retaining incumbent bytes', async () => {
   const dir = shipPack('shipped-pack');
-  await installShippedPacks(shipped, packsDir, { installedPacksFile });
+  await installShippedPacks(shipped, packsDir, { seedMissing: 'all', installedPacksFile });
   const before = readPackBuild(path.join(packsDir, 'shipped-pack')).revision;
   fs.appendFileSync(path.join(dir, 'dist', PACK_LAYOUT.runtimeEntry), '\n// update');
   sealBuild(dir);

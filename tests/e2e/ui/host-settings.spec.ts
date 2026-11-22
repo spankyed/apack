@@ -1,11 +1,12 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { Component } from 'vue';
 import type { Editor } from '@tiptap/core';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
-import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
+import { PACK_LAYOUT, sealPackBuild, stagePack } from '@apackdev/host/packs';
 import { test as base, expect } from '@apackdev/testing';
 
 // A separate worker boots with a real disabled-pack record. No runtime facade, form or setting is mocked.
@@ -14,12 +15,14 @@ const test = base.extend<{}, { hostOnlyData: string }>({
   hostOnlyData: [async ({}, use) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-host-settings-'));
     const previous = process.env.E2E_DATA_DIR;
-    const { installedPacksFile } = resolveAppEnvironment({ env: 'test', userDataDir: directory });
-    fs.mkdirSync(path.dirname(installedPacksFile), { recursive: true });
-    fs.writeFileSync(installedPacksFile, JSON.stringify({ packs: [{ id: 'default-setup', enabled: false }] }));
-    process.env.E2E_DATA_DIR = directory;
-    try { await use(directory); }
-    finally {
+    try {
+      const { installedPacksFile, packsDir } = resolveAppEnvironment({ env: 'test', userDataDir: directory });
+      const starterRoot = fileURLToPath(new URL('../../../packages/default-setup', import.meta.url));
+      stagePack(starterRoot, path.join(packsDir, 'default-setup'));
+      fs.writeFileSync(installedPacksFile, JSON.stringify({ packs: [{ id: 'default-setup', enabled: false }] }));
+      process.env.E2E_DATA_DIR = directory;
+      await use(directory);
+    } finally {
       if (previous === undefined) delete process.env.E2E_DATA_DIR;
       else process.env.E2E_DATA_DIR = previous;
       fs.rmSync(directory, { recursive: true, force: true });

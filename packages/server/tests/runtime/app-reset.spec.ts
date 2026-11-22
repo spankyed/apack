@@ -47,7 +47,7 @@ beforeAll(async () => {
   }));
   // The API's boot, for the built-in packs
   // The app installs the packs it ships, then loads every installed pack
-  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
+  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { seedMissing: 'all', installedPacksFile: resolveAppEnvironment().installedPacksFile });
   loadAppPacks(packs);
   startPacks(packs);
   fresh = { settings: storedSettings(), flows: flows() };

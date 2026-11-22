@@ -43,7 +43,7 @@ function snapshot(ears: Ears) {
  */
 async function bootApi() {
   const app = openAppStore();
-  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
+  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { seedMissing: 'all', installedPacksFile: resolveAppEnvironment().installedPacksFile });
   loadAppPacks(app.packs);
   return app;
 }
