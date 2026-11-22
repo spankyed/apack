@@ -54,6 +54,7 @@ export interface ClaudeNativeTerminalSession {
 }
 
 export interface ClaudeNativePromptQueue {
+  revision: string
   count: number
   next: { id: string; text: string }
 }

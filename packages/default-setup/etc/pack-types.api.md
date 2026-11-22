@@ -911,8 +911,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    default: "default";
                     plan: "plan";
+                    default: "default";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1880,11 +1880,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
+                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
-                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1959,8 +1959,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    idle: "idle";
                     pending: "pending";
+                    idle: "idle";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -2202,8 +2202,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        feedback: "feedback";
         warning: "warning";
+        feedback: "feedback";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -2584,8 +2584,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                default: "default";
                 plan: "plan";
+                default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -2601,6 +2601,15 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
 interface ClaudeNativeProfile {
     configDir?: string;
     secureStorageConfigDir?: string;
+}
+
+interface ClaudeNativePromptQueue {
+    revision: string;
+    count: number;
+    next: {
+        id: string;
+        text: string;
+    };
 }
 
 type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>;
@@ -2961,6 +2970,8 @@ interface ClaudeNativeTerminalState {
         turnId: string;
         output: string;
     };
+    /** Waiting main-conversation prompts observed in the original CLI. */
+    promptQueue?: ClaudeNativePromptQueue;
     busy: boolean;
     /** Original turn currently eligible for a composer Pause. */
     activeTurnId?: string;
@@ -3499,6 +3510,14 @@ type ClaudeTerminalViewRequest = {
     operation: 'retry_worker' | 'skip_worker';
     worker: ClaudeNativeWorkflowWorkerTarget;
 })) | {
+    type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW';
+    ownerId: string;
+    sessionId: string;
+    viewRevision: number;
+    turnId: string;
+    queueRevision: string;
+    sequence: number;
+} | {
     type: 'CLAUDE_TERMINAL_NOTICE';
     ownerId: string;
     notice: ClaudeNativeNoticeResponse;
@@ -3551,6 +3570,14 @@ type ClaudeTerminalViewSnapshot = {
     background?: ClaudeBackgroundSessionState;
     mcpOperation?: {
         sequence: number;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
+    queueOperation?: {
+        sequence: number;
+        sessionId: string;
+        viewRevision: number;
+        queueRevision: string;
         status: 'done' | 'error' | 'pending';
         problem?: string;
     };
@@ -8222,8 +8249,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
     plan: "plan";
+    default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -11308,11 +11335,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
+            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
-            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -11387,8 +11414,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

@@ -163,7 +163,8 @@
               :prefill-references="prefillReferences"
               :is-busy="isBusy"
               :native-send-waiting="nativeSendWaiting"
-              :native-prompt-queue="nativePromptQueue"
+              :native-prompt-queue="nativePromptQueue" :native-queue-send-available="nativeQueueSendAvailable"
+              :native-queue-operation="nativeQueueOperation" @native-queue-send-now="sendNativeQueueNow"
               :native-pause-requested="nativePauseRequested" :native-pause="nativePauseScope"
               @native-session-controls="nativeSession?.open()"
               :native-memory-available="!!memoryTarget" @native-memory="showMemory = true"
@@ -380,6 +381,23 @@ const nativePromptQueue = computed(() => {
   if (owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === thread?.id
     && owner.sessionId === thread?.context?.claudeCode?.sessionId) return owner.promptQueue
 })
+const nativeQueueSendAvailable = computed(() => {
+  const owner = nativeComposerOwner.value
+  return !!nativePromptQueue.value && !!owner?.activeTurnId && !owner.endingTurnId && !owner.inputBlocked
+})
+const nativeQueueOperation = computed(() => {
+  const view = nativeComposerView.value, state = view?.state, operation = view?.queueOperation
+  if (operation && state?.sessionId === operation.sessionId && state.view?.revision === operation.viewRevision
+    && nativePromptQueue.value?.revision === operation.queueRevision) return operation
+})
+let nativeQueueSequence = 0
+function sendNativeQueueNow(queueRevision: string) {
+  const view = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (!view || owner?.view?.kind !== 'main' || !owner.activeTurnId || !nativeQueueSendAvailable.value
+    || nativePromptQueue.value?.revision !== queueRevision || nativeQueueOperation.value?.status === 'pending') return
+  send({type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ...view, ownerId: owner.ownerId, sessionId: owner.sessionId,
+    viewRevision: owner.view.revision, turnId: owner.activeTurnId, queueRevision, sequence: ++nativeQueueSequence})
+}
 const nativeSendWaiting = computed(() => {
   const owner = nativeComposerOwner.value
   return !!owner && (!!owner.inputBlocked || owner.busy && !owner.activeTurnId)

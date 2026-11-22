@@ -522,6 +522,7 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "QK": "SG",
     "ul": "ul",
     "Lst": "Wst",
     "sCe": "vCe",
@@ -590,6 +591,8 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "df272849e942d17c66349e14a5027eb1c8c1155e6cda7f6f9b0c4ac2e807b1f3": "bc4b24a2b0b613393b34aaafb65700cf3777d8a5e85b678bb40602e0df8213de",
+    "3006d6da03796ed090d39350a672773b46cd77acc021e6bc4074c34e1893fc6c": "353117be59cd273cc11644a7399d436d2f859ebb95eb213df154ed726c4fddb9",
     "322c1d6c6c77b53deab4e99856a2d8502181ae0ad07f707bcf904aeb34861662": "5dfa0297d4269a2b20f728be53a9d9bb38a538df63bdc1cb9e787312ebc5888e",
     "73991c6e58be63f833bd28c99cb9d1475bf4d61c9506e61c601135dad12e4850": "e09dae1fdfa38d5ebb554f4376ac455cb892e6fa2c41f691416082597948d93c",
     "1881b29f0df68643fbbddd89ecc94dda427c4ac21e596c4d73aadf6494b7e411": "b9a953839986e5303d9ebc26230ebd370573038ae9b103b63d785f5e9b4a14db",

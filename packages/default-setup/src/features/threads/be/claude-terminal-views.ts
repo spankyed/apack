@@ -21,6 +21,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
+  | { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW'; ownerId: string; sessionId: string; viewRevision: number; turnId: string; queueRevision: string; sequence: number }
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
@@ -89,6 +90,7 @@ export type ClaudeTerminalViewSnapshot = {
   attachment?: ClaudeBackgroundAttachmentView
   background?: ClaudeBackgroundSessionState
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
+  queueOperation?: { sequence: number; sessionId: string; viewRevision: number; queueRevision: string; status: 'pending' | 'done' | 'error'; problem?: string }
   noticeAnswer?: { id: string; revision: string; requestId?: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
   stop?: ClaudeTerminalStopState
@@ -129,6 +131,7 @@ interface View {
   desktopRetry?: boolean
   backgroundRegistration?: string
   mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
+  queueOperation?: ClaudeTerminalViewSnapshot['queueOperation']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
   task?: ClaudeTerminalTaskState
   stop?: ClaudeTerminalStopState
@@ -199,7 +202,7 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -387,6 +390,33 @@ export function createClaudeTerminalViews(dependencies: {
           if (current()) { target.mcpOperation = { ...operation, status: 'done' }; publish(key, target) }
         }).catch(error => {
           if (current()) { target.mcpOperation = { ...operation, status: 'error', problem: error instanceof Error ? error.message : 'Native MCP form action failed' }; publish(key, target) }
+        })
+        return
+      }
+      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW') {
+        const {sessionId, viewRevision, turnId, queueRevision, sequence} = event
+        const previous = target.queueOperation
+        const scopeCurrent = () => {
+          const state = owner.state
+          return state.status === 'live' && !state.inputBlocked && state.sessionId === sessionId
+            && state.view?.kind === 'main' && state.view.revision === viewRevision && state.activeTurnId === turnId
+            && !state.endingTurnId && state.promptQueue?.revision === queueRevision
+        }
+        if (typeof queueRevision !== 'string' || !/^[a-f0-9]{64}$/.test(queueRevision) || typeof turnId !== 'string' || !turnId
+          || !scopeCurrent() || !Number.isSafeInteger(sequence) || sequence <= (previous?.sequence ?? 0) || previous?.status === 'pending') return
+        const operation: NonNullable<ClaudeTerminalViewSnapshot['queueOperation']> = {sequence, sessionId, viewRevision, queueRevision, status: 'pending'}
+        target.queueOperation = operation; publish(key, target)
+        const current = () => views.get(key) === target && dependencies.get(event.threadId) === owner
+          && target.owner === owner && target.queueOperation === operation
+        void Promise.resolve().then(async () => {
+          if (!current() || !scopeCurrent()) throw new Error('The Claude queue changed before Send now')
+          const result = await owner.uiTransport.request({subtype: 'apack_main_queue_send_now', session_id: sessionId,
+            view_revision: viewRevision, turn_id: turnId, queue_revision: queueRevision}) as {handled?: unknown}
+          if (result.handled !== true) throw new Error('Claude could not send the waiting prompts now')
+        }).then(() => {
+          if (current()) { target.queueOperation = {...operation, status: 'done'}; publish(key, target) }
+        }, error => {
+          if (current()) { target.queueOperation = {...operation, status: 'error', problem: error instanceof Error ? error.message : 'Send now failed'}; publish(key, target) }
         })
         return
       }

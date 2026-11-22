@@ -77,6 +77,7 @@ it('uses Linux producer names/hashes in the actual composed adapter without chan
 it('both composed preloads parse and route native module imports through the platform gate', () => {
   for (const source of [claudeTerminalUiRuntime, createClaudePrintClientRuntime({ socketPath: '/synthetic', token: 'synthetic', epoch: 'synthetic' })]) {
     expect(() => parse(source, { ecmaVersion: 'latest', sourceType: 'module' })).not.toThrow()
+    expect(source).not.toContain('nativeFunctionHash(nativeFunctionHash(')
     expect(source).toContain("importClaudeNativeModule('chunk-c7wcn77x.js')")
     expect(source).not.toContain("await import('/$bunfs/root/")
   }

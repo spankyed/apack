@@ -89,6 +89,7 @@ export async function createClaudeTerminalBridge(options: {
   let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
   let preview: ClaudeNativeTerminalState['preview'], previewSequence = 0, previewRecord: string | undefined
   const promptQueueSchema = z.object({
+    revision: z.string().regex(/^[a-f0-9]{64}$/),
     count: z.number().int().positive(),
     next: z.object({id: z.string().uuid(), text: z.string().max(240)}),
   }).nullable()

@@ -470,7 +470,51 @@ function nativeMainPromptQueue(n,queue){
  const first=rows[0];
  if(!first)return null;
  const text=(first.preExpansionValue??first.value).trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,'');
- return {count:rows.length,next:{id:first.uuid,text}};
+ // Include waiting work that may join delivery even when the preview shows only human text.
+ const revision=createHash('sha256').update(JSON.stringify(queue.map(item=>[item.uuid,item.mode,item.priority,item.screeningPending===true]))).digest('hex');
+ return {revision,count:rows.length,next:{id:first.uuid,text}};
+}
+let sentQueueRevision;
+function nativeQueueSendNowController(n){
+ const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],visited=new Set(),controllers=new Set();
+ function matches(fn,hash){
+  if(typeof fn!=='function')return false;
+  let actual=composerFunctionHashes.get(fn);
+  if(!actual){actual=createHash('sha256').update(Function.prototype.toString.call(fn)).digest('hex');composerFunctionHashes.set(fn,actual);}
+  return actual===hash;
+ }
+ while(pending.length){
+  const fiber=pending.pop();
+  if(!fiber||visited.has(fiber))continue;
+  if(visited.size>=4096)throw Error('Claude queue controls are unavailable');
+  visited.add(fiber);
+  if(fiber.type?.name===nativeFunctionName('QK')
+   &&matches(fiber.type,'df272849e942d17c66349e14a5027eb1c8c1155e6cda7f6f9b0c4ac2e807b1f3')){
+   const controller=fiber.memoizedProps?.submitController;
+   if(matches(controller?.sendQueuedNow,'3006d6da03796ed090d39350a672773b46cd77acc021e6bc4074c34e1893fc6c'))controllers.add(controller);
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);
+  if(fiber.child)pending.push(fiber.child);
+ }
+ return controllers.size===1?controllers.values().next().value:undefined;
+}
+async function sendNativeQueueNow(n,request,abort){
+ await n.gate._Jo('desktop');
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal')return {handled:false};
+ const draft=await binding.composer.read();
+ abort.signal.throwIfAborted();
+ const facts=nativeViewFacts(n,binding,abort),turn=n.runtime.lpe(),context=binding.toolContext(abort);
+ if(facts.sessionId!==request.session_id||facts.sequence!==request.view_revision||facts.view.kind!=='main'
+  ||!turn||turn.turnId!==request.turn_id||turn.cancelled()||draft.text!==''||context.dialogStore.getState().open.length)return {handled:false};
+ const queue=nativeMainPromptQueue(n,context.messageQueue.getCommandQueueSnapshot());
+ if(!queue||queue.revision!==request.queue_revision)return {handled:false};
+ const key=JSON.stringify([facts.sessionId,turn.turnId,queue.revision]);
+ if(sentQueueRevision===key)return {handled:true};
+ const controller=nativeQueueSendNowController(n);
+ if(!controller||controller.sendQueuedNow('prompt')!==true)return {handled:false};
+ sentQueueRevision=key;
+ return {handled:true};
 }
 async function promptOutcome(n,id){
  const interruptions=await nativeInterruptionModule();
@@ -921,6 +965,7 @@ async function control(request,abort){
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
+ if(request.subtype==='apack_main_queue_send_now')return sendNativeQueueNow(n,request,abort);
  if(request.subtype==='apack_native_agents_gesture')return await dispatchNativeAgentsGesture(n,request);
  if(request.subtype==='apack_native_notice')return {...await readNativeNoticeSnapshot(n,abort.signal),handoffPending:nativeAgentsParkState(n)};
  if(request.subtype==='apack_answer_native_notice'){

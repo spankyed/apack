@@ -9,6 +9,7 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
     subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) }),
+    uiTransport: {request: vi.fn(async () => ({handled: true}))},
     answerNotice: vi.fn(async () => {}), operateMcpUrl: vi.fn(async () => {}), operateMcpForm: vi.fn(async () => {}),
     operateTask: vi.fn(async () => ({ stopped: true })),
     submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
@@ -759,4 +760,31 @@ it('validates credit commands and publishes each request acknowledgement without
   expect(f.owner.answerNotice).toHaveBeenCalledExactlyOnceWith(response)
   await vi.waitFor(()=>expect(f.send).toHaveBeenLastCalledWith(expect.objectContaining({noticeAnswer:expect.objectContaining({id:notice.id,revision:notice.revision,requestId:response.credit.requestId,status:'done'})})))
  }finally{f.views.clear()}
+})
+
+
+it('forwards Send now only from the live window and with the current turn and queue revision', async () => {
+  const f = fixture()
+  try {
+    const queueRevision = 'a'.repeat(64)
+    const state = f.owner.state
+    state.view = {kind: 'main', revision: 4}
+    state.activeTurnId = 'live-turn'
+    state.promptQueue = {revision: queueRevision, count: 1, next: {id: randomUUID(), text: 'Waiting follow-up'}}
+    f.views.handle(mount, 'one', f.send)
+    const action = {...mount, type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ownerId: state.ownerId, sessionId: state.sessionId,
+      viewRevision: 4, turnId: state.activeTurnId, queueRevision, sequence: 1} as const
+    f.views.handle(action, 'other-window', f.send)
+    f.views.handle({...action, queueRevision: 'b'.repeat(64)}, 'one', f.send)
+    f.views.handle({...action, turnId: 'expired-turn'}, 'one', f.send)
+    expect(f.owner.uiTransport.request).not.toHaveBeenCalled()
+
+    f.views.handle(action, 'one', f.send)
+    f.views.handle(action, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].queueOperation?.status).toBe('done'))
+    f.views.handle(action, 'one', f.send)
+    expect(f.owner.uiTransport.request).toHaveBeenCalledExactlyOnceWith({
+      subtype: 'apack_main_queue_send_now', session_id: state.sessionId, view_revision: 4, turn_id: 'live-turn', queue_revision: queueRevision,
+    })
+  } finally { f.views.clear() }
 })

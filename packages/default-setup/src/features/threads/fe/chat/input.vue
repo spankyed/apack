@@ -55,8 +55,11 @@
 
         <section v-if="nativePromptQueue" class="flex min-w-0 items-baseline gap-2 border-b border-white/10 px-5 py-2 text-xs" aria-label="Claude prompt queue">
           <span class="shrink-0 font-medium text-neutral-300">{{ nativePromptQueue.count }} queued</span>
-          <span class="truncate text-neutral-400">{{ nativePromptQueue.next.text }}</span>
+          <span class="min-w-0 flex-1 truncate text-neutral-400">{{ nativePromptQueue.next.text }}</span>
+          <button v-if="nativeQueueSendAvailable" type="button" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+            :disabled="nativeQueueOperation?.status === 'pending'" @click="emit('native-queue-send-now', nativePromptQueue.revision)">Send now</button>
         </section>
+        <p v-if="nativeQueueOperation?.status === 'error'" role="alert" class="px-5 py-1 text-xs text-amber-200">{{ nativeQueueOperation.problem }}</p>
 
         <!-- Editor container -->
         <div ref="editorAreaRef" class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
@@ -293,6 +296,8 @@ const props = defineProps<{
   nativeMemoryAvailable?: boolean
   nativeSendWaiting?: boolean
   nativePromptQueue?: import('#features/code/common/native-terminal.ts').ClaudeNativePromptQueue
+  nativeQueueSendAvailable?: boolean
+  nativeQueueOperation?: import('../../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot['queueOperation']
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */
@@ -345,6 +350,7 @@ const emit = defineEmits<{
   (e: 'summarize-from-here', messageId: string): void
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
+  (e: 'native-queue-send-now', revision: string): void
   (e: 'native-agents-gesture', request: { mountId: string; revision: number }): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
   (e: 'native-ui-notice', event: import('#generated/types.ts').ClaudeUiNoticeEvent): void
