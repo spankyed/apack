@@ -45,7 +45,7 @@
     <p v-if="props.presentation?.notice" class="native-tool-notice" role="note">{{ props.presentation.notice }}</p>
     <footer>
       <div class="decision-status">
-        <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
+        <button type="button" class="quiet" :disabled="props.disabled || readingImages" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
         <button v-if="canClarify && current" type="button" class="quiet" :disabled="disabled || hasUnsupportedClarificationDraft" :title="hasUnsupportedClarificationDraft ? 'Submit answers to include your general response or notes.' : undefined" @click="submit(false, 'clarify')">Chat about this</button>
         <span v-if="pending" role="status" class="muted">Waiting for Claude…</span>
       </div>

@@ -144,7 +144,7 @@
               @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'" :can-clarify="nativeComposerOwner?.view?.kind === 'main'"
+            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'" :can-clarify="nativeComposerOwner?.view?.kind === 'main'"
               @press="pressNativeUi" @field="editNativeUi" @started="startNativeQuestionDraft"
               @respond="answerNativeQuestion"
               @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
@@ -830,7 +830,7 @@ const pendingNativeQuestion = computed(() => {
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   const presentation = ClaudeQuestionPresentationSchema.safeParse(native.presentation)
   const frame = nativeUiDrawing.value?.question
-  return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, disabled: !!message.responseTimestamp && typeof native.problem !== 'string', error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
+  return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, pending: !!message.responseTimestamp && typeof native.problem !== 'string', error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
 
 const nativeQuestionDraft = ref<{ messageId: string; token: string }>()
