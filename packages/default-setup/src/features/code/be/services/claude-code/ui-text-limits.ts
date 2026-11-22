@@ -1,6 +1,8 @@
 import { CLAUDE_UI_TEXT_MAX_LENGTH } from '../../../common/native-prompt-limits.ts'
 export { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '../../../common/native-prompt-limits.ts'
 
+export const CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES = 2 * 1048576
+
 // JSON.stringify can escape each unit as six ASCII bytes (controls or lone surrogates).
 // Leave bounded room for session/client identity and the surrounding protocol envelope.
 export const CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES = 6 * CLAUDE_UI_TEXT_MAX_LENGTH + 65_536

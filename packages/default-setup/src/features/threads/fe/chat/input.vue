@@ -83,7 +83,8 @@
         </section>
         <details v-if="unappliedQueueEdit" class="px-5 py-1 text-xs text-neutral-300">
           <summary class="cursor-pointer">Recovered queued prompt</summary>
-          <p class="max-h-24 overflow-y-auto whitespace-pre-wrap">{{ unappliedQueueEdit.text }}</p>
+          <p v-if="unappliedQueueEdit.text" class="max-h-24 overflow-y-auto whitespace-pre-wrap">{{ unappliedQueueEdit.text }}</p>
+          <p v-if="unappliedQueueEdit.images?.length">{{ unappliedQueueEdit.images.length }} image{{ unappliedQueueEdit.images.length === 1 ? '' : 's' }}</p>
           <button type="button" class="rounded underline focus-visible:outline focus-visible:outline-2" @click="restoreQueuedPrompt">Return to draft</button>
         </details>
         <p v-if="nativeQueueOperation?.status === 'error'" role="alert" class="px-5 py-1 text-xs text-amber-200">{{ nativeQueueOperation.problem }}</p>
@@ -491,7 +492,9 @@ const queueActionPending = computed(() => props.nativeQueueOperation?.status ===
 function restoreQueuedPrompt() {
   const restored = unappliedQueueEdit.value, editor = tiptapRef.value?.editor
   if (!restored || !editor || !promptEditor || submitting.value || props.disabled || props.nativeDecisionPending) return
-  if (!promptEditor.restoreQueuedText(restored.text)) return
+  if (editor.isDestroyed || editor.view.composing) return
+  if (restored.text && !promptEditor.restoreQueuedText(restored.text)) return
+  if (restored.images?.length) restoreQueuedImages(restored.images)
   appliedQueueEdit.value = restored.id
   emit('native-queue-edit-applied', restored.id)
   editor.view.focus()
@@ -659,7 +662,7 @@ const commandHighlight = computed(() => {
 
 const {
   pendingImages, pendingFiles, hasAttachments,
-  handlePaste, handleFileDrop, addImageFromUrl, removeImage, openFilePicker, removeFile,
+  handlePaste, handleFileDrop, addImageFromUrl, removeImage, restoreQueuedImages, openFilePicker, removeFile,
   captureAttachments, restoreFromReferences,
 } = useAttachments()
 watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {

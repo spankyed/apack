@@ -821,12 +821,13 @@ it.each(['unmount', 'disconnect'])('recovers a selected queue edit after %s in t
     expect(request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({subtype: 'apack_main_queue_edit', item_id: selected}))
     if (detach === 'unmount') f.views.handle({...mount, type: 'CLAUDE_TERMINAL_UNMOUNT'}, 'one', f.send)
     else requester.abort()
-    reply({handled: true, restored: {id: selected, text: 'Return to the draft'}})
+    const images = detach === 'disconnect' ? [{mediaType: 'image/png', data: 'aW1hZ2U='}] : undefined
+    reply({handled: true, restored: {id: selected, text: 'Return to the draft', images}})
     await operation
     expect(sendTerminal.mock.calls.every(([value]) => !value.queueDraft)).toBe(true)
     expect(f.send.mock.calls.every(([value]) => !value.queueDraft)).toBe(true)
     expect(sendSecond.mock.calls.at(-1)![0].queueDraft).toEqual({
-      id: selected, sessionId: state.sessionId, text: 'Return to the draft', automatic: false,
+      id: selected, sessionId: state.sessionId, text: 'Return to the draft', automatic: false, ...(images ? {images} : {}),
     })
     const ack = {...second, type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED', ownerId: state.ownerId, sessionId: state.sessionId, itemId: selected} as const
     f.views.handle({...ack, itemId: first}, 'two', sendSecond)

@@ -207,6 +207,8 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-m86ay9q5.js",
       "exports": {
         "aK": "QK",
+        "Hc": "Mc",
+        "nX": "K8",
         "Cie": "_ie",
         "FPe": "OPe",
         "gAs": "PRs",
@@ -281,6 +283,9 @@ export const claudeNativeLinuxBindings: {
       "exports": {
         "zp": "Gp",
         "Tf": "Rf",
+        "fdt": "sdt",
+        "Dwr": "mwr",
+        "Nmo": "lmo",
         "hgs": "Oms",
         "Ims": "qfs",
         "p_r": "Gyr",

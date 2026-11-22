@@ -90,6 +90,16 @@ export function useAttachments() {
     }
   }
 
+  const restoreQueuedImages = (images: readonly import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeImage[]) => {
+    const names = new Set(pendingImages.value.map(image => image.name))
+    const restored = images.map(({mediaType, data}) => {
+      const name = getUniqueName(`image.${mediaType.slice('image/'.length)}`, names)
+      names.add(name)
+      return {dataUrl: `data:${mediaType};base64,${data}`, name}
+    })
+    pendingImages.value = [...pendingImages.value, ...restored]
+  }
+
   const removeImage = (i: number) => {
     pendingImages.value = pendingImages.value.filter((_, idx) => idx !== i)
   }
@@ -219,6 +229,7 @@ export function useAttachments() {
     handleFileDrop,
     addImageFromUrl,
     removeImage,
+    restoreQueuedImages,
     openFilePicker,
     removeFile,
     captureAttachments,

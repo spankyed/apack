@@ -912,8 +912,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 label: z.ZodString;
                 mode: z.ZodEnum<{
                     default: "default";
-                    plan: "plan";
                     auto: "auto";
+                    plan: "plan";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
                 }>;
@@ -2585,8 +2585,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             label: z.ZodString;
             mode: z.ZodEnum<{
                 default: "default";
-                plan: "plan";
                 auto: "auto";
+                plan: "plan";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
             }>;
@@ -3614,6 +3614,7 @@ type ClaudeTerminalViewSnapshot = {
         sessionId: string;
         id: string;
         text: string;
+        images?: ClaudeNativeImage[];
         automatic: boolean;
     };
     policyRecheck?: {
@@ -8291,8 +8292,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
-    plan: "plan";
     auto: "auto";
+    plan: "plan";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";

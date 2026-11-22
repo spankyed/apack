@@ -5,12 +5,18 @@ import type { ClaudeNativeContinuation } from '#features/code/be/services/claude
 import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest, ClaudeBackgroundUiTarget } from '#features/code/common/native-background.ts'
 import { isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/be/services/claude-code/ui-text-limits.ts'
 import type { MessageReferences } from './types.ts'
 import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
 import { CLAUDE_STALE_DRAFT_MESSAGE, type ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
+
+const queuedDraftImage = z.object({
+  mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
+  data: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).refine(data => data.length % 4 === 0),
+})
 
 export type ClaudeQueuedPromptEdit = {
   threadId: string; mountId: string; ownerId: string; sessionId: string
@@ -100,7 +106,7 @@ export type ClaudeTerminalViewSnapshot = {
   background?: ClaudeBackgroundSessionState
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
   queueOperation?: { sequence: number; sessionId: string; viewRevision: number; queueRevision: string; status: 'pending' | 'done' | 'error'; problem?: string }
-  queueDraft?: { sessionId: string; id: string; text: string; automatic: boolean }
+  queueDraft?: { sessionId: string; id: string; text: string; images?: ClaudeNativeImage[]; automatic: boolean }
   policyRecheck?: { sessionId: string; viewRevision: number; status: 'pending' | 'done' | 'error'; problem?: string }
   noticeAnswer?: { id: string; revision: string; requestId?: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
@@ -461,12 +467,14 @@ export function createClaudeTerminalViews(dependencies: {
             subtype,
             session_id: sessionId, view_revision: viewRevision, turn_id: turnId, queue_revision: queueRevision,
             ...(itemId ? {item_id: itemId} : {}),
-          }) as {handled?: unknown; cancelled?: unknown; restored?: {id?: unknown; text?: unknown}}
+          }) as {handled?: unknown; cancelled?: unknown; restored?: {id?: unknown; text?: unknown; images?: unknown}}
           if (result.handled !== true || cancelling && result.cancelled !== itemId) throw new Error(refusal)
           if (!editing) return
           if (!itemId || result.restored?.id !== itemId || typeof result.restored.text !== 'string'
             || result.restored.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) throw new Error('Claude did not return the selected draft')
-          return {id: itemId, text: result.restored.text}
+          const images = z.array(queuedDraftImage).optional().safeParse(result.restored.images)
+          if (!images.success || !result.restored.text && !images.data?.length) throw new Error('Claude did not return a usable draft')
+          return {id: itemId, text: result.restored.text, ...(images.data?.length ? {images: images.data} : {})}
         }).then(restored => {
           const sameView = current()
           // The CLI already removed this row. A closed requester must not retain the only copy.

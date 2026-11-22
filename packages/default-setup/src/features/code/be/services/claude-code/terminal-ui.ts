@@ -1,4 +1,4 @@
-import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
+import { CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES, CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudePromptHosts, type ClaudePromptHost } from './ui-prompt-host.ts'
 import { request as httpRequest, type ClientRequest } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -42,7 +42,7 @@ export function createClaudeTerminalUiTransport(options: {
       const id = randomUUID(), body = JSON.stringify({ id, sequence: ++sequence, ownerPid: owner.pid, sessionId: owner.sessionId, transportEpoch: options.transportEpoch, request: value })
       const textRpc = CLAUDE_UI_PROMPT_RPC_SUBTYPES.some(subtype => subtype === value.subtype)
       const requestMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 1048576
-      const responseMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 2 * 1048576
+      const responseMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES
       if (Buffer.byteLength(body) > requestMaxBytes) return Promise.reject(new Error('Native UI request exceeds its size limit'))
       return new Promise((resolve, reject) => {
         const request = httpRequest({ socketPath: options.socketPath, path: '/control', method: 'POST',

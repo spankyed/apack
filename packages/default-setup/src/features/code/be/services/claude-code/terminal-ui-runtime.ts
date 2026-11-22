@@ -4,7 +4,7 @@ import { claudeTerminalAutoModeSafetyRuntime } from './terminal-auto-mode-safety
 import { claudeTerminalComputerPermissionRuntime } from './terminal-computer-permission-runtime.ts'
 import { claudeTerminalChromeSetupRuntime } from './terminal-chrome-setup-runtime.ts'
 import { claudeTerminalHelperPolicyRuntime } from './terminal-helper-policy-runtime.ts'
-import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MAX_LENGTH, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
+import { CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES, CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MAX_LENGTH, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
@@ -58,6 +58,7 @@ import {accessSync,constants as fsConstants,readFileSync,statSync} from 'node:fs
 import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
 const nativeUiTextMaxLength=${CLAUDE_UI_TEXT_MAX_LENGTH};
+const nativeUiControlResponseMaxBytes=${CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES};
 async function nativeInterruptionModule(){return await import('/$bunfs/root/chunk-ev1xcp32.js');}
 const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SUBTYPES)});
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
@@ -466,9 +467,45 @@ function isNativeMainHumanPrompt(n,item){
  return n.runtime.zp(item)&&item.mode==='prompt'&&item.origin?.kind==='human'
   &&item.isMeta!==true&&item.screeningPending!==true&&typeof item.uuid==='string';
 }
-function canEditNativeQueuedText(n,item){
- return n.runtime.Tf(item)&&typeof item.value==='string'&&item.value.length<=nativeUiTextMaxLength&&Object.keys(item.pastedContents??{}).length===0
-  &&item.ideSelection===undefined;
+function nativeQueuedDraft(n,item,verifyBytes=false){
+ if(!n.runtime.Tf(item)||item.ideSelection!==undefined)return;
+ const pasted=n.runtime.Dwr(item);
+ const blocks=Array.isArray(item.value)?item.value:undefined;
+ if(blocks?.some(part=>part?.type!=='text'&&part?.type!=='image'))return;
+ if(pasted.some(part=>part?.type!=='image'))return;
+ if(!blocks&&typeof item.value!=='string')return;
+ const caption=n.runtime.fdt(item);
+ if(caption.length>nativeUiTextMaxLength)return;
+ // A native value can also carry image blocks directly. The original pop prepends those in block order.
+ const embedded=blocks?n.runtime.Nmo(blocks,0):[];
+ if(blocks&&embedded.length!==blocks.filter(part=>part.type==='image').length)return;
+ const byId=new Map(pasted.map(image=>[image.id,image]));
+ const markers=pasted.length?n.engine.Hc(caption).filter(marker=>byId.has(marker.id)&&marker.match===n.engine.nX(marker.id)):[];
+ if(new Set(markers.map(marker=>marker.id)).size!==pasted.length||markers.length!==pasted.length)return;
+ const images=[...embedded,...markers.map(marker=>byId.get(marker.id))];
+ let text=caption;
+ for(const {index,match} of markers.slice().reverse()){
+  const end=index+match.length;
+  // Drop a leading marker's separator. Keep words on either side of an inline marker separate.
+  const separator=index>0&&/\S/u.test(text[index-1])&&/\S/u.test(text[end]??'')?' ':'';
+  text=text.slice(0,index)+separator+text.slice(end+(index===0&&text[end]===' '?1:0));
+ }
+ let encodedBytes=0;
+ const restoredImages=[];
+ for(const image of images){
+  const {mediaType,content:data}=image;
+  if(!['image/png','image/jpeg','image/gif','image/webp'].includes(mediaType)||typeof data!=='string'||!data||data.length%4!==0)return;
+  encodedBytes+=data.length;
+  if(encodedBytes>nativeUiControlResponseMaxBytes
+   ||verifyBytes&&!/^[A-Za-z0-9+/]+={0,2}$/.test(data))return;
+  restoredImages.push({mediaType,data});
+ }
+ if(!text&&!restoredImages.length)return;
+ // Preflight the complete receipt before the irreversible native queue pop.
+ const headerBytes=Buffer.byteLength(JSON.stringify(restoredImages.map(({mediaType})=>({mediaType,data:''}))))+encodedBytes+256;
+ if(headerBytes+6*text.length>nativeUiControlResponseMaxBytes
+  &&headerBytes+Buffer.byteLength(JSON.stringify(text))>nativeUiControlResponseMaxBytes)return;
+ return {text,...(restoredImages.length?{images:restoredImages}:{})};
 }
 function nativeMainPromptQueue(n,queue){
  const rows=[];
@@ -492,7 +529,7 @@ function nativeMainPromptQueue(n,queue){
  const items=rows.slice(0,12).map(({item,text})=>({
   id:item.uuid,
   text:text.trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,''),
-  editable:canEditNativeQueuedText(n,item),
+  editable:!!nativeQueuedDraft(n,item),
   cancellable:desktopQueuedPrompts.has(item.uuid),
  }));
  // Include waiting work that may join delivery even when the preview shows only human text.
@@ -551,11 +588,11 @@ function editNativeQueuedPrompt(n,request,abort){
  return dispatchNativeQueueAction(n,request,abort,({commands,messageQueue,queue})=>{
   if(!queue.items.some(row=>row.id===request.item_id&&row.editable)||messageQueue.isFoldInFlight(request.item_id))return {handled:false};
   // The original edit index ranges over all editable rows, including ones outside this desktop preview.
-  const index=commands.filter(n.runtime.Tf).findIndex(item=>item.uuid===request.item_id);
-  if(index<0)return {handled:false};
-  const result=messageQueue.popEditableAt(index,'',0);
-  if(!result)return {handled:false};
-  return {handled:true,restored:{id:request.item_id,text:result.text}};
+  const editable=commands.filter(n.runtime.Tf);
+  const index=editable.findIndex(item=>item.uuid===request.item_id);
+  const draft=index<0?undefined:nativeQueuedDraft(n,editable[index],true);
+  if(!draft||!messageQueue.popEditableAt(index,'',0))return {handled:false};
+  return {handled:true,restored:{id:request.item_id,...draft}};
  });
 }
 function cancelNativeQueuedPrompt(n,request,abort){
