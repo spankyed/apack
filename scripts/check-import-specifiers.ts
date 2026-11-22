@@ -271,7 +271,7 @@ export function findExtensionlessOwnModules(
  * `pack-own-aliases` owns every `@/` specifier — each over a pack's tests as well as its sources. Several
  * rules claiming one import means only the first to run gets read.
  */
-const APP_SPECIFIER = /^(?:\.\.?\/)+(?:[\w.-]+\/)*(?:api|apack-host|apack-cli)\/src(?:\/|$)/;
+const APP_SPECIFIER = /^(?:\.\.?\/)+(?:[\w.-]+\/)*(?:server|apack-host|apack-cli)\/src(?:\/|$)/;
 
 /**
  * `file:line: specifier` for each app module a pack's unit tests load. Tests of app code belong to
@@ -1053,7 +1053,7 @@ const RULE_LIST = [
   {
     id: 'findAppImportsInPackTests',
     over: PACK_TEST_DIRS,
-    repoOnly: { kind: 'inapplicable', note: "Its subject is a relative import into this repo's api, host or CLI sources, which only a pack inside this monorepo can write; `@apackdev/host` and every `@/` specifier belong to `host-imports` and `pack-own-aliases`, which the CLI's pack-test command runs over a pack's tests" },
+    repoOnly: { kind: 'inapplicable', note: "Its subject is a relative import into this repo's server, host or CLI sources, which only a pack inside this monorepo can write; `@apackdev/host` and every `@/` specifier belong to `host-imports` and `pack-own-aliases`, which the CLI's pack-test command runs over a pack's tests" },
     find: () => findAppImportsInPackTests(PACK_TEST_DIRS),
     // Dirs-shaped, so a per-file run can answer for it too, which is also what lets the sweeps call it
     overPaths: (paths, root = repoRoot) => findAppImportsInPackTests(paths, root),

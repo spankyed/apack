@@ -53,7 +53,7 @@ export const BUILD_BUDGET: BudgetClass = 'suite';
  * **`@apackdev/sdk` is absent, and that is four facts rather than a speed choice.** Its `build` is
  * `tsc -p tsconfig.json` over a config setting `noEmit: true`: it emits nothing, so it adds no output to
  * a step whose product is `APP_OUTPUTS`; `typecheck:sdk` runs that identical compile; the `build:runtime`
- * step's `inputs` name `renderer, api, main, preload` and never `apack-sdk`, so dropping the leg makes
+ * step's `inputs` name `renderer, server, main, preload` and never `apack-sdk`, so dropping the leg makes
  * the declaration honest rather than narrower; and the step's key would not cover it — the four
  * workspaces' `package.json` files are declared inputs and the sdk's is not, so a leg building it would
  * depend on a script the step does not watch.

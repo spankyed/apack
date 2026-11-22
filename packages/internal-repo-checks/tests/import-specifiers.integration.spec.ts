@@ -269,6 +269,7 @@ describe('findAppImportsInPackTests', () => {
   it.each([
     ["const { init } = await import('../../../apack-cli/src/commands/init');", '../../../apack-cli/src/commands/init'],
     ["import { installPackFromLocal } from '../../../apack-host/src/packs/pack-installer';", '../../../apack-host/src/packs/pack-installer'],
+    ["import { openAppStore } from '../../../server/src/runtime/index.ts';", '../../../server/src/runtime/index.ts'],
   ])('flags %s', (code, specifier) => {
     write('pack-tests/unit/feature.spec.ts', code);
     expect(findAppImportsInPackTests(['src/pack-tests'], root)).toEqual([`src/pack-tests/unit/feature.spec.ts:1: ${specifier}`]);

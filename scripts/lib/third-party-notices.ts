@@ -8,7 +8,7 @@
  *
  *   - As files: every package under a `node_modules` of the packaged app. Each also keeps its own license files there
  *     (`packaged-app-files.spec.ts`); this lists it again so the notices are whole in one place.
- *   - Inlined into the app's own bundles: what the renderer, main, preload and api builds each recorded
+ *   - Inlined into the app's own bundles: what the renderer, main, preload and server builds each recorded
  *     (`@apackdev/host/build/bundled-packages`, `recordBundledPackages`), from the staging build root.
  *   - Inlined into a built-in pack's bundles: what each bundle's source map, or esbuild's module comments in a bundle
  *     without one, names (`packBundledPackages`), with the bundlers' own injected code and the pack's CSS tooling. A
