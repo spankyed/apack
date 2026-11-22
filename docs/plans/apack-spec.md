@@ -655,14 +655,19 @@ is a `transact` of its own, joins whichever it is called in.
 - **What a handler wrote before it waited is kept.** An ask that writes a row, waits, and is then refused has
   kept the row: the write was in the step that took the ask, which committed. This is what progress it sent does
   too. A row that should not outlive a refusal is written in the change that comes with the answer.
+- **A handler's rows stand on their own.** A link is written to entities that are there: one to an entity a later
+  handler in the step creates is refused where it is written, and fails its handler alone. This is the rule a
+  handler's data already keeps, a change that is valid when the handler ends or is not made, and it is SQL's
+  default: a constraint is checked at the statement that wrote the row, and deferring it to the commit is what a
+  schema asks for. elmdb deferred this one check, a relation's two ends, to a unit's commit, where a link to
+  nothing lost the whole step with nobody to blame. spankyed/elmdb#215 takes the deferral out: nothing needed it.
+  An entity never needs a relation in order to be written, so the entity can always go first, and against an engine
+  that refuses the link where it is written apack's unit suites pass, 6,514 host tests and the pack pool, with the
+  boot, a pack's content, reset and import among them.
 - **Rows that cannot be kept stop the system.** If the commit fails, nothing has left yet: whoever asked in that
   step is told it failed, nobody is told of a change, and the system takes no more steps, since its states are then
-  ahead of its rows. The app restarts from the rows. Two things make a commit fail. One is the disk. The other is
-  the one check elmdb leaves until a unit commits: that both ends of a relation exist (`Check::Ends`, so that a
-  link may be written before the entity it names). A handler that links to nothing is found there, which is too
-  late to blame it, and today that stops the system as a full disk does. The fix is elmdb's and small: run the
-  checks a savepoint deferred when the savepoint is released, so that the handler's own unit fails and only its rows
-  go ([Not built](#not-built)).
+  ahead of its rows. The app restarts from the rows. With no check left for a commit to make, what fails one is the
+  disk.
 
 **What it costs**, on elmdb, 2026-11-21, an M1 Pro under a load of 5.5, temporary databases with syncing off, the
 median of seven runs (`prototype/rows-cost.mts`):
@@ -762,6 +767,7 @@ first, and nothing above needs it.
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
 | A step is one unit of the database, which the kernel knows as its `transact` and nothing else: rows, data and what is sent are kept together, and a handler that changes nothing has written nothing. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A store of the kernel's own with marks to go back to, dropped: the engine's `transact` inside itself is that already, and a command's own unit joins it. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
+| A link is written to entities that are there, in a unit as outside one, so a handler that links to nothing fails alone. | elmdb left a relation's ends to the unit's commit, where one that failed took the whole step and stopped the system. Asking a unit inside another for the check as it ended (spankyed/elmdb#214, `checked`), dropped: a flag every caller has to pass, for an order nothing uses. |
 
 ## What the prototype proves
 
@@ -841,7 +847,9 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   Rows that cannot be kept: the asker is told it failed, no subscriber hears, and no more steps are taken. Two
   commands, each a unit of its own, are kept with the count in one commit, and a handler that refuses after they
   returned takes back what they wrote. Outside any step a command is still whole and a bare write is refused. A link
-  whose far end is written later in the step is kept, and a link to nothing loses the step and stops the system.
+  to a thread written later in the step is refused where it is written and fails its handler alone, and a link to
+  nothing does the same, with the step and the system going on. Those two run on elmdb from spankyed/elmdb#215 on:
+  against the release apack is pinned to they are named as waiting, and the count says two were not run.
   Under all 420 orderings of two imports, a create, a note and a handler that throws, the count a state holds is
   the number of rows kept, on each store. And on elmdb, a watch of the rows is delivered after the step that wrote
   them, by when the state has counted them, and whoever was answered reads the row at once. Ten changes to a copy
@@ -1296,8 +1304,8 @@ projects. Each would loosen the fit to this app.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
 - **Rows** ([Rows](#rows)): the rule is proven on elmdb. What is left is not the kernel's:
-  - *In elmdb:* the checks a savepoint deferred run when it is released, so that a link to nothing fails the handler
-    that wrote it and not the step.
+  - *The pin.* apack is pinned to an elmdb from before spankyed/elmdb#215. `npm run deps:pin -- elmdb <commit>`
+    once it is merged, and the two checks that wait for it run on both stores.
   - *In the SDK:* the engine a pack is handed refuses a bare write outside a unit. In the prototype that is a count
     kept around `transact` (`store-elmdb.mts`), and it is the same there.
   - *A step that must be on disk before it answers.* `transact` takes `durable: true`; a handler has no way to ask

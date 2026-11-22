@@ -207,7 +207,8 @@ A write is told when losing it does not matter, and asked when it does. There is
 - **One message and everything it causes is one step.** Nothing leaves until the step commits, so nobody sees a
   half-made change, and what runs is matched to the data once, as the step ends.
 - **A step is one database transaction.** A handler's rows, its data and what it sends are kept together, a handler
-  that changes nothing has written nothing, and a write outside a step is refused. Nothing outside the database is part of it: git, files and models are
+  that changes nothing has written nothing, a link is written to rows that are there, and a write outside a step is
+  refused. Nothing outside the database is part of it: git, files and models are
   done first, and the row that records one is written in the step its result arrives in.
 - **Work has one owner and stops when its owner does.** A state's `run` is the state's. An ask is the asker's. What a
   state starts, follows, awaits or makes is that state's.

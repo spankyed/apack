@@ -16,7 +16,7 @@ export interface Rows {
   transact<T>(run: () => T): T
   put(table: Table, id: string, row: Row): void
   remove(table: Table, id: string): void
-  /** Joins two threads. Whether both exist is looked at when the unit commits, so the other end may be written after. */
+  /** Joins two threads, both of which there have to be: a join to a thread written later is refused where it is written. */
   join(from: string, to: string): void
   joined(from: string, to: string): boolean
   /** As whoever is reading sees it: with what the open unit has written, inside one. */
@@ -63,9 +63,7 @@ export function memory(): Rows {
       depth--
       if (depth > 0 || !undo) return value
       const wrote = undo.length > 0
-      // What was left until now: both ends of every join are there.
-      const loose = [...joins].find((pair) => pair.split('>').some((end) => !table('thread').has(end)))
-      const why = loose ? `join(${loose}): no thread has this id` : failing
+      const why = failing
       if (wrote && why !== undefined) { failing = undefined; back(0); undo = undefined; throw new Error(why) }
       undo = undefined
       if (wrote) commits++
@@ -88,6 +86,7 @@ export function memory(): Rows {
     },
     join: (from, to) => {
       const log = writes()
+      for (const end of [from, to]) if (!table('thread').has(end)) throw new Error(`join(${from}, ${to}): no thread has the id ${end}`)
       const pair = `${from}>${to}`
       if (joins.has(pair)) return
       joins.add(pair)

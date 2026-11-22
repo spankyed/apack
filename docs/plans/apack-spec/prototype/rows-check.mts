@@ -8,7 +8,7 @@ import { rest, run, system } from './checks.mts'
 import { explore, type Schedule } from './schedule.mts'
 import { answered, given, reaching } from './state.mts'
 import { memory, WROTE_OUTSIDE_A_STEP, type Rows } from './store.mts'
-import { elmdb } from './store-elmdb.mts'
+import { elmdb, refusesAtTheLink } from './store-elmdb.mts'
 
 type Asks = {
   CREATE: { args: { id: string; topic: string; parent?: string }; answer: { id: string }; refuses: 'no-parent' | 'taken' }
@@ -57,7 +57,7 @@ const threads = (store: Rows, read: (path: string) => Promise<string> = async (p
     TOUCH: (_, { data }) => ({ data: { touched: data.touched + 1 } }),
     LOAD: ({ id, how }) => ({ at: 'loading', data: { id, how } }),
     BACK: () => ({ at: 'idle' }),
-    // A join whose far end may not be there yet: that is looked at when the step's rows are kept.
+    // A join, which both threads have to be there for.
     JOIN: ({ from, to }) => { store.join(from, to) },
     // In one step: the join first, and the thread it joins to after.
     JOIN_AHEAD: ({ from, to }, { send }) => { send({ type: 'JOIN', from, to }); send({ type: 'NOTE', id: to }) },
@@ -133,6 +133,15 @@ const threads = (store: Rows, read: (path: string) => Promise<string> = async (p
     },
   },
 })
+
+/**
+ * Waits until every watch has delivered. The engine's own timers do not keep a process alive, so while this waits
+ * something else has to: with nothing else under way the process would end with the check unfinished.
+ */
+const settled = async (store: ReturnType<typeof elmdb>): Promise<void> => {
+  const alive = setInterval(() => {}, 1_000)
+  try { await store.engine.admin.watchesSettled() } finally { clearInterval(alive) }
+}
 
 type Kept = readonly [name: string, open: () => Rows]
 const stores: readonly Kept[] = [['in memory', memory], ['in elmdb', elmdb]]
@@ -304,25 +313,39 @@ const checks = ([kept, open]: Kept): Array<readonly [string, () => void | Promis
     strictEqual(threw, WROTE_OUTSIDE_A_STEP)
     strictEqual(store.get('thread', 'c'), undefined)
   }],
-  ['a join whose far end is written later in the step is kept', async () => {
-    const { store, sys, handle } = made(open)
+  ['a join to a thread written later in the step is refused where it is written: its handler fails alone, and the thread is still made', async () => {
+    const { store, sys, handle, defects } = made(open)
     sys.send(handle, { type: 'NOTE', id: 'a' })
     sys.send(handle, { type: 'JOIN_AHEAD', from: 'a', to: 'b' })
+    ok(!store.joined('a', 'b'))
+    deepStrictEqual(store.get('thread', 'b'), { topic: 'noted' })
     strictEqual(sys.read(handle).data.count, 2)
-    ok(store.joined('a', 'b'))
+    strictEqual(defects().length, 1)
   }],
-  ['a join to nothing is found when the rows are kept, which is too late to blame its handler: the step is lost and the system stops', async () => {
+  ['a join to nothing fails its handler, and the step and the system go on', async () => {
     const { store, sys, handle, defects } = made(open)
     sys.send(handle, { type: 'NOTE', id: 'a' })
     sys.send(handle, { type: 'JOIN', from: 'a', to: 'nowhere' })
     ok(!store.joined('a', 'nowhere'))
     strictEqual(defects().length, 1)
+    deepStrictEqual(store.get('thread', 'a'), { topic: 'noted' })
     sys.send(handle, { type: 'TOUCH' })
-    strictEqual(sys.read(handle).data.touched, 0)
+    strictEqual(sys.read(handle).data.touched, 1)
   }],
 ])
 
-await run([...stores.flatMap((kept) => checks(kept).map(([name, body]) => [`${kept[0]}: ${name}`, body] as const)),
+// A join that needs both its threads is elmdb's rule from spankyed/elmdb#215 on. Against an elmdb from before it, the
+// checks of that rule are not run there, and are named as waiting: a count that left them out would read as all of it.
+const WAITS = /^a join to /
+const current = refusesAtTheLink()
+const waiting: string[] = []
+const listed = stores.flatMap((kept) => checks(kept).flatMap(([name, body]) => {
+  const named = `${kept[0]}: ${name}`
+  if (kept[0] === 'in elmdb' && !current && WAITS.test(name)) { waiting.push(named); return [] }
+  return [[named, body] as const]
+}))
+
+await run([...listed,
   ['in elmdb: a view of the rows is delivered after the step that wrote them, and whoever was answered can already read them', async () => {
     const store = elmdb()
     before?.close()
@@ -331,12 +354,12 @@ await run([...stores.flatMap((kept) => checks(kept).map(([name, body]) => [`${ke
     const handle = sys.start('threads', threads(store))
     const seen: Array<{ rows: number; count: number; commit: number }> = []
     const watching = store.engine.watch(() => store.count('thread'), (rows, commit) => { seen.push({ rows, count: sys.read(handle).data.count, commit }) })
-    await store.engine.admin.watchesSettled()
+    await settled(store)
     const answer = await sys.ask(handle, 'CREATE', { id: 'a', topic: 'watched' })
     ok(answer.ok)
     // Whoever was answered reads the row at once, before any view has been delivered again.
     deepStrictEqual(store.get('thread', 'a'), { topic: 'watched' })
-    await store.engine.admin.watchesSettled()
+    await settled(store)
     watching.stop()
     // The view saw no rows, and then one: and by then the state that counts them had counted it.
     deepStrictEqual(seen.map(({ rows, count }) => ({ rows, count })), [{ rows: 0, count: 0 }, { rows: 1, count: 1 }])
@@ -372,3 +395,6 @@ await run([...stores.flatMap((kept) => checks(kept).map(([name, body]) => [`${ke
     }
   }))
 })
+
+for (const name of waiting) console.log(`  wait  ${name}\n        the elmdb installed leaves a link's ends to the commit; this waits for spankyed/elmdb#215`)
+if (waiting.length) console.log(`\n${waiting.length} not run`)
