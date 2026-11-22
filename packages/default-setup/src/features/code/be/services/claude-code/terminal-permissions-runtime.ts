@@ -28,9 +28,10 @@ function nativePermissionText(value,depth=0){
  throw Error('Native permission label is not supported');
 }
 const nativePermissionDirectoryOwners=['82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473','f253efbd23d08ded24b3b7a564dfe865d007cd97a0966e4ec7f3f75c79936b14'];
-function nativePermissionDirectory(controlsRoot,input,entry){
+function nativePermissionDirectory(controlsRoot,input,entry,standaloneOwner){
  if(!input){entry.permissionsDirectoryLease=undefined;return;}
- const owners=[];nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.onAddDirectory==='function'&&p.permissionContext)owners.push(f);});
+ const owners=standaloneOwner?[standaloneOwner]:[];
+ if(!standaloneOwner)nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.onAddDirectory==='function'&&p.permissionContext)owners.push(f);});
  if(!owners.length){entry.permissionsDirectoryLease=undefined;return;}
  if(owners.length!==1||!nativePermissionDirectoryOwners.includes(nativeModelFunctionHash(owners[0].type)))throw Error('Native directory producer changed');
  const owner=owners[0],fields=[];nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&p?.onChange===input.onChange&&p.onSubmit===input.onSubmit&&Array.isArray(p.suggestions))fields.push(f);});
@@ -97,10 +98,10 @@ function nativePermissionSearch(owner,controlsRoot,ruleList,entry,local){
 }
 function nativePermissionsFrame(n,entry){
  entry.current();if(entry.closed||entry.answered||!['permissions','add-dir'].includes(entry.commandName))throw Error('Native Permissions panel expired');
- const hash=nativeModelFunctionHash(entry.originalType),providedDirectory=entry.commandName==='add-dir';
- if(providedDirectory&&!nativePermissionDirectoryOwners.includes(hash))throw Error('Native directory producer changed');
- if(providedDirectory&&(typeof entry.originalProps?.directoryPath!=='string'||!entry.originalProps.directoryPath))throw Error('Use terminal controls to enter a working directory');
- const local=providedDirectory||nativePermissionOwners.local.includes(hash);
+ const hash=nativeModelFunctionHash(entry.originalType),directoryCommand=entry.commandName==='add-dir';
+ if(directoryCommand&&!nativePermissionDirectoryOwners.includes(hash))throw Error('Native directory producer changed');
+ const providedDirectory=directoryCommand&&typeof entry.originalProps?.directoryPath==='string'&&entry.originalProps.directoryPath.length>0;
+ const local=directoryCommand||nativePermissionOwners.local.includes(hash);
  if(!local&&!nativePermissionOwners.remote.includes(hash))throw Error('Native Permissions producer changed');
  const owners=[];nativeIdeWalk(n.themeRoots.ai().get(process.stdout)?.container?.current,f=>{if(f.type===entry.originalType&&f.memoizedProps===entry.originalProps)owners.push(f);});
  if(owners.length!==1)throw Error('Native Permissions is not uniquely mounted');
@@ -135,7 +136,9 @@ function nativePermissionsFrame(n,entry){
   if(typeof p.value==='string'&&typeof p.onChange==='function'&&typeof p.onSubmit==='function'&&typeof p.placeholder==='string'){inputs.push(p);return false;}
  });
  if(pickers.length>1||inputs.length>1||pickers.length&&inputs.length)throw Error('Native Permissions controls are ambiguous');
- const picker=pickers[0],input=inputs[0],liveForm=nativePermissionDirectory(controlsRoot,input,entry)??nativePermissionAutoRule(controlsRoot,input,entry);
+ const picker=pickers[0],input=inputs[0],standaloneInput=directoryCommand&&!providedDirectory;
+ const liveForm=nativePermissionDirectory(controlsRoot,input,entry,standaloneInput?owner:undefined)??nativePermissionAutoRule(controlsRoot,input,entry);
+ if(standaloneInput&&liveForm?.snapshot.kind!=='directory')throw Error('Native directory input is unavailable');
  if(providedDirectory&&(!picker||typeof picker.props.onCancel!=='function'||picker.options.length!==3||picker.options.map(o=>o.value).join(',')!=='yes-session,yes-remember,no'))throw Error('Native directory decisions changed');
  const textRoots=[];let bodyFrame;
  if(!tabFrame){
@@ -153,13 +156,13 @@ function nativePermissionsFrame(n,entry){
  const title=tabFrame?.title??bodyFrame?.memoizedProps.title??'Permissions';
  const prior=entry.permissionsFrame;
  // The original picker rebuilds its Escape wrapper around the same No callback on each render.
- let cancel=owner.child?.memoizedProps?.onCancel;
+ let cancel=standaloneInput?owner.memoizedProps.onCancel:owner.child?.memoizedProps?.onCancel;
  if(providedDirectory)cancel=prior?.source===owner.memoizedProps&&prior.picker?.select===picker.select?prior.cancel:()=>picker.select('no');
  if(typeof cancel!=='function'){
   const caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===(local?226:19));
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
  }
- const recent=nativePermissionRecent(controlsRoot,picker),decisions=local&&!providedDirectory?nativePermissionDecisionState(owner):undefined;
+ const recent=nativePermissionRecent(controlsRoot,picker),decisions=local&&!directoryCommand?nativePermissionDecisionState(owner):undefined;
  const choices=recent?.choices??(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(p=>p.runs.reduce((size,run)=>size+run.text.length,0)>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
  const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey??(providedDirectory?choices.find(o=>!o.disabled)?.value:undefined);
@@ -250,7 +253,10 @@ async function nativePermissionsPanel(n,entry,request,abort){
   }
   if(nativePermissionsFrame(n,entry)!==before)throw Error('Native permission field changed before dispatch');entry.current();liveForm.lease.epoch++;liveForm.lease.busy=true;if(command.action!=='change')before.consumed=true;
   try{await callback(...args);}finally{liveForm.lease.busy=false;}
-  for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,25));entry.current();const after=nativePermissionsFrame(n,entry);
+  for(let attempt=0;attempt<40;attempt++){
+   abort.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,25));
+   if(entry.commandName==='add-dir'&&(liveCancel||liveSubmit)&&entry.closed)return {snapshot:before.snapshot};
+   entry.current();const after=nativePermissionsFrame(n,entry);
    if(after.liveForm?.lease!==liveForm.lease)return {snapshot:after.snapshot};
    if(command.action==='change'?after.input.value===expected:command.action==='complete'?after.liveForm.field!==liveForm.field||after.input.value!==before.input.value:true)return {snapshot:after.snapshot};
   }

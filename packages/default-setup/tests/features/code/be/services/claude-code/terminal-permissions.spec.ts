@@ -144,7 +144,7 @@ it('cancels a preselected directory via its original picker and refuses changed 
   f.options[0].value = 'yes-session'
   const path = f.entry.originalProps.directoryPath
   delete f.entry.originalProps.directoryPath
-  expect(f.read).toThrow(/terminal controls/)
+  expect(f.read).toThrow(/directory input is unavailable/)
   f.entry.originalProps.directoryPath = path
   const revision = f.read().snapshot.revision
   f.root.child.memoizedProps = { ...f.root.child.memoizedProps, onCancel: vi.fn() }
@@ -225,11 +225,14 @@ it('retires a search lease on another native action and rejects fabricated scope
   await expect(f.act(before.snapshot.revision, { action: 'search', scope, value: 'retired' })).rejects.toThrow(/unavailable/)
 })
 
-function directoryFixture() {
+function directoryFixture(standalone = false) {
   const f = fixture(), ownerProps = { onAddDirectory: vi.fn(), onCancel: f.cancel, permissionContext: {} }
   let value = '', problem: string | null = null, suggestions = [{ id: '/native/reference', displayText: 'reference/', description: 'directory' }]
   const onChange = vi.fn((next: string) => { value = next; redraw() })
-  const onSubmit = vi.fn(async (_next: string) => { problem = 'Original directory validation failed'; redraw() })
+  const onSubmit = vi.fn(async (_next: string) => {
+    if (standalone) f.entry.closed = true
+    else { problem = 'Original directory validation failed'; redraw() }
+  })
   const complete = vi.fn((_item: object) => { value = 'original-completed-value/'; problem = null; redraw() })
   const ownerType = Object.assign(function Directory() {}, { hash: '82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473' })
   const fieldType = Object.assign(function DirectoryField() {}, { hash: 'c6cd02efcbe63ca1098635b105cf87343f6514880c19f38944088c26ce479eb6' })
@@ -239,8 +242,11 @@ function directoryFixture() {
     const fieldProps = { value, onChange, onSubmit, suggestions, selectedSuggestion: 0, error: problem }
     const frameProps = { title: 'Add directory to workspace', onCancel: f.cancel, children: [{ type: fieldType, props: fieldProps }] }
     const field: any = { type: fieldType, memoizedProps: fieldProps, child: { type: function Input() {}, memoizedProps: inputProps } }
-    f.root.child = { type: ownerType, memoizedProps: ownerProps, updateQueue: { memoCache: { data: [Array.from({ length: 38 }, (_, i) => i === 7 ? complete : undefined)] } }, child: { type: function Frame() {}, memoizedProps: frameProps, child: field } }
+    const mounted = { type: ownerType, memoizedProps: ownerProps, updateQueue: { memoCache: { data: [Array.from({ length: 38 }, (_, i) => i === 7 ? complete : undefined)] } }, child: { type: function Frame() {}, memoizedProps: frameProps, child: field } }
+    if (standalone) Object.assign(f.root, mounted)
+    else f.root.child = mounted
   }
+  if (standalone) Object.assign(f.entry, { commandName: 'add-dir', originalType: ownerType, originalProps: ownerProps })
   redraw(); return { ...f, onChange, onSubmit, complete, ownerType, fieldType, redraw, replaceSuggestions: (next: typeof suggestions) => { suggestions = next; redraw() }, nativeItems: () => suggestions }
 }
 
@@ -280,6 +286,25 @@ it('submits only the current native draft and form revision, and exposes origina
   expect(f.onSubmit).toHaveBeenCalledExactlyOnceWith('bad-directory')
   expect(result.snapshot.permissions.form.live.problem).toBe('Original directory validation failed')
   await expect(f.act(edited.snapshot.revision, { action: 'submit', scope, formRevision: form.live.revision, value: form.value })).rejects.toThrow(/submission changed/)
+})
+
+it('borrows the standalone directory form and acknowledges its original closing submit', async () => {
+  const f = directoryFixture(true), first = f.read()
+  expect(first.snapshot.permissions.title).toBe('Add directory to workspace')
+  expect(first.snapshot.permissions.choices).toEqual([])
+  const scope = first.snapshot.permissions.form.live.id
+  const { snapshot } = await f.act(first.snapshot.revision, { action: 'change', scope, value: 'reference' })
+  const form = snapshot.permissions.form
+  await f.act(snapshot.revision, { action: 'submit', scope, formRevision: form.live.revision, value: form.value })
+  expect(f.onSubmit).toHaveBeenCalledExactlyOnceWith('reference')
+  expect(f.read).toThrow(/expired/)
+})
+
+it('acknowledges a standalone directory form closing through original Cancel', async () => {
+  const f = directoryFixture(true), first = f.read()
+  await f.act(first.snapshot.revision, { action: 'cancel', scope: first.snapshot.permissions.form.live.id })
+  expect(f.cancel).toHaveBeenCalledOnce()
+  expect(f.read).toThrow(/expired/)
 })
 
 function autoRuleFixture() {

@@ -82,6 +82,11 @@ const formIdentity=computed(()=>JSON.stringify([panel.value?.title,panel.value?.
 function guardFormEvent(event:Event){const target=event.target as HTMLElement;if(!root.value?.contains(target)||target.dataset.nativePermissionForm!==formIdentity.value){event.stopImmediatePropagation();return false}return true}
 const formDisabled=computed(()=>liveForm.active.value?liveForm.locked.value:pending.value)
 const formInput=ref<HTMLInputElement>(),directoryListId='native-directory-'+useId(),highlightedDirectory=ref('')
+watch(()=>props.directoryDialog?panel.value?.form?.live?.id:undefined,async id=>{
+ if(!id)return
+ await nextTick()
+ if(document.hasFocus()&&root.value?.contains(document.activeElement))formInput.value?.focus({preventScroll:true})
+})
 const directorySuggestions=liveForm.suggestions
 const directorySelection=computed(()=>directorySuggestions.value.find(item=>item.value===highlightedDirectory.value)?.value??directorySuggestions.value.find(item=>item.value===panel.value?.form?.live?.selectedValue)?.value??directorySuggestions.value[0]?.value??'')
 const activeSuggestionId=computed(()=>{const index=directorySuggestions.value.findIndex(item=>item.value===directorySelection.value);return index<0?undefined:directoryListId+'-'+index})
