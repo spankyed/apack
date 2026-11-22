@@ -12,8 +12,13 @@ import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claud
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
 import { CLAUDE_STALE_DRAFT_MESSAGE, type ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 
+export type ClaudeQueuedPromptEdit = {
+  threadId: string; mountId: string; ownerId: string; sessionId: string
+  viewRevision: number; turnId: string; queueRevision: string; sequence: number; itemId: string
+}
+
 export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & (
-  | { type: 'CLAUDE_TERMINAL_MOUNT' }
+  | { type: 'CLAUDE_TERMINAL_MOUNT'; queueComposer?: boolean }
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
   | { type: 'CLAUDE_TERMINAL_CANCEL_OPEN'; openingId: string }
@@ -22,7 +27,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | ({ ownerId: string; sessionId: string; viewRevision: number; turnId: string; queueRevision: string; sequence: number } & (
-      { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT'; itemId: string } | { type: 'CLAUDE_TERMINAL_QUEUE_CANCEL'; itemId: string }
+      { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_CANCEL'; itemId: string }
     ))
   | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED'; ownerId: string; sessionId: string; itemId: string }
   | { type: 'CLAUDE_TERMINAL_POLICY_RECHECK'; ownerId: string; sessionId: string; viewRevision: number }
@@ -115,6 +120,7 @@ export type ClaudeTerminalViewReply = ClaudeTerminalViewSnapshot & {
 }
 interface View {
   client: string
+  queueComposer: boolean
   threadId: string
   mountId: string
   expires: number
@@ -201,7 +207,7 @@ export function createClaudeTerminalViews(dependencies: {
     const state = view.owner?.state
     const recovered = view.owner && queueDrafts.get(view.owner)
     let queueDraft: ClaudeTerminalViewSnapshot['queueDraft']
-    if (recovered && recovered.draft.sessionId === state?.sessionId && state.view?.kind === 'main') {
+    if (view.queueComposer && recovered && recovered.draft.sessionId === state?.sessionId && state.view?.kind === 'main') {
       recovered.view ??= view
       if (recovered.view === view) queueDraft = recovered.draft
     }
@@ -290,7 +296,8 @@ export function createClaudeTerminalViews(dependencies: {
     })
   }
   return {
-    handle(event: ClaudeTerminalViewRequest, client: string | undefined, send: ((reply: ClaudeTerminalViewReply) => void) | undefined) {
+    handle(event: ClaudeTerminalViewRequest | (ClaudeQueuedPromptEdit & {type: 'EDIT_CLAUDE_QUEUED_PROMPT'}),
+      client: string | undefined, send: ((reply: ClaudeTerminalViewReply) => void) | undefined, signal?: AbortSignal) {
       if (!client || !send || !/^[0-9a-f-]{36}$/i.test(event.mountId) || !event.threadId || event.threadId.length > 256) return
       const key = JSON.stringify([client, event.mountId])
       let view = views.get(key)
@@ -300,7 +307,7 @@ export function createClaudeTerminalViews(dependencies: {
       if (event.type === 'CLAUDE_TERMINAL_MOUNT') {
         if (!view) {
           if (views.size >= 256 || [...views.values()].filter(value => value.client === client).length >= 16) return
-          view = { client, threadId: event.threadId, mountId: event.mountId, expires: 0, send, sequence: 0, opening: false }
+          view = { client, queueComposer: event.queueComposer === true, threadId: event.threadId, mountId: event.mountId, expires: 0, send, sequence: 0, opening: false }
           views.set(key, view)
           const mounted = view
           view.backgroundUnsubscribe = dependencies.subscribeBackground?.(event.threadId, () => {
@@ -423,8 +430,8 @@ export function createClaudeTerminalViews(dependencies: {
         publish(key, target)
         return
       }
-      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT' || event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL') {
-        const editing = event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT'
+      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'EDIT_CLAUDE_QUEUED_PROMPT' || event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL') {
+        const editing = event.type === 'EDIT_CLAUDE_QUEUED_PROMPT'
         const cancelling = event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL'
         const itemId = 'itemId' in event ? event.itemId : undefined
         const subtype = editing ? 'apack_main_queue_edit' : cancelling ? 'apack_main_queue_cancel' : 'apack_main_queue_send_now'
@@ -442,13 +449,13 @@ export function createClaudeTerminalViews(dependencies: {
         }
         if (typeof queueRevision !== 'string' || !/^[a-f0-9]{64}$/.test(queueRevision) || typeof turnId !== 'string' || !turnId
           || (editing || cancelling) && (typeof itemId !== 'string' || !itemId)
-          || editing && queueEditsInFlight.has(owner) || !scopeCurrent() || !Number.isSafeInteger(sequence) || sequence <= (previous?.sequence ?? 0) || previous?.status === 'pending') return
+          || editing && (!target.queueComposer || signal?.aborted || queueEditsInFlight.has(owner)) || !scopeCurrent() || !Number.isSafeInteger(sequence) || sequence <= (previous?.sequence ?? 0) || previous?.status === 'pending') return
         const operation: NonNullable<ClaudeTerminalViewSnapshot['queueOperation']> = {sequence, sessionId, viewRevision, queueRevision, status: 'pending'}
         if (editing) queueEditsInFlight.add(owner)
         target.queueOperation = operation; publish(key, target)
-        const current = () => views.get(key) === target && dependencies.get(event.threadId) === owner
+        const current = () => !signal?.aborted && views.get(key) === target && dependencies.get(event.threadId) === owner
           && target.owner === owner && target.queueOperation === operation
-        void Promise.resolve().then(async () => {
+        const pending = Promise.resolve().then(async () => {
           if (!current() || !scopeCurrent()) throw new Error('The Claude queue changed before the request')
           const result = await owner.uiTransport.request({
             subtype,
@@ -462,6 +469,8 @@ export function createClaudeTerminalViews(dependencies: {
           return {id: itemId, text: result.restored.text}
         }).then(restored => {
           const sameView = current()
+          // The CLI already removed this row. A closed requester must not retain the only copy.
+          if (editing && signal?.aborted && views.get(key) === target) drop(key)
           if (restored && dependencies.get(event.threadId) === owner && owner.state.sessionId === sessionId) {
             queueDrafts.set(owner, {draft: {...restored, sessionId, automatic: sameView}, view: sameView ? target : undefined})
           }
@@ -470,7 +479,7 @@ export function createClaudeTerminalViews(dependencies: {
         }, error => {
           if (current()) { target.queueOperation = {...operation, status: 'error', problem: error instanceof Error ? error.message : refusal}; publish(key, target) }
         }).finally(() => { if (editing) queueEditsInFlight.delete(owner) })
-        return
+        return editing ? pending : undefined
       }
       if (event.type === 'CLAUDE_TERMINAL_POLICY_RECHECK') {
         const {sessionId, viewRevision} = event

@@ -719,6 +719,7 @@ export type ClaudeMemoryRequest = {
  * asks, answered to the window that made them.
  */
 export type ThreadsAsks = {
+  EDIT_CLAUDE_QUEUED_PROMPT: { args: import('./claude-terminal-views.ts').ClaudeQueuedPromptEdit };
   CLAUDE_MEMORY: { args: ClaudeMemoryRequest; answer: { dialog?: import('#features/code/be/services/claude-code/host-controls.ts').ClaudeMemoryDialog; saved?: boolean; path?: string } };
   SET_CLAUDE_PERMISSION_MODE: { args: { threadId: string; mode: PermissionMode } };
   CREATE_THREAD: { args: { topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }; answer: { id: EARS.EntityId } };

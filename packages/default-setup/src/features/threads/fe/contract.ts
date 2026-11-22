@@ -44,7 +44,7 @@ export interface ThreadsContext {
   };
   threadsImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number };
   threadsExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; threadCount: number };
-  nativeTerminalViews: Record<string, { threadId: string } & import('../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot>;
+  nativeTerminalViews: Record<string, { threadId: string; queueComposer?: boolean } & import('../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot>;
   nativeUiViews: Record<string, { threadId: string; resumeKey?: string; attachmentId?: string; mountRequest?: import('../be/types.ts').ClaudeUiMountRequest; state: ClaudeUiMountState; actionKeyResult?: { sequence: number; handled: boolean; actionKeys?: ClaudeUiMountState['actionKeys'] }; promptHostRequest?: ClaudePromptHostRequest; focusRevision?: number; focusSite?: string; focus?: ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
   permissionModeChanges: Record<string, { pending: boolean; reason?: string }>;
   // Chat/agent

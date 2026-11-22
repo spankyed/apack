@@ -790,7 +790,7 @@ it('forwards Send now only from the live window and with the current turn and qu
 })
 
 
-it('retains a selected queue edit across window detach and accepts only the recipient acknowledgement', async () => {
+it.each(['unmount', 'disconnect'])('recovers a selected queue edit after %s in the remaining composer only', async (detach) => {
   const f = fixture()
   try {
     const queueRevision = 'a'.repeat(64), first = randomUUID(), selected = randomUUID(), state = f.owner.state
@@ -800,24 +800,34 @@ it('retains a selected queue edit across window detach and accepts only the reci
       {id: first, text: 'Keep waiting', editable: true, cancellable: true},
       {id: selected, text: 'Return to the draft', editable: true, cancellable: true},
     ]}
-    const second = {...mount, mountId: randomUUID()}
+    const firstMount = {...mount, queueComposer: true} as const
+    const terminal = {...mount, mountId: randomUUID()}
+    const second = {...firstMount, mountId: randomUUID()}
+    const sendTerminal = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
     const sendSecond = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
-    f.views.handle(mount, 'one', f.send)
+    f.views.handle(firstMount, 'one', f.send)
+    f.views.handle(terminal, 'two', sendTerminal)
     f.views.handle(second, 'two', sendSecond)
     let reply!: (value: unknown) => void
     const request = vi.mocked(f.owner.uiTransport.request)
     request.mockImplementation(() => new Promise(resolve => { reply = resolve }))
-    const action = {...mount, type: 'CLAUDE_TERMINAL_QUEUE_EDIT', ownerId: state.ownerId, sessionId: state.sessionId,
+    const action = {...mount, type: 'EDIT_CLAUDE_QUEUED_PROMPT', ownerId: state.ownerId, sessionId: state.sessionId,
       viewRevision: 4, turnId: state.activeTurnId, queueRevision, sequence: 1, itemId: selected} as const
-    f.views.handle({...action, itemId: randomUUID()}, 'one', f.send)
-    f.views.handle(action, 'one', f.send)
+    const requester = new AbortController()
+    f.views.handle({...action, itemId: randomUUID()}, 'one', f.send, requester.signal)
+    f.views.handle({...action, mountId: terminal.mountId}, 'two', sendTerminal, requester.signal)
+    const operation = f.views.handle(action, 'one', f.send, requester.signal)
     await Promise.resolve()
     expect(request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({subtype: 'apack_main_queue_edit', item_id: selected}))
-    f.views.handle({...mount, type: 'CLAUDE_TERMINAL_UNMOUNT'}, 'one', f.send)
+    if (detach === 'unmount') f.views.handle({...mount, type: 'CLAUDE_TERMINAL_UNMOUNT'}, 'one', f.send)
+    else requester.abort()
     reply({handled: true, restored: {id: selected, text: 'Return to the draft'}})
-    await vi.waitFor(() => expect(sendSecond.mock.calls.at(-1)![0].queueDraft).toEqual({
+    await operation
+    expect(sendTerminal.mock.calls.every(([value]) => !value.queueDraft)).toBe(true)
+    expect(f.send.mock.calls.every(([value]) => !value.queueDraft)).toBe(true)
+    expect(sendSecond.mock.calls.at(-1)![0].queueDraft).toEqual({
       id: selected, sessionId: state.sessionId, text: 'Return to the draft', automatic: false,
-    }))
+    })
     const ack = {...second, type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED', ownerId: state.ownerId, sessionId: state.sessionId, itemId: selected} as const
     f.views.handle({...ack, itemId: first}, 'two', sendSecond)
     expect(sendSecond.mock.calls.at(-1)![0].queueDraft?.id).toBe(selected)

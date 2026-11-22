@@ -493,7 +493,7 @@ const threadsState = setup({
       enqueue('followList');
       enqueue(() => {
         for (const release of takeClaudeUiRetirements()) tell(id, { type: 'CLAUDE_UI_UNMOUNT', ...release });
-        for (const [mountId, view] of Object.entries(context.nativeTerminalViews)) tell(id, { type: 'CLAUDE_TERMINAL_MOUNT', threadId: view.threadId, mountId });
+        for (const [mountId, view] of Object.entries(context.nativeTerminalViews)) tell(id, { type: 'CLAUDE_TERMINAL_MOUNT', threadId: view.threadId, mountId, queueComposer: view.queueComposer });
         for (const view of Object.values(context.nativeUiViews)) if (view.mountRequest) tell(id, { ...view.mountRequest, ...(view.resumeKey ? { resumeKey: view.resumeKey } : {}) });
       });
     }),
@@ -1815,7 +1815,7 @@ const threadsState = setup({
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
-    CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, opening: false, output: [] } } })), ({ event }) => tell(id, event)] },
+    CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, queueComposer: event.queueComposer, opening: false, output: [] } } })), ({ event }) => tell(id, event)] },
     CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => tell(id, event), assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
     CLAUDE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_CANCEL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
@@ -1833,7 +1833,6 @@ const threadsState = setup({
     CLAUDE_BACKGROUND_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_QUEUE_CANCEL: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
-    CLAUDE_TERMINAL_QUEUE_EDIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_QUEUE_SEND_NOW: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_TASK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
@@ -1842,7 +1841,7 @@ const threadsState = setup({
       const sameOwner = view.state?.ownerId === event.state?.ownerId;
       const output = [...(sameOwner ? view.output : []), ...event.output];
       let bytes = 0, from = output.length; while (from > 0 && bytes < 262144) bytes += output[--from].text.length;
-      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, backgroundInfo: event.backgroundInfo, canReplyBackground: event.canReplyBackground, state: event.state, attachment: event.attachment, background: event.background, mcpOperation: event.mcpOperation, queueOperation: event.queueOperation, queueDraft: event.queueDraft, policyRecheck: event.policyRecheck, noticeAnswer: event.noticeAnswer, task: event.task, stop: event.stop, submission: event.submission, opening: event.opening, openingId: event.openingId, cancelling: event.cancelling, problem: event.problem, output: output.slice(from) } } };
+      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, queueComposer: view.queueComposer, backgroundInfo: event.backgroundInfo, canReplyBackground: event.canReplyBackground, state: event.state, attachment: event.attachment, background: event.background, mcpOperation: event.mcpOperation, queueOperation: event.queueOperation, queueDraft: event.queueDraft, policyRecheck: event.policyRecheck, noticeAnswer: event.noticeAnswer, task: event.task, stop: event.stop, submission: event.submission, opening: event.opening, openingId: event.openingId, cancelling: event.cancelling, problem: event.problem, output: output.slice(from) } } };
     }) },
     CLAUDE_UI_STATE: { actions: [() => {
       // Module refresh can unmount the old view after startup; a native frame also proves readiness.

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { cpuBudget } from '@apackdev/testing/vitest'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
@@ -786,6 +787,7 @@ it('settles a busy parent submission only after an addressed native queue receip
   expect((await request('/native-view', {...main, pid: process.pid + 1})).status).toBe(409)
   expect((await request('/native-view', main)).value).toEqual({})
   const {value: {prepareQueuedPrompt: prompt}} = await request('/native-view', {...main, heartbeat: true})
+  assert.ok(prompt && typeof prompt === 'object' && 'id' in prompt && typeof prompt.id === 'string')
   expect(prompt).toEqual({id: expect.any(String), text: 'Review the queued release checklist'})
   expect((await request('/native-view', main)).value).toEqual({})
   const queued = '33333333-3333-4333-8333-333333333333'

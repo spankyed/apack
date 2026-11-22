@@ -328,7 +328,7 @@ import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { openSurface } from '#generated/fe.ts'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
-import { tell } from '#generated/events.ts'
+import { ask, tell } from '#generated/events.ts'
 import NativeMemoryPanel from './NativeMemoryPanel.vue'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import { claudeWindowAgentDrafts } from './native-window-draft.ts'
@@ -423,7 +423,8 @@ function operateNativeQueue(queueRevision: string, action?: {kind: 'edit' | 'can
     || nativePromptQueue.value?.revision !== queueRevision || nativeQueueOperation.value?.status === 'pending' || action?.kind === 'edit' && nativeQueueDraft.value) return
   const request = {...view, ownerId: owner.ownerId, sessionId: owner.sessionId,
     viewRevision: owner.view.revision, turnId: owner.activeTurnId, queueRevision, sequence: ++nativeQueueSequence}
-  if (action) send({type: action.kind === 'edit' ? 'CLAUDE_TERMINAL_QUEUE_EDIT' : 'CLAUDE_TERMINAL_QUEUE_CANCEL', ...request, itemId: action.id})
+  if (action?.kind === 'edit') void ask('threads', {type: 'EDIT_CLAUDE_QUEUED_PROMPT', ...request, itemId: action.id})
+  else if (action) send({type: 'CLAUDE_TERMINAL_QUEUE_CANCEL', ...request, itemId: action.id})
   else send({type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ...request})
 }
 const nativeSendWaiting = computed(() => {
@@ -530,7 +531,7 @@ function renewNativeUi() {
   const mount = nativeUiMount.value
   if (mount && mount.threadId === currentThread.value?.id) {
     send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockVisibility.value })
-    send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount })
+    send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount, queueComposer: true })
   }
 }
 function reportNativeBlockView(view: { messageId: string; blockIndex: number; open: boolean }) {
