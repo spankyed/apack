@@ -40,6 +40,26 @@ Coordinate its public package/host prerequisites with this plan; local tarball c
 establish registry availability. Neither public workstream blocks the settings/contracts goal's
 required local packaged-authoring and isolated app/runtime acceptance.
 
+## Release assets for the starter migration
+
+The [independent starter goal](../../goals/goal-independent-default-setup.md) can use npm tarballs pinned
+to an apack source commit while registry publication waits. On the clean authoring toolchain commit, run
+`npm ci`, `npm run packages:ensure`, `npm run packages:check`, then
+`npm run packages:stage-toolchain -- /path/to/output`. The last command stages a
+`toolchain-<commit>/` directory with npm tarballs for SDK, UI, CLI and testing. Its `toolchain.json`
+lists each filename and SHA-256 and the upstream release URLs for dependencies the app supplies
+through npm overrides. Stage into an ignored directory or a path outside the checkout.
+
+The release operator can attach those files to the GitHub release of the same name when authorized.
+A consumer pins the exact asset URLs in `package.json` and commits the resulting npm lockfile.
+Use the upstream URLs as dependency specs for directly declared packages such as `@apackdev/git`
+and `@apackdev/terminal-view`. Use npm overrides for transitive-only packages such as EARS and
+elmdb. npm rejects a URL override that conflicts with a direct semver dependency.
+Test `npm ci` from a clean consumer checkout with no local authoring checkout. Reuse the staged
+bytes for retries and keep each commit's release files immutable.
+The actual hosted round trip belongs to the starter goal. Registry distribution and Homebrew remain
+owned by this plan.
+
 ## Conditions for resuming
 
 1. Review the public exports, CLI behavior and scaffolded project dependencies. Resolve known API changes
