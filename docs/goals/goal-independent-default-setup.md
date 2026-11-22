@@ -39,6 +39,7 @@ The owner approved one branch and one ready-for-review PR per independently test
 | 1. Consume the release layout | `spankyed/apack` · `session/starter-release-layout` | `master` |
 | 2. Preserve replacement choices | `spankyed/apack` · `session/starter-replacement` | `master` |
 | 3a. Supply retrievable authoring packages, if producer-side changes are needed | `spankyed/apack` · `session/starter-toolchain` | `master` |
+| 3a. Make pack release uploads retryable | `spankyed/apack` · `session/starter-release-upload` | `master` |
 | 3b. Transfer the production pack | `spankyed/default-setup` · `session/production-starter` | `main` |
 | 4. Pin the first external release | `spankyed/apack` · `session/starter-release-pin` | `master` |
 | 5. Remove the workspace | `spankyed/apack` · `session/starter-remove-workspace` | `master` |

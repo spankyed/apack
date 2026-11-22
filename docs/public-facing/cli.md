@@ -592,7 +592,13 @@ The scaffolded `.github/workflows/release.yml` publishes the GitHub release from
 
 #### `apack pack release publish [--dir <dir>] [--dry-run]`
 
-Verify the pack in `<dir>` (default `.apack/release`) and create the GitHub release `v<version>` (a prerelease for prerelease versions), uploading `<id>-<version>.tgz`, `.sha256` and `.integrity.json`. The release workflow runs it. Needs `GITHUB_TOKEN` (or `GH_TOKEN`), and `GITHUB_REPOSITORY` or a GitHub `origin` remote.
+Verify the pack in `<dir>` (default `.apack/release`). The command uploads `<id>-<version>.tgz`, `.sha256`
+and `.integrity.json` to a draft for `v<version>`. It publishes the draft after all three files verify.
+A prerelease version creates a GitHub prerelease.
+
+After an interrupted upload, rerun the command with the same files. It reuses verified uploads
+and stops if an existing file differs. The release workflow runs this command with `GITHUB_TOKEN`
+(or `GH_TOKEN`) and `GITHUB_REPOSITORY` or a GitHub `origin` remote.
 
 #### `apack pack install <source> --host <path|beta> [--profile <name>]`
 

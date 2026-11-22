@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { _declarationRevision } from '@apackdev/sdk/build';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -202,25 +203,121 @@ describe('preflight', () => {
 
 describe('publishRelease', () => {
   function mockOctokit() {
-    const createRelease = vi.fn(async () => ({ data: { id: 42 } }));
-    const uploadReleaseAsset = vi.fn(async () => ({ data: {} }));
-    return { octokit: { rest: { repos: { createRelease, uploadReleaseAsset } } } as any, createRelease, uploadReleaseAsset };
+    type Asset = { id: number; name: string; size: number; digest: string | null; state: 'uploaded' | 'starter' };
+    type Release = { id: number; tag_name: string; draft: boolean; prerelease: boolean };
+    const releases: Release[] = [];
+    const assets: Asset[] = [];
+    const bytesByAsset = new Map<number, Buffer>();
+    const listReleases = vi.fn(async () => [...releases]);
+    const listReleaseAssets = vi.fn(async () => [...assets]);
+    const createRelease = vi.fn(async (request: Omit<Release, 'id'>) => {
+      const release = { id: 42, ...request };
+      releases.push(release);
+      return { data: release };
+    });
+    const uploadReleaseAsset = vi.fn(async ({ name, data }: { name: string; data: Buffer }) => {
+      const asset = {
+        id: assets.length + 1, name, size: data.length,
+        digest: `sha256:${createHash('sha256').update(data).digest('hex')}`, state: 'uploaded' as const,
+      };
+      assets.push(asset);
+      bytesByAsset.set(asset.id, data);
+      return { data: asset };
+    });
+    const deleteReleaseAsset = vi.fn(async ({ asset_id }: { asset_id: number }) => {
+      assets.splice(assets.findIndex(asset => asset.id === asset_id), 1);
+    });
+    const updateRelease = vi.fn(async ({ draft }: { draft: boolean }) => {
+      releases[0]!.draft = draft;
+    });
+    const getReleaseAsset = vi.fn(async ({ asset_id }: { asset_id: number }) => ({
+      data: new Response(new Uint8Array(bytesByAsset.get(asset_id)!)).body,
+    }));
+    const repos = { listReleases, listReleaseAssets, createRelease, uploadReleaseAsset, deleteReleaseAsset, updateRelease, getReleaseAsset };
+    const paginate = vi.fn(async (method: typeof listReleaseAssets | typeof listReleases) => method());
+    const octokit = { rest: { repos }, paginate } as unknown as NonNullable<Parameters<typeof publishRelease>[2]>['octokit'];
+    return { octokit, releases, assets, paginate, ...repos };
   }
 
   it('creates a prerelease for beta versions and uploads the archive and checksum', async () => {
     const root = builtPack('1.3.0-beta.2');
     const releaseDir = path.join(tmp, 'release');
     await buildPackArchive(root, releaseDir);
-    const { octokit, createRelease, uploadReleaseAsset } = mockOctokit();
+    const { octokit, createRelease, uploadReleaseAsset, updateRelease } = mockOctokit();
 
     const result = await publishRelease(root, releaseDir, { octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' }, run: fakeGit({}) });
 
     expect(result).toEqual({ tag: 'v1.3.0-beta.2', prerelease: true });
-    expect(createRelease).toHaveBeenCalledWith(expect.objectContaining({ owner: 'acme', repo: 'demo-pack', tag_name: 'v1.3.0-beta.2', prerelease: true }));
-    expect(uploadReleaseAsset.mock.calls.map(([arg]: any[]) => arg.name)).toEqual(['demo-pack-1.3.0-beta.2.tgz', 'demo-pack-1.3.0-beta.2.tgz.sha256', 'demo-pack-1.3.0-beta.2.tgz.integrity.json']);
+    expect(createRelease).toHaveBeenCalledWith(expect.objectContaining({ owner: 'acme', repo: 'demo-pack', tag_name: 'v1.3.0-beta.2', prerelease: true, draft: true }));
+    expect(uploadReleaseAsset.mock.calls.map(([arg]) => arg.name)).toEqual(['demo-pack-1.3.0-beta.2.tgz', 'demo-pack-1.3.0-beta.2.tgz.sha256', 'demo-pack-1.3.0-beta.2.tgz.integrity.json']);
     // The update check reads hostVersion from this asset
-    const info = JSON.parse(String((uploadReleaseAsset.mock.calls[2] as any[])[0].data));
+    expect(updateRelease).toHaveBeenCalledWith({ owner: 'acme', repo: 'demo-pack', release_id: 42, draft: false });
+    expect(updateRelease.mock.invocationCallOrder[0]).toBeGreaterThan(uploadReleaseAsset.mock.invocationCallOrder[2]!);
+    const info = JSON.parse(uploadReleaseAsset.mock.calls[2]![0].data.toString());
     expect(info).toMatchObject({ id: 'demo-pack', version: '1.3.0-beta.2', hostVersion: expect.any(String) });
+  });
+
+  it('resumes a draft after an interrupted upload and accepts an identical published result', async () => {
+    const root = builtPack('1.0.0');
+    const releaseDir = path.join(tmp, 'release');
+    await buildPackArchive(root, releaseDir);
+    const api = mockOctokit();
+    api.uploadReleaseAsset.mockImplementationOnce(async ({ name, data }) => {
+      const asset = {
+        id: 4, name, size: data.length,
+        digest: `sha256:${createHash('sha256').update(data).digest('hex')}`, state: 'uploaded' as const,
+      };
+      api.assets.push(asset);
+      // GitHub accepted the bytes, but the process lost the response.
+      throw new Error('Connection dropped');
+    });
+    const publish = () => publishRelease(root, releaseDir, { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' } });
+    await expect(publish()).rejects.toThrow('Connection dropped');
+    expect(api.releases[0]?.draft).toBe(true);
+    expect(api.updateRelease).not.toHaveBeenCalled();
+    api.assets.push({
+      id: 99, name: 'demo-pack-1.0.0.tgz.sha256', size: 0, digest: null, state: 'starter',
+    });
+
+    api.updateRelease.mockImplementationOnce(async () => {
+      api.releases[0]!.draft = false;
+      throw new Error('Lost publish response');
+    });
+    await expect(publish()).rejects.toThrow('Lost publish response');
+    expect(api.createRelease).toHaveBeenCalledTimes(1);
+    expect(api.deleteReleaseAsset).toHaveBeenCalledExactlyOnceWith({ owner: 'acme', repo: 'demo-pack', asset_id: 99 });
+    expect(api.uploadReleaseAsset.mock.calls.map(([arg]) => arg.name)).toEqual([
+      'demo-pack-1.0.0.tgz', 'demo-pack-1.0.0.tgz.sha256', 'demo-pack-1.0.0.tgz.integrity.json',
+    ]);
+
+    // Older published assets may lack a server-side digest. Check the bytes and keep the result.
+    const checksum = api.assets.find(asset => asset.name.endsWith('.sha256'))!;
+    checksum.digest = null;
+    await expect(publish()).resolves.toEqual({ tag: 'v1.0.0', prerelease: false });
+    expect(api.getReleaseAsset).toHaveBeenCalledWith(expect.objectContaining({
+      asset_id: checksum.id, headers: { accept: 'application/octet-stream' },
+    }));
+    expect(api.uploadReleaseAsset).toHaveBeenCalledTimes(3);
+    expect(api.updateRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the release private when a response reports a different asset digest', async () => {
+    const root = builtPack('1.0.0');
+    const releaseDir = path.join(tmp, 'release');
+    await buildPackArchive(root, releaseDir);
+    const api = mockOctokit();
+    api.uploadReleaseAsset.mockImplementationOnce(async ({ name, data }) => ({
+      data: { id: 1, name, size: data.length, digest: `sha256:${'0'.repeat(64)}`, state: 'uploaded' },
+    }));
+    const publish = () => publishRelease(root, releaseDir, { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' } });
+    await expect(publish()).rejects.toThrow(/did not verify the upload/);
+    expect(api.updateRelease).not.toHaveBeenCalled();
+
+    api.assets.push({ id: 1, name: 'demo-pack-1.0.0.tgz', size: 1, digest: null, state: 'uploaded' });
+    await expect(publish()).rejects.toThrow(/cannot verify asset/);
+    expect(api.deleteReleaseAsset).not.toHaveBeenCalled();
+    expect(api.uploadReleaseAsset).toHaveBeenCalledTimes(1);
+    expect(api.updateRelease).not.toHaveBeenCalled();
   });
 
   it('refuses to publish an archive that fails verification', async () => {

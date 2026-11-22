@@ -2,6 +2,7 @@ import { writeManifest } from '../manifest-writer.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as semver from 'semver';
 import { Octokit } from '@octokit/rest';
 import { findPackRoot, readManifest } from '../utils';
@@ -26,8 +27,8 @@ release   Preflight, bump the version (beta cycle: 1.2.3 → 1.2.4-beta.0 → -b
           builds, packs and verifies the pack under .apack/release/, at the version
           on disk, since nothing was bumped.
 
-publish   Create the GitHub release for the pack in <dir> (default .apack/release)
-          and upload <id>-<version>.tgz, .sha256 and .integrity.json. Used by the release workflow.
+publish   Upload <id>-<version>.tgz, .sha256 and .integrity.json from <dir> (default .apack/release)
+          to a draft. Publish after verification. Rerun with the same files to resume an upload.
           Needs GITHUB_TOKEN (or GH_TOKEN) and GITHUB_REPOSITORY or an origin remote.
 `.trim();
 
@@ -267,10 +268,10 @@ export interface PublishOptions {
   env?: NodeJS.ProcessEnv;
   run?: Runner;
   /** Injected for tests; defaults to an authenticated Octokit. */
-  octokit?: Pick<Octokit, 'rest'>;
+  octokit?: Pick<Octokit, 'rest' | 'paginate'>;
 }
 
-/** Create the GitHub release for a packed archive and upload it + its checksum. */
+/** Upload the verified pack to a draft before exposing it to consumers. */
 export async function publishRelease(root: string, releaseDir: string, options: PublishOptions = {}): Promise<{ tag: string; prerelease: boolean }> {
   const env = options.env ?? process.env;
   const run = options.run ?? defaultRunner;
@@ -283,16 +284,24 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   }
 
   // Refuse to publish anything that doesn't verify
-  const sha256 = fs.readFileSync(checksumFile, 'utf-8').trim().split(/\s+/)[0];
+  const checksum = fs.readFileSync(checksumFile);
+  const sha256 = checksum.toString('utf-8').trim().split(/\s+/)[0];
+  if (!/^[a-f0-9]{64}$/i.test(sha256)) throw new Error(`Invalid SHA-256 in ${checksumFile}`);
+  const archiveBytes = fs.readFileSync(archive);
   const scratch = fs.mkdtempSync(path.join(releaseDir, '.verify-'));
   // The pack's integrity.json (id, version, hostVersion) as its own asset: the app's update check
   // reads a release's hostVersion from it without downloading the archive
   const infoFile = `${archive}.integrity.json`;
+  let infoBytes: Buffer;
   try {
-    const extracted = await extractPackArchive(archive, scratch, sha256);
+    const verifiedArchive = path.join(scratch, path.basename(archive));
+    fs.writeFileSync(verifiedArchive, archiveBytes);
+    const extracted = await extractPackArchive(verifiedArchive, path.join(scratch, 'extracted'), sha256);
     const info = verifyPack(extracted);
     if (info.version !== version) throw new Error(`Pack version ${info.version} does not match apack.json ${version}`);
-    fs.writeFileSync(infoFile, JSON.stringify(info, null, 2) + '\n');
+    if (info.id !== manifest.id) throw new Error(`Pack ID ${info.id} does not match apack.json ${manifest.id}`);
+    infoBytes = Buffer.from(JSON.stringify(info, null, 2) + '\n');
+    fs.writeFileSync(infoFile, infoBytes);
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5 });
   }
@@ -310,25 +319,71 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   if (!token && !options.octokit) throw new Error('GITHUB_TOKEN (or GH_TOKEN) is required to publish');
   const octokit = options.octokit ?? new Octokit({ auth: token, userAgent: 'apack-cli' });
 
-  const { data: release } = await octokit.rest.repos.createRelease({
-    owner,
-    repo,
+  const repos = octokit.rest.repos;
+  const repository = { owner, repo };
+  // The authenticated list includes drafts. Match an exact tag, including any older interrupted draft.
+  const matches = (await octokit.paginate(repos.listReleases, { ...repository, per_page: 100 }))
+    .filter(release => release.tag_name === tag);
+  if (matches.length > 1) throw new Error(`Multiple releases for ${owner}/${repo}@${tag}`);
+  const release = matches[0] ?? (await repos.createRelease({
+    ...repository,
     tag_name: tag,
     name: `${manifest.name} ${tag}`,
+    draft: true,
     prerelease,
     generate_release_notes: true,
-  });
-  for (const file of [archive, checksumFile, infoFile]) {
-    const contentType = file.endsWith('.tgz') ? 'application/gzip' : file.endsWith('.json') ? 'application/json' : 'text/plain';
-    await octokit.rest.repos.uploadReleaseAsset({
-      owner,
-      repo,
-      release_id: release.id,
-      name: path.basename(file),
-      data: fs.readFileSync(file) as unknown as string,
-      headers: { 'content-type': contentType },
+  })).data;
+  if (release.prerelease !== prerelease) throw new Error(`Existing release ${tag} has a different prerelease setting`);
+
+  const releaseRef = { ...repository, release_id: release.id };
+  const assets = await octokit.paginate(repos.listReleaseAssets, { ...releaseRef, per_page: 100 });
+  const digest = (bytes: Buffer) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  const files = [
+    { name: path.basename(archive), bytes: archiveBytes, contentType: 'application/gzip' },
+    { name: path.basename(checksumFile), bytes: checksum, contentType: 'text/plain' },
+    { name: path.basename(infoFile), bytes: infoBytes, contentType: 'application/json' },
+  ].map(file => ({ ...file, digest: digest(file.bytes) }));
+  const verified = async (asset: { id: number; name: string; state: string; size: number; digest?: unknown },
+    file: (typeof files)[number]): Promise<boolean> => {
+    if (asset.name !== file.name || asset.state !== 'uploaded' || asset.size !== file.bytes.length) return false;
+    if (typeof asset.digest === 'string') return asset.digest === file.digest;
+    // GitHub can omit the digest. Fetch the raw bytes so even JSON and text are hashed as uploaded.
+    const { data } = await repos.getReleaseAsset({
+      ...repository,
+      asset_id: asset.id,
+      headers: { accept: 'application/octet-stream' },
+      request: { parseSuccessResponseBody: false },
     });
+    return digest(Buffer.from(await new Response(data as unknown as ReadableStream).arrayBuffer())) === file.digest;
+  };
+  const pending = [];
+  for (const file of files) {
+    const asset = assets.find(entry => entry.name === file.name);
+    if (asset && await verified(asset, file)) continue;
+    // Older Octokit types omit 'starter', which GitHub uses for incomplete uploads.
+    const state: string | undefined = asset?.state;
+    if (!release.draft || (asset && (state !== 'starter' || asset.size !== 0))) {
+      throw new Error(`Release ${tag}: cannot verify asset ${file.name} against the local file`);
+    }
+    pending.push({ file, placeholder: asset });
   }
+  if (!release.draft) {
+    console.log(`Already published ${owner}/${repo}@${tag}`);
+    return { tag, prerelease };
+  }
+
+  for (const { file, placeholder } of pending) {
+    // A failed GitHub upload can leave an empty starter entry. Only that entry may be removed.
+    if (placeholder) await repos.deleteReleaseAsset({ ...repository, asset_id: placeholder.id });
+    const { data: uploaded } = await repos.uploadReleaseAsset({
+      ...releaseRef,
+      name: file.name,
+      data: file.bytes as unknown as string,
+      headers: { 'content-type': file.contentType },
+    });
+    if (!await verified(uploaded, file)) throw new Error(`Release ${tag}: GitHub did not verify the upload of ${file.name}`);
+  }
+  await repos.updateRelease({ ...releaseRef, draft: false });
   console.log(`Published ${owner}/${repo}@${tag}${prerelease ? ' (prerelease)' : ''}`);
   return { tag, prerelease };
 }
