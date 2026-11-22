@@ -1,10 +1,11 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
+import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {SHIPPED_PACKS_DIRECTORY} from '@apackdev/host/packs/assets';
 import {createRequire} from 'node:module';
-import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {APP_WORKSPACES, PACK_REDISTRIBUTION_DIRECTORY, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, brokerSbomComponent, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
@@ -20,6 +21,7 @@ const buildRoot = process.env.APACK_BUILD_ROOT;
 if (!buildRoot) throw new Error('Packaging requires a completed staging build. Use build:production or build:preview.');
 verifyBuildOutputs(buildRoot);
 const metadata = readBuildManifest(buildRoot);
+const pinnedPacks = fs.existsSync(path.join(buildRoot, PACK_REDISTRIBUTION_DIRECTORY));
 const isBeta = metadata.channel === 'beta';
 const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
@@ -92,12 +94,16 @@ export default /** @type import('electron-builder').Configuration */
       appDir,
       buildRoot,
       bundleRecords: APP_WORKSPACES.map(workspace => bundledPackagesFile(buildRoot, workspace)),
-      // The built-in pack, whose dist the app ships from the repository
-      packDirs: [path.join(projectDir, 'packages', 'default-setup')],
+      packDirs: pinnedPacks ? [] : [path.join(projectDir, 'packages', 'default-setup')],
       licensesDir: path.join(projectDir, 'build', 'licenses'),
       channel: metadata.channel,
       platform: context.electronPlatformName,
       native: [
+        ...(pinnedPacks ? (metadata.shippedPackIds ?? []).map(id => {
+          const dir = `${PACK_REDISTRIBUTION_DIRECTORY}/${id}`;
+          return {pointer: `${id}: license, third-party notices, and SBOM in ${dir}`,
+            files: ['LICENSE', 'THIRD-PARTY-NOTICES.txt'].map(file => path.join(appDir, dir, file))};
+        }) : []),
         {pointer: electronNoticesPointer(context.electronPlatformName)},
         // Where FFmpeg's source is, which its LGPL asks for, read for one Electron and a problem for another
         ffmpegSource(electronVersion),
@@ -285,11 +291,16 @@ export default /** @type import('electron-builder').Configuration */
   // Extra resources
   extraResources: [
     {from: path.join(buildRoot, 'build-manifest.json'), to: 'app/build-manifest.json'},
-    {
+    ...(metadata.shippedPackIds?.length === 0 ? [] : [{
       from: path.join(buildRoot, SHIPPED_PACKS_DIRECTORY),
       to: `app/${SHIPPED_PACKS_DIRECTORY}`,
       filter: ['**/*'],
-    },
+    }]),
+    ...(pinnedPacks && metadata.shippedPackIds?.length ? [{
+      from: path.join(buildRoot, PACK_REDISTRIBUTION_DIRECTORY),
+      to: `app/${PACK_REDISTRIBUTION_DIRECTORY}`,
+      filter: ['**/*'],
+    }] : []),
     ...speechResources,
     // `apack` launcher for "Install 'apack' command in PATH"; runs packages/apack-cli/dist/package
     ...(process.platform === 'darwin'

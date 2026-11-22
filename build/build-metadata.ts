@@ -7,6 +7,7 @@ import pkg from '../package.json' with { type: 'json' };
 
 export const APP_WORKSPACES = ['main', 'server', 'renderer', 'preload'] as const;
 type AppWorkspace = (typeof APP_WORKSPACES)[number];
+export const PACK_REDISTRIBUTION_DIRECTORY = 'pack-redistribution';
 
 /** Identity recorded once for each packaged build. */
 export interface BuildMetadata {
@@ -16,6 +17,7 @@ export interface BuildMetadata {
   productName: string;
   urlScheme: string;
   shippedPackLayouts?: true;
+  shippedPackIds?: readonly string[];
 }
 
 export function resolveBuildMetadata(env: NodeJS.ProcessEnv = process.env): BuildMetadata {
@@ -79,11 +81,16 @@ function buildOutputHashes(root: string): Record<string, string> {
     return output;
   });
   const shipped = path.join(root, SHIPPED_PACKS_DIRECTORY);
-  if (!fs.existsSync(shipped)) throw new Error(`Missing shipped pack staging directory: ${shipped}`);
-  for (const entry of fs.readdirSync(shipped, { recursive: true, withFileTypes: true })) {
-    const file = path.join(entry.parentPath, entry.name);
-    if (entry.isFile()) files.push(file);
-    else if (!entry.isDirectory()) throw new Error(`Unexpected shipped pack output: ${file}`);
+  if (!fs.existsSync(shipped) && readBuildManifest(root).shippedPackIds?.length !== 0) {
+    throw new Error(`Missing shipped pack staging directory: ${shipped}`);
+  }
+  for (const directory of [shipped, path.join(root, PACK_REDISTRIBUTION_DIRECTORY)]) {
+    if (!fs.existsSync(directory)) continue;
+    for (const entry of fs.readdirSync(directory, { recursive: true, withFileTypes: true })) {
+      const file = path.join(entry.parentPath, entry.name);
+      if (entry.isFile()) files.push(file);
+      else if (!entry.isDirectory()) throw new Error(`Unexpected shipped pack output: ${file}`);
+    }
   }
   files.push(path.join(root, 'build-manifest.json'));
   return Object.fromEntries(files.sort().map(file => [

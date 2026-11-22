@@ -79,20 +79,9 @@ echo "  Staging: $APACK_BUILD_ROOT"
 echo -e "${GREEN}✓${NC} Dependencies installed"
 echo ""
 
-# Generate the built-in pack's entries. Codegen reads each feature's contract with the types the SDK's packages
-# export, which resolve to their dist: a checkout that never built them, as every CI runner's is, reads those types as
-# `any`, and codegen refuses the contract. So the packages are built first
+# Step 3: Prepare the pack selection before building the app.
+echo -e "${BLUE}[3/7]${NC} Preparing shipped packs..."
 npm run packages:ensure
-npm run generate:entries -w @app/default-setup
-
-# Step 3: Compile default-setup
-if [ -z "$SKIP_DEFAULT_SETUP_BUILD" ]; then
-  echo -e "${BLUE}[3/7]${NC} Compiling default-setup..."
-  npm run build:default-setup
-  echo -e "${GREEN}✓${NC} Default-setup compiled"
-else
-  echo -e "${BLUE}[3/7]${NC} Skipping default-setup compilation (SKIP_DEFAULT_SETUP_BUILD set)"
-fi
 npx tsx scripts/stage-shipped-starter.ts
 echo ""
 
