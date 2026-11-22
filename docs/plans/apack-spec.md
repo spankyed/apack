@@ -563,6 +563,186 @@ progress, a broadcast, word to a subscriber) until the step commits. This is wha
 parallel regions: an observer never sees them disagree. The same idea is SCXML's macrostep, a Redux dispatch, a signals
 batch, and this repo's own `transact` followed by `watch`.
 
+### Rows
+
+**A step covers what a state holds. On the backend that is the small part.** What the backend holds for good is rows
+in the database, and a handler writes them as it runs, through its repository. Left outside the step, every rule
+above about a change being whole would hold for a state's data and for none of its rows: a handler that writes two
+rows and throws on the third leaves two, an ask refused after a write has written, and a window is told of a change
+before its views show it.
+
+**The rule, in one sentence: what a handler wrote is kept exactly when what it did was made, with the data it
+changed, and nobody hears of either before both are kept, a window not before its views show them.**
+
+#### Where the app writes
+
+Read from each file's syntax tree on `97ee092630`, 2026-11-21, by `prototype/writes-survey.mts` and, for the second
+table, `prototype/writes-shape.mts`. A call counts when it names a write the file imported from EARS, or a method of
+a repository's `…Commands`:
+
+| Where | Write calls | Files |
+|---|---|---|
+| A pack's repository, where its commands are defined | 136 | 8 |
+| A backend system and its helpers | 155 | 20 |
+| The SDK's repositories | 41 | 2 |
+| A flow action | 31 | 15 |
+| The SDK's content appliers and writers | 12 | 3 |
+| Everything else: content writers, two step runtimes, the host's app state, the database console | 11 | 6 |
+
+No surface writes. The host's stores (settings, secrets, the run history) write through an engine they are handed
+and are not counted. Outside the repositories, 136 functions in the built-in pack write, in 192 calls:
+
+| | Backend systems | Flow actions | Other |
+|---|---|---|---|
+| Functions that write | 111 | 19 | 6 |
+| Of those, one write | 93 | 13 | 5 |
+| Several writes | 18 | 6 | 1 |
+| Several writes, all in one `transact` | 1 | 0 | 0 |
+| Functions that write after an `await` | 12, in 14 writes | 7, in 13 writes | 0 |
+| Functions that send a message and then write | 1 | 0 | 0 |
+
+- **Most of it is already the shape a step wants.** 165 of the 192 writes are made before the function has waited
+  for anything. One command is one unit already: a repository wraps its own in `transact`.
+- **What is torn is the handler, not the command.** 25 functions make several writes and one makes them as a unit.
+  `FORK_THREAD` makes five, `UPDATE_NOTE` four. Each leaves part of itself on a path that throws.
+- **Only 27 writes sit next to something outside**, a file, a session, a model. That is the part no transaction
+  can cover, and it is a seventh of the writes.
+
+#### How it is joined
+
+The kernel is given the database's `transact`, and on a backend that runs views for its windows, a way to learn
+that the views have been sent what was kept:
+
+```ts
+system({ side: 'backend', transact: engine.transact, views, viewsSent })
+```
+
+The engine's `transact` runs a function as one unit, kept when it returns and undone when it throws. One inside
+another joins it, as a savepoint, and is undone alone when it throws. It takes the writer at the first write, and a
+unit that wrote nothing commits nothing. The kernel runs a step in one `transact` and each thing the step handles in
+one inside it, and a repository's command, which is a `transact` of its own, joins whichever it is called in.
+
+#### What holds
+
+1. **A handler writes as it does now**, with its repository's commands, and reads its own writes back. The 184
+   calls to a command stay as they are.
+2. **A handler that changes nothing has written nothing.** One that threw, refused, or returned a change that could
+   not be made has its rows taken back, its commands' included, and the rows of everything else in the step are
+   kept. A step is not refused whole: one handler in it can fail while the others stand, as with data. *Everything*
+   a step handles is a handler here: an event, an ask, the change that comes with an answer, where work goes when
+   it fails, what a state hears from a view or from an ask it made. Whether one was made is what handling it
+   returns, so a path that does not say does not compile. The 24 torn handlers are whole without being touched.
+3. **A handler's rows stand on their own.** A link is written to entities that are there: one to an entity a later
+   handler in the step creates is refused where it is written, and fails its handler alone. This is the rule a
+   handler's data keeps, and SQL's default: a constraint is checked at the statement that wrote the row, and
+   deferring it to the commit is what a schema asks for. elmdb left this one check to a unit's commit, where a link
+   to nothing lost the whole step. spankyed/elmdb#215 took the deferral out, since nothing needed it: an entity
+   never needs a relation in order to be written, and against an engine without it apack's unit suites passed,
+   6,514 host tests and the pack pool.
+4. **A write is made in a unit.** A bare write outside one is refused, on its line, by the engine a pack is handed.
+   After an `await` a handler is outside its step, and the rule it already has covers it: it only returns. What it
+   returns is a change, a change is made in a step, and a change's function may write as well as edit the draft:
+
+   ```ts
+   run: async ({ data }) => {
+     const session = await readSession(data.path)            // outside: a file
+     return {
+       data: (draft) => {                                    // a step: rows and data together
+         const { id } = repository.threadCommands.create({ topic: session.topic })
+         draft.imported = id
+       },
+     }
+   }
+   ```
+
+   The 27 writes after an `await` move into what is returned, and are the only ones that move. An answer is worked
+   out before its change is made, so an answer that names a row its change creates takes the id first (`newId`).
+   A handler could still open a `transact` of its own after an `await` and write there. That is refused by a pack
+   rule and not by handing a handler its writer: the rule keeps the 184 calls as they are, where a writer passed in
+   would change every one.
+5. **What a handler wrote before it waited is kept.** An ask that writes a row, waits, and is then refused has kept
+   the row: the write was in the step that took the ask. A row that should not outlive a refusal is written in the
+   change that comes with the answer.
+6. **Nothing leaves before the rows are kept.** An answer, a broadcast, progress and word to a subscriber are
+   released after the unit commits. This is a Durable Object's output gate and the transactional outbox, with the
+   outbox in memory.
+7. **A window hears of a step after its views show it.** A window follows its backend's views over the link, so
+   what a view delivers and what a step sends come down one connection, in the order they were sent. The backend
+   holds what a step sends its windows until the views have been sent what the step kept. So a window answered
+   "created" has the thing in its list already. Convex makes the same promise: a mutation resolves once the
+   client's queries reflect it. What a step sends a state on the same backend is not held: that state reads the
+   rows.
+8. **Rows that cannot be kept stop the system, all of it.** Nothing has left yet. Whoever asked in that step is
+   told it failed, an ask that was waiting to be taken is told there is nothing to take it, every state ends, which
+   ends the work it was doing and the asks it was answering, and an ask made after is told the same. Nothing is
+   left that somebody could be waiting on. With no check left for a commit to make, what fails one is the disk, and
+   the app restarts from the rows.
+
+#### What it costs
+
+On elmdb, 2026-11-22, an M1 Pro under a load of 7.6, temporary databases with syncing off, the median of seven runs
+(`prototype/rows-cost.mts`):
+
+| A step that | Engine alone | Through the kernel |
+|---|---|---|
+| writes nothing | | 6.3 µs, against 6.4 µs given no database |
+| writes one row | 45 µs | 60 µs |
+| has ten handlers write a row each | 206 µs, or 239 µs with each write in a unit of its own | 299 µs |
+| ten rows, a step each | | 576 µs |
+
+| A window asks its backend | Answered when the rows are kept | Answered when its views show them |
+|---|---|---|
+| to write a row, straight after the last | 0.12 ms | 17.3 ms |
+| to write a row, 20 ms after the last was answered | 1.2 ms | 1.6 ms |
+| something that writes nothing | 0.05 ms | 0.05 ms |
+
+A step that writes nothing pays nothing, since the writer is never taken. A unit around a handler is about 3 µs
+once the step has written. The commit is what costs: ten rows in ten steps are 2.8 times ten rows in one, so a
+stream is written a batch to a step.
+
+The hold costs a third of a millisecond on an ask that writes, and nothing on one that does not. What costs more
+is elmdb's own limit on a watch: it runs one again no sooner than a frame, 16 ms, after it last ran
+(`WATCH_SCHEDULE`), so an ask that writes straight after another that wrote into the same view waits out what is
+left of that frame. One thing a person does is never that close to the last. A run of asks, each made when the one
+before is answered and each writing, is: it costs a frame a link, and is the case to put in one ask. Asks made
+together are told together, after one frame for all of them. Running a waited-for watch at once, and not when its
+frame is up, is elmdb's to offer and is not asked for here ([Not built](#not-built)).
+
+#### What it does not cover
+
+- **Anything outside the database.** A commit made in git, a file written, a model called, a terminal started: none
+  can be undone by a transaction, and no design makes two stores change as one. Do the outside thing first, in work
+  the state owns, and write the row that says it happened in the step its result arrives in. A crash between the
+  two leaves the outside thing done and unrecorded, so what is recorded has to be something a later look can find
+  again: the commit by its hash, the file by its path.
+- **The run history**, which is a second database with its own engine. A run node is written beside a step.
+- **A flow action.** An action is not a state: it is work the brain runs, outside any step. Its 31 writes are each
+  a command, which is a unit of its own, and several that belong together go in one `transact`, as now. Whether an
+  action's result should carry its writes back to the brain's step is settled when the brain is ported.
+- **Durable is later than committed.** A commit is on disk within a second (group commit). An answer released after
+  a commit and before that can outlive its row through a power cut. A handler whose answer must not says
+  `durable: true`, as `transact` takes today, and its step waits.
+- **What a state holds is lost when the process ends; its rows are not.** After a restart a state is rebuilt from
+  rows and what it was given, so anything a backend state must not lose is a row.
+- **One writer.** LMDB takes one write transaction at a time, across processes. A step holds it from its first
+  write to its end, which is one run of code with no wait in it.
+
+#### What it is modelled on
+
+Convex splits a mutation, which is a transaction and may not reach outside, from an action, which may and is not
+one: that is a step and a state's work. A Durable Object holds its replies until its writes are stored. Akka
+Persistence and Orleans make the stored thing the truth and the actor's memory a cache of it. Haskell's STM and
+Mnesia forbid waiting inside a transaction, which the rule about `await` is. What each of them declines is the same
+thing declined here: one transaction over two stores.
+
+#### Left for after: one store for either kind of data
+
+A state's `data` could be kept in memory or in the database behind one interface, so that a backend state's data
+were rows and a window followed them by view. It is worth having for exactly that, a backend state with data
+several windows show. It is not a way to make everything a row: a window has no database, a row is typed by a
+pack's manifest where data is typed by the state, and a write a second is what a draft of text costs in memory and
+far more in a log. It needs the step to be a transaction first, and nothing above needs it.
+
 ## Decisions, and what each replaced
 
 | Decision | What was tried first, and why it was dropped |
@@ -610,6 +790,12 @@ batch, and this repo's own `transact` followed by `watch`.
 | A component reads and sends, and cannot ask | Giving `useState` an `ask`. An ask made from a component has no owner to stop it or to say where the state goes if it fails, which is what `run` and `failed` are for |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
+| A step is one unit of the database, which the kernel knows as its `transact` and nothing else: rows, data and what is sent are kept together, and a handler that changes nothing has written nothing. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A store of the kernel's own with marks to go back to, dropped: the engine's `transact` inside itself is that already, and a command's own unit joins it. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
+| A link is written to entities that are there, in a unit as outside one, so a handler that links to nothing fails alone. | elmdb left a relation's ends to the unit's commit, where one that failed took the whole step and stopped the system. Asking a unit inside another for the check as it ended (spankyed/elmdb#214, `checked`), dropped: a flag every caller has to pass, for an order nothing uses. |
+| Whether what was handled was made is what handling it returns, so a path that does not say does not compile. | A flag set where a handler threw or was refused, in ten places. A path that forgot it kept the rows and dropped the data, and nothing made the eleventh set it. |
+| Rows that cannot be kept stop every state and answer every ask: one in the step, one being answered, one waiting, one made after. | Taking no more steps, and telling only whoever asked in the step that failed. An ask whose handler was waiting on something was never answered. |
+| A window follows its backend's views over the link, and the backend holds what a step sends windows until the views have been sent what it kept. | Views and messages on two channels, released when the rows were kept: a window could be answered "created" before its list showed the thing. A commit number on every message and a window that waits for its views to reach it, dropped: a second queue in every window, and a watermark the views would have to send whether or not they changed. |
+| A handler that opens a `transact` after an `await` is refused by a pack rule. | Handing a handler its writer for the step, which closes it by construction and changes all 184 calls to a command. |
 
 ## What the prototype proves
 
@@ -677,7 +863,45 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
   and which handler says to make which.
-- **A check that fails says so, and does not hang** (`checks.mts`). All fourteen check files run their checks
+- **A step is one unit of the database** (`rows-check.mts`, 46 checks). Every check is run twice: against rows in
+  memory (`store.mts`) and against elmdb through `@elmdb/ears` on a temporary database (`store-elmdb.mts`), with the
+  kernel given the `transact` of each and nothing else. A row and the data that counts it are kept together, and a
+  subscriber told of the step can read the row. A step that writes nothing never takes the writer. A handler that
+  throws after two writes leaves neither, and in the same step the handler beside it keeps its own, in one commit.
+  An ask refused after it wrote has written nothing. A change that refuses, and a change the kernel will not make,
+  take back their own rows and the handler's. Work that throws at once has written nothing, and so has where work
+  goes when it fails, if that throws. A write after an `await` throws on its line, saying what to do, and the same
+  write returned in the change is kept with the data. Work left before it returned writes nothing. What an ask wrote
+  before it waited is kept when it is refused after. Two commands, each a unit of its own, are kept with the count
+  in one commit, and a handler that refuses after they returned takes back what they wrote. Outside any step a
+  command is still whole and a bare write is refused. A link to a thread written later in the step is refused where
+  it is written and fails its handler alone, and so does a link to nothing. Rows that cannot be kept: the asker is
+  told it failed, subscribers hear the state is gone and never the count the lost step made, an ask that was being
+  answered is told it was abandoned, and one made after is told there is nothing to take it. Under all 420
+  orderings of two imports, a create, a note and a handler that throws, the count a state holds is the number of
+  rows kept, on each store. And on elmdb, a watch of the rows is delivered after the step that wrote them.
+- **The rule as a property** (`rows-property.mts`). Runs of ten handlers each, made from a seed: each writes, tells
+  itself more, and ends made, thrown, refused or with a change that cannot be made, as an event, an ask, or an ask
+  that waits. Each run is held against a model of a few lines that knows nothing of the kernel: the rows kept, the
+  count, whether each ask was answered as made, and that nobody was told of a step while it was still writing.
+  1,500 runs hold in memory and 150 on elmdb, and a run that differs is reported with its seed. Its first two
+  failures were the model's, which had the events a handler sends itself handled before its change and depth
+  first: they are handled after, in the order they were sent.
+- **A window hears of a step after its views show it** (`views-check.mts`, 9 checks). A backend that keeps threads
+  as rows, runs a view that counts them, answers an ask to make one and broadcasts that it did. A window that
+  follows the view over the link notes the count each time it is answered and each time it is told. With the views
+  told in a lane of their own, so that the schedule chooses when: asked for one thread after the other, the count is
+  never behind under all 58 orderings, and asked for both at once, under all 8,884. Without the hold there is an
+  ordering in each in which the window hears first, which is what shows the scenario can fail. On elmdb, whose
+  views run on its own clock, three threads in a row are each in the view when the window is answered. What a
+  state hears from a view is a handler too: one that writes and then throws has written nothing, on both stores.
+- **What a change to the kernel would let through.** Seventeen changes to a copy of the kernel, each taking out one
+  part of the above, each fail a check: rows never undone; an event's, an ask's, a late change's, an edit's or a
+  failed handler's failure counted as made; a stray field counted as made; a view's hearing that throws counted as
+  made; a step that is not a unit; what leaves before the rows are kept; states that go on after rows are lost; an
+  ask after the stop left waiting; nothing held for windows; and everything held released at once. Three of them
+  passed every check until one was written for them, and two were caught by the property and by nothing else.
+- **A check that fails says so, and does not hang** (`checks.mts`). All seventeen check files run their checks
   through one runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails
   part-way leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps
   it will take, and says so when it reaches it; the app gives none, since an agent's loop is one thing leading to the
@@ -1126,6 +1350,27 @@ projects. Each would loosen the fit to this app.
 - **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
+- **Rows** ([Rows](#rows)): the rule is proven on elmdb. What is left is not the kernel's:
+  - *In the SDK:* the engine a pack is handed refuses a bare write outside a unit. In the prototype that is a count
+    kept around `transact` (`store-elmdb.mts`), and it is the same there.
+  - *A pack rule:* a handler that opens a `transact` after an `await` is refused by `apack pack validate`, beside
+    the rules that are there. It has no subject until a handler is written against the kernel.
+  - *The views and the bus on one connection.* The hold rests on what a view delivers and what a step sends coming
+    down one ordered connection, and on the host saying when the views have been sent what was kept: for elmdb,
+    its `watchesSettled`. Whether the API's view subscriptions and its bus share a socket today is to read when the
+    host is ported, and they are put on one if not.
+  - *A watch somebody is waiting on.* elmdb runs a watch again no sooner than a frame after it last ran, which
+    bounds what a churning view costs and is what a run of asks that each write pays, a frame a link. A way to have
+    the watches a held answer waits on run at once, within the slice a flush already keeps to, would make that the
+    time the view takes to read. It is a change to elmdb's scheduler, and is made if a ported feature has such a
+    run that cannot be one ask.
+  - *A step that must be on disk before it answers.* `transact` takes `durable: true`; a handler has no way to ask
+    for it yet. It is one more key on what a handler returns, and is added when a handler needs it.
+  - *Restart.* Nothing here kills a system between something done outside and the row that records it. That is
+    checked against the first ported feature that does both, since what is to be found again differs by feature.
+  - *A flow action's writes and the brain's step*, settled with the brain.
+  - *What an ask it made, or a read it awaits, tells a state* is a handler like the rest, and returns whether it was
+    made as they do. No check writes a row in one and then throws.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edge.** Reading a state that has ended throws.
@@ -1146,6 +1391,8 @@ projects. Each would loosen the fit to this app.
 - **Static analysis needs the compiler**, and is as precise as the helper types: a loosely typed helper blurs the graph.
 - **A discipline XState avoids by forbidding it.** After an `await` in `run` or an ask, code should only return. The
   kernel drops what a stale task sends through it, and cannot stop a side effect that bypasses it.
+- **A transaction ends at the database.** A step is whole over data, rows and what is sent, and over nothing
+  outside: git, files, models and the run history keep their own time ([Rows](#rows)).
 - **A check before a wait proves nothing about after it.** The change that comes with an answer can check again and
   refuse. What a handler told others or sent as progress on the strength of the earlier check has already gone, and
   no design that does not block can take that back.
@@ -1165,9 +1412,11 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
    ([What #591 delivered](#what-591-delivered)). A machine goes on naming XState until it is ported.
 2. **Build the kernel in the tree**, with no dependencies, as its own workspace, from the prototype and with its
    checks: the schedule and every ordering, the refusals, what must not compile. Not a sibling repository: its API
-   is the pack contract.
+   is the pack contract. It takes the `transact` a step is run in ([Rows](#rows)) as something it is given, so
+   that it names no database.
 3. **Port the host's bus and shell**, which everything else runs inside. Two things they need are settled here,
-   against the real ones ([Not built](#not-built)): roles, and restoring a state.
+   against the real ones ([Not built](#not-built)): roles, and restoring a state. The host gives the
+   kernel the app's engine's `transact`, and the engine a pack is handed refuses a write outside a unit.
 4. **Put the test harness on it**, so that a feature's specs run against the kernel. From here to the end the app
    does not start, and this is how each port is known to work: a feature is across when its specs pass, unchanged in
    what they assert.

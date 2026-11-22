@@ -28,6 +28,13 @@ the app: nothing imports it, and no check covers it.
 | `answer-check.mts` | An ask that changes something as it answers: the change is there with the answer, a refused change fails the ask, nothing is lost across a wait. Runs |
 | `failure-check.mts` | What happens when a state's work or a handler throws: where the state goes, and that the kernel goes on. Runs |
 | `leaving-check.mts` | What happens to an ask when whoever made it goes: it throws `Left` where awaited, `finally` runs, the answerer is told, nothing hangs. Runs |
+| `store.mts` | Rows as the rule about them is checked: one interface, and rows kept in memory behind it. `transact` is all the kernel is given of it |
+| `store-elmdb.mts` | The same interface over the app's engine, elmdb, on a temporary database. Needs the checkout's dependencies |
+| `rows-check.mts` | A step as one unit of the database: a handler's rows, data and what it sent kept together, on both stores. Runs, for about 12 seconds |
+| `rows-property.mts` | The same rule as a property: runs of handlers made from a seed, held against a model of a few lines. Runs, for about 6 seconds, and names the seed of a run that differs |
+| `views-check.mts` | A window hears of a step after its views show it: views over the link, and what a step sends windows held until they have been sent its rows. Under every ordering in memory, and on elmdb. Runs, for about 10 seconds |
+| `rows-cost.mts` | What a unit around a step and around each handler costs on elmdb, beside the engine alone, and what holding an answer for the views costs a window. A measurement: it prints, and refuses nothing |
+| `writes-survey.mts`, `writes-shape.mts` | Where the app writes to the database, and how each function that writes does it, read from syntax trees. Each takes the checkout to read |
 | `binding-check.mts` | That a reader is handed the state's own values and runs when a field it read is replaced, that none of it can be written, and that a hidden window still hears. Runs |
 | `kernel-check.mts` | What the kernel does with a change to data, a move that edits a draft and the refused edits included. Runs |
 | `draft-check.mts` | The checks a hand-built draft has to pass. Runs |
