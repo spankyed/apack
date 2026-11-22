@@ -471,15 +471,27 @@ function canEditNativeQueuedText(n,item){
   &&item.ideSelection===undefined;
 }
 function nativeMainPromptQueue(n,queue){
- const rows=queue.filter(item=>isNativeMainHumanPrompt(n,item)&&typeof (item.preExpansionValue??item.value)==='string');
+ const rows=[];
+ for(const item of queue){
+  if(!isNativeMainHumanPrompt(n,item))continue;
+  const caption=item.preExpansionValue??item.value;
+  if(typeof caption==='string'){
+   rows.push({item,text:caption});
+   continue;
+  }
+  if(Array.isArray(item.value)&&item.value.some(part=>part?.type==='image')){
+   // The original queued-prompt formatter reads the text parts of a multimodal entry.
+   rows.push({item,text:n.runtime.fdt(item)||'Image attachment'});
+  }
+ }
  if(desktopQueuedPrompts.size){
   const liveIds=new Set(queue.map(item=>item.uuid));
   for(const id of desktopQueuedPrompts)if(!liveIds.has(id))desktopQueuedPrompts.delete(id);
  }
  if(!rows.length)return null;
- const items=rows.slice(0,12).map(item=>({
+ const items=rows.slice(0,12).map(({item,text})=>({
   id:item.uuid,
-  text:(item.preExpansionValue??item.value).trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,''),
+  text:text.trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,''),
   editable:canEditNativeQueuedText(n,item),
   cancellable:desktopQueuedPrompts.has(item.uuid),
  }));
