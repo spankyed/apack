@@ -78,7 +78,7 @@ Today the shipped catalog reads an authoring root with nested `dist/`; the ordin
 
 ### Phase 2. Prove a replacement survives an app upgrade
 
-Use the Phase 1 build with a differently named starter and with no starter. Move CLI path settings and their test action to the Code feature. Today General Settings saves to a literal pack ID while the test action resolves a role. Give generic testing helpers an explicit feature target. Packs and Settings are host-owned and must remain reachable. [Settings writes](../../packages/renderer/src/views/settings/canvas/components/GeneralSettings/CliProviders.vue) · [Test action dispatch](../../packages/apack-host/src/features/settings/fe/machine.ts) · [Testing helper](../../packages/apack-testing/src/engine/session.ts) · [Host surfaces](../../packages/apack-host/src/features/declaration.ts)
+Use the Phase 1 build with a differently named starter and with no starter. The Code feature owns CLI path settings and their test action. Give generic testing helpers an explicit feature target. Packs and Settings are host-owned and must remain reachable. [Code settings](../../packages/default-setup/src/features/code/fe/components/CliProviders.vue) · [Code test action](../../packages/default-setup/src/features/code/be/system.ts) · [Testing helper](../../packages/apack-testing/src/engine/session.ts) · [Host surfaces](../../packages/apack-host/src/features/declaration.ts)
 
 **Done when** two packaged app versions establish the following on disposable profiles:
 
