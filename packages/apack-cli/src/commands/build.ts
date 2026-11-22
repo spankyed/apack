@@ -1,4 +1,5 @@
 import { createBuildOutputs } from '../build/build-outputs.ts';
+import { PACK_STYLES_INPUTS } from '@apackdev/host/build/bundled-packages';
 import { writePackBuildInputs, PACK_BUILD_INPUTS_FILE } from '@apackdev/host/build/pack-build-inputs';
 import { _packEntityTypes, _packRelationTypes, _packRoles } from '@apackdev/sdk/framework';
 import * as fs from 'node:fs';
@@ -388,9 +389,15 @@ async function buildIntoStaging(args: string[], root: string) {
     const feEntry = args.includes('--skip-fe') ? null : findFEEntry(root);
     if (feEntry) {
       const feOutputDir = path.join(outputDir, PACK_LAYOUT.runtimeDir);
+      let styles: readonly string[] = [];
       const feResult = await bundlePackFE({ packDir: root, outputDir: feOutputDir, entryPoint: feEntry, release, compilation, recordOutput: outputs.record,
+        recordStyles: files => { styles = files; },
         recordReads: reads?.forPhase('fe'), onInputs: process.env[BUILD_INPUTS_IPC_ENV] === '1' ? reportBuildWatchInputs : undefined });
       if (feResult.success) {
+        const styleInputs = path.join(outputDir, PACK_STYLES_INPUTS);
+        const bytes = JSON.stringify(styles) + '\n';
+        fs.writeFileSync(styleInputs, bytes);
+        outputs.record(styleInputs, bytes);
         console.log(`  fe: dist/${PACK_LAYOUT.feEntry}`);
         if (fs.existsSync(path.join(outputDir, PACK_LAYOUT.feStyles))) {
           console.log(`  fe styles: dist/${PACK_LAYOUT.feStyles}`);

@@ -19,6 +19,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PACK_BUILD_STAGING_DIR } from './pack-workdir.ts';
 
+/** Private compiler output outside the exported pack sections. */
+export const PACK_STYLES_INPUTS = 'bundled-styles.json';
+
 /** A third-party package a bundle inlined: its name and version, and where its files are */
 export interface BundledPackage {
   name: string;
@@ -199,7 +202,7 @@ const SCRIPT_PATH = /^\S+\.[cm]?[jt]sx?$/;
  * dependency's copy of a package the pack itself would resolve at another version. Only a module that is no file is told
  * by the names in its path, and one whose names don't resolve is a problem.
  *
- * A pack's CSS says nothing of where it came from, so a package a pack takes only CSS from is not found here.
+ * The frontend build also records its stylesheet inputs, since generated CSS has no module map.
  */
 export function readPackBundledPackages(packDir: string): { packages: BundledPackage[]; problems: string[] } {
   const dist = path.join(packDir, 'dist');
@@ -244,6 +247,16 @@ export function readPackBundledPackages(packDir: string): { packages: BundledPac
     if (!modules.length) problems.push(`${name} has no source map and names no module, so what it inlined is unknown`);
   }
   if (!bundles.length) problems.push(noBundle);
+  const styleInputs = path.join(dist, PACK_STYLES_INPUTS);
+  if (fs.existsSync(styleInputs)) {
+    try {
+      const sources: unknown = JSON.parse(fs.readFileSync(styleInputs, 'utf8'));
+      if (!Array.isArray(sources) || sources.some(file => typeof file !== 'string')) throw new Error('expected stylesheet paths');
+      for (const source of sources as string[]) {
+        credit(source, path.resolve(packDir, source), `${styleInputs} names an unknown stylesheet: ${source}`);
+      }
+    } catch (error) { problems.push(`${styleInputs}: ${(error as Error).message}`); }
+  }
   // What the bundlers inject with no module of a package: esbuild's and Vite's helpers, plugin-vue's, and the pack's
   // CSS, which Tailwind writes (the pack builder runs every pack's CSS through it)
   const css = fs.readdirSync(dist, { recursive: true, encoding: 'utf8' }).some((file) => file.endsWith('.css'));

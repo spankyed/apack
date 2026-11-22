@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { buildSync } from 'esbuild';
 import { REPO_ROOT, packagesBuiltOrRefuse, publishedTreeDirs } from '@apackdev/host/build/packages-built';
 import { packTree } from '@apackdev/host/build/published-manifest';
 import { sha256File } from '@apackdev/host/packs/assets';
@@ -34,7 +35,20 @@ try {
     const tarball = packTree(dir, stage);
     return [name, { version, file: path.basename(tarball), sha256: sha256File(tarball) }];
   }));
-  fs.writeFileSync(path.join(stage, 'toolchain.json'), JSON.stringify({ commit, tag, packages, upstream }, null, 2) + '\n');
+  const file = 'pack-release-evidence.mjs';
+  const evidence = path.join(stage, file);
+  const licenseDir = path.join(REPO_ROOT, 'build', 'licenses');
+  const texts = Object.fromEntries(fs.readdirSync(licenseDir, { withFileTypes: true }).filter(entry => entry.isFile())
+    .map(({ name }) => [name, fs.readFileSync(path.join(licenseDir, name), 'utf8')]));
+  buildSync({
+    entryPoints: [path.join(REPO_ROOT, 'scripts', 'pack-release-evidence.ts')],
+    outfile: evidence, bundle: true, format: 'esm', platform: 'node', target: 'node24',
+    conditions: ['@apackdev/source'],
+    banner: { js: "import { createRequire as __apackCreateRequire } from 'node:module'; const require = __apackCreateRequire(import.meta.url);" },
+    define: { __PACK_NOTICE_LICENSES__: JSON.stringify(texts) },
+  });
+  const evidenceTool = { file, sha256: sha256File(evidence) };
+  fs.writeFileSync(path.join(stage, 'toolchain.json'), JSON.stringify({ commit, tag, packages, upstream, evidenceTool }, null, 2) + '\n');
   if (git('rev-parse', 'HEAD') !== commit || git('status', '--porcelain')) {
     throw new Error('Checkout changed while staging the authoring toolchain');
   }

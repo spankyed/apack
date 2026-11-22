@@ -20,15 +20,15 @@ Options:
 export function gitProvenance(root: string): PackIntegrity['provenance'] | undefined {
   const git = (...args: string[]) => {
     try {
-      return execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || undefined;
+      return execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
     } catch {
       return undefined;
     }
   };
   const commit = git('rev-parse', 'HEAD');
-  if (!commit) return undefined;
+  if (!commit || git('status', '--porcelain', '--untracked-files=normal') !== '') return undefined;
   // An https remote can carry credentials (https://user:token@host/…); never publish them
-  return { commit, repo: git('remote', 'get-url', 'origin')?.replace(/^(\w+:\/\/)[^@/]+@/, '$1') };
+  return { commit, repo: (git('remote', 'get-url', 'origin') || undefined)?.replace(/^(\w+:\/\/)[^@/]+@/, '$1') };
 }
 
 export interface PackResult {
@@ -52,10 +52,14 @@ export async function buildPackArchive(root: string, outDir = path.join(root, '.
     const inputs = readPackBuildInputs(path.join(root, 'dist'));
     assertPackBuildInputsCurrent(root, inputs);
     const stageDir = path.join(root, '.apack', 'staged', manifest.id);
-    const integrity = stagePack(root, stageDir, { sdkVersion: sdkVersion(), provenance: gitProvenance(root) });
+    const provenance = gitProvenance(root);
+    const integrity = stagePack(root, stageDir, { sdkVersion: sdkVersion(), provenance });
     temporary = fs.mkdtempSync(path.join(root, '.apack', 'archive-'));
     const archive = await createPackArchive(stageDir, temporary);
     assertPackBuildInputsCurrent(root, inputs);
+    if (provenance && gitProvenance(root)?.commit !== provenance.commit) {
+      throw new Error('Pack source changed while exporting; rebuild and export again.');
+    }
     fs.mkdirSync(outDir, { recursive: true });
     const file = path.join(outDir, path.basename(archive.file));
     const checksumFile = `${file}.sha256`;

@@ -64,11 +64,20 @@ describe.each(LAYOUTS)('bundlePackFE host binding guard ($name)', (layout) => {
   });
 
   it('records release bundle origins without embedding source text or a map reference', async () => {
-    const { packDir, entry } = makePack(layout, 'export const value = 42;');
+    const { packDir, entry } = makePack(layout, "import './pack.css'; export const value = 42;");
     const outputDir = path.join(packDir, 'dist');
-    const result = await bundlePackFE({ packDir, outputDir, entryPoint: entry, release: true });
+    const stylePackage = path.join(packDir, 'node_modules', 'only-styles');
+    fs.mkdirSync(stylePackage);
+    fs.writeFileSync(path.join(stylePackage, 'package.json'), '{"name":"only-styles","version":"1.0.0"}');
+    fs.writeFileSync(path.join(stylePackage, 'index.css'), '.pack-audit { color: red; }');
+    fs.writeFileSync(path.join(packDir, 'src', 'pack.css'), '@import "only-styles/index.css";');
+    let styles: readonly string[] = [];
+    const result = await bundlePackFE({ packDir, outputDir, entryPoint: entry, release: true,
+      recordStyles: files => { styles = files; } });
 
     expect(result.success, result.error).toBe(true);
+    expect(styles).toContain('node_modules/only-styles/index.css');
+    expect(fs.readFileSync(path.join(outputDir, 'fe.css'), 'utf8')).toContain('.pack-audit');
     const map = JSON.parse(fs.readFileSync(path.join(outputDir, 'fe.js.map'), 'utf8'));
     expect(map.sources).toEqual(expect.arrayContaining([expect.stringMatching(/entry\.ts$/)]));
     expect(map.sourcesContent?.some(Boolean) ?? false).toBe(false);

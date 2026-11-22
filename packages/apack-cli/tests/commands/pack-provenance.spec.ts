@@ -20,5 +20,8 @@ describe('gitProvenance (integrity.json provenance)', () => {
     await git('remote', 'add', 'origin', 'https://author:ghp_secret@github.com/acme/demo-pack.git');
 
     expect(gitProvenance(tmp)).toEqual({ commit: await git('rev-parse', 'HEAD'), repo: 'https://github.com/acme/demo-pack.git' });
+
+    fs.writeFileSync(path.join(tmp, 'source.ts'), 'uncommitted input');
+    expect(gitProvenance(tmp)).toBeUndefined();
   });
 });

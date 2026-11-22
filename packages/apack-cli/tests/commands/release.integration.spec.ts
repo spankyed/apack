@@ -248,6 +248,34 @@ describe('publishRelease', () => {
     return { octokit, releases, assets, paginate, getRef, getTag, ...repos };
   }
 
+  it('holds a pack release in draft until the verified redistribution files are uploaded', async () => {
+    const root = builtPack('1.0.0');
+    const releaseDir = path.join(tmp, 'release');
+    const archive = await archiveForPublish(root, releaseDir);
+    const api = mockOctokit();
+    const options = { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' }, requireRedistribution: true };
+    const files = ['LICENSE', 'THIRD-PARTY-NOTICES.txt', 'demo-pack-1.0.0.cdx.json'].map(file => {
+      fs.writeFileSync(path.join(releaseDir, file), file);
+      return { file, sha256: createHash('sha256').update(file).digest('hex') };
+    });
+    fs.writeFileSync(path.join(releaseDir, 'redistribution.json'), JSON.stringify({
+      format: 1,
+      pack: { id: 'demo-pack', version: '1.0.0' },
+      archive: { file: path.basename(archive.file), sha256: archive.sha256 },
+      producerLockSha256: 'a'.repeat(64),
+      files,
+    }));
+    const notices = path.join(releaseDir, 'THIRD-PARTY-NOTICES.txt');
+    fs.writeFileSync(notices, 'wrong');
+    await expect(publishRelease(root, releaseDir, options)).rejects.toThrow(/checksum mismatch/);
+    expect(api.createRelease).not.toHaveBeenCalled();
+
+    fs.writeFileSync(notices, 'THIRD-PARTY-NOTICES.txt');
+    await publishRelease(root, releaseDir, options);
+    expect(api.assets.map(asset => asset.name)).toEqual(expect.arrayContaining(['redistribution.json', ...files.map(file => file.file)]));
+    expect(api.updateRelease.mock.invocationCallOrder[0]).toBeGreaterThan(api.uploadReleaseAsset.mock.invocationCallOrder.at(-1)!);
+  });
+
   it('creates a prerelease for beta versions and uploads the archive and checksum', async () => {
     const root = builtPack('1.3.0-beta.2');
     const releaseDir = path.join(tmp, 'release');

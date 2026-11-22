@@ -420,7 +420,7 @@ export function staleExtras(packages: readonly NoticePackage[]): string[] {
  * The notices' text: a header naming what else carries notices, then each distinct text with the packages it covers,
  * then each file of the app's own adapted from third-party code, with its texts
  */
-export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[], adapted: readonly (Adaptation & { text: string })[] = []): string {
+export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[], adapted: readonly (Adaptation & { text: string })[] = [], packId?: string): string {
   const groups = new Map<string, PackageNotice[]>();
   for (const notice of notices) groups.set(notice.text, [...(groups.get(notice.text) ?? []), notice]);
   const line = (notice: PackageNotice) => `  ${notice.package.name} ${notice.package.version}, ${notice.license}, `
@@ -436,10 +436,12 @@ export function renderNotices(notices: readonly PackageNotice[], pointers: reado
   return [
     'THIRD-PARTY NOTICES',
     '',
+    ...(packId ? [`Packages and license texts carried by the ${packId} pack.`] : [
     "apack is built from its own code and from third-party packages, each under its own license. This file holds the",
     'license and notices of each package the app carries, as files under its node_modules or inlined into its',
     "bundles; a package carried as files also keeps its own license files beside it. It ends with the licenses of",
     "third-party code adapted into apack's own files. Native code carries its own notices beside it:",
+    ]),
     '',
     ...pointers.map((pointer) => `  - ${pointer}`),
     '',

@@ -409,6 +409,8 @@ export interface BundleFEOptions {
   release?: boolean;
   /** Where this bundle reports the files it read, for the build's record of its inputs */
   recordReads?: RecordReads;
+  /** Stylesheet files Vite read, including stylesheets imported by other stylesheets. */
+  recordStyles?: (files: readonly string[]) => void;
   /** Expected emitted/copied bytes, retained by the build until sealing. */
   recordOutput?: RecordBuildOutput;
   /** Live subscriptions for the worker's parent, independent of optional diagnostic recording. */
@@ -555,7 +557,7 @@ export async function bundlePackFE(options: BundleFEOptions): Promise<{ success:
 }
 
 async function bundleFrontend(options: BundleFEOptions): Promise<{ success: boolean; error?: string }> {
-  const { packDir, outputDir, entryPoint, release = false, recordReads, compilation } = options;
+  const { packDir, outputDir, entryPoint, release = false, recordReads, recordStyles, compilation } = options;
 
   const vite = await import('vite');
   const vue = (await import('@vitejs/plugin-vue')).default;
@@ -574,7 +576,7 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
   // Workers compile in separate Rollup builds. The final report must retain their inputs too.
   const observedFiles = new Set<string>();
   const inputPlugins = () => [
-    ...((recordReads || options.onInputs) ? [inputReportPlugin(options, directories, vite.version, observedFiles)] : []),
+    ...((recordReads || recordStyles || options.onInputs) ? [inputReportPlugin(options, directories, vite.version, observedFiles)] : []),
     ...(options.onInputs ? [globWatchPlugin(packDir, directories)] : []),
   ];
   if (options.onInputs) postcssPlugins.push({
@@ -692,6 +694,15 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
       if (!('output' in output)) throw new Error('Frontend build did not return its written output');
       for (const file of output.output) options.recordOutput?.(path.join(outputDir, file.fileName),
         file.type === 'chunk' ? file.code : file.source);
+    }
+    if (recordStyles) {
+      const sourceRoot = fs.realpathSync(packDir);
+      const files = [...observedFiles]
+        .filter(file => !file.includes('\0'))
+        .map(file => fs.existsSync(file) ? file : file.replace(/[?#].*$/, ''))
+        .filter(file => path.isAbsolute(file) && /\.(css|pcss|postcss|scss|sass|less|styl|stylus|sss)$/i.test(file))
+        .map(file => path.relative(sourceRoot, compilation?.sourcePath(file) ?? file).split(path.sep).join('/'));
+      recordStyles([...new Set(files)].sort());
     }
     return { success: true };
   } catch (err) {
