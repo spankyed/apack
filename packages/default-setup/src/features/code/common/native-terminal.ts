@@ -53,6 +53,11 @@ export interface ClaudeNativeTerminalSession {
   target: string | null
 }
 
+export interface ClaudeNativePromptQueue {
+  count: number
+  next: { id: string; text: string }
+}
+
 export interface ClaudeNativeTerminalState {
   /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
   terminalSession?: ClaudeNativeTerminalSession
@@ -80,6 +85,8 @@ export interface ClaudeNativeTerminalState {
   exitCode?: number
   continuation?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
   preview?: { turnId: string; output: string }
+  /** Waiting main-conversation prompts observed in the original CLI. */
+  promptQueue?: ClaudeNativePromptQueue
   busy: boolean
   /** Original turn currently eligible for a composer Pause. */
   activeTurnId?: string

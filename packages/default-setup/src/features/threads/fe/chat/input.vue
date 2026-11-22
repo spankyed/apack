@@ -53,6 +53,11 @@
             @click="emit('native-session-controls')">Session controls</button>
         </div>
 
+        <section v-if="nativePromptQueue" class="flex min-w-0 items-baseline gap-2 border-b border-white/10 px-5 py-2 text-xs" aria-label="Claude prompt queue">
+          <span class="shrink-0 font-medium text-neutral-300">{{ nativePromptQueue.count }} queued</span>
+          <span class="truncate text-neutral-400">{{ nativePromptQueue.next.text }}</span>
+        </section>
+
         <!-- Editor container -->
         <div ref="editorAreaRef" class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
@@ -72,7 +77,7 @@
             @pause="pauseWork"
             @open-revert-menu="openRevertMenu"
           />
-          <p v-if="queuedNotice && isBusy && !composerProblem" class="px-3 text-xs text-neutral-400" role="status">Sent to Claude’s queue.</p>
+          <p v-if="queuedNotice && isBusy && !composerProblem" class="px-3 text-xs text-neutral-400" :class="{ 'sr-only': nativePromptQueue }" role="status">Sent to Claude’s queue.</p>
           <p v-if="composerProblem && !nativeDraftTooLong" class="px-3 text-xs text-neutral-500" role="status">{{ composerProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
@@ -287,6 +292,7 @@ const props = defineProps<{
   nativeDecisionPending?: boolean
   nativeMemoryAvailable?: boolean
   nativeSendWaiting?: boolean
+  nativePromptQueue?: import('#features/code/common/native-terminal.ts').ClaudeNativePromptQueue
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */

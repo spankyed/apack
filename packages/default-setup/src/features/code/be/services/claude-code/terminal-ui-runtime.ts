@@ -461,6 +461,17 @@ function nativeUnknownCommandRefusal(n,messages){
  const warnings=messages.filter(row=>!preparedPrompt.before.has(row.uuid)&&row.type==='system'&&row.subtype==='informational'&&row.level==='warning'&&row.isMeta!==true&&typeof row.uuid==='string'&&typeof row.content==='string'&&row.content.length<=1024&&(row.content===prefix||row.content.startsWith(prefix+'. Did you mean /')&&row.content.endsWith('?')));
  return warnings.length===1?warnings[0].content:undefined;
 }
+function isNativeMainHumanPrompt(n,item){
+ return n.runtime.zp(item)&&item.mode==='prompt'&&item.origin?.kind==='human'
+  &&item.isMeta!==true&&item.screeningPending!==true&&typeof item.uuid==='string';
+}
+function nativeMainPromptQueue(n,queue){
+ const rows=queue.filter(item=>isNativeMainHumanPrompt(n,item)&&typeof (item.preExpansionValue??item.value)==='string');
+ const first=rows[0];
+ if(!first)return null;
+ const text=(first.preExpansionValue??first.value).trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,'');
+ return {count:rows.length,next:{id:first.uuid,text}};
+}
 async function promptOutcome(n,id){
  const interruptions=await nativeInterruptionModule();
  if(!preparedPrompt||preparedPrompt.id!==id)return {};
@@ -471,8 +482,7 @@ async function promptOutcome(n,id){
   if(candidates.length===0&&preparedPrompt.queue){
    const {queue,beforeQueue,text}=preparedPrompt;
    // Original zp / Gp identifies the main Agent by its real session-bound ID.
-   const matches=queue.getCommandQueueSnapshot().filter(item=>item.mode==='prompt'&&n.runtime.zp(item)&&item.origin?.kind==='human'
-    &&item.isMeta!==true&&item.screeningPending!==true&&typeof item.uuid==='string'&&!beforeQueue.has(item.uuid)
+   const matches=queue.getCommandQueueSnapshot().filter(item=>isNativeMainHumanPrompt(n,item)&&!beforeQueue.has(item.uuid)
     &&(item.preExpansionValue??item.value)===text.trim());
    if(matches.length===1)return {queued:matches[0].uuid};
   }
@@ -889,12 +899,12 @@ async function control(request,abort){
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   if(request.include_main_status_cache===true&&ownerContext.session?.id===sessionId)helperState.cachedMainStatus=nativeMainStatusCache(n,ownerContext,sessionId,helperState.statusCommand);
   if(request.include_main_status_observation===true)helperState.mainStatusObservation=nativeHelperObservationReader?.()??null;
-  const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
+  const activityContext=binding.toolContext(abort),queuedCommands=activityContext.messageQueue.getCommandQueueSnapshot(),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands});
   const activeTurn=n.runtime.lpe();
   const preview=await nativeStreamingPreview(n,facts,activeTurn);
   const limits=await import('/$bunfs/root/chunk-2bb0j573.js');
   const billing=limits.xme()?{info:limits.ha(),observedAt:limits.HFs()}:null;
-  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,activeTurnId:activeTurn&&!activeTurn.cancelled()?activeTurn.turnId:null,endingTurnId:activeTurn?.cancelled()?activeTurn.turnId:null,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,...helperState};
+  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,promptQueue:view.kind==='main'?nativeMainPromptQueue(n,queuedCommands):null,activeTurnId:activeTurn&&!activeTurn.cancelled()?activeTurn.turnId:null,endingTurnId:activeTurn?.cancelled()?activeTurn.turnId:null,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,...helperState};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   // Frozen native $.session.turns/her semantics include interruption envelopes, unlike person-message history.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
@@ -1497,7 +1507,7 @@ const ownerTimer=setInterval(async()=>{
   // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
   if(refreshView){
-   const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence,heartbeat:true});
+   const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence,heartbeat:true,promptQueue:gate.promptQueue});
    reportedView=viewKey;viewHeartbeat=0;
    const command=response?.prepareQueuedPrompt;
    if(command){

@@ -88,6 +88,11 @@ export async function createClaudeTerminalBridge(options: {
   let focus: ClaudeNativeTerminalState['focus'], focusSequence = 0, focusRecord: string | undefined
   let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
   let preview: ClaudeNativeTerminalState['preview'], previewSequence = 0, previewRecord: string | undefined
+  const promptQueueSchema = z.object({
+    count: z.number().int().positive(),
+    next: z.object({id: z.string().uuid(), text: z.string().max(240)}),
+  }).nullable()
+  let promptQueue: ClaudeNativeTerminalState['promptQueue']
   let nativePolling = false
   /**
    * How often the plugin should report this session's state, which is the app's answer and not the
@@ -297,7 +302,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if ((event.policyKey === helperPolicyKey || !policyChanged && event.policyKey === undefined) && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; activeTurnId = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
+        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; promptQueue = undefined; session.reset(value.sessionId); lastTurn = undefined; activeTurnId = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
@@ -379,9 +384,17 @@ export async function createClaudeTerminalBridge(options: {
         const record = JSON.stringify([value.sessionId, next])
         // A session handoff withdraws presentation, not the last admitted observation's identity.
         if (value.sequence === nativeViewSequence && record !== nativeViewRecord) return reply(409, {})
+        const queue = value.promptQueue === undefined ? undefined : promptQueueSchema.safeParse(value.promptQueue)
+        if (queue && (!queue.success || value.heartbeat !== true || next.kind !== 'main' && queue.data !== null)) return reply(409, {})
         nativeViewSequence = value.sequence as number
         nativeViewRecord = record
-        if (JSON.stringify(next) !== JSON.stringify(nativeView)) { preview = undefined; focus = undefined; nativeView = next; options.changed() }
+        const viewChanged = JSON.stringify(next) !== JSON.stringify(nativeView)
+        if (viewChanged) { preview = undefined; focus = undefined; nativeView = next }
+        const nextQueue = queue?.success ? queue.data ?? undefined : viewChanged ? undefined : promptQueue
+        if (viewChanged || JSON.stringify(nextQueue) !== JSON.stringify(promptQueue)) {
+          promptQueue = nextQueue
+          options.changed()
+        }
         const submission = pending
         if (next.kind !== 'main' || !submission || submission.sessionId !== value.sessionId) return reply(200, {})
         // While a turn is running, the CLI can service its view heartbeat even when the hook does not poll.
@@ -522,6 +535,7 @@ export async function createClaudeTerminalBridge(options: {
       get focus() { return focus },
       get billing() { return closed ? undefined : billing.value },
       get preview() { return closed ? undefined : preview },
+      get promptQueue() { return closed ? undefined : promptQueue },
       get activity() { return activity },
       get busy() { return busy || !!pending || !!nativeEditor?.active },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {

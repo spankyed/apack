@@ -806,3 +806,25 @@ it('settles a busy parent submission only after an addressed native queue receip
   expect((await request('/submission', receipt)).status).toBe(409)
   expect(bridge!.busy).toBe(true)
 })
+
+
+it('clears the observed prompt queue on native view changes and rejects stale projections', async () => {
+  await create()
+  const main = {sessionId: session, pid: process.pid, sequence: 1, view: {kind: 'main'}}
+  const promptQueue = {count: 2, next: {id: '33333333-3333-4333-8333-333333333333', text: 'First waiting prompt'}}
+  expect((await request('/native-view', {...main, promptQueue})).status).toBe(409)
+  expect((await request('/native-view', {...main, heartbeat: true, promptQueue})).status).toBe(200)
+  expect(bridge!.promptQueue).toEqual(promptQueue)
+
+  const agent = {...main, sequence: 2, view: {kind: 'agent', registryId: 'agent'}}
+  expect((await request('/native-view', {...agent, heartbeat: true, promptQueue})).status).toBe(409)
+  expect((await request('/native-view', {...agent, heartbeat: true, promptQueue: null})).status).toBe(200)
+  expect(bridge!.promptQueue).toBeUndefined()
+  expect((await request('/native-view', {...main, heartbeat: true, promptQueue})).status).toBe(409)
+
+  const returned = {...main, sequence: 3, heartbeat: true}
+  await request('/native-view', {...returned, promptQueue})
+  expect(bridge!.promptQueue).toEqual(promptQueue)
+  await request('/native-view', {...returned, promptQueue: null})
+  expect(bridge!.promptQueue).toBeUndefined()
+})
