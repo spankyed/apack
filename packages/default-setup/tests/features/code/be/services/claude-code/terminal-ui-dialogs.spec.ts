@@ -4,6 +4,12 @@ import { constants as fsConstants } from 'node:fs'
 import { claudeTerminalFileRuntime } from '#features/code/be/services/claude-code/terminal-file-runtime.ts'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(done => { resolve = done })
+  return { promise, resolve }
+}
+
 function fixture() {
   let sessionId = '11111111-1111-4111-8111-111111111111'
   let nativeSessionId = sessionId
@@ -321,8 +327,8 @@ it.each(['disconnected request', 'replacement question'] as const)('discards a c
   f.item.kind = 'permission_ask_user_question'
   Object.assign(f.item.payload, { toolName: 'AskUserQuestion', questions, input: { questions } })
   const draw = (f.control as typeof f.control & {questionFixture(): Promise<Record<string, unknown>>}).questionFixture
-  const conversion = Promise.withResolvers<{block: {type: string}}>()
-  const started = Promise.withResolvers<void>()
+  const conversion = deferred<{block: {type: string}}>()
+  const started = deferred<void>()
   const limit = {maxWidth: 100}
   const convert = vi.fn(() => { started.resolve(); return conversion.promise })
   Object.assign(f.native, {
