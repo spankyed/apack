@@ -79,6 +79,33 @@ it('distinguishes Command from Alt and normalizes shifted punctuation like nativ
   expect(f.send.mock.calls[1]![0].event).toMatchObject({ key: '!', shift: false, alt: true })
 })
 
+it.each([['π', 'KeyP', 'p'], ['ø', 'KeyO', 'o'], ['†', 'KeyT', 't']])(
+  'dispatches the native Option shortcut when Chromium reports %s',
+  (glyph, code, letter) => {
+    const f = fixture()
+    f.state.keys!.bindings = [[{ ...key(letter), alt: true }]]
+    expect(f.fire(glyph, { code }).defaultPrevented).toBe(false)
+    expect(f.fire(glyph, { code: 'KeyA', altKey: true }).defaultPrevented).toBe(false)
+    expect(f.fire(glyph, { code, altKey: true, modifierAltGraph: true }).defaultPrevented).toBe(false)
+    expect(f.fire(glyph, { code, altKey: true }).defaultPrevented).toBe(true)
+    expect(f.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      event: { key: letter, ctrl: false, alt: true, shift: false, super: false, from_composer: true },
+    }))
+  },
+)
+
+it('preserves a configured glyph binding and supports an Option alias in a pending chord', () => {
+  const f = fixture()
+  const option = { code: 'KeyP', altKey: true }
+  const letter = { ...key('p'), alt: true }
+  f.state.keys!.bindings = [[letter], [{ ...key('π'), alt: true }], [key('k', true), letter]]
+  expect(f.fire('π', option).defaultPrevented).toBe(true)
+  expect(f.send.mock.calls[0]![0].event.key).toBe('π')
+  expect(f.fire('k', { ctrlKey: true }).defaultPrevented).toBe(true)
+  expect(f.fire('π', option).defaultPrevented).toBe(true)
+  expect(f.send.mock.calls[2]![0].event.key).toBe('p')
+})
+
 it('withdraws key handling when native bindings disappear and honors prior event cancellation', () => {
   const f = fixture()
   f.editor.addEventListener('keydown', event => event.preventDefault(), true)

@@ -19,6 +19,19 @@ function same(a: ClaudeActionStroke, b: ClaudeActionStroke): boolean {
 function prefix(path: ClaudeActionStroke[], chord: ClaudeActionStroke[]): boolean {
   return path.length <= chord.length && path.every((key, index) => same(key, chord[index]!))
 }
+// Match only the Option glyph/key pairs observed by the pinned CLI. Other layouts and
+// dead keys keep their browser meaning, and an explicit glyph binding takes precedence.
+const optionGlyphs = new Map<string, readonly [code: string, letter: string]>([['π', ['KeyP', 'p']], ['ø', ['KeyO', 'o']], ['†', ['KeyT', 't']]])
+function optionShortcut(event: KeyboardEvent, key: ClaudeActionStroke, keys: ClaudeActionKeys, pending: ClaudeActionStroke[] | null): ClaudeActionStroke {
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.getModifierState('AltGraph')) return key
+  const pair = optionGlyphs.get(event.key)
+  if (!pair || pair[0] !== event.code) return key
+  const chords = pending ? [...keys.bindings, ...keys.continuations] : keys.bindings
+  const matches = (candidate: ClaudeActionStroke) => chords.some(chord => prefix([...(pending ?? []), candidate], chord))
+  const alias = { ...key, key: pair[1] }
+  return !matches(key) && matches(alias) ? alias : key
+}
+
 function advance(keys: ClaudeActionKeys, pending: ClaudeActionStroke[] | null, key: ClaudeActionStroke): ClaudeActionStroke[] | null {
   if (pending && key.key === 'escape') return null
   const path = [...(pending ?? []), key]
@@ -53,8 +66,9 @@ export function createClaudeActionKeyHandler(
     if (target.closest('[data-native-client]')) return false
     const fromComposer = !!target.closest('.composer-document, .native-agent-editor')
     if (!fromComposer && (!target.closest('[data-native-plugin]') || target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))) return false
-    const key = stroke(event)
-    if (!key || (!pending && fromComposer && !key.ctrl && !key.alt && !key.super)) return false
+    const observed = stroke(event)
+    if (!observed || (!pending && fromComposer && !observed.ctrl && !observed.alt && !observed.super)) return false
+    const key = optionShortcut(event, observed, keys, pending)
     if (!pending && !keys.bindings.some(chord => chord[0] && same(chord[0], key))) return false
     pending = advance(keys, pending, key)
     const sequence = ++sent
