@@ -3,7 +3,8 @@ export const claudeTerminalStatusObserverRuntime = String.raw`import { ChildProc
 import { readFileSync,writeFileSync,renameSync,unlinkSync } from 'node:fs';
 import http from 'node:http';
 /** Resolve once, after a claimed spare has its real argv and environment. Never start a helper. */
-export function installNativeHelperObserver({resolveConfig,readPolicy,readCommands,onReady}){
+export function installNativeHelperObserver({resolveConfig,readPolicy,readCommands,onReady,reconcileSignalledMain}){
+ let signalledMain;
  let heldConfig,activation,retainedMainStartedAt=-1n,latestMainStartedAt=-1n,latestMainObservation,mainObservationPending=false,closed=false,warned=false;
  const warn=()=>{if(!warned){warned=true;process.stderr.write('apack: native helper observation could not initialize\n')}};
  async function publish(path,body){const config=heldConfig.config;await new Promise(resolve=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>{response.resume();response.on('end',resolve)});request.on('error',resolve);request.on('timeout',()=>{request.destroy();resolve()});request.end(JSON.stringify(body))})}
@@ -50,11 +51,31 @@ const installed=function(...args){
    try{writeFileSync(temporary,text,{mode:0o600,flag:'wx'});renameSync(temporary,target);retainedMainStartedAt=BigInt(startedAt);}finally{try{unlinkSync(temporary)}catch(error){if(error.code!=='ENOENT')throw error}}
   }
  }catch{process.stderr.write('apack: native helper startup observation could not be retained\n')}
- void publish('/native-status',event).catch(()=>{})});
+ // The original renderer keeps its caption when its scheduler cancels a refresh.
+ // A raw child signal can also come from a real failure. Wait for the native caption
+ // to clear before projecting that failure; a newer settled result replaces it.
+ if(kind==='main'&&reconcileSignalledMain?.()){
+  if(event.signal){
+   if(BigInt(startedAt)===latestMainStartedAt)signalledMain=event;
+   return;
+  }
+  if(signalledMain&&BigInt(startedAt)>=BigInt(signalledMain.startedAt))signalledMain=undefined;
+ }
+ reportResult(event);});
  return result;
 };
  if(typeof original==='function')ChildProcess.prototype.spawn=installed;
  else warn();
- return{get mainObservationPending(){return !closed&&mainObservationPending},get mainObservation(){return !closed&&latestMainObservation?{...latestMainObservation}:undefined},async activate(){ensureConfig();await activation},close(){closed=true;latestMainObservation=undefined;if(ChildProcess.prototype.spawn===installed)ChildProcess.prototype.spawn=original}};
+ function reportResult(event){void publish('/native-status',event).catch(()=>{})}
+ return{
+  get signalledMainStartedAt(){return signalledMain?.startedAt},
+  reconcileMainStatus(startedAt,snapshot){
+   const event=signalledMain;
+   if(closed||!event||startedAt!==event.startedAt)return;
+   if(event.sessionId!==snapshot.sessionId||event.command!==snapshot.statusCommand){signalledMain=undefined;return;}
+   if(snapshot.cachedMainStatus!==null)return;
+   signalledMain=undefined;reportResult(event);
+  },
+  get mainObservationPending(){return !closed&&mainObservationPending},get mainObservation(){return !closed&&latestMainObservation?{...latestMainObservation}:undefined},async activate(){ensureConfig();await activation},close(){closed=true;signalledMain=undefined;latestMainObservation=undefined;if(ChildProcess.prototype.spawn===installed)ChildProcess.prototype.spawn=original}};
 }
 `

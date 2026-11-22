@@ -63,7 +63,10 @@ const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SU
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 ${claudeTerminalHelperPolicyRuntime}
 ${claudeTerminalHelperPolicyReaderRuntime}
-let nativeHelperObservationReader;
+let nativeHelperObservationReader,nativeMainStatusReconciliation;
+export function bindNativeMainStatusReconciliation(reconciliation){
+ nativeMainStatusReconciliation=reconciliation;
+}
 export function bindNativeHelperObservationReader(reader){
  if(typeof reader!=='function'||nativeHelperObservationReader&&nativeHelperObservationReader!==reader)throw Error('Native helper observation reader is already bound or invalid');
  nativeHelperObservationReader=reader;
@@ -873,7 +876,7 @@ async function control(request,abort){
   const effective=settings.ut(),policy=settings.me('policySettings')??{},privateHooksSuppressed=restrictions.xr('plugins')===true;
   const helperState=nativeHelperPolicySnapshot(effective,policy);
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
-  if(request.include_main_status_cache===true)helperState.cachedMainStatus=nativeMainStatusCache(n,binding.toolContext(abort),sessionId,helperState.statusCommand);
+  if(request.include_main_status_cache===true&&ownerContext.session?.id===sessionId)helperState.cachedMainStatus=nativeMainStatusCache(n,ownerContext,sessionId,helperState.statusCommand);
   if(request.include_main_status_observation===true)helperState.mainStatusObservation=nativeHelperObservationReader?.()??null;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
   const activeTurn=n.runtime.lpe();
@@ -1435,8 +1438,10 @@ async function reportPendingPromptRefusal(id){
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
-  const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
+  const signalledMain=nativeMainStatusReconciliation?.startedAt();
+  const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true,include_main_status_cache:signalledMain!==undefined},new AbortController());
   await followNativeOwnerSession(gate);
+  if(signalledMain!==undefined)nativeMainStatusReconciliation.reconcile(signalledMain,gate);
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
