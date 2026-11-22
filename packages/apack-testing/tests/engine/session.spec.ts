@@ -9,14 +9,17 @@
 // read the call off the send rather than out of a payload.
 import { describe, expect, it, vi } from 'vitest';
 import {
-  BRIDGE_FLAG, BRIDGE_FUNCTION, createSession, DATABASE_SYSTEM, DRIVE_REF, evalSource, MAX_SEEN_EVENTS,
+  BRIDGE_FLAG, BRIDGE_FUNCTION, createSession, DRIVE_REF, evalSource, MAX_SEEN_EVENTS,
   REPLY_TIMEOUT_MS, type EngineResult, type SeenEvent, type SessionApi, type SessionPage,
 } from '../../src/engine/session.ts';
 import type { BusMessage } from '../../src/engine/api-client.ts';
 import type { EngineSession, SettingsTarget } from '../../src/engine/session.ts';
 import { asSessionPage } from '../../src/engine/index.ts';
 import type { Page } from '@playwright/test';
+import { resolveName } from '@apackdev/sdk/ids';
 import { answerTo } from '@apackdev/sdk/testing';
+
+const DATABASE_SYSTEM = resolveName('database', 'alternate-pack');
 
 /** A page that records what it was asked and lets a test answer for it, plus the bridge's own callback */
 function fakePage() {
@@ -334,7 +337,7 @@ describe('the in-page bridge', () => {
     await session.ready();
 
     for (let n = 0; n < MAX_SEEN_EVENTS; n += 1) emit({ type: `E${n}`, event: {} });
-    const pending = session.query('return 1');
+    const pending = session.query('return 1', DATABASE_SYSTEM);
     await settle();
     // Through the bridge, so the call is on the delivered event where a window's door put it — `answerTo`
     // builds exactly that, which is why the session reads both places into one field
@@ -630,7 +633,7 @@ describe('a bus round-trip', () => {
     const { session, send, answer } = sessionWith();
     await session.ready();
 
-    const pending = session.query('return 42');
+    const pending = session.query('return 42', DATABASE_SYSTEM);
     await settle();
     const sent = lastSend(send);
     expect(sent.to).toBe(DATABASE_SYSTEM);
@@ -650,7 +653,7 @@ describe('a bus round-trip', () => {
     const { session, send, answer } = sessionWith();
     await session.ready();
 
-    const pending = session.query('return boom');
+    const pending = session.query('return boom', DATABASE_SYSTEM);
     await settle();
     answer({ type: 'ASK_FAILED', asked: 'EXECUTE_QUERY', failure: { kind: 'failed', message: 'boom is not defined' } }, { answering: sentCall(send) });
 
@@ -661,7 +664,7 @@ describe('a bus round-trip', () => {
     const { session, send, answer } = sessionWith();
     await session.ready();
 
-    const pending = session.transact('return write(...)');
+    const pending = session.transact('return write(...)', DATABASE_SYSTEM);
     await settle();
     expect(lastSend(send).event).toMatchObject({ type: 'EXECUTE_TRANSACTION', code: 'return write(...)' });
 
@@ -680,7 +683,7 @@ describe('a bus round-trip', () => {
     const { session, emit, send } = sessionWith();
     await session.ready();
 
-    const pending = session.query('return 1');
+    const pending = session.query('return 1', DATABASE_SYSTEM);
     await settle();
     emit({ type: 'ASK_ANSWERED', event: answerTo(sentCall(send), { type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'through the bridge' } }) });
 
@@ -699,7 +702,7 @@ describe('a bus round-trip', () => {
     const { session, finish } = sessionWith();
     await session.ready();
 
-    const pending = session.query('return 1');
+    const pending = session.query('return 1', DATABASE_SYSTEM);
     await settle();
     finish('the app closed the connection');
 
@@ -715,7 +718,7 @@ describe('a bus round-trip', () => {
     await session.ready();
     fail('the app closed the connection');
 
-    await expect(session.query('return 1')).resolves.toMatchObject({
+    await expect(session.query('return 1', DATABASE_SYSTEM)).resolves.toMatchObject({
       ok: false,
       error: expect.stringContaining('restart the session'),
     });
@@ -726,7 +729,7 @@ describe('a bus round-trip', () => {
     const { session, send, answer } = sessionWith();
     await session.ready();
 
-    const pending = session.query('return mine');
+    const pending = session.query('return mine', DATABASE_SYSTEM);
     await settle();
     answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'someone else' } }, { answering: 'c-elsewhere' });
     await settle();
@@ -748,13 +751,13 @@ describe('a bus round-trip', () => {
       const { session, send, answer } = sessionWith();
       await session.ready();
 
-      const abandoned = session.query('return slow');
+      const abandoned = session.query('return slow', DATABASE_SYSTEM);
       await vi.advanceTimersByTimeAsync(0);
       const orphan = sentCall(send);
       await vi.advanceTimersByTimeAsync(REPLY_TIMEOUT_MS + 10);
       await expect(abandoned).resolves.toMatchObject({ ok: false });
 
-      const next = session.query('return quick');
+      const next = session.query('return quick', DATABASE_SYSTEM);
       await vi.advanceTimersByTimeAsync(0);
       // The slow query finishes at last, with nobody waiting for it
       answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'the abandoned one' } }, { answering: orphan });
@@ -779,7 +782,7 @@ describe('a bus round-trip', () => {
     try {
       const { session, send } = sessionWith();
       await session.ready();
-      const pending = session.query('return 1');
+      const pending = session.query('return 1', DATABASE_SYSTEM);
       // Advanced rather than `settle()`, which is `setImmediate` and so is itself faked here
       await vi.advanceTimersByTimeAsync(1);
       // The ask's own call, so the message is held to naming *that* one rather than to looking like an id
@@ -813,7 +816,7 @@ describe('a bus round-trip', () => {
     try {
       const { session, fail } = sessionWith();
       await session.ready();
-      const pending = session.query('return 1');
+      const pending = session.query('return 1', DATABASE_SYSTEM);
       fail('the app ended the event subscription');
       await vi.advanceTimersByTimeAsync(REPLY_TIMEOUT_MS + 10);
 
@@ -830,12 +833,12 @@ describe('a bus round-trip', () => {
     const { session, send, answer } = sessionWith();
     await session.ready();
 
-    const bad = session.query('return boom');
+    const bad = session.query('return boom', DATABASE_SYSTEM);
     await settle();
     answer({ type: 'ASK_FAILED', asked: 'EXECUTE_QUERY', failure: { kind: 'failed', message: 'nope' } }, { answering: sentCall(send) });
     await expect(bad).resolves.toMatchObject({ ok: false });
 
-    const good = session.query('return 1');
+    const good = session.query('return 1', DATABASE_SYSTEM);
     await settle();
     answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'still here' } }, { answering: sentCall(send) });
     await expect(good).resolves.toEqual({ ok: true, value: 'still here' });

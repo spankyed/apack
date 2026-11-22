@@ -1,4 +1,5 @@
 import type { SettingsTarget } from '@apackdev/sdk/types';
+import type { FeatureRef } from '@apackdev/sdk/ids';
 export type { SettingsTarget } from '@apackdev/sdk/types';
 import { _callOf, newCall } from '@apackdev/sdk/events';
 import { HOST } from '@apackdev/host/bus';
@@ -178,9 +179,6 @@ export const MAX_SEEN_EVENTS = 1_000;
 /** How long a bus round-trip waits for its reply before answering that none came */
 export const REPLY_TIMEOUT_MS = 15_000;
 
-/** The system that runs query and transaction code against the live engine, and the events it answers with */
-export const DATABASE_SYSTEM = 'default-setup/database';
-
 /** The name the session claims, so a system can answer *it* rather than broadcasting to every window */
 export const DRIVE_REF = HOST.drive;
 
@@ -255,8 +253,8 @@ export interface EngineSession {
   evaluate: (body: string) => Promise<EngineResult>;
   send: (event: Record<string, unknown>) => Promise<EngineResult>;
   system: (to: string, event: Record<string, unknown>) => Promise<EngineResult>;
-  query: (code: string) => Promise<EngineResult>;
-  transact: (code: string) => Promise<EngineResult>;
+  query: (code: string, system: FeatureRef) => Promise<EngineResult>;
+  transact: (code: string, system: FeatureRef) => Promise<EngineResult>;
   state: () => Promise<EngineResult>;
   wait: (target: WaitTarget, timeoutMs?: number) => Promise<EngineResult>;
   navigate: (surfaceId: string) => Promise<EngineResult>;
@@ -425,8 +423,8 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
   };
 
   /** What the database answers a query or a transaction with: its answer's result, or why it failed */
-  const runCode = (type: 'EXECUTE_QUERY' | 'EXECUTE_TRANSACTION', code: string): Promise<unknown> =>
-    roundTrip(DATABASE_SYSTEM, { type, code }).then((answer) => (answer as { result?: unknown } | undefined)?.result);
+  const runCode = (type: 'EXECUTE_QUERY' | 'EXECUTE_TRANSACTION', code: string, system: FeatureRef): Promise<unknown> =>
+    roundTrip(system, { type, code }).then((answer) => (answer as { result?: unknown } | undefined)?.result);
 
   /**
    * Hooks the app's actor inspection up to `BRIDGE_FUNCTION`, which is a callback into this process rather
@@ -551,8 +549,8 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
     // match one against. A system that replies to it answers a call nobody is holding, which the bus drops
     system: (to, event) => attempt('system', () => tell(to, event)),
 
-    query: (code) => attempt('query', () => runCode('EXECUTE_QUERY', code)),
-    transact: (code) => attempt('transact', () => runCode('EXECUTE_TRANSACTION', code)),
+    query: (code, system) => attempt('query', () => runCode('EXECUTE_QUERY', code, system)),
+    transact: (code, system) => attempt('transact', () => runCode('EXECUTE_TRANSACTION', code, system)),
 
     state: () => attempt('state', () => page.evaluateExpression(`(() => {
       const snap = window.applicationState?.getSnapshot();

@@ -161,6 +161,13 @@ describe('a config that has stopped delegating', () => {
  * has never heard of — and Playwright's answer to that is to fail the run.
  */
 describe('takeOneShotFlags', () => {
+  it('selects a qualified database feature for a query', () => {
+    expect(takeOneShotFlags(['--database-system', 'alternate-pack/storage', '--query', 'return 1']))
+      .toMatchObject({ ask: 'query', databaseSystem: 'alternate-pack/storage', rest: [] });
+    expect(() => takeOneShotFlags(['--database-system', 'storage', '--query', 'return 1'])).toThrow(/pack\/feature/);
+    expect(() => takeOneShotFlags(['--database-system=alternate-pack/storage', '--state'])).toThrow(/only for --query/);
+  });
+
   it('consumes nothing when no question is asked, and keeps the order', () => {
     const argv = ['look.ts', '--grep', 'x'];
 
