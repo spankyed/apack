@@ -437,14 +437,19 @@ describe.each(['input', 'select'] as const)('%s callback failure ownership', kin
   })
 })
 
-it.each(['PromptHint','Spinner'] as const)('reacquires a withdrawn %s source without publishing a message failure or replaying its actions',async component=>{
+it.each([
+ ['PromptHint','before rendering'],
+ ['PromptHint','while rendering'],
+ ['Spinner','while formatting'],
+ ['SessionMode','while formatting document'],
+] as const)('reacquires a withdrawn %s source %s without publishing a failure or replaying its actions',async (component,stage)=>{
  const f=fixture(),old={component,id:'native-placement',revision:'a'.repeat(64)},fresh={...old,revision:'b'.repeat(64)}
  f.ui.composerPlacements.mockResolvedValue([old])
  f.setSource((_groups,composer)=>composer.map(item=>({component:item.component,uuid:item.id,sourceRevision:item.revision,messageId:'composer',sessionId:'session',text:'',start:0,end:0})))
  const states:string[]=[];f.publish.mockImplementation(()=>{states.push(...f.host.state.map(row=>row.body.status))})
  f.host.start();await vi.advanceTimersByTimeAsync(50)
  const prior=f.nodes()[0];if(prior.kind!=='button')throw Error('expected button')
- f.ui.render.mockImplementationOnce(async()=>{f.ui.composerPlacements.mockResolvedValue([fresh]);throw Error('Native composer source changed before rendering')})
+ f.ui.render.mockImplementationOnce(async()=>{f.ui.composerPlacements.mockResolvedValue([fresh]);throw Error(`Native composer source changed ${stage}`)})
  f.host.receive({type:'system',subtype:'ui_invalidate',event:'ui.render',composer_placements:true,client_id:'view',instances:[{surface:'desktop',component,id:old.id,instance_id:old.id}]})
  await vi.advanceTimersByTimeAsync(100)
  expect(states).not.toContain('error')

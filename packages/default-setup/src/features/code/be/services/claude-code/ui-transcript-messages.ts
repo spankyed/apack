@@ -191,7 +191,7 @@ export function createClaudeTranscriptMessageHost(options: {
           if (present(entry) && epoch === entry.epoch) {
             // Native source withdrawal is a replacement, not a failed message render.
             // Fetch new authority before rendering again; never retry the cached source.
-            if (composerRow(entry.row) && error instanceof Error && error.message === 'Native composer source changed before rendering') {
+            if (composerRow(entry.row) && error instanceof Error && /^Native composer source changed (?:before rendering|while rendering|while formatting(?: document)?)$/.test(error.message)) {
               entry.epoch++; entry.dirty = false; entry.drawing = undefined; entry.fields = undefined
               entry.engineOutput = undefined; entry.nativeHint = undefined; entry.body = {status: 'rendering'}
               void release(entry); entry.failedLease = true; publish(); void refreshGroups()
