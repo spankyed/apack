@@ -39,6 +39,7 @@ The owner approved one branch and one ready-for-review PR per independently test
 | 1. Consume the release layout | `spankyed/apack` · `session/starter-release-layout` | `master` |
 | 2. Move CLI provider settings to Code | `spankyed/apack` · `session/starter-code-settings` | `master` |
 | 2. Preserve replacement choices | `spankyed/apack` · `session/starter-replacement` | `master` |
+| 2. Address drive queries to an explicit feature | `spankyed/apack` · `session/starter-drive-database-target` | `master` |
 | 3a. Supply retrievable authoring packages, if producer-side changes are needed | `spankyed/apack` · `session/starter-toolchain` | `master` |
 | 3b. Transfer the production pack | `spankyed/default-setup` · `session/production-starter` | `main` |
 | 4. Pin the first external release | `spankyed/apack` · `session/starter-release-pin` | `master` |

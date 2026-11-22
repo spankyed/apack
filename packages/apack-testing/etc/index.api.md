@@ -7,6 +7,7 @@
 import { ElectronApplication } from '@playwright/test';
 import { Expect } from 'playwright/test';
 import { expect } from '@playwright/test';
+import type { FeatureRef } from '@apackdev/sdk/ids';
 import { Page } from '@playwright/test';
 import { PlaywrightTestArgs } from 'playwright/test';
 import { PlaywrightTestOptions } from 'playwright/test';

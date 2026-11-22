@@ -12,6 +12,7 @@ import { askAttached, attachableApp, spawnOrAttach, type AttachableApp } from '.
 import type { DevSession } from '@apackdev/host/dev-session';
 import { appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { resolveName, splitRef, type FeatureRef } from '@apackdev/sdk/ids';
 import { fixtureEnv } from './test';
 import { hostEnvironment } from './dev';
 import { copySecretsInto } from '../app/profile-secrets.ts';
@@ -21,6 +22,7 @@ import { configCallsHelper } from '../build/config-text.ts';
 import { ensureCheckoutPackages } from '../build/checkout-packages.ts';
 
 const DRIVE_DIR = 'drive';
+const QUERY_TARGET_REQUIRED = '--query needs --database-system <pack/feature> to select its database system.';
 
 type DriveScope = 'app' | 'pack';
 
@@ -59,6 +61,7 @@ Use apack profiles to inspect or stop it.
 Options:
   --eval <body>       Evaluate a function body in the page
   --query <code>      Run one EARS read over the bus
+  --database-system <pack/feature>  Address --query to a database feature${scope === 'pack' ? ' (required for --query)' : ''}
   --state             Read the app shell's state
   --spawn             Start a source app if none is running
 ${scope === 'pack' ? '  --host <path|beta>  Select a host for scripts or live --spawn\n' : ''}${PROFILE_USAGE}
@@ -121,17 +124,25 @@ export type AskName = (typeof ASK_NAMES)[number];
 const ASKS_TAKING_A_VALUE = new Set<AskName>(['eval', 'query']);
 
 /** Consume live-question flags before forwarding script arguments to Playwright. */
-export function takeOneShotFlags(argv: string[]): { ask?: AskName; argument?: string; spawn: boolean; rest: string[] } {
+export function takeOneShotFlags(argv: string[]): { ask?: AskName; argument?: string; databaseSystem?: FeatureRef; spawn: boolean; rest: string[] } {
   const rest: string[] = [];
   let ask: AskName | undefined;
   let argument: string | undefined;
   let spawn = false;
+  let databaseSystem: FeatureRef | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const [name, inline] = argv[i]!.split(/=(.*)/s, 2) as [string, string | undefined];
     if (name === '--spawn') {
       if (inline !== undefined) throw new Error('--spawn does not take a value.');
       spawn = true;
+      continue;
+    }
+    if (name === '--database-system') {
+      if (databaseSystem !== undefined) throw new Error('--database-system was given twice.');
+      const value = inline ?? argv[++i];
+      if (value === undefined || !splitRef(value)) throw new Error('--database-system needs a pack/feature address.');
+      databaseSystem = resolveName(value);
       continue;
     }
     const asked = ASK_NAMES.find((verb) => name === `--${verb}`);
@@ -152,7 +163,8 @@ export function takeOneShotFlags(argv: string[]): { ask?: AskName; argument?: st
         + ' `return` is required: --eval "return document.title"');
     }
   }
-  return { ...(ask === undefined ? {} : { ask }), ...(argument === undefined ? {} : { argument }), spawn, rest };
+  if (databaseSystem !== undefined && ask !== 'query') throw new Error('--database-system is only for --query.');
+  return { ...(databaseSystem === undefined ? {} : { databaseSystem }), ...(ask === undefined ? {} : { ask }), ...(argument === undefined ? {} : { argument }), spawn, rest };
 }
 
 /**
@@ -294,7 +306,7 @@ interface OneShotOutput {
 
 /** What a one-shot asks of a session, by the flag that was passed. */
 async function answerAttached(
-  live: AttachableApp, root: string, ask: AskName, argument: string | undefined, state: 'attached' | 'spawned',
+  live: AttachableApp, root: string, ask: AskName, argument: string | undefined, state: 'attached' | 'spawned', databaseSystem: FeatureRef | undefined,
 ): Promise<OneShotOutput> {
   const screenshotDir = path.join(root, '.apack', DRIVE_DIR, 'screenshots');
   const notes: string[] = [];
@@ -307,7 +319,9 @@ async function answerAttached(
     const answer = await askAttached(live, root, screenshotDir, async (session) => {
       if (ask === 'state') return session.state();
       if (argument === undefined) throw new Error(`--${ask} needs something to run`);
-      return ask === 'eval' ? session.evaluate(argument) : session.query(argument);
+      if (ask === 'eval') return session.evaluate(argument);
+      if (databaseSystem === undefined) throw new Error(QUERY_TARGET_REQUIRED);
+      return session.query(argument, databaseSystem);
     });
     const result = answer.value as { ok?: boolean; value?: unknown; error?: string };
     if (result?.ok === false) {
@@ -368,14 +382,14 @@ export async function packDrive(args: string[]) {
   return drive(args, 'pack');
 }
 
-export async function drive(args: string[], scope: 'app' | 'pack' = 'app') {
+export async function drive(args: string[], scope: 'app' | 'pack' = 'app', defaultDatabaseSystem?: FeatureRef) {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(driveHelp(scope));
     return;
   }
 
   const cwd = process.cwd();
-  const { ask, argument, spawn: spawnFlag, rest } = takeOneShotFlags(args);
+  const { ask, argument, databaseSystem = defaultDatabaseSystem, spawn: spawnFlag, rest } = takeOneShotFlags(args);
   const { mode, withSecrets, rest: scriptArgs } = parseProfileFlags(rest);
   const flags = parseHostFlags(scriptArgs);
 
@@ -383,6 +397,7 @@ export async function drive(args: string[], scope: 'app' | 'pack' = 'app') {
   if (ask !== undefined) {
     if (flags.args.length) throw new Error(`Unexpected live-question arguments: ${flags.args.join(' ')}. See --help.`);
     if (flags.release || flags.prebuilt) throw new Error('Pack build flags belong to script runs, not live questions.');
+    if (ask === 'query' && databaseSystem === undefined) throw new Error(QUERY_TARGET_REQUIRED);
     const root = scope === 'pack' ? findPackRoot(cwd) : cwd;
     if (scope === 'app' && flags.host) throw new Error('Repository automation uses its own checkout; host selection belongs to pack commands.');
     if (!spawnFlag && flags.host) throw new Error('--host requires --spawn for a live question.');
@@ -399,14 +414,14 @@ export async function drive(args: string[], scope: 'app' | 'pack' = 'app') {
     const live = attachableApp(target.dir, expectedRoot);
     if (live) {
       if (needsNewSession) throw new Error('--rm and --with-secrets require a new session; this app is already running. Attach without those flags.');
-      return report(await answerAttached(live, root, ask, argument, 'attached'));
+      return report(await answerAttached(live, root, ask, argument, 'attached', databaseSystem));
     }
     if (spawnFlag) {
       if (target.note !== undefined) console.error(target.note);
       const spawnArgs = scope === 'pack' && selected?.kind === 'source'
         ? [...target.spawnArgs, '--host', selected.root] : target.spawnArgs;
       const { app, state } = await spawnOrAttach(root, target.dir, spawnArgs, { scope, expectedRoot, reuse: !needsNewSession });
-      return report(await answerAttached(app, root, ask, argument, state));
+      return report(await answerAttached(app, root, ask, argument, state, databaseSystem));
     }
     return report(noAppHere(target.dir));
   }

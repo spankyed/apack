@@ -278,7 +278,8 @@ that app published — one process per question, no session to stand up and noth
 apack pack dev                                   # one terminal: holds the app
 apack pack drive --state                         # another: 0.9s
 apack pack drive --eval 'return window.appVersion'
-apack pack drive --query 'return query(EARS.Entity.Note).count()'
+# Address the query to a database feature in the selected app
+apack pack drive --database-system another-pack/storage --query 'return query(EARS.Entity.Note).count()'
 ```
 
 With no app running it exits 3 and says so. `--spawn` starts one and keeps it, so a cold checkout costs
