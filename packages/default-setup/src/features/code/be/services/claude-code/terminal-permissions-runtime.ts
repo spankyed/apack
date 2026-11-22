@@ -140,9 +140,12 @@ function nativePermissionsFrame(n,entry){
  const liveForm=nativePermissionDirectory(controlsRoot,input,entry,standaloneInput?owner:undefined)??nativePermissionAutoRule(controlsRoot,input,entry);
  if(standaloneInput&&liveForm?.snapshot.kind!=='directory')throw Error('Native directory input is unavailable');
  if(providedDirectory&&(!picker||typeof picker.props.onCancel!=='function'||picker.options.length!==3||picker.options.map(o=>o.value).join(',')!=='yes-session,yes-remember,no'))throw Error('Native directory decisions changed');
- const ruleDetail=['19402997c9ec0c7bb57ebb4fe65ffd9e9fbdef857b9088fa1ed1eac99f9fe18d','61abd1560c3097702383db89a1347182baa6c2ce4d5d7d0733135f74682fd5f2'].includes(nativeModelFunctionHash(owner.child?.type));
- // The original confirmation can outlive the list that admitted this rule.
- const restrictedDelete=ruleDetail&&owner.child.memoizedProps.rule?.source!=='policySettings'&&n.managedPermissionRulesOnly();
+ const childHash=nativeModelFunctionHash(owner.child?.type);
+ const ruleDetail=['19402997c9ec0c7bb57ebb4fe65ffd9e9fbdef857b9088fa1ed1eac99f9fe18d','61abd1560c3097702383db89a1347182baa6c2ce4d5d7d0733135f74682fd5f2'].includes(childHash);
+ const ruleDestination=['d65b66125390a55515f7f62765bae04e5c8cf0ddd21d9d8e3c8d6256deaec0cd','c6a54291da908c727ef61cb71b9aa80642d6d4e0000818636de9fa11deb9853d'].includes(childHash);
+ // The original callbacks can update the displayed rules even after the policy prevents writes.
+ const privateRuleMutation=ruleDestination||ruleDetail&&owner.child.memoizedProps.rule?.source!=='policySettings';
+ const restrictedRuleWrite=privateRuleMutation&&n.managedPermissionRulesOnly();
  const textRoots=[];let bodyFrame;
  if(!tabFrame){
   const frames=[];nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.title==='string'&&p.children!==undefined)frames.push(f);});
@@ -156,7 +159,7 @@ function nativePermissionsFrame(n,entry){
  }
  if(!textRoots.length)textRoots.push(controlsRoot);
  for(const root of textRoots)nativeIdeWalk(root,f=>{const p=f.memoizedProps;if(liveForm?.problemProps&&p===liveForm.problemProps||search?.displayProps&&p===search.displayProps)return false;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text'&&(!n.terminalComponents?.n||f.type!==n.terminalComponents.n))return;const paragraph=nativePermissionParagraph(n,f);if(paragraph)paragraphs.push(paragraph);return false;},false);
- if(restrictedDelete)paragraphs.unshift({role:'alert',runs:[{text:'Managed policy changed. Go back to review the available rules.',style:{}}]});
+ if(restrictedRuleWrite)paragraphs.unshift({role:'alert',runs:[{text:'Managed policy changed. Go back to review the available rules.',style:{}}]});
  const title=tabFrame?.title??bodyFrame?.memoizedProps.title??'Permissions';
  const prior=entry.permissionsFrame;
  // The original picker rebuilds its Escape wrapper around the same No callback on each render.
@@ -167,7 +170,7 @@ function nativePermissionsFrame(n,entry){
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
  }
  const recent=nativePermissionRecent(controlsRoot,picker),decisions=local&&!directoryCommand?nativePermissionDecisionState(owner):undefined;
- const choices=recent?.choices??(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true||restrictedDelete&&o.value!=='cancel'}));
+ const choices=recent?.choices??(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true||restrictedRuleWrite&&o.value!=='cancel'}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(p=>p.runs.reduce((size,run)=>size+run.text.length,0)>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
  const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey??(providedDirectory?choices.find(o=>!o.disabled)?.value:undefined);
  const permissions={title,...decisions?{decisions}:{},...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...search?{search:search.value,searchScope:search.lease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:liveForm?.snapshot.kind==='directory'?'Add directory':liveForm?'Save rule':'Continue',...liveForm?{live:liveForm.snapshot}:{}}}:{}};

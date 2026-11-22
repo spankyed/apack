@@ -127,6 +127,28 @@ describe('original mounted Permissions authority', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith('cancel')
   })
 
+  it('withdraws private save destinations while original managed-only policy is active', async () => {
+    const f = fixture()
+    const onChange = vi.fn()
+    const options = ['localSettings', 'projectSettings', 'userSettings'].map(value => ({ value, label: value }))
+    const choices = { options, onChange }
+    const picker = function Choices() {}
+    f.root.child = {
+      type: Object.assign(function RuleDestination() {}, { hash: 'd65b66125390a55515f7f62765bae04e5c8cf0ddd21d9d8e3c8d6256deaec0cd' }),
+      memoizedProps: { title: 'Add ask permission rule', onCancel: f.cancel, children: [{ type: picker, props: choices }] },
+      child: { type: picker, memoizedProps: choices },
+    }
+    const prior = f.read().snapshot
+    expect(prior.permissions.choices.every((choice: { disabled: boolean }) => !choice.disabled)).toBe(true)
+    f.managedPermissionRulesOnly.mockReturnValue(true)
+    const current = f.read().snapshot
+    expect(current.permissions.choices.every((choice: { disabled: boolean }) => choice.disabled)).toBe(true)
+    await expect(f.act(current.revision, { action: 'select', value: 'userSettings' })).rejects.toThrow(/unavailable/)
+    expect(onChange).not.toHaveBeenCalled()
+    await f.act(current.revision, { action: 'cancel' })
+    expect(f.cancel).toHaveBeenCalledOnce()
+  })
+
   it('uses native dismissal so original summary/retry semantics are preserved', async () => {
     const f = fixture(); await f.close(); expect(f.cancel).toHaveBeenCalledOnce()
     expect(f.read).toThrow(/expired/)
