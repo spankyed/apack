@@ -377,6 +377,7 @@ type BlockResponse = {
     validationFailed: true;
 } | {
     nativeQuestionAnswer: ClaudeQuestionAnswer;
+    nativeQuestionDecision?: 'clarify';
     nativeQuestionRenderToken?: string;
     nativeQuestionDraftStarted?: boolean;
 }
@@ -912,8 +913,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 label: z.ZodString;
                 mode: z.ZodEnum<{
                     default: "default";
-                    auto: "auto";
                     plan: "plan";
+                    auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
                 }>;
@@ -2585,8 +2586,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             label: z.ZodString;
             mode: z.ZodEnum<{
                 default: "default";
-                auto: "auto";
                 plan: "plan";
+                auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
             }>;
@@ -2621,6 +2622,7 @@ interface ClaudeNativeQuestionDialogResponse {
     revision: string;
     sessionId: string;
     answer: Record<string, unknown>;
+    decision?: 'clarify';
     renderToken?: string;
     draftStarted?: boolean;
 }
@@ -8292,8 +8294,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
-    auto: "auto";
     plan: "plan";
+    auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
