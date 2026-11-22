@@ -14,8 +14,8 @@
           <MessageSquare :size="12" />
         </button>
 
-        <span class="flex shrink-0 items-center gap-1.5 px-1 py-0.5">
-          <span class="relative inline-block w-2 h-2" :title="content.chatState">
+        <span class="flex shrink-0 items-center gap-1.5 px-1 py-0.5" role="status" aria-label="Claude session summary status">
+          <span class="relative inline-block w-2 h-2" :title="stateConfig?.label ?? content.chatState">
             <span
               :class="[
                 'block w-2 h-2 rounded-full transition-colors duration-300',
@@ -325,7 +325,8 @@ interface SessionContent {
   lastTurnAt: number
   turns: number
   totalCostUsd: number
-  chatState: 'idle' | 'working' | 'paused' | 'error'
+  chatState: 'idle' | 'working' | 'paused' | 'error' | 'success'
+  nativeContinuation?: { sessionId: string }
   toolCallCount: number
   recentTools?: Array<{ name: string; summary: string; at: number }>
   permissionMode?: PermissionMode
@@ -391,11 +392,22 @@ function fmt(n: number): string {
 
 const settings = useSurfaceState('threads', (s) => s.settings)
 const overrides = useSurfaceState('threads', (s) => s.chatStateOverrides)
+const terminalViews = useSurfaceState('threads', s => s.nativeTerminalViews)
 const stateConfig = computed(() => {
+  const threadId = currentThreadId.value
+  const { sessionId, chatState, nativeContinuation } = content.value
+  if (threadId && sessionId && nativeContinuation?.sessionId !== sessionId) {
+    const views = Object.values(terminalViews.value ?? {}).filter(view =>
+      view.queueComposer && view.threadId === threadId && view.state?.sessionId === sessionId)
+    const reconnecting = views.some(view => view.opening || view.state?.status === 'starting' || view.state?.status === 'live')
+    // The last turn can succeed even when the authenticated terminal has since failed.
+    if (!reconnecting && views.some(view => view.state?.status === 'error' && view.state.nativePid !== undefined)) {
+      return { label: 'Disconnected', color: '#ef4444', busy: false }
+    }
+  }
   const configs = settings.value?.chatStates;
-  const threadId = currentThreadId.value ?? '';
-  const override = overrides.value?.[threadId];
-  const activeId = (override && override.expiresAt > Date.now()) ? override.id : content.value.chatState;
+  const override = overrides.value?.[threadId ?? ''];
+  const activeId = (override && override.expiresAt > Date.now()) ? override.id : chatState;
   return configs?.find((c: any) => c.id === activeId);
 });
 
