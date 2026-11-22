@@ -1880,11 +1880,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
-                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
+                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1959,8 +1959,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    pending: "pending";
                     idle: "idle";
+                    pending: "pending";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -2202,8 +2202,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        warning: "warning";
         feedback: "feedback";
+        warning: "warning";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -3290,6 +3290,18 @@ declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
     }, z.core.$strip>>;
 }, z.core.$strip>;
 
+type ClaudeQueuedPromptEdit = {
+    threadId: string;
+    mountId: string;
+    ownerId: string;
+    sessionId: string;
+    viewRevision: number;
+    turnId: string;
+    queueRevision: string;
+    sequence: number;
+    itemId: string;
+};
+
 type ClaudeRateLimitInfo = z.infer<typeof ClaudeRateLimitInfoSchema>;
 
 /** Native observations describe a completed request, never a promise about the next bill. */
@@ -3469,6 +3481,7 @@ type ClaudeTerminalViewRequest = {
     mountId: string;
 } & ({
     type: 'CLAUDE_TERMINAL_MOUNT';
+    queueComposer?: boolean;
 } | {
     type: 'CLAUDE_TERMINAL_UNMOUNT';
 } | {
@@ -3520,9 +3533,6 @@ type ClaudeTerminalViewRequest = {
     sequence: number;
 } & ({
     type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW';
-} | {
-    type: 'CLAUDE_TERMINAL_QUEUE_EDIT';
-    itemId: string;
 } | {
     type: 'CLAUDE_TERMINAL_QUEUE_CANCEL';
     itemId: string;
@@ -9836,6 +9846,9 @@ type ThreadViewData = Simplify<ThreadCreateData & {
  * asks, answered to the window that made them.
  */
 type ThreadsAsks = {
+    EDIT_CLAUDE_QUEUED_PROMPT: {
+        args: ClaudeQueuedPromptEdit;
+    };
     CLAUDE_MEMORY: {
         args: ClaudeMemoryRequest;
         answer: {
@@ -9980,6 +9993,7 @@ interface ThreadsContext {
     };
     nativeTerminalViews: Record<string, {
         threadId: string;
+        queueComposer?: boolean;
     } & ClaudeTerminalViewSnapshot>;
     nativeUiViews: Record<string, {
         threadId: string;
@@ -11366,11 +11380,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -11445,8 +11459,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
