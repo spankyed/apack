@@ -151,7 +151,10 @@ function nativePermissionsFrame(n,entry){
  if(!textRoots.length)textRoots.push(controlsRoot);
  for(const root of textRoots)nativeIdeWalk(root,f=>{const p=f.memoizedProps;if(liveForm?.problemProps&&p===liveForm.problemProps||search?.displayProps&&p===search.displayProps)return false;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text'&&(!n.terminalComponents?.n||f.type!==n.terminalComponents.n))return;const paragraph=nativePermissionParagraph(n,f);if(paragraph)paragraphs.push(paragraph);return false;},false);
  const title=tabFrame?.title??bodyFrame?.memoizedProps.title??'Permissions';
- let cancel=providedDirectory?picker.props.onCancel:owner.child?.memoizedProps?.onCancel;
+ const prior=entry.permissionsFrame;
+ // The original picker rebuilds its Escape wrapper around the same No callback on each render.
+ let cancel=owner.child?.memoizedProps?.onCancel;
+ if(providedDirectory)cancel=prior?.source===owner.memoizedProps&&prior.picker?.select===picker.select?prior.cancel:()=>picker.select('no');
  if(typeof cancel!=='function'){
   const caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===(local?226:19));
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
@@ -161,7 +164,7 @@ function nativePermissionsFrame(n,entry){
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(p=>p.runs.reduce((size,run)=>size+run.text.length,0)>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
  const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey??(providedDirectory?choices.find(o=>!o.disabled)?.value:undefined);
  const permissions={title,...decisions?{decisions}:{},...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...search?{search:search.value,searchScope:search.lease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:liveForm?.snapshot.kind==='directory'?'Add directory':liveForm?'Save rule':'Continue',...liveForm?{live:liveForm.snapshot}:{}}}:{}};
- const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
+ const encoded=JSON.stringify(permissions),source=providedDirectory?owner.memoizedProps:picker?.props??input??tabFrame??owner.memoizedProps;
  if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody||prior.liveForm?.field!==liveForm?.field||prior.recent?.props!==recent?.props||prior.recent?.keyDown!==recent?.keyDown)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,liveForm,tabs,ruleList,search,recent,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
  return entry.permissionsFrame;
 }

@@ -146,8 +146,21 @@ it('cancels a preselected directory via its original picker and refuses changed 
   delete f.entry.originalProps.directoryPath
   expect(f.read).toThrow(/terminal controls/)
   f.entry.originalProps.directoryPath = path
-  await f.act(f.read().snapshot.revision, { action: 'cancel' })
-  expect(f.onCancel).toHaveBeenCalledOnce()
+  const revision = f.read().snapshot.revision
+  f.root.child.memoizedProps = { ...f.root.child.memoizedProps, onCancel: vi.fn() }
+  expect(f.read().snapshot.revision).toBe(revision)
+  await f.act(revision, { action: 'cancel' })
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('no')
+  expect(f.onCancel).not.toHaveBeenCalled()
+})
+
+it('requires a fresh revision when the original directory decision changes', async () => {
+  const f = providedDirectoryFixture(), before = f.read()
+  const replacement = vi.fn()
+  f.root.child.memoizedProps = { ...f.root.child.memoizedProps, onChange: replacement }
+  expect(f.read().snapshot.revision).not.toBe(before.snapshot.revision)
+  await expect(f.act(before.snapshot.revision, { action: 'select', value: 'yes-remember' })).rejects.toThrow(/changed/)
+  expect(replacement).not.toHaveBeenCalled()
   expect(f.onChange).not.toHaveBeenCalled()
 })
 
