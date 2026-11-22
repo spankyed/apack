@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services/claude-code/native-platform-runtime.ts'
 import { claudeTerminalPowerShellRuntime } from '#features/code/be/services/claude-code/terminal-powershell-runtime.ts'
 
-function fixture() {
+function fixture(withFeedback = false) {
   function jat() {}
   function Xe() {}
   const item = { id: 'permission', kind: 'permission_powershell' }
@@ -11,15 +11,29 @@ function fixture() {
   const open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
   let current = dialog
-  const onChange = vi.fn((_: string) => { open.pop() })
+  let refusing = false
+  const onChange = vi.fn((_: string) => { if (refusing) return false; open.pop(); return true })
   const onCancel = vi.fn(() => { open.pop() })
   const options = [{ value: 'yes', label: 'Original approval' }, { value: 'no', label: 'Original refusal' }]
-  const control = { type: Xe, props: { options, onChange, onCancel } }
+  const onInputModeToggle = () => {}
+  const control = { type: Xe, props: { options, onChange: (choice: string) => onChange(choice), onCancel, onInputModeToggle } }
+  const acceptedFeedback = vi.fn(), refusedFeedback = vi.fn()
+  const feedback = {
+    acceptFeedback: '', rejectFeedback: '', handleInputModeToggle: onInputModeToggle,
+    setAcceptFeedback: (text: string) => update('acceptFeedback', text),
+    setRejectFeedback: (text: string) => update('rejectFeedback', text),
+  }
+  function update(field: 'acceptFeedback' | 'rejectFeedback', text: string) {
+    feedback[field] = text
+    const report = field === 'acceptFeedback' ? acceptedFeedback : refusedFeedback
+    control.props.onChange = choice => { report(text); return onChange(choice) }
+  }
+  const memoRow = Array.from({ length: 35 }, (_, index) => index === 34 ? feedback : null)
   const command = { kind: 'full', text: 'Write-Output "Local fixture"' }
   const body = [false, 'Original reason', null, 'Do you want to proceed?', control]
   const panel = { title: 'PowerShell command', children: [null, { props: { commandDisplay: command } }, { props: { children: body } }, null] }
   const wrapper = { fitted: { description: 'Original description', body: { isStandingHeld: false } }, children: { props: panel } }
-  const fiber = { type: jat, memoizedProps: { payload, wouldTakeAnswer: () => true }, child: { memoizedProps: wrapper } }
+  const fiber = { type: jat, memoizedProps: { payload, wouldTakeAnswer: () => true }, child: { memoizedProps: wrapper }, updateQueue: { memoCache: { data: withFeedback ? [memoRow] : [] } } }
   const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const code = rewriteClaudeNativePlatformSelectors(claudeTerminalPowerShellRuntime)
   const runtime = vm.runInNewContext(`${code};({show:nativePowerShellPresentation,answer:answerNativePowerShellPermission})`, {
@@ -30,8 +44,8 @@ function fixture() {
     nativeDialog: () => current,
   })
   const show = () => runtime.show(n, dialog)
-  const answer = (token: string, decision: string, choice: string) => runtime.answer(n, dialog, { toolName: 'PowerShell', choiceToken: token, decision, choice })
-  return { show, answer, onChange, onCancel, command, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  const answer = (token: string, decision: string, choice: string, feedback?: string) => runtime.answer(n, dialog, { feedback, toolName: 'PowerShell', choiceToken: token, decision, choice }, new AbortController().signal)
+  return { show, answer, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 
 it.each([['allow', 'yes'], ['deny', 'no'], ['cancel', '']])('sends %s to the original PowerShell control', async (decision, choice) => {
@@ -78,4 +92,19 @@ it('rejects mismatched decisions and retired native dialogs before invoking any 
   await expect(f.answer(shown.presentation.token, 'allow', 'yes')).rejects.toThrow('Native PowerShell permission expired')
   expect(f.onChange).not.toHaveBeenCalled()
   expect(f.onCancel).not.toHaveBeenCalled()
+})
+
+it.each([['allow', 'yes', 'acceptedFeedback'], ['deny', 'no', 'refusedFeedback']] as const)('commits %s feedback through the confirmed native state before deciding', async (decision, choice, report) => {
+  const f = fixture(true), shown = await f.show()
+  expect(shown.presentation.choices.find((option: { value: string }) => option.value === choice)?.feedback).toBe(true)
+  await f.answer(shown.presentation.token, decision, choice, 'Keep exact spacing  in this instruction.')
+  expect(f[report]).toHaveBeenCalledExactlyOnceWith('Keep exact spacing  in this instruction.')
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith(choice)
+})
+
+it('restores the prior native text when the original callback refuses the operation', async () => {
+  const f = fixture(true), shown = await f.show()
+  f.refuse()
+  await expect(f.answer(shown.presentation.token, 'allow', 'yes', 'Do not keep this after failure')).rejects.toThrow('refused')
+  expect(f.feedback.acceptFeedback).toBe('')
 })

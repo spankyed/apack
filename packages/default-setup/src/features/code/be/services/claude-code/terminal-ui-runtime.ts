@@ -1206,7 +1206,7 @@ async function control(request,abort){
   const shell=nativeDialog(n,'permission_powershell');
   if(shell.item){
    if(request.id!==shell.item.id||request.revision!==shell.revision||request.session_id!==shell.sessionId)throw Error('Native PowerShell permission changed or expired');
-   await answerNativePowerShellPermission(n,shell,request);dialogRevisions.delete('permission_powershell');return {answered:true};
+   await answerNativePowerShellPermission(n,shell,request,abort.signal);dialogRevisions.delete('permission_powershell');return {answered:true};
   }
   const d=nativeDialog(n,'permission_prompt');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native generic permission changed or expired');
