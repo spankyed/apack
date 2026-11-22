@@ -271,6 +271,24 @@ export interface PublishOptions {
   octokit?: Pick<Octokit, 'rest' | 'paginate'>;
 }
 
+/** Resolve an existing release tag to its commit, including annotated tags. */
+async function verifyReleaseTag(octokit: Pick<Octokit, 'rest'>, repository: { owner: string; repo: string },
+  tag: string, commit: string,
+): Promise<void> {
+  const { data } = await octokit.rest.git.getRef({ ...repository, ref: `tags/${tag}` });
+  let object = data.object;
+  const seen = new Set<string>();
+  while (object.type === 'tag') {
+    if (seen.has(object.sha)) throw new Error(`Release tag ${tag} has a circular tag reference`);
+    seen.add(object.sha);
+    const { data: annotated } = await octokit.rest.git.getTag({ ...repository, tag_sha: object.sha });
+    object = annotated.object;
+  }
+  if (object.type !== 'commit' || object.sha !== commit) {
+    throw new Error(`Release tag ${tag} points to ${object.sha}; the archive records ${commit}`);
+  }
+}
+
 /** Upload the verified pack to a draft before exposing it to consumers. */
 export async function publishRelease(root: string, releaseDir: string, options: PublishOptions = {}): Promise<{ tag: string; prerelease: boolean }> {
   const env = options.env ?? process.env;
@@ -293,6 +311,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   // reads a release's hostVersion from it without downloading the archive
   const infoFile = `${archive}.integrity.json`;
   let infoBytes: Buffer;
+  let sourceCommit: string | undefined;
   try {
     const verifiedArchive = path.join(scratch, path.basename(archive));
     fs.writeFileSync(verifiedArchive, archiveBytes);
@@ -300,6 +319,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
     const info = verifyPack(extracted);
     if (info.version !== version) throw new Error(`Pack version ${info.version} does not match apack.json ${version}`);
     if (info.id !== manifest.id) throw new Error(`Pack ID ${info.id} does not match apack.json ${manifest.id}`);
+    sourceCommit = info.provenance?.commit;
     infoBytes = Buffer.from(JSON.stringify(info, null, 2) + '\n');
     fs.writeFileSync(infoFile, infoBytes);
   } finally {
@@ -321,6 +341,8 @@ export async function publishRelease(root: string, releaseDir: string, options: 
 
   const repos = octokit.rest.repos;
   const repository = { owner, repo };
+  if (!sourceCommit) throw new Error('A published pack archive must record its source commit');
+  await verifyReleaseTag(octokit, repository, tag, sourceCommit);
   // The authenticated list includes drafts. Match an exact tag, including any older interrupted draft.
   const matches = (await octokit.paginate(repos.listReleases, { ...repository, per_page: 100 }))
     .filter(release => release.tag_name === tag);
@@ -383,6 +405,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
     });
     if (!await verified(uploaded, file)) throw new Error(`Release ${tag}: GitHub did not verify the upload of ${file.name}`);
   }
+  await verifyReleaseTag(octokit, repository, tag, sourceCommit);
   await repos.updateRelease({ ...releaseRef, draft: false });
   console.log(`Published ${owner}/${repo}@${tag}${prerelease ? ' (prerelease)' : ''}`);
   return { tag, prerelease };

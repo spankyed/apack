@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultRunner, nextReleaseVersion, preflight, publishRelease, releaseStateReport, runRelease, type Runner } from '../../src/commands/release';
-import { readPackIntegrity, sealPackBuild } from '@apackdev/host/packs';
+import { createPackArchive, readPackIntegrity, sealPackBuild, stagePack } from '@apackdev/host/packs';
 import { runPackBuild } from '../../src/build/build-process.ts';
 import { createPackCompilerInputView } from '@apackdev/host/build/compiler-inputs';
 import { readPackageInputs } from '@apackdev/host/build/package-inputs';
@@ -202,6 +202,13 @@ describe('preflight', () => {
 });
 
 describe('publishRelease', () => {
+  const sourceCommit = 'a'.repeat(40);
+  async function archiveForPublish(root: string, releaseDir: string) {
+    const stage = path.join(tmp, 'publish-stage');
+    stagePack(root, stage, { provenance: { commit: sourceCommit } });
+    return createPackArchive(stage, releaseDir);
+  }
+
   function mockOctokit() {
     type Asset = { id: number; name: string; size: number; digest: string | null; state: 'uploaded' | 'starter' };
     type Release = { id: number; tag_name: string; draft: boolean; prerelease: boolean };
@@ -235,14 +242,16 @@ describe('publishRelease', () => {
     }));
     const repos = { listReleases, listReleaseAssets, createRelease, uploadReleaseAsset, deleteReleaseAsset, updateRelease, getReleaseAsset };
     const paginate = vi.fn(async (method: typeof listReleaseAssets | typeof listReleases) => method());
-    const octokit = { rest: { repos }, paginate } as unknown as NonNullable<Parameters<typeof publishRelease>[2]>['octokit'];
-    return { octokit, releases, assets, paginate, ...repos };
+    const getRef = vi.fn(async () => ({ data: { object: { type: 'tag', sha: 'b'.repeat(40) } } }));
+    const getTag = vi.fn(async () => ({ data: { object: { type: 'commit', sha: sourceCommit } } }));
+    const octokit = { rest: { repos, git: { getRef, getTag } }, paginate } as unknown as NonNullable<Parameters<typeof publishRelease>[2]>['octokit'];
+    return { octokit, releases, assets, paginate, getRef, getTag, ...repos };
   }
 
   it('creates a prerelease for beta versions and uploads the archive and checksum', async () => {
     const root = builtPack('1.3.0-beta.2');
     const releaseDir = path.join(tmp, 'release');
-    await buildPackArchive(root, releaseDir);
+    await archiveForPublish(root, releaseDir);
     const { octokit, createRelease, uploadReleaseAsset, updateRelease } = mockOctokit();
 
     const result = await publishRelease(root, releaseDir, { octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' }, run: fakeGit({}) });
@@ -260,7 +269,7 @@ describe('publishRelease', () => {
   it('resumes a draft after an interrupted upload and accepts an identical published result', async () => {
     const root = builtPack('1.0.0');
     const releaseDir = path.join(tmp, 'release');
-    await buildPackArchive(root, releaseDir);
+    await archiveForPublish(root, releaseDir);
     const api = mockOctokit();
     api.uploadReleaseAsset.mockImplementationOnce(async ({ name, data }) => {
       const asset = {
@@ -301,10 +310,39 @@ describe('publishRelease', () => {
     expect(api.updateRelease).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses a missing or mismatched remote tag before uploading', async () => {
+    const root = builtPack('1.0.0');
+    const releaseDir = path.join(tmp, 'release');
+    await archiveForPublish(root, releaseDir);
+    const api = mockOctokit();
+    const publish = () => publishRelease(root, releaseDir, { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' } });
+
+    api.getRef.mockRejectedValueOnce(new Error('Tag missing'));
+    await expect(publish()).rejects.toThrow('Tag missing');
+    api.getRef.mockResolvedValueOnce({ data: { object: { type: 'commit', sha: 'c'.repeat(40) } } });
+    await expect(publish()).rejects.toThrow(/the archive records/);
+    expect(api.createRelease).not.toHaveBeenCalled();
+    expect(api.uploadReleaseAsset).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft if its tag no longer matches at promotion', async () => {
+    const root = builtPack('1.0.0');
+    const releaseDir = path.join(tmp, 'release');
+    await archiveForPublish(root, releaseDir);
+    const api = mockOctokit();
+    api.getTag.mockResolvedValueOnce({ data: { object: { type: 'commit', sha: sourceCommit } } })
+      .mockResolvedValueOnce({ data: { object: { type: 'commit', sha: 'c'.repeat(40) } } });
+    await expect(publishRelease(root, releaseDir, { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' } }))
+      .rejects.toThrow(/the archive records/);
+    expect(api.releases[0]?.draft).toBe(true);
+    expect(api.uploadReleaseAsset).toHaveBeenCalledTimes(3);
+    expect(api.updateRelease).not.toHaveBeenCalled();
+  });
+
   it('keeps the release private when a response reports a different asset digest', async () => {
     const root = builtPack('1.0.0');
     const releaseDir = path.join(tmp, 'release');
-    await buildPackArchive(root, releaseDir);
+    await archiveForPublish(root, releaseDir);
     const api = mockOctokit();
     api.uploadReleaseAsset.mockImplementationOnce(async ({ name, data }) => ({
       data: { id: 1, name, size: data.length, digest: `sha256:${'0'.repeat(64)}`, state: 'uploaded' },
@@ -323,7 +361,7 @@ describe('publishRelease', () => {
   it('refuses to publish an archive that fails verification', async () => {
     const root = builtPack('1.0.0');
     const releaseDir = path.join(tmp, 'release');
-    await buildPackArchive(root, releaseDir);
+    await archiveForPublish(root, releaseDir);
     fs.writeFileSync(path.join(releaseDir, 'demo-pack-1.0.0.tgz.sha256'), `${'0'.repeat(64)}  demo-pack-1.0.0.tgz\n`);
     const { octokit, createRelease } = mockOctokit();
 
