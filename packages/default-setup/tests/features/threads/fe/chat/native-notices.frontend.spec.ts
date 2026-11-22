@@ -1,4 +1,5 @@
 import { createApp, h, reactive, nextTick } from 'vue'
+import NativeManagedSettingsNotice from '#features/threads/fe/chat/NativeManagedSettingsNotice.vue'
 import NativeUiNotices from '#features/threads/fe/chat/NativeUiNotices.vue'
 import type { ClaudeUiNotices } from '#features/code/be/services/claude-code/ui-presentation.ts'
 
@@ -17,5 +18,40 @@ it('renders native notices literally, keeps the latest three toasts and dismisse
     button.click(); await nextTick()
     expect(root.querySelectorAll('[data-native-toast]')).toHaveLength(3); expect(root.textContent).not.toContain('src="1"')
     notices.statuses = []; notices.toasts = []; await nextTick(); expect(root.querySelector('section')).toBeNull()
+  } finally { app.unmount(); root.remove() }
+})
+
+
+it('keeps keyboard ownership through a pending managed settings recheck and returns it when the warning clears', async () => {
+  const state = reactive<{ show: boolean; eligible: boolean; operation?: 'pending' | 'error' }>({ show: true, eligible: true })
+  const diagnostics = [{ file: 'managed-settings.json', path: '', message: 'Access refused', errno: 'EACCES' }]
+  const root = document.createElement('div')
+  document.body.append(root)
+  const recheck = vi.fn(() => { state.operation = 'pending' })
+  const returnFocus = vi.fn()
+  const app = createApp({ render: () => state.show ? h(NativeManagedSettingsNotice, {
+    diagnostics, canRecheck: state.eligible,
+    recheck: state.operation && { status: state.operation, sessionId: 'same-session', viewRevision: 1 },
+    onRecheck: recheck, onReturnFocus: returnFocus,
+  }) : null })
+  app.mount(root)
+  try {
+    root.querySelector('details')!.open = true
+    const button = root.querySelector('button')!
+    button.focus()
+    button.click()
+    await nextTick()
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.disabled).toBe(false)
+    expect(document.activeElement).toBe(button)
+    button.click()
+    expect(recheck).toHaveBeenCalledOnce()
+    state.operation = 'error'
+    state.eligible = false
+    await nextTick()
+    expect(document.activeElement).toBe(root.querySelector('summary'))
+    state.show = false
+    await nextTick()
+    expect(returnFocus).toHaveBeenCalledOnce()
   } finally { app.unmount(); root.remove() }
 })
