@@ -159,7 +159,9 @@ export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNulla
         span.contentEditable = 'false'
         span.setAttribute('aria-hidden', 'true')
         span.className = 'claude-prompt-virtual'
-        span.style.cssText = 'opacity:0.6;pointer-events:none;user-select:none'
+        const lines = [run.underline && 'underline', run.strikethrough && 'line-through'].filter(Boolean)
+        span.style.cssText = ['opacity:0.6', ...claudePromptRunStyles(run), `text-decoration-line:${lines.join(' ') || 'none'}`,
+          'pointer-events:none', 'user-select:none'].join(';')
         return span
       }, { side: -1, ignoreSelection: true }))
       continue

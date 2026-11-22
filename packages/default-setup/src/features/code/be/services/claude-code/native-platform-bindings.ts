@@ -211,7 +211,8 @@ export const claudeNativeLinuxBindings: {
         "Rs": "As",
         "tut": "Kct",
         "vfe": "_fe",
-        "yCr": "XEr"
+        "yCr": "XEr",
+        "Yen": "Den"
       }
     },
     "chunk-ck4jw7jw.js": {

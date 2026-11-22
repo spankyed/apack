@@ -64,3 +64,37 @@ it('coalesces queued edits, adopts app changes and retires edits on detach', asy
   calls[2]!.resolve({ text: 'LATE', cursor: 4 })
   expect(await next).toEqual({ text: 'restored ', cursor: 9, superseded: true })
 })
+
+it('projects original zero-width hints only for the latest eligible owned terminal draft', () => {
+  const start = claudeTerminalUiRuntime.indexOf('function ownedPromptDecorations(')
+  const end = claudeTerminalUiRuntime.indexOf('function clearEdit(')
+  const project = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';ownedPromptDecorations', {
+    originalContext: undefined, process,
+  }) as (native: unknown, runs: unknown, text: string, latest: boolean) => unknown
+  const paint = { start: 0, end: 3, bold: true }
+  const hint = { start: 1, end: 1, virtualText: ' note ' }
+  let surface = 'terminal', reader = false, admitted = true
+  const originalDisplay = vi.fn((text: string) => ({ text: text.slice(0, 1) + hint.virtualText + text.slice(1) }))
+  const native = {
+    runtime: { nxe: () => [paint, hint], ey: () => ({ surface }), qgr: () => [paint] },
+    gate: { ioe: () => admitted },
+    themeRoots: { ai: () => new Map([[process.stdout, { isScreenReaderEnabled: reader }]]) },
+    engine: { Yen: originalDisplay },
+  }
+  expect(project(native, [], 'abc', true)).toEqual([paint, hint])
+  expect(originalDisplay).toHaveBeenCalledOnce()
+  expect(project(native, [], 'abc', false)).toEqual([paint])
+  expect(project(native, [], '', true)).toEqual([paint])
+  expect(project(native, [], 'e\u0301', true)).toEqual([paint])
+  reader = true
+  expect(project(native, [], 'abc', true)).toEqual([paint])
+  reader = false
+  surface = 'desktop'
+  expect(project(native, [], 'abc', true)).toEqual([paint])
+  surface = 'terminal'
+  admitted = false
+  expect(project(native, [], 'abc', true)).toEqual([paint])
+  admitted = true
+  originalDisplay.mockReturnValueOnce({ text: 'e\u0301' })
+  expect(project(native, [], 'abc', true)).toEqual([paint])
+})

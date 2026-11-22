@@ -495,6 +495,19 @@ function nativeTurnControl(n,request,signal,sessionId){
 }
 // Keep remote edit state separate from the hidden terminal draft used for submission.
 const edits=new Map();
+function ownedPromptDecorations(n,runs,text,latest){
+ const normalized=n.runtime.nxe(runs,text);
+ const hints=normalized.filter(run=>run.start===run.end&&run.virtualText);
+ if(latest&&hints.length&&text&&text===text.normalize('NFC')
+  &&(originalContext??n.runtime.ey())?.surface==='terminal'
+  &&n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false})
+  &&n.themeRoots.ai().get(process.stdout)?.isScreenReaderEnabled===false){
+  // Use the native terminal's projected text only to verify normalization; never return it as the draft.
+  const display=n.engine.Yen(text,hints).text;
+  if(display===display.normalize('NFC'))return normalized;
+ }
+ return n.runtime.qgr(normalized);
+}
 function clearEdit(clientId){
  const state=edits.get(clientId);if(!state)return;
  edits.delete(clientId);state.active?.abort();
@@ -523,7 +536,7 @@ function drainEdit(n,clientId,state){
  Promise.resolve().then(()=>n.session.kGr({before,after:next.box,...(nativeKey?{key:nativeKey}:{})},abort.signal)).catch(()=>next.box).then(result=>{
   state.active=undefined;
   if(abort.signal.aborted||edits.get(clientId)!==state){next.answer({...next.box,superseded:true});return;}
-  const box=n.session.o_n(result),decorations=nativeThemePromptDecorations(n,n.runtime.qgr(n.runtime.nxe(result.decorations,box.text)));
+  const box=n.session.o_n(result),decorations=nativeThemePromptDecorations(n,ownedPromptDecorations(n,result.decorations,box.text,!state.stale&&!state.waiting.length));
   if((box.text!==next.box.text||box.cursor!==next.box.cursor)&&!state.waiting.length&&!state.stale)state.offered=box;
   state.stale=false;next.answer({...box,...(decorations.length?{decorations}:{})});drainEdit(n,clientId,state);
  });

@@ -133,6 +133,24 @@ describe('native UI transport', () => {
     f.controls.close()
   })
 
+  it('accepts virtual anchors inside native paint without relaxing overlapping paint validation', async () => {
+    const f = fixture()
+    const paint = { start: 0, end: 3, bold: true }
+    const hint = { start: 1, end: 1, virtualText: 'hint' }
+    const edit = f.ui.promptEdit({ ...client, by: 'person', text: 'abc', cursor: 3 })
+    await Promise.resolve()
+    const frame = { text: 'abc', cursor: 3, decorations: [paint, hint] }
+    f.reply(0, frame)
+    await expect(edit).resolves.toEqual(frame)
+
+    const badEdit = f.ui.promptEdit({ ...client, by: 'person', text: 'abc', cursor: 3 })
+    const rejected = expect(badEdit).rejects.toThrow('decoration range')
+    await Promise.resolve()
+    f.reply(1, { ...frame, decorations: [paint, hint, { start: 2, end: 3, bold: true }] })
+    await rejected
+    f.controls.close()
+  })
+
   it('rejects malformed native caret and decoration frames', async () => {
     const f = fixture()
     const edit = f.ui.promptEdit({ ...client, by: 'person', text: 'a', cursor: 1 })

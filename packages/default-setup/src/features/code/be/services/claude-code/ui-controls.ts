@@ -87,12 +87,15 @@ const promptFrame = z.object({ text: z.string().max(1000000), cursor: z.number()
   decorations: z.array(promptDecoration).max(8192).optional(), superseded: z.literal(true).optional(),
 }).passthrough().superRefine((frame, context) => {
   if (frame.cursor > frame.text.length) context.addIssue({ code: z.ZodIssueCode.custom, message: 'native prompt cursor exceeds text' })
-  let end = 0
+  let lastStart = 0, paintEnd = 0
   for (const run of frame.decorations ?? []) {
-    if (run.start < end || run.end < run.start || run.end > frame.text.length || (run.end === run.start && !run.virtualText)) {
+    const virtual = run.start === run.end
+    if (run.start < lastStart || run.end < run.start || run.end > frame.text.length
+      || (virtual ? !run.virtualText : run.start < paintEnd || run.virtualText !== undefined)) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: 'native prompt decoration range is invalid' })
     }
-    end = run.end
+    lastStart = run.start
+    if (!virtual) paintEnd = run.end
   }
 })
 // Frozen 2.1.302 pane roster and person-origin pane controls.
