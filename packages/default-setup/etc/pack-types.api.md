@@ -11643,7 +11643,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean, pai
     register(client: string, host: ClaudePromptHost): () => void;
     answers(client: string): string[];
     detach: (client: string) => void;
-    receive(line: ControlRequestLine): boolean;
+    receive(line: ControlRequestLine, allowVirtualDecorations?: boolean): boolean;
     cancel(id: string): boolean;
     close(): void;
 };
@@ -12430,6 +12430,7 @@ declare const fill: z.ZodObject<{
         italic: z.ZodOptional<z.ZodBoolean>;
         underline: z.ZodOptional<z.ZodBoolean>;
         strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>>>;
 }, z.core.$strict>;
 

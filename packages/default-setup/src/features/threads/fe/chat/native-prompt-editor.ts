@@ -144,7 +144,18 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const offset = input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
     const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
     const cursor = offset + input.text.length
-    const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
+    let runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
+    const hints = runs.filter(run => run.start === run.end && run.virtualText)
+    if (hints.length) {
+      // Use the whole draft, since insert and append can join adjacent Unicode.
+      let from = 0
+      const projection = hints.map(run => {
+        const prefix = text.slice(from, run.start)
+        from = run.start
+        return prefix + run.virtualText
+      }).join('') + text.slice(from)
+      if (text !== text.normalize('NFC') || projection !== projection.normalize('NFC')) runs = runs.filter(run => run.start !== run.end)
+    }
     let parserRefused = false
     const parseFill = (value: string) => { try { return parse(value) } catch (error) { parserRefused = true; throw error } }
     // Replacing a literal draft must also release reference metadata from its former text.

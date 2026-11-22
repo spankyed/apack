@@ -8,14 +8,20 @@ const box = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH), cursor: 
 const decoration = z.object({ _apackThemeColor: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).optional(), _apackThemeBackgroundColor: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).optional(), start: z.number().int().nonnegative(), end: z.number().int().nonnegative(),
   color: z.string().optional(), backgroundColor: z.string().optional(), dimColor: z.boolean().optional(),
   bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(), strikethrough: z.boolean().optional(),
+  virtualText: z.string().min(1).optional(),
 }).strict()
 const fill = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH), mode: z.enum(['replace', 'append', 'insert']), ifEmpty: z.literal(true).optional(), focus: z.literal(true).optional(), decorations: z.array(decoration).max(8192).optional() }).strict()
   .superRefine((value, context) => {
     if (value.focus && (!value.ifEmpty || value.mode !== 'replace')) context.addIssue({ code: z.ZodIssueCode.custom, message: 'restoration focus requires empty-only replacement' })
-    let end = 0
+    let lastStart = 0, paintEnd = 0
     for (const run of value.decorations ?? []) {
-      if (run.start < end || run.end <= run.start || run.end > value.text.length) context.addIssue({ code: z.ZodIssueCode.custom, message: 'invalid prompt fill decoration range' })
-      end = run.end
+      const virtual = run.start === run.end
+      if (run.start < lastStart || run.end < run.start || run.end > value.text.length
+        || (virtual ? !run.virtualText : run.start < paintEnd || run.virtualText !== undefined)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: 'invalid prompt fill decoration range' })
+      }
+      lastStart = run.start
+      if (!virtual) paintEnd = run.end
     }
   })
 const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy', 'ui_read_selection']), client_id: z.string(), surface: z.enum(['desktop', 'mobile', 'vscode']) }).passthrough()
@@ -52,7 +58,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       return host && host.available?.() !== false ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : []
     },
     detach,
-    receive(line: ControlRequestLine): boolean {
+    receive(line: ControlRequestLine, allowVirtualDecorations = false): boolean {
       if (!['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy', 'ui_read_selection'].includes(line.request.subtype)) return false
       if (closed || seen.has(line.request_id)) return true
       const read = line.request.subtype === 'ui_prompt_read', filling = line.request.subtype === 'ui_prompt_fill', copying = line.request.subtype === 'ui_copy', selecting = line.request.subtype === 'ui_read_selection'
@@ -66,7 +72,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       const parsed = request.safeParse(line.request)
       const host = parsed.success && parsed.data.surface === 'desktop' ? hosts.get(parsed.data.client_id) : undefined
       const input = !filling ? undefined : fill.safeParse({ text: line.request.text, mode: line.request.mode, ...(line.request.ifEmpty!==undefined?{ifEmpty:line.request.ifEmpty}:{}), ...(line.request.focus!==undefined?{focus:line.request.focus}:{}), ...(line.request.decorations !== undefined ? { decorations: line.request.decorations } : {}) })
-      const fillInput = input?.success ? input.data : undefined
+      const fillInput = input?.success && (allowVirtualDecorations || !input.data.decorations?.some(run => run.virtualText !== undefined)) ? input.data : undefined
       const textInput = !read && !filling && !selecting ? z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH).safeParse(line.request.text) : undefined
       const requestText = textInput?.success && (copying || textInput.data.trim()) ? textInput.data : undefined
       if (!host || host.available?.() === false || (selecting && !host.selection) || (filling && !fillInput) || (!read && !filling && !selecting && (!(copying ? host.copy : host.suggest) || requestText === undefined))) { reply(fallback); return true }

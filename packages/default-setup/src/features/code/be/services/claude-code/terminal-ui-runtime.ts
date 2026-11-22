@@ -51,6 +51,7 @@ import { claudeTerminalInlineModelRuntime } from './terminal-inline-model-runtim
 import { claudeTerminalActionKeyRuntime } from './terminal-action-key-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
 export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.raw`import http from 'node:http';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {dirname as nativeEditorDirname} from 'node:path';
 import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
@@ -423,14 +424,27 @@ function restoreHosts(n){
  if(wrappedContext&&n.runtime.ey()===wrappedContext)n.runtime.Zao(originalContext);
  originalContext=undefined;wrappedContext=undefined;
 }
+const nativeFillForRequester=new AsyncLocalStorage();
+function requestNativeFill(n,args){
+ const captured=nativeFillForRequester.getStore();
+ const local=captured&&captured.text===args.text&&captured.mode===args.mode
+  ? ownedPromptDecorations(n,captured.decorations,args.text,true) : undefined;
+ const decorations=local?.some(run=>run.start===run.end)?local:args.decorations;
+ return askHost('ui_prompt_fill',{...args,...(decorations!==undefined?{decorations:nativeThemePromptDecorations(n,decorations)}:{})});
+}
 function installHosts(n){
  if(wrappedContext&&n.runtime.ey()===wrappedContext)return;
  if(wrappedContext)restoreHosts(n);
  const current=n.runtime.ey();if(!current?.composer)throw Error('Native terminal composer is not bound');
  originalContext=current;
- releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async args=>(await askHost('ui_copy',args))?.copied,readSelection:async args=>{const value=await askHost('ui_read_selection',args);return value===undefined?n.runtime.j_r('aborted'):n.runtime.CXs(value.text,value.instance_id)},readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await askHost('ui_prompt_fill',{...args,...(args.decorations!==undefined?{decorations:nativeThemePromptDecorations(n,args.decorations)}:{})}))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
+ releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async args=>(await askHost('ui_copy',args))?.copied,readSelection:async args=>{const value=await askHost('ui_read_selection',args);return value===undefined?n.runtime.j_r('aborted'):n.runtime.CXs(value.text,value.instance_id)},readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await requestNativeFill(n,args))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
  const remote=n.runtime.AXs(current.composer),selection=n.runtime.RXs(),has=answer=>n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes(answer));
- wrappedContext={...current,selection:{read:()=>has('ui_read_selection')?selection.read():current.selection?.read()},composer:{...current.composer,read:()=>remote.read(),write:(...args)=>has('ui_prompt_fill')?remote.write(...args):current.composer.write(...args),propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
+ wrappedContext={...current,selection:{read:()=>has('ui_read_selection')?selection.read():current.selection?.read()},composer:{...current.composer,read:()=>remote.read(),write:(text,mode,decorations)=>{
+  if(!has('ui_prompt_fill'))return current.composer.write(text,mode,decorations);
+  // Keep original reach, refusal, and size checks. Only the selected owned desktop requester can use the pre-filter runs.
+  const captured=decorations?.some(run=>run.start===run.end&&run.virtualText)?{text,mode,decorations}:undefined;
+  return nativeFillForRequester.run(captured,()=>remote.write(text,mode,decorations));
+ },propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
  n.runtime.Zao(wrappedContext);
 }
 let preparedPrompt;

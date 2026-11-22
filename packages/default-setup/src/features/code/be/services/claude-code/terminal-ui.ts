@@ -114,7 +114,7 @@ export function createClaudeTerminalUiTransport(options: {
       const host = hosts.get(request.client_id)
       if (host) manager.register(request.client_id, host)
       hostRequests.set(id, { clientId: request.client_id, cancel() { manager.close(); if (hostRequests.delete(id)) complete(undefined, false) } })
-      manager.receive({ type: 'control_request', request_id: id, request: { ...request, subtype: String(request.subtype) } })
+      manager.receive({ type: 'control_request', request_id: id, request: { ...request, subtype: String(request.subtype) } }, true)
       return true
     },
     cancelHost(id: string) { hostRequests.get(id)?.cancel() },

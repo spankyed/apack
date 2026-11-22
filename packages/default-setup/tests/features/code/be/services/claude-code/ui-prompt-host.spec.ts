@@ -33,6 +33,19 @@ it('refuses unknown clients and malformed fills without invoking a composer', as
   expect(f.answer()).toMatchObject({ response: { response: { filled: false } } }); f.hosts.close()
 })
 
+it('allows a virtual anchor inside a paint span only from the private terminal', async () => {
+  const f = fixture()
+  const decorations = [{ start: 0, end: 6, bold: true }, { start: 2, end: 2, virtualText: '[hint]' }]
+  f.hosts.receive({ ...fill('print'), request: { ...fill().request, decorations } })
+  await flush()
+  expect(f.host.fill).not.toHaveBeenCalled()
+  expect(f.answer()).toMatchObject({ response: { request_id: 'print', response: { filled: false } } })
+  f.hosts.receive({ ...fill('terminal'), request: { ...fill().request, decorations } }, true)
+  await flush()
+  expect(f.host.fill).toHaveBeenCalledExactlyOnceWith({ text: 'native', mode: 'insert', decorations }, expect.any(AbortSignal), expect.any(Number))
+  f.hosts.close()
+})
+
 it('validates host reads and falls back when the mounted editor refuses or fails', async () => {
   const f = fixture(); f.host.read.mockResolvedValueOnce({ text: 'x', cursor: 2 })
   f.hosts.receive(read()); await flush(); expect(f.answer()).toMatchObject({ response: { response: { text: '', cursor: 0 } } })
