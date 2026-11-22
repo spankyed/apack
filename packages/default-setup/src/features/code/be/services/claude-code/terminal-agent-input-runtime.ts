@@ -53,6 +53,28 @@ async function retireNativeAgentCommands(clientId){
  await Promise.allSettled(retired);
  for(const [id,entry] of agentCommandDialogs)if((clientId===undefined||entry.clientId===clientId)&&entry.closed)agentCommandDialogs.delete(id);
 }
+// An inline local-jsx callback emits adjacent native user rows instead of a system local_command row.
+function inlineParentCommandOutput(n,rows,before,run){
+ const envelope=n.runtime.Xse(run.command,run.args);
+ const isNewOriginal=row=>row?.type==='user'&&row.origin===undefined&&row.isMeta!==true
+  &&typeof row.uuid==='string'&&!before.has(row.uuid)&&typeof row.message?.content==='string';
+ const opening='<local-command-stdout>',closing='</local-command-stdout>';
+ let result;
+ for(let index=1;index<rows.length;index++){
+  const invocation=rows[index-1],output=rows[index];
+  if(!isNewOriginal(invocation)||invocation.message.content!==envelope||!isNewOriginal(output)
+    ||(output.parentUuid!==undefined&&output.parentUuid!==invocation.uuid))continue;
+  const content=output.message.content;
+  if(!content.startsWith(opening)||!content.endsWith(closing))continue;
+  const text=content.slice(opening.length,-closing.length);
+  if(text.length>65536)continue;
+  if(result)return;
+  result=text===''||text===n.questionOptions.gu
+   ?{kind:'command_complete',messageId:invocation.uuid,commandName:run.command}
+   :{kind:'command_output',messageId:output.uuid,commandName:run.command,text,isErrored:false};
+ }
+ return result;
+}
 async function dispatchNativeAgentInput(n,request,abort){return dispatchNativeInput(n,request,abort,false);}
 async function dispatchNativeInput(n,request,abort,main,parentTicket){
  await n.gate._Jo('desktop');
@@ -112,6 +134,10 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
      const output=typeof content==='string'?content:Array.isArray(content)?content.filter(block=>block.type==='text').map(block=>block.text).join('\n'):undefined;
      if(typeof output==='string'&&output.length>0&&output.length<=65536)return {kind:'command_output',messageId:row.uuid,commandName:expectedRun.command,text:output,isErrored:(n.commandTags.Ms(row.content,'local-command-stderr')??'').trim()!=='',...(typeof row.commandOutcome?.kind==='string'?{outcome:row.commandOutcome.kind}:{})};
     }
+   }
+   if(main&&expectedRun&&command.type==='local-jsx'){
+    const inline=inlineParentCommandOutput(n,binding.messages?.()??[],parentBefore,expectedRun);
+    if(inline)return inline;
    }
    const notice=notices().find(value=>!priorNotices.has(value)&&value.key==='agent-view-command-notice');
    if(notice){await restore();return {kind:'blocked',message:notice.text??notice.segments?.map(segment=>segment.text??'').join('')??'Native command was blocked'};}

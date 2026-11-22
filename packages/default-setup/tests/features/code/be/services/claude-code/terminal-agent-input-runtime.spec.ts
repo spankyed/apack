@@ -120,6 +120,44 @@ it('dispatches parent local commands while leaving ordinary prompts on their ori
 })
 
 
+it('settles a typed parent local-jsx command only from its new original invocation and callback output', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true)
+    const argument = 'invalid-cap', invocationId = randomUUID(), outputId = randomUUID()
+    const command = f.command('autocompact')
+    command.type = 'local-jsx'
+    f.native.commandInput.IS = () => ({ commandName: command.name, args: argument })
+    f.native.engine.Cie = () => ({ command: command.name, args: argument })
+    const envelope = (name: string, args: string) => '<command-name>/' + name + '</command-name><command-message>' + name + '</command-message><command-args>' + args + '</command-args>'
+    Object.assign(f.native.runtime, { Xse: envelope })
+    const invocation = (name: string, args: string, uuid = randomUUID()) =>
+      ({ type: 'user', uuid, message: { content: envelope(name, args) } })
+    const output = (text: string, uuid = randomUUID(), parentUuid?: string) =>
+      ({ type: 'user', uuid, parentUuid, message: { content: '<local-command-stdout>' + text + '</local-command-stdout>' } })
+    f.parentRows.push(invocation(command.name, argument), output('Old result'))
+    f.enter.mockImplementationOnce(async () => {
+      f.parentRows.push(invocation(command.name, 'auto'), output('Different arguments'),
+        invocation(command.name, argument), { ...output('Human text'), origin: { kind: 'human' } },
+        invocation(command.name, argument), output('Wrong parent', randomUUID(), randomUUID()))
+      f.setDraft('')
+      return { entered: true }
+    })
+    const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/autocompact ' + argument })
+    const ticket = { client_id: 'client', command_id: prepared.id }
+    await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'running' })
+    f.parentRows.push(invocation(command.name, argument, invocationId), output("Couldn't parse 'invalid-cap'.", outputId, invocationId))
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({
+      kind: 'finished',
+      result: { kind: 'command_output', commandName: command.name, messageId: outputId, text: "Couldn't parse 'invalid-cap'.", isErrored: false },
+    })
+    expect(f.enter).toHaveBeenCalledOnce()
+  } finally { vi.useRealTimers() }
+})
+
 it('prepares without Enter, refuses duplicate/foreign execution, and waits beyond the RPC window for the applied compact boundary', async () => {
   vi.useFakeTimers()
   try {

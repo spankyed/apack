@@ -318,6 +318,7 @@ export const claudeNativeLinuxBindings: {
         "v7t": "dJt",
         "vxt": "pxt",
         "WXt": "xXt",
+        "Xse": "Wse",
         "xbe": "kSe",
         "Z2": "jz",
         "Zao": "Eao"
