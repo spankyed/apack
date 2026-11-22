@@ -1,5 +1,6 @@
 import vm from 'node:vm'
 import { randomUUID, createHash } from 'node:crypto'
+import { constants as fsConstants } from 'node:fs'
 import { claudeTerminalFileRuntime } from '#features/code/be/services/claude-code/terminal-file-runtime.ts'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 
@@ -25,12 +26,17 @@ function fixture() {
   const fileFiber = { type: function Sat() {}, memoizedProps: { payload: item.payload, wouldTakeAnswer: () => true }, memoizedState: { memoizedState: '', queue: { dispatch: setter }, next: null }, child: { type: function Xe() {}, memoizedProps: fileControl } }
   const fileStdout = {}, fileHashes = new WeakMap([[fileFiber.type, '4d3297fd160d4c1497f0a21f0f98372ea53943f0e951256c3fbd8ac13dd5b406']])
   Object.assign(native, { themeRoots: { ai: () => new Map([[fileStdout, { container: { current: fileFiber } }]]) } })
+  const attachmentBytes = Buffer.from('fixture image')
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};Object.assign(control,{async questionFixture(shownInput){const d=nativeDialog(await initialize(),'permission_ask_user_question');const frame={token:'original-question-frame',client:'question-client',item:d.item,revision:d.revision,sessionId:d.sessionId,shownInput:shownInput??d.payload.input};clients.set(frame.client,{});questionFrames.set(frame.client,frame);return {id:d.item.id,revision:d.revision,session_id:d.sessionId,render_token:frame.token}}})`, {
-    nativeFunctionHash: (hash: string) => hash, nativeFunctionName: (name: string) => name, process: { stdout: fileStdout }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
+    nativeFunctionHash: (hash: string) => hash, nativeFunctionName: (name: string) => name, process: { stdout: fileStdout, getuid: () => 1000 }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
     clients: new Map(), originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
-    readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
+    URL, fsConstants, configUrl: 'file:///fixture/native-config.json',
+    lstatSync: () => ({ isDirectory: () => true, uid: 1000, mode: 0o700 }),
+    openSync: () => 42, closeSync: () => undefined,
+    fstatSync: () => ({ isFile: () => true, uid: 1000, mode: 0o600, size: attachmentBytes.length }),
+    readFileSync: (source: string | number) => typeof source === 'number' ? attachmentBytes : JSON.stringify({ sessionId }),
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_file_dialogs' }, new AbortController())).dialogs[0]
   const reply = (dialog: any, overrides = {}) => control({ subtype: 'apack_answer_file_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...overrides }, new AbortController())
@@ -307,6 +313,45 @@ it('uses original question titles and displayed answer keys in clarification fee
   })
   await expect(clarify()).rejects.toThrow('changed or expired')
   expect(f.answer).toHaveBeenCalledOnce()
+})
+
+it.each(['disconnected request', 'replacement question'] as const)('discards a converted image after a %s', async reason => {
+  const f = fixture()
+  const questions = [{ question: 'Which release?' }]
+  f.item.kind = 'permission_ask_user_question'
+  Object.assign(f.item.payload, { toolName: 'AskUserQuestion', questions, input: { questions } })
+  const draw = (f.control as typeof f.control & {questionFixture(): Promise<Record<string, unknown>>}).questionFixture
+  const conversion = Promise.withResolvers<{block: {type: string}}>()
+  const started = Promise.withResolvers<void>()
+  const limit = {maxWidth: 100}
+  const convert = vi.fn(() => { started.resolve(); return conversion.promise })
+  Object.assign(f.native, {
+    questionTool: { shownCardInput: (input: unknown) => input, admitCardAnswer: (_input: unknown, answer: unknown) => ({ kind: 'admitted', input: answer }) },
+    questionImageModel: { CM: () => 'model' },
+    questionImage: { jS: convert },
+  })
+  Object.assign(f.native.runtime, { ql: () => limit })
+  const answer = { answers: { 'Which release?': 'Stable' } }
+  const original = await draw()
+  const abort = new AbortController()
+  const pending = f.control({
+    subtype: 'apack_answer_question_dialog', ...original, answer,
+    question_media: {id: randomUUID(), types: ['image/png']},
+  }, abort)
+  const refusal = expect(pending).rejects.toThrow(reason === 'disconnected request' ? 'Client disconnected' : 'Native question changed while preparing attachments')
+  await started.promise
+  expect(convert).toHaveBeenCalledWith({ data: Buffer.from('fixture image'), mediaType: 'image/png', limits: limit })
+  if (reason === 'disconnected request') abort.abort(new Error('Client disconnected'))
+  else f.state.open = [{ ...f.item, id: 'fresh-question' }]
+  conversion.resolve({block: {type: 'image'}})
+  await refusal
+  expect(f.answer).not.toHaveBeenCalled()
+  const fresh = await draw()
+  const retry = { answers: { 'Which release?': 'Next' } }
+  await expect(f.control({subtype: 'apack_answer_question_dialog', ...fresh, answer: retry}, new AbortController())).resolves.toEqual({answered: true})
+  expect(f.answer).toHaveBeenCalledExactlyOnceWith(reason === 'disconnected request' ? 'dialog-1' : 'fresh-question', {
+    behavior: 'allow', updatedInput: { questions, ...retry },
+  })
 })
 
 it('publishes original turn identity alongside an empty pending-control list', async () => {
