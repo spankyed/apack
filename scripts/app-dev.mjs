@@ -30,7 +30,7 @@ Pack authors: run apack pack dev from your pack repository.`);
     }
   } else if (operation === 'drive') {
     const { drive } = await tsImport('../packages/apack-cli/src/commands/drive.ts', import.meta.url);
-    await drive(withCheckoutProfile(repositoryRoot, args));
+    await drive(withCheckoutProfile(repositoryRoot, args), 'app', 'default-setup/database');
   } else throw new Error('Use npm run dev:open or npm run dev:drive.');
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

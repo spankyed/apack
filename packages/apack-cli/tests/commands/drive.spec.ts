@@ -67,6 +67,7 @@ describe('the help text', () => {
       const help = output.mock.calls.flat().join('\n');
       expect(help).toContain('Usage: apack pack drive');
       expect(help).toContain('--host <path|beta>');
+      expect(help).toContain('required for --query');
       expect(help).not.toContain('npm run');
     } finally { output.mockRestore(); }
   });
@@ -160,6 +161,11 @@ describe('a config that has stopped delegating', () => {
  * Everything left over is forwarded to the Playwright CLI verbatim, which would be asked about a flag it
  * has never heard of — and Playwright's answer to that is to fail the run.
  */
+it('requires a database target for a pack query before resolving an app', async () => {
+  await expect(drive(['--query', 'return 1', '--spawn'], 'pack')).rejects
+    .toThrow(/--query needs --database-system/);
+});
+
 describe('takeOneShotFlags', () => {
   it('selects a qualified database feature for a query', () => {
     expect(takeOneShotFlags(['--database-system', 'alternate-pack/storage', '--query', 'return 1']))

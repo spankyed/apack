@@ -278,8 +278,7 @@ that app published — one process per question, no session to stand up and noth
 apack pack dev                                   # one terminal: holds the app
 apack pack drive --state                         # another: 0.9s
 apack pack drive --eval 'return window.appVersion'
-apack pack drive --query 'return query(EARS.Entity.Note).count()'
-# Address a query to a database feature from another pack
+# Address the query to a database feature in the selected app
 apack pack drive --database-system another-pack/storage --query 'return query(EARS.Entity.Note).count()'
 ```
 

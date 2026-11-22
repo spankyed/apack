@@ -22,7 +22,7 @@ import { configCallsHelper } from '../build/config-text.ts';
 import { ensureCheckoutPackages } from '../build/checkout-packages.ts';
 
 const DRIVE_DIR = 'drive';
-const OFFICIAL_DATABASE = resolveName('database', 'default-setup');
+const QUERY_TARGET_REQUIRED = '--query needs --database-system <pack/feature> to select its database system.';
 
 type DriveScope = 'app' | 'pack';
 
@@ -61,7 +61,7 @@ Use apack profiles to inspect or stop it.
 Options:
   --eval <body>       Evaluate a function body in the page
   --query <code>      Run one EARS read over the bus
-  --database-system <pack/feature>  Address --query to a different database feature
+  --database-system <pack/feature>  Address --query to a database feature${scope === 'pack' ? ' (required for --query)' : ''}
   --state             Read the app shell's state
   --spawn             Start a source app if none is running
 ${scope === 'pack' ? '  --host <path|beta>  Select a host for scripts or live --spawn\n' : ''}${PROFILE_USAGE}
@@ -306,7 +306,7 @@ interface OneShotOutput {
 
 /** What a one-shot asks of a session, by the flag that was passed. */
 async function answerAttached(
-  live: AttachableApp, root: string, ask: AskName, argument: string | undefined, state: 'attached' | 'spawned', databaseSystem: FeatureRef,
+  live: AttachableApp, root: string, ask: AskName, argument: string | undefined, state: 'attached' | 'spawned', databaseSystem: FeatureRef | undefined,
 ): Promise<OneShotOutput> {
   const screenshotDir = path.join(root, '.apack', DRIVE_DIR, 'screenshots');
   const notes: string[] = [];
@@ -319,7 +319,9 @@ async function answerAttached(
     const answer = await askAttached(live, root, screenshotDir, async (session) => {
       if (ask === 'state') return session.state();
       if (argument === undefined) throw new Error(`--${ask} needs something to run`);
-      return ask === 'eval' ? session.evaluate(argument) : session.query(argument, databaseSystem);
+      if (ask === 'eval') return session.evaluate(argument);
+      if (databaseSystem === undefined) throw new Error(QUERY_TARGET_REQUIRED);
+      return session.query(argument, databaseSystem);
     });
     const result = answer.value as { ok?: boolean; value?: unknown; error?: string };
     if (result?.ok === false) {
@@ -380,14 +382,14 @@ export async function packDrive(args: string[]) {
   return drive(args, 'pack');
 }
 
-export async function drive(args: string[], scope: 'app' | 'pack' = 'app') {
+export async function drive(args: string[], scope: 'app' | 'pack' = 'app', defaultDatabaseSystem?: FeatureRef) {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(driveHelp(scope));
     return;
   }
 
   const cwd = process.cwd();
-  const { ask, argument, databaseSystem = OFFICIAL_DATABASE, spawn: spawnFlag, rest } = takeOneShotFlags(args);
+  const { ask, argument, databaseSystem = defaultDatabaseSystem, spawn: spawnFlag, rest } = takeOneShotFlags(args);
   const { mode, withSecrets, rest: scriptArgs } = parseProfileFlags(rest);
   const flags = parseHostFlags(scriptArgs);
 
@@ -395,6 +397,7 @@ export async function drive(args: string[], scope: 'app' | 'pack' = 'app') {
   if (ask !== undefined) {
     if (flags.args.length) throw new Error(`Unexpected live-question arguments: ${flags.args.join(' ')}. See --help.`);
     if (flags.release || flags.prebuilt) throw new Error('Pack build flags belong to script runs, not live questions.');
+    if (ask === 'query' && databaseSystem === undefined) throw new Error(QUERY_TARGET_REQUIRED);
     const root = scope === 'pack' ? findPackRoot(cwd) : cwd;
     if (scope === 'app' && flags.host) throw new Error('Repository automation uses its own checkout; host selection belongs to pack commands.');
     if (!spawnFlag && flags.host) throw new Error('--host requires --spawn for a live question.');
