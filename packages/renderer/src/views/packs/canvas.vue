@@ -148,6 +148,9 @@
                 <p v-if="pack.loadProblem" class="text-xs text-red-400 mt-1 break-words" data-testid="pack-load-problem">
                   Failed to load: {{ pack.loadProblem }}
                 </p>
+                <p v-if="pack.dependencyProblems.length" class="text-xs text-amber-400 mt-1">
+                  Pack dependencies need attention
+                </p>
                 <ContentOfferNotice :count="pack.contentOffers.length" />
               </div>
               <div class="flex items-center gap-3 flex-shrink-0" @click.stop>

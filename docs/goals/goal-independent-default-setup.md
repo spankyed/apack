@@ -83,6 +83,7 @@ Use the Phase 1 build with a differently named starter and with no starter. Move
 
 - An app-managed starter refreshes. A same-ID fork, disabled pack and deliberately removed pack each retain their respective choices. Explicit Restore works.
 - A user switches to another ID that provides the same role, restarts and upgrades. A conflicting candidate identifies the owners, a broken named dependency is reported, and the user can recover the incumbent. Check installed ownership, settings and retained data.
+  [Named dependency diagnostics](../references/evidence/starter-dependency-diagnostics.md)
 - Change the official selection from A in version 1 to B in version 2. A fresh version 2 profile gets B. Upgrade profiles with A active, disabled, removed or replaced by a same-ID fork. In each case verify the prior choice and data survive a restart, B is offered, and B is installed only after the user accepts.
 - A fresh empty profile and an existing profile whose last surface disappeared can both open Packs and install a pack.
 

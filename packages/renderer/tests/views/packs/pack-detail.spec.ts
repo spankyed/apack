@@ -7,7 +7,7 @@ import PackDetail from '@/views/packs/PackDetail.vue';
 const pack = (overrides: Partial<InstalledPackSummary> = {}): InstalledPackSummary => ({
   id: 'memo-pack', name: 'Memos', version: '1.0.0', updatesWith: 'user', enabled: true,
   entities: {}, relKinds: {}, roles: {}, features: [], services: [], steps: [], artifacts: [], blocks: [], systems: [],
-  entityCount: 0, hasFrontend: false, permissions: [], lifecycleHooks: [], migrationCount: 0, contentOffers: [], contentKept: [],
+  entityCount: 0, hasFrontend: false, permissions: [], lifecycleHooks: [], migrationCount: 0, contentOffers: [], contentKept: [], dependencyProblems: [],
   ...overrides,
 });
 
@@ -36,6 +36,12 @@ describe('an installed pack in the Packs view', () => {
     expect(el.querySelector('[data-testid="pack-load-problem"]')?.textContent?.trim())
       .toBe('Failed to load: its snapshot is format 2, written by a newer apack CLI; update apack to use it');
     expect(el.textContent).not.toContain('Enabled');
+  });
+
+  it('identifies a named dependency the profile cannot supply', () => {
+    const message = 'Requires starter-a (^1.0.0). Install the named pack.';
+    const el = render({ pack: pack({ dependencyProblems: [message] }) });
+    expect(el.querySelector('[aria-label="Pack dependencies"]')?.textContent?.trim()).toBe(message);
   });
 
   it('shows its status when it loaded', () => {

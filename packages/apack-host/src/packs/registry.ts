@@ -137,6 +137,8 @@ export interface InstalledPackSummary extends PackExtensions {
   updateCheckError?: string;
   /** Why this installed pack isn't running although it is enabled: the app skipped it or failed to load it */
   loadProblem?: string;
+  /** Direct named dependencies the current profile cannot supply. */
+  dependencyProblems: string[];
   /**
    * The decisions the last apply left the user about this pack's content, in the order the view draws them.
    *
