@@ -60,6 +60,44 @@ it('refuses a replaced owner before issuing cancellation', async () => {
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: false, reason: 'native owner changed' });
   expect(f.requests).toHaveLength(1); expect(f.events).toEqual([]);
 });
+it.each([
+  { turnId: 'previous-turn' }, { ownerId: 'previous-owner' }, { sessionId: 'previous-session' },
+])('refuses a delayed composer Pause addressed to %j', async change => {
+  const f = setup('native')
+  const target = { ownerId: 'original-owner', sessionId: 'original-session', turnId: 'original-turn', ...change }
+  await expect(action({ threadId: f.id, nativePause: target }, services)).resolves.toMatchObject({ success: false })
+  expect(f.requests.some(request => request.subtype === 'apack_abort_turn')).toBe(false)
+  expect(f.events).toEqual([])
+})
+
+it('never falls through to print Stop after an addressed native owner exits', async () => {
+  const f = setup('print')
+  const target = { ownerId: 'original-owner', sessionId: 'original-session', turnId: 'original-turn' }
+  await expect(action({ threadId: f.id, nativePause: target }, services)).resolves.toMatchObject({ success: false })
+  expect(f.events).toEqual([])
+})
+
+it('interrupts exactly the addressed composer turn', async () => {
+  const f = setup('native')
+  const nativePause = { ownerId: 'original-owner', sessionId: 'original-session', turnId: 'original-turn' }
+  await expect(action({ threadId: f.id, nativePause }, services)).resolves.toEqual({ success: true, interrupted: true })
+  expect(f.requests).toEqual([
+    { subtype: 'apack_turn_state', session_id: 'original-session' },
+    { subtype: 'apack_abort_turn', session_id: 'original-session', turn_id: 'original-turn' },
+  ])
+  expect(f.events).toEqual([])
+})
+
+it.each(['url-revision', 'retired-revision'])('addresses an independent MCP input at %s without aborting a newer turn', async revision => {
+  const f = setup('native')
+  f.control.nativeUrl = true
+  const nativePause = { ownerId: 'original-owner', sessionId: 'original-session', mcp: { id: 'url', revision } }
+  const current = revision === 'url-revision'
+  await expect(action({ threadId: f.id, nativePause }, services)).resolves.toMatchObject({ success: current })
+  expect(f.requests).toEqual([])
+  expect(f.events).toEqual(current ? [['native.cancelMcpInput', { id: 'url', revision, sessionId: 'original-session' }]] : [])
+})
+
 it('preserves the owner when native turn identity changes during cancellation', async () => {
   const f = setup('native'); f.control.refuse = true;
   await expect(action({ threadId: f.id }, services)).rejects.toThrow('Native turn changed or ended');

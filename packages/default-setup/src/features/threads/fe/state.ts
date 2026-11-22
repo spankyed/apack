@@ -275,7 +275,7 @@ type UIEvent =
   | { type: 'FORK_THREAD'; messageId: string; threadId?: string; threadTopic?: string }
   | { type: 'REVERT_THREAD'; messageId: string; threadId: string; restoreFiles?: boolean; userCliUuid?: string }
   | { type: 'SUMMARIZE_THREAD'; messageId: string; threadId: string }
-  | { type: 'PAUSE_TURN'; threadId: string }
+  | { type: 'PAUSE_TURN'; threadId: string; nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope }
   | { type: 'UNQUEUE_MESSAGE'; threadId: string; messageId: string }
   | { type: 'DISMISS_MESSAGE'; messageId: string }
   | { type: 'LOAD_MORE_MESSAGES' }
@@ -1611,8 +1611,7 @@ const threadsState = setup({
       tell(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
     },
     pauseTurn: ({ event }) => {
-      const { threadId } = typeOf('PAUSE_TURN', event);
-      tell(id, { type: 'PAUSE_TURN', threadId });
+      tell(id, typeOf('PAUSE_TURN', event));
     },
     unqueueMessage: ({ event }) => {
       const { threadId, messageId } = typeOf('UNQUEUE_MESSAGE', event);

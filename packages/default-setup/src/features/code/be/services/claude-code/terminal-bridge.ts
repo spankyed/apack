@@ -84,7 +84,7 @@ export async function createClaudeTerminalBridge(options: {
     return split > 0 ? nativeQuote(shellPrefix.slice(0, split)) + ' ' + shellPrefix.slice(split + 1) + ' ' + nativeQuote(value) : nativeQuote(shellPrefix) + ' ' + nativeQuote(value)
   }
   const matches = (value: Record<string, unknown>) => value.kind === 'subagent' ? !!subagentCommand && value.command === subagentCommand : value.kind === 'main' && !!mainCommand && (value.command === mainCommand || value.command === prefixCommand(mainCommand))
-  let lastTurn: ClaudeNativeTerminalState['lastTurn'], endingTurnId: string | undefined
+  let lastTurn: ClaudeNativeTerminalState['lastTurn'], activeTurnId: string | undefined, endingTurnId: string | undefined
   let focus: ClaudeNativeTerminalState['focus'], focusSequence = 0, focusRecord: string | undefined
   let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
   let preview: ClaudeNativeTerminalState['preview'], previewSequence = 0, previewRecord: string | undefined
@@ -221,13 +221,15 @@ export async function createClaudeTerminalBridge(options: {
         const counts = object(value.activity)
         if (!counts || !['pendingAgents', 'pendingWorkflows'].every(key => Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0) || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1) return reply(400, {})
         const next = { pendingAgents: counts.pendingAgents as number, pendingWorkflows: counts.pendingWorkflows as number }
-        const ending = value.endingTurnId
-        if (ending !== undefined && ending !== null && (typeof ending !== 'string' || !ending || ending.length > 256)) return reply(400, {})
-        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? [], value.managedTasks ?? [], ending ?? null])
+        const active = value.activeTurnId, ending = value.endingTurnId
+        if ([active, ending].some(id => id !== undefined && id !== null && (typeof id !== 'string' || !id || id.length > 256))
+          || (active && ending)) return reply(400, {})
+        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? [], value.managedTasks ?? [], active ?? null, ending ?? null])
         if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && activityRecord !== encoded) return reply(409, {})
         if (!projection.updateActivityTasks(value.sessionId, value.workflows, value.shells, value.mcpTasks, value.managedTasks)) return reply(400, {})
         const changed = activityRecord !== encoded
         activitySequence = value.sequence as number; activityRecord = encoded; activity = next
+        activeTurnId = typeof active === 'string' && active !== lastTurn?.id ? active : undefined
         endingTurnId = typeof ending === 'string' && ending !== lastTurn?.id ? ending : undefined
         if (changed) options.changed()
         return reply(200, {})
@@ -282,7 +284,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if ((event.policyKey === helperPolicyKey || !policyChanged && event.policyKey === undefined) && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
+        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; activeTurnId = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
@@ -429,6 +431,7 @@ export async function createClaudeTerminalBridge(options: {
         if (typeof value.running !== 'boolean') return reply(400, {})
         if (!value.running && (typeof value.turnId !== 'string' || !['answer','aborted','refusal','error'].includes(String(value.reason)))) return reply(400, {})
         lastTurn = value.running ? undefined : { id: value.turnId as string, reason: value.reason as NonNullable<ClaudeNativeTerminalState['lastTurn']>['reason'] }
+        if (!value.running && activeTurnId === lastTurn?.id) activeTurnId = undefined
         if (value.running || endingTurnId === lastTurn?.id) endingTurnId = undefined
         busy = value.running; options.changed(); return reply(200, {})
       }
@@ -482,6 +485,7 @@ export async function createClaudeTerminalBridge(options: {
       get nativePid() { return observerPid },
       get view() { return nativeView },
       get lastTurn() { return lastTurn },
+      get activeTurnId() { return busy && !closed ? activeTurnId : undefined },
       get endingTurnId() { return busy ? endingTurnId : undefined },
       get ready() { return ready && !closed },
       get focus() { return focus },

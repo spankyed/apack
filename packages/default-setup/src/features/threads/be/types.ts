@@ -686,7 +686,7 @@ export type IncomingThreadsEvents =
   | ClaudeUiViewRequest
   | { type: 'VIEW_THREAD'; threadId: string }
   | { type: 'SET_CLAUDE_CHANNELS'; threadId: string; channels: string[] }
-  | { type: 'PAUSE_TURN'; threadId: string }
+  | { type: 'PAUSE_TURN'; threadId: string; nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope }
   | { type: 'INTERACTIVE_MSG_RESPONSE'; messageId: string; threadId: string; response: any }
   | { type: 'REVERT_THREAD'; messageId: string; threadId: string; restoreFiles?: boolean; userCliUuid?: string }
   | { type: 'SUMMARIZE_THREAD'; messageId: string; threadId: string }

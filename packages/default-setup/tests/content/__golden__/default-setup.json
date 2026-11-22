@@ -446,6 +446,11 @@
             "description": "Thread ID",
             "required": true
           },
+          "nativePause": {
+            "type": "object",
+            "description": "Captured native composer turn or MCP dialog identity",
+            "required": false
+          },
           "nativeDecision": {
             "type": "object",
             "description": "Captured native decision identity for an addressed Cancel",

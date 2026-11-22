@@ -384,6 +384,28 @@ it('reports accepted Pause only while the same native turn is settling', async (
   expect(bridge!.endingTurnId).toBeUndefined()
 })
 
+it('publishes native Pause targets and withdraws a completed turn before its next activity report', async () => {
+  await create()
+  const body = { sessionId: session, pid: process.pid, activity: { pendingAgents: 0, pendingWorkflows: 0 } }
+  const report = (sequence: number, activeTurnId: string | null, endingTurnId?: string) =>
+    request('/native-activity', { ...body, sequence, activeTurnId, endingTurnId })
+  await request('/turn', { sessionId: session, running: true })
+  expect((await report(1, 'first')).status).toBe(200)
+  expect(bridge!.activeTurnId).toBe('first')
+  expect((await report(1, 'second')).status).toBe(409)
+  expect((await report(2, 'first', 'first')).status).toBe(400)
+  await request('/turn', { sessionId: session, running: false, turnId: 'first', reason: 'answer' })
+  expect(bridge!.activeTurnId).toBeUndefined()
+  expect((await report(2, 'first')).status).toBe(200)
+  await request('/turn', { sessionId: session, running: true })
+  expect(bridge!.activeTurnId).toBeUndefined()
+  expect((await report(3, 'second')).status).toBe(200)
+  expect(bridge!.activeTurnId).toBe('second')
+  expect((await report(4, null, 'second')).status).toBe(200)
+  expect(bridge!.activeTurnId).toBeUndefined()
+  expect(bridge!.endingTurnId).toBe('second')
+})
+
 it('retires focus selection on native view/session changes and rejects stale selection reports', async () => {
   await create()
   await request('/native-view', { sessionId: session, pid: process.pid, sequence: 1, view: { kind: 'main' } })

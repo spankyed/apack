@@ -155,7 +155,7 @@
               :prefill-text="prefillText"
               :prefill-references="prefillReferences"
               :is-busy="isBusy"
-              :native-pause-requested="nativePauseRequested"
+              :native-pause-requested="nativePauseRequested" :native-pause="nativePauseScope"
               @native-session-controls="nativeSession?.open()"
               :modes="threads.data.modes"
               :default-mode="threads.data.chatSettings?.defaultMode"
@@ -181,7 +181,7 @@
               @phase-change="setComposerPhase"
               @set-default-mode="(mode: string) => threadsSettings.set({ path: ['chat', 'defaultMode'], value: mode })"
               @set-default-phase="(phase: string) => threadsSettings.set({ path: ['chat', 'defaultPhase'], value: phase })"
-              @pause="send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })"
+              @pause="nativePause => currentThread?.id && send({ type: 'PAUSE_TURN', threadId: currentThread.id, nativePause })"
               @open-lightbox="openLightbox"
               @update-quick-prompts="(prompts: QuickPrompt[]) => threadsSettings.set({ path: ['chat', 'quickPrompts'], value: prompts })"
               @close-quick-prompts="send({ type: 'CLOSE_QUICK_PROMPTS' })"
@@ -287,7 +287,7 @@ import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
-import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
+import type { ClaudeNativeAgentUiTarget, ClaudeNativePauseScope } from '#features/code/common/native-terminal.ts'
 import { provideClaudeHoverGroups } from './native-ui-hover.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { createClaudeActionKeyHandler } from './native-action-keys.ts'
@@ -366,6 +366,15 @@ const nativePauseRequested = computed(() => {
   const thread = currentThread.value
   return !!owner?.endingTurnId && owner.view?.kind === 'main'
     && nativeComposerView.value?.threadId === thread?.id && owner.sessionId === thread?.context?.claudeCode?.sessionId
+})
+const nativePauseScope = computed<ClaudeNativePauseScope | null | undefined>(() => {
+  const owner = nativeComposerOwner.value, thread = currentThread.value
+  if (!owner || nativeComposerView.value?.threadId !== thread?.id) return undefined
+  if (owner.view?.kind !== 'main' || owner.sessionId !== thread?.context?.claudeCode?.sessionId) return null
+  const mcp = owner.mcpForm ?? owner.mcpUrl
+  return owner.activeTurnId || mcp
+    ? { ownerId: owner.ownerId, sessionId: owner.sessionId, turnId: owner.activeTurnId, ...(mcp ? { mcp: { id: mcp.id, revision: mcp.revision } } : {}) }
+    : null
 })
 const nativePermissionMode = computed(() => {
   const owner = nativeComposerOwner.value

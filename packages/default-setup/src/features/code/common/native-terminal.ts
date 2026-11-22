@@ -22,6 +22,13 @@ export interface ClaudeNativeAgentUiTarget {
   taskId: string
 }
 
+export interface ClaudeNativePauseScope {
+  ownerId: string
+  sessionId: string
+  turnId?: string
+  mcp?: { id: string; revision: string }
+}
+
 export interface ClaudeNativeFocusProjection {
   sessionId: string
   viewRevision: number
@@ -71,6 +78,8 @@ export interface ClaudeNativeTerminalState {
   continuation?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
   preview?: { turnId: string; output: string }
   busy: boolean
+  /** Original turn currently eligible for a composer Pause. */
+  activeTurnId?: string
   /** Original turn accepted cancellation and is still settling. */
   endingTurnId?: string
   /** Native pending-work counts, independent of prompt submission readiness. */

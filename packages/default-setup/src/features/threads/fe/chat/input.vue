@@ -190,7 +190,7 @@
             <!-- Right side buttons -->
             <div class="flex items-center gap-2 flex-shrink-0">
               <Button
-                v-if="isBusy && !nativePauseRequested"
+                v-if="isBusy && !nativePauseRequested && nativePause !== null"
                 title="Pause agent work"
                 type="button"
                 variant="secondary"
@@ -286,6 +286,7 @@ const props = defineProps<{
   /** Whether the current thread is in the user-marked "busy" chat state. Controls Pause button visibility. */
   isBusy?: boolean
   nativePauseRequested?: boolean
+  nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope | null
   /** Max duration (in minutes) for a single voice-input session. */
   recordingLimitMinutes?: number
   /** CWD label shown in the attached session strip. */
@@ -315,7 +316,7 @@ const emit = defineEmits<{
   (e: 'quick-message'): void
   (e: 'attach-file'): void
   (e: 'voice-input'): void
-  (e: 'pause'): void
+  (e: 'pause', nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope): void
   (e: 'native-session-controls'): void
   (e: 'mode-change', mode: string): void
   (e: 'phase-change', phase: string): void
@@ -706,7 +707,7 @@ const handleVoiceKeyup = (e: KeyboardEvent) => {
 //   1. pause available (streaming) → single ESC pauses
 //   2. empty input, double-ESC → open revert menu
 function pauseWork() {
-  if (!props.nativePauseRequested) emit('pause')
+  if (!props.nativePauseRequested && props.nativePause !== null) emit('pause', props.nativePause)
 }
 
 let lastGlobalEscTime = 0

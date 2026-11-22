@@ -1,5 +1,5 @@
 import type { ClaudeNativeNotice } from '#features/code/common/native-notice.ts'
-import { createApp, h, ref, computed, nextTick, type App } from 'vue'
+import { createApp, h, ref, nextTick, type App } from 'vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
 const actor = vi.hoisted(() => ({ send: vi.fn() }))

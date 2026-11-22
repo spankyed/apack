@@ -5,6 +5,7 @@
  */
 
 import { parseClaudeDecisionPauseScope } from '../../../features/code/common/native-decision-pause.ts';
+import type { ClaudeNativePauseScope } from '../../../features/code/common/native-terminal.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
 import { getClaudeState, killTurn, updateChatState } from './_helpers/thread-context.ts';
@@ -15,9 +16,27 @@ export const meta: ActionMeta = {
   category: 'claude-code',
   input: {
     threadId: { type: 'string', description: 'Thread ID', required: true },
+    nativePause: { type: 'object', description: 'Captured native composer turn or MCP dialog identity', required: false },
     nativeDecision: { type: 'object', description: 'Captured native decision identity for an addressed Cancel', required: false },
   },
 };
+
+function nativeId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256;
+}
+
+function parseNativePause(value: unknown): ClaudeNativePauseScope | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const { ownerId, sessionId, turnId, mcp } = value as Record<string, unknown>;
+  if (!nativeId(ownerId) || !nativeId(sessionId) || (turnId !== undefined && !nativeId(turnId))) return;
+  if (mcp !== undefined) {
+    if (!mcp || typeof mcp !== 'object' || Array.isArray(mcp)) return;
+    const { id, revision } = mcp as Record<string, unknown>;
+    if (!nativeId(id) || !nativeId(revision)) return;
+    return { ownerId, sessionId, turnId, mcp: { id, revision } };
+  }
+  return turnId === undefined ? undefined : { ownerId, sessionId, turnId };
+}
 
 export async function action(
   params: Record<string, any>,
@@ -30,6 +49,37 @@ export async function action(
   // Busy metadata can lag submission; an explicit Pause targets the owning native process.
   const prior = getClaudeState(services, threadId);
   const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (params.nativePause !== undefined) {
+    const target = parseNativePause(params.nativePause);
+    const state = native?.state;
+    if (!target || !native || !state || state.ownerId !== target.ownerId || state.sessionId !== target.sessionId) {
+      return { success: false, reason: 'native owner changed' };
+    }
+    const form = state.mcpForm ?? state.mcpUrl;
+    if (target.mcp && (!form || form.id !== target.mcp.id || form.revision !== target.mcp.revision || form.sessionId !== target.sessionId)) {
+      return { success: false, reason: 'native MCP input changed' };
+    }
+    if (prior?.pendingElicitation || (prior?.pendingControlRequest && !target.mcp)) {
+      return { success: false, reason: 'native decision changed' };
+    }
+    if (target.turnId) {
+      const current = await native.uiTransport.request({ subtype: 'apack_turn_state', session_id: target.sessionId }) as { turn: { id: string; cancelled: boolean } | null };
+      if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== target.sessionId || current.turn?.id !== target.turnId) {
+        return { success: false, reason: 'native turn changed' };
+      }
+      if (current.turn.cancelled) return { success: true, noop: true };
+      const result = await native.uiTransport.request({ subtype: 'apack_abort_turn', session_id: target.sessionId, turn_id: target.turnId }) as { cancelled: boolean };
+      if (!result.cancelled) return { success: true, noop: true };
+    }
+    if (target.mcp) {
+      if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== target.sessionId) {
+        return { success: false, reason: 'native owner changed' };
+      }
+      await native.cancelMcpInput({ ...target.mcp, sessionId: target.sessionId });
+    }
+    return { success: true, interrupted: true };
+  }
+
   if (params.nativeDecision !== undefined) {
     const parsed = parseClaudeDecisionPauseScope(params.nativeDecision);
     const pending = prior?.pendingControlRequest, decision = pending?.nativeTerminal;

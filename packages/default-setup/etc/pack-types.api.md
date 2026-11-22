@@ -2493,6 +2493,16 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     sessionId: z.ZodString;
 }, z.core.$strip>], "kind">;
 
+interface ClaudeNativePauseScope {
+    ownerId: string;
+    sessionId: string;
+    turnId?: string;
+    mcp?: {
+        id: string;
+        revision: string;
+    };
+}
+
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
 
 interface ClaudeNativePlanDialogResponse {
@@ -2899,6 +2909,8 @@ interface ClaudeNativeTerminalState {
         output: string;
     };
     busy: boolean;
+    /** Original turn currently eligible for a composer Pause. */
+    activeTurnId?: string;
     /** Original turn accepted cancellation and is still settling. */
     endingTurnId?: string;
     /** Native pending-work counts, independent of prompt submission readiness. */
@@ -6737,6 +6749,7 @@ type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
 } | {
     type: 'PAUSE_TURN';
     threadId: string;
+    nativePause?: ClaudeNativePauseScope;
 } | {
     type: 'INTERACTIVE_MSG_RESPONSE';
     messageId: string;
