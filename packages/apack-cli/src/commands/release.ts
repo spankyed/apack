@@ -344,7 +344,9 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   ];
 
   if (options.dryRun) {
-    console.log(`[dry-run] Would create GitHub release ${owner}/${repo}@${tag}${prerelease ? ' (prerelease)' : ''} with ${releaseFiles.map(file => file.name).join(', ')}`);
+    const names = releaseFiles.map(file => file.name);
+    const last = names.pop();
+    console.log(`[dry-run] Would create GitHub release ${owner}/${repo}@${tag}${prerelease ? ' (prerelease)' : ''} with ${names.join(', ')} and ${last}`);
     return { tag, prerelease };
   }
 
