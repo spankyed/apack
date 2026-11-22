@@ -71,7 +71,7 @@
             @pause="pauseWork"
             @open-revert-menu="openRevertMenu"
           />
-          <p v-if="submissionProblem || nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ submissionProblem || nativePromptProblem }}</p>
+          <p v-if="composerProblem" class="px-3 text-xs text-neutral-500" role="status">{{ composerProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
             :anchor-el="inputCardRef"
@@ -225,7 +225,8 @@ import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import { CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
@@ -429,6 +430,16 @@ watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
+const rejectedNativeDraft = shallowRef<{ doc: ProseMirrorNode; sessionId: string; sessionChanged: boolean }>()
+const composerProblem = computed(() => {
+  const rejected = rejectedNativeDraft.value
+  // A session change and its Send rejection may reach the composer in either order.
+  if (rejected && (rejected.sessionChanged || rejected.sessionId !== props.currentThread?.context?.claudeCode?.sessionId)) {
+    return CLAUDE_STALE_DRAFT_MESSAGE
+  }
+  return submissionProblem.value || nativePromptProblem.value
+})
+watch([() => tiptapRef.value?.editor, () => props.currentThread?.id], () => { rejectedNativeDraft.value = undefined }, { flush: 'sync' })
 let pendingNativeCommand: { revision: number; accept(): void } | undefined
 watch(() => props.nativeUi?.agentInput, state => {
   if (state?.status !== 'command_done' && state?.status !== 'error') return
@@ -603,6 +614,7 @@ watch(tiptapRef, (ref) => {
 }, { immediate: true })
 
 const onContentUpdate = (md: string) => {
+  if (rejectedNativeDraft.value && !tiptapRef.value?.editor?.state.doc.eq(rejectedNativeDraft.value.doc)) rejectedNativeDraft.value = undefined
   messageContent.value = md
   hasTextContent.value = !!tiptapRef.value?.editor?.state.doc.textContent.trim()
   if (!navigatingHistory.value) {
@@ -907,10 +919,11 @@ const handleSubmit = async () => {
   if (!editor) return
   const epoch = composerEpoch, bridge = promptEditor
   const threadId = props.currentThread?.id
-  let nativeSubmissionDoc: typeof editor.state.doc | undefined
+  let nativeSubmission: { doc: ProseMirrorNode; sessionId: string } | undefined
   if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
   submitting.value = true
   submissionProblem.value = undefined
+  rejectedNativeDraft.value = undefined
   try {
     if (bridge) {
       const revision = bridge.revision
@@ -948,7 +961,8 @@ const handleSubmit = async () => {
         editor.view.dispatch(tr)
       }
     } else if (props.nativeSubmit) {
-      nativeSubmissionDoc = doc
+      const sessionId = props.currentThread?.context?.claudeCode?.sessionId
+      if (sessionId) nativeSubmission = { doc, sessionId }
       const result = await props.nativeSubmit(md, references)
       if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
       if (result && 'review' in result) {
@@ -980,10 +994,11 @@ const handleSubmit = async () => {
     attachments.clear()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Message could not be sent'
-    // A reset changes the composer epoch even when the same editor retains the submitted draft.
-    const retainedNativeDraft = message === CLAUDE_STALE_DRAFT_MESSAGE && threadId === props.currentThread?.id
-      && tiptapRef.value?.editor === editor && !editor.isDestroyed && nativeSubmissionDoc === editor.state.doc
-    if (epoch === composerEpoch || retainedNativeDraft) submissionProblem.value = message
+    if (nativeSubmission && threadId === props.currentThread?.id && tiptapRef.value?.editor === editor
+      && !editor.isDestroyed && editor.state.doc.eq(nativeSubmission.doc)) {
+      rejectedNativeDraft.value = { ...nativeSubmission, sessionChanged: message === CLAUDE_STALE_DRAFT_MESSAGE }
+    }
+    if (epoch === composerEpoch) submissionProblem.value = message
   } finally { submitting.value = false }
 }
 
