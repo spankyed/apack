@@ -19,6 +19,7 @@ function parseNativeText(text: string, links: boolean): ClaudeStatusSpan[] {
   const spans: ClaudeStatusSpan[] = []
   let href: string | undefined
   let style: Record<string, string> = {}, foreground: string | undefined, background: string | undefined, inverse = false
+  let underline = false, strikethrough = false
   function append(value: string) {
     // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
     const clean = value.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
@@ -26,6 +27,7 @@ function parseNativeText(text: string, links: boolean): ClaudeStatusSpan[] {
     const paint = { ...style }
     if (foreground || inverse) paint.color = inverse ? background ?? '#1c1c1c' : foreground!
     if (background || inverse) paint.backgroundColor = inverse ? foreground ?? '#d4d4d4' : background!
+    if (underline || strikethrough) paint.textDecoration = underline && strikethrough ? 'underline line-through' : underline ? 'underline' : 'line-through'
     spans.push({ text: clean, style: paint, ...(href ? { href } : {}) })
   }
   // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
@@ -47,16 +49,17 @@ function parseNativeText(text: string, links: boolean): ClaudeStatusSpan[] {
     const codes = match[0].slice(2, -1).split(';').map(value => Number(value || 0))
     for (let i = 0; i < codes.length; i++) {
       const code = codes[i]!
-      if (code === 0) { style = {}; foreground = background = undefined; inverse = false }
+      if (code === 0) { style = {}; foreground = background = undefined; inverse = underline = strikethrough = false }
       else if (code === 1) style.fontWeight = '600'
       else if (code === 2) style.opacity = '0.65'
       else if (code === 3) style.fontStyle = 'italic'
-      else if (code === 4) style.textDecoration = 'underline'
+      else if (code === 4) underline = true
       else if (code === 7) inverse = true
-      else if (code === 9) style.textDecoration = 'line-through'
+      else if (code === 9) strikethrough = true
       else if (code === 22) { delete style.fontWeight; delete style.opacity }
       else if (code === 23) delete style.fontStyle
-      else if (code === 24 || code === 29) delete style.textDecoration
+      else if (code === 24) underline = false
+      else if (code === 29) strikethrough = false
       else if (code === 27) inverse = false
       else if (code === 39) foreground = undefined
       else if (code === 49) background = undefined

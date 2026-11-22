@@ -14,3 +14,14 @@ it('removes terminal commands and OSC links while leaving markup as inert text',
   expect(spans).toEqual([{ text: '<img onerror="bad()">', style: {} }])
   expect(parseClaudeStatus('visible\x1b]52;c;clipboard')).toEqual([{ text: 'visible', style: {} }])
 })
+
+it('retains both text decorations across lines and clears each independently', () => {
+  const spans = parseClaudeStatus('\x1b[4;9mReview\nMigration\x1b[24m deferred\x1b[4m soon\x1b[29m now\x1b[0m complete')
+  expect(spans).toEqual([
+    { text: 'Review\nMigration', style: { textDecoration: 'underline line-through' } },
+    { text: ' deferred', style: { textDecoration: 'line-through' } },
+    { text: ' soon', style: { textDecoration: 'underline line-through' } },
+    { text: ' now', style: { textDecoration: 'underline' } },
+    { text: ' complete', style: {} },
+  ])
+})
