@@ -3413,6 +3413,7 @@ type ClaudeTerminalViewRequest = {
 } | {
     type: 'CLAUDE_TERMINAL_SUBMIT';
     ownerId: string;
+    sessionId: string;
     revision: number;
     text: string;
     references?: MessageReferences;

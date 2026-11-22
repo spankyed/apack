@@ -78,7 +78,7 @@ it('submits once for the owning view and publishes the native accepted prompt id
     f.views.handle(mount, 'one', f.send)
     const receipt = { sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Native rewrite' }
     vi.mocked(f.owner.submit).mockResolvedValue(receipt)
-    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Original draft' } as const
+    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: 'Original draft' } as const
     f.views.handle(submit, 'other-window', f.send)
     f.views.handle({ ...submit, ownerId: randomUUID() }, 'one', f.send)
     expect(f.owner.submit).not.toHaveBeenCalled()
@@ -92,7 +92,7 @@ it('settles an oversized owned submission and lets the same composer send a long
   const f = fixture()
   try {
     f.views.handle(mount, 'one', f.send)
-    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId } as const
+    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId } as const
     const oversized = { ...submit, revision: 1, text: '😀'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH / 2) + 'x' }
     f.views.handle(oversized, 'other-window', f.send)
     expect(f.send.mock.calls.at(-1)![0].submission).toBeUndefined()
@@ -112,7 +112,7 @@ it('reports native refusal without an accepted prompt receipt', async () => {
   try {
     f.views.handle(mount, 'one', f.send)
     vi.mocked(f.owner.submit).mockRejectedValue(new Error('Native prompt refused'))
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Keep this draft' }, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: 'Keep this draft' }, 'one', f.send)
     await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({ revision: 1, status: 'rejected', problem: 'Native prompt refused' }))
     expect(f.send.mock.calls.at(-1)![0].submission?.receipt).toBeUndefined()
   } finally { f.views.clear() }
@@ -123,7 +123,7 @@ it('discards receipts after owner replacement', async () => {
   vi.mocked(f.owner.submit).mockImplementation(() => new Promise(done => { resolve = done }))
   try {
     f.views.handle(mount, 'one', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Old draft' }, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: 'Old draft' }, 'one', f.send)
     await vi.waitFor(() => expect(f.owner.submit).toHaveBeenCalledOnce()); const count = f.send.mock.calls.length
     f.setCurrent(); resolve({ sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Old accepted prompt' })
     await Promise.resolve(); await Promise.resolve()
@@ -136,7 +136,7 @@ it('resolves image-only references before native submission and retains owner fe
   let finish!: (value: { text: string; images: { mediaType: 'image/png'; data: string }[] }) => void
   const prepare = vi.fn(() => new Promise<{ text: string; images: { mediaType: 'image/png'; data: string }[] }>(resolve => { finish = resolve }))
   const f = fixture(prepare)
-  const event = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT' as const, ownerId: f.owner.state.ownerId, revision: 1, text: '', references: { images: [{ name: 'pixel.png', url: 'media://fixture/pixel.png' }] } }
+  const event = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT' as const, ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: '', references: { images: [{ name: 'pixel.png', url: 'media://fixture/pixel.png' }] } }
   try {
     f.views.handle(mount, 'one', f.send)
     f.views.handle(event, 'one', f.send)
@@ -154,6 +154,37 @@ it('resolves image-only references before native submission and retains owner fe
   } finally { f.views.clear() }
 })
 
+it.each(['delivery', 'preparation'] as const)('fences a draft from the preceding session at %s even when the owner stays live', async point => {
+  let finish!: (value: { text: string; images: [] }) => void
+  const prepare = vi.fn(async (text: string) => ({ text, images: [] as [] }))
+  if (point === 'preparation') prepare.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const f = fixture(prepare)
+  try {
+    f.views.handle(mount, 'one', f.send)
+    const request = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: 'Old session draft' } as const
+    if (point === 'preparation') {
+      f.views.handle(request, 'one', f.send)
+      await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce())
+    }
+    f.owner.state.sessionId = randomUUID()
+    for (const notify of f.listeners) notify()
+    if (point === 'delivery') f.views.handle(request, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({
+      revision: 1, status: 'rejected', problem: 'The Claude session changed. Your draft was kept.',
+    }))
+    expect(f.owner.submit).not.toHaveBeenCalled()
+    expect(f.accepted).not.toHaveBeenCalled()
+    f.views.handle({ ...request, sessionId: f.owner.state.sessionId, revision: 2, text: 'New session draft' }, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({ revision: 2, status: 'accepted' }))
+    if (point === 'preparation') {
+      finish({ text: request.text, images: [] })
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith('New session draft')
+    expect(f.send.mock.calls.at(-1)![0].submission?.revision).toBe(2)
+  } finally { f.views.clear() }
+})
+
 it('persists accepted reference identity after the submitting view detaches', async () => {
   const f = fixture(async text => ({ text, images: [] }))
   let finish!: (receipt: { sessionId: string; uuid: string; text: string }) => void
@@ -161,7 +192,7 @@ it('persists accepted reference identity after the submitting view detaches', as
   const references = { files: [{ name: 'example.ts', path: '/project/example.ts', typeLabel: 'TypeScript', isImage: false }] }
   try {
     f.views.handle(mount, 'one', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: '', references }, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: '', references }, 'one', f.send)
     await vi.waitFor(() => expect(f.owner.submit).toHaveBeenCalledOnce())
     f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', f.send)
     references.files[0].name = 'new draft name'
@@ -268,11 +299,15 @@ it.each([false, true])('awaits prompt host release and rechecks owner replacemen
 })
 
 it('returns the submitting window native command outcome without a fabricated human receipt', async () => {
-  const command = vi.fn(async () => ({ kind: 'command_complete' as const, commandName: 'clear', messageId: randomUUID(), sessionId: randomUUID() }))
+  const nextSession = randomUUID()
+  const command = vi.fn(async () => {
+    f.owner.state.sessionId = nextSession
+    return { kind: 'command_complete' as const, commandName: 'clear', messageId: randomUUID(), sessionId: nextSession, conversationId: randomUUID() }
+  })
   const f = fixture(undefined, undefined, command)
   try {
     f.views.handle(mount, 'window', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: '/clear' }, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: '/clear' }, 'window', f.send)
     await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({ status: 'accepted', command: { kind: 'command_complete' } }))
     expect(command).toHaveBeenCalledExactlyOnceWith('window', 'thread', mount.mountId, 1, '/clear', false)
     expect(f.owner.submit).not.toHaveBeenCalled(); expect(f.accepted).not.toHaveBeenCalled()
@@ -350,7 +385,7 @@ it('carries the selected phase only to the authenticated owner and preserves a n
   const f = fixture()
   try {
     f.views.handle(mount, 'one', f.send)
-    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Retain my plan draft', phase: 'Plan' } as const
+    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, revision: 1, text: 'Retain my plan draft', phase: 'Plan' } as const
     f.views.handle(submit, 'other-window', f.send)
     expect(f.owner.submit).not.toHaveBeenCalled()
     vi.mocked(f.owner.submit).mockRejectedValue(new Error('Original policy refusal'))

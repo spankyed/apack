@@ -809,7 +809,7 @@ function submitNativeMessage(text: string, references: MessageReferences): Promi
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
     pendingNativeSend.value = { ownerId: owner.ownerId, revision, threadId: mount.threadId, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject }
-    send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
+    send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, sessionId: owner.sessionId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
     pendingScrollOnSend.value = true
   })
 }

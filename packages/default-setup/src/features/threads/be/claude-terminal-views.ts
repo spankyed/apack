@@ -12,12 +12,14 @@ import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claud
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 
+const staleClaudeDraft = 'The Claude session changed. Your draft was kept.'
+
 export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & (
   | { type: 'CLAUDE_TERMINAL_MOUNT' }
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
   | { type: 'CLAUDE_TERMINAL_CANCEL_OPEN'; openingId: string }
-  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences; phase?: 'Plan' | 'Edit' }
+  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; sessionId: string; revision: number; text: string; references?: MessageReferences; phase?: 'Plan' | 'Edit' }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
@@ -134,6 +136,7 @@ interface View {
   stop?: ClaudeTerminalStopState
   submission?: ClaudeTerminalSubmissionState
   submissionRevision?: number
+  draftSessionId?: string
 }
 
 /** Window leases own subscriptions; detaching a view never stops the native session. */
@@ -180,6 +183,10 @@ export function createClaudeTerminalViews(dependencies: {
     if (views.get(key) !== view) return
     const state = view.owner?.state
     if (view.task && view.task.sessionId !== state?.sessionId) view.task = undefined
+    if (view.submission?.status === 'pending' && view.draftSessionId && view.draftSessionId !== state?.sessionId) {
+      view.submission = { ...view.submission, status: 'rejected', problem: staleClaudeDraft }
+      view.draftSessionId = undefined
+    }
     if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
     if (view.background) {
       view.background.turn = view.background.desktop ? dependencies.backgroundTurn?.(view.threadId, view.background.desktop) : undefined
@@ -252,7 +259,7 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined
+    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -428,9 +435,12 @@ export function createClaudeTerminalViews(dependencies: {
         if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
           || event.phase !== undefined && event.phase !== 'Plan' && event.phase !== 'Edit'
           || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !Object.values(event.references ?? {}).some(value => value?.length)) return
+        const sessionId = event.sessionId
         target.submissionRevision = event.revision
-        if (event.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) {
-          target.submission = { ownerId: event.ownerId, revision: event.revision, status: 'rejected', problem: CLAUDE_UI_TEXT_LIMIT_MESSAGE }
+        target.draftSessionId = undefined
+        if (sessionId !== owner.state.sessionId || event.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) {
+          const problem = sessionId !== owner.state.sessionId ? staleClaudeDraft : CLAUDE_UI_TEXT_LIMIT_MESSAGE
+          target.submission = { ownerId: event.ownerId, revision: event.revision, status: 'rejected', problem }
           publish(key, target)
           return
         }
@@ -438,25 +448,36 @@ export function createClaudeTerminalViews(dependencies: {
         const submission: ClaudeTerminalSubmissionState = { ownerId: event.ownerId, revision: event.revision, status: 'pending' }
         target.submission = submission; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.submission === submission
+        const requireSession = () => {
+          if (owner.state.sessionId !== sessionId) throw new Error(staleClaudeDraft)
+        }
         void Promise.resolve().then(async () => {
           if (!current()) return undefined
+          requireSession()
           const command = event.text.trim() ? await dependencies.command?.(target.client, target.threadId, target.mountId, event.revision, event.text, !!references && Object.values(references).some(value => value?.length)) : undefined
           if (command && command.kind !== 'not_command') return { command }
           if (!current()) return undefined
+          requireSession()
+          target.draftSessionId = sessionId
           if (!dependencies.prepareInput && event.references && Object.values(event.references).some(value => value?.length)) throw new Error('Native references could not be prepared')
           const input = dependencies.prepareInput ? await dependencies.prepareInput(event.text, references) : { text: event.text, images: [] }
           if (!current()) return undefined
+          requireSession()
           if (event.phase !== undefined) return owner.submit(input.text, input.images.length ? input.images : undefined, event.phase)
           return input.images.length ? owner.submit(input.text, input.images) : owner.submit(input.text)
         }).then(result => {
           if (result && 'command' in result) {
             if (!current()) return
+            // An acknowledged native reset can itself move this owner to a new session.
+            const command = result.command
+            if (command.kind !== 'command_complete' || !command.conversationId || command.sessionId !== owner.state.sessionId) requireSession()
             target.submission = { ...submission, status: result.command.kind === 'blocked' ? 'rejected' : 'accepted', command: result.command, ...(result.command.kind === 'blocked' ? { problem: result.command.message } : {}) }; publish(key, target)
             return
           }
           const receipt = result
           if (!receipt || dependencies.get(event.threadId) !== owner) return
-          if (receipt.sessionId !== owner.state.sessionId) throw new Error('Native prompt receipt belongs to another session')
+          requireSession()
+          if (receipt.sessionId !== sessionId) throw new Error('Native prompt receipt belongs to another session')
           // Persistence follows the accepted owner, even if the submitting window detached.
           if (references) dependencies.accepted?.(owner, receipt, references)
           if (!current()) return
