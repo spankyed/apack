@@ -27,22 +27,6 @@ interface Engine {
 
 export interface ElmdbRows extends Rows { readonly engine: Engine }
 
-/**
- * Whether the elmdb installed refuses a link to an entity that is not there where the link is written, in a unit as
- * outside one. One from before that leaves it to the unit's commit, and the checks of that rule have to wait for it.
- */
-export function refusesAtTheLink(): boolean {
-  const rows = elmdb()
-  try {
-    rows.transact(() => {
-      rows.put('thread', 'a', {})
-      rows.join('a', 'later')
-      rows.put('thread', 'later', {})
-    })
-    return false
-  } catch { return true } finally { rows.close() }
-}
-
 export function elmdb(): ElmdbRows {
   const opened = databases.open({ types: { Thread: rules, Link: rules, Import: rules }, relations: { parent_of: {} }, roles: [] })
   let taken = 0

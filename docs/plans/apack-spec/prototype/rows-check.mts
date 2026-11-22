@@ -8,7 +8,7 @@ import { rest, run, system } from './checks.mts'
 import { explore, type Schedule } from './schedule.mts'
 import { answered, given, reaching } from './state.mts'
 import { memory, WROTE_OUTSIDE_A_STEP, type Rows } from './store.mts'
-import { elmdb, refusesAtTheLink } from './store-elmdb.mts'
+import { elmdb } from './store-elmdb.mts'
 
 type Asks = {
   CREATE: { args: { id: string; topic: string; parent?: string }; answer: { id: string }; refuses: 'no-parent' | 'taken' }
@@ -334,18 +334,7 @@ const checks = ([kept, open]: Kept): Array<readonly [string, () => void | Promis
   }],
 ])
 
-// A join that needs both its threads is elmdb's rule from spankyed/elmdb#215 on. Against an elmdb from before it, the
-// checks of that rule are not run there, and are named as waiting: a count that left them out would read as all of it.
-const WAITS = /^a join to /
-const current = refusesAtTheLink()
-const waiting: string[] = []
-const listed = stores.flatMap((kept) => checks(kept).flatMap(([name, body]) => {
-  const named = `${kept[0]}: ${name}`
-  if (kept[0] === 'in elmdb' && !current && WAITS.test(name)) { waiting.push(named); return [] }
-  return [[named, body] as const]
-}))
-
-await run([...listed,
+await run([...stores.flatMap((kept) => checks(kept).map(([name, body]) => [`${kept[0]}: ${name}`, body] as const)),await run([...listed,
   ['in elmdb: a view of the rows is delivered after the step that wrote them, and whoever was answered can already read them', async () => {
     const store = elmdb()
     before?.close()
@@ -395,6 +384,3 @@ await run([...listed,
     }
   }))
 })
-
-for (const name of waiting) console.log(`  wait  ${name}\n        the elmdb installed leaves a link's ends to the commit; this waits for spankyed/elmdb#215`)
-if (waiting.length) console.log(`\n${waiting.length} not run`)

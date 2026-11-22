@@ -660,7 +660,7 @@ is a `transact` of its own, joins whichever it is called in.
   handler's data already keeps, a change that is valid when the handler ends or is not made, and it is SQL's
   default: a constraint is checked at the statement that wrote the row, and deferring it to the commit is what a
   schema asks for. elmdb deferred this one check, a relation's two ends, to a unit's commit, where a link to
-  nothing lost the whole step with nobody to blame. spankyed/elmdb#215 takes the deferral out: nothing needed it.
+  nothing lost the whole step with nobody to blame. spankyed/elmdb#215 took the deferral out: nothing needed it.
   An entity never needs a relation in order to be written, so the entity can always go first, and against an engine
   that refuses the link where it is written apack's unit suites pass, 6,514 host tests and the pack pool, with the
   boot, a pack's content, reset and import among them.
@@ -848,8 +848,8 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   commands, each a unit of its own, are kept with the count in one commit, and a handler that refuses after they
   returned takes back what they wrote. Outside any step a command is still whole and a bare write is refused. A link
   to a thread written later in the step is refused where it is written and fails its handler alone, and a link to
-  nothing does the same, with the step and the system going on. Those two run on elmdb from spankyed/elmdb#215 on:
-  against the release apack is pinned to they are named as waiting, and the count says two were not run.
+  nothing does the same, with the step and the system going on, which is elmdb's rule from spankyed/elmdb#215 on
+  and the release apack is pinned to (spankyed/apack#607).
   Under all 420 orderings of two imports, a create, a note and a handler that throws, the count a state holds is
   the number of rows kept, on each store. And on elmdb, a watch of the rows is delivered after the step that wrote
   them, by when the state has counted them, and whoever was answered reads the row at once. Ten changes to a copy
@@ -1304,8 +1304,6 @@ projects. Each would loosen the fit to this app.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
 - **Rows** ([Rows](#rows)): the rule is proven on elmdb. What is left is not the kernel's:
-  - *The pin.* apack is pinned to an elmdb from before spankyed/elmdb#215. `npm run deps:pin -- elmdb <commit>`
-    once it is merged, and the two checks that wait for it run on both stores.
   - *In the SDK:* the engine a pack is handed refuses a bare write outside a unit. In the prototype that is a count
     kept around `transact` (`store-elmdb.mts`), and it is the same there.
   - *A step that must be on disk before it answers.* `transact` takes `durable: true`; a handler has no way to ask
