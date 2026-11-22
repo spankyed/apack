@@ -28,7 +28,7 @@ pass their closing checks. Record evidence on the tested commits and the owner's
 
 - **Source.** The initial survey used apack `19adecce0d` on `rename-server-workspace`. Phase 1 branches from this goal commit on top of `origin/master` at `3d9e9a4c78`. Boot lives in `packages/server` on this base. [Server boot](../../packages/server/src/runtime/index.ts)
 - **Proven.** The Phase 0 scaffold passed a clean local install, validation, typecheck, registration test, facade check, build and archive creation. The archive digest and all seven receipt entries verified. It has zero features and the production ID. Use disposable profiles for experiments. Its toolchain still comes from a prepared app checkout. [Scaffold and bootstrap instructions at bb6ebb3](https://github.com/spankyed/default-setup/blob/bb6ebb3/README.md)
-- **Next.** Finish Phase 1 validation on `session/starter-release-layout` and hand the PR to the owner. The archive-backed preview, selected-host CLI lookup and pack inventory verification are implemented. The [Phase 1 evidence](../references/evidence/starter-release-layout.md) records the offline packaged boot and authoring round trip. The repository validation chain is still due. Start the replacement PR after the Phase 1 base lands.
+- **Next.** Phase 1 is validated and awaits owner review in [PR #610](https://github.com/spankyed/apack/pull/610). The [Phase 1 evidence](../references/evidence/starter-release-layout.md) records the offline packaged boot, authoring round trip and passing non-native chain. Start the replacement PR after the Phase 1 base lands. Authoring toolchain preparation can proceed independently.
 
 ## Branches and review
 
