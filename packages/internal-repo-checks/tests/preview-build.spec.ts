@@ -68,6 +68,34 @@ describe('local preview builds', () => {
     expect(() => verifyBuildOutputs(preview)).toThrow(/outputs differ/);
   });
 
+  it.each(['production', 'beta', 'preview'])('verifies the packaged starter receipt in %s', channel => {
+    const env = channel === 'preview' ? previewEnvironment('0.4.0-preview.1', {}) : { APACK_ENV: channel };
+    const stage = createBuildSession(env);
+    const app = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-package-'));
+    dirs.push(stage, app);
+    const manifest = readBuildManifest(stage);
+    expect(manifest.shippedPackLayouts).toBe(true);
+    const pack = 'shipped-packs/example';
+    fs.mkdirSync(path.join(stage, pack), { recursive: true });
+    fs.writeFileSync(path.join(stage, pack, 'integrity.json'), '{}');
+    completeBuildFixture(stage);
+    fs.cpSync(stage, app, { recursive: true });
+    fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ version: manifest.version }));
+    expect(() => verifyPackagedBuild(app, stage)).not.toThrow();
+    fs.unlinkSync(path.join(app, pack, 'integrity.json'));
+    expect(() => verifyPackagedBuild(app, stage)).toThrow(/outputs differ/);
+  });
+
+  it('refuses to seal an app without a staged pack directory', () => {
+    const stage = createBuildSession({ APACK_ENV: 'production' });
+    dirs.push(stage);
+    completeBuildFixture(stage);
+    fs.rmSync(path.join(stage, 'build-integrity.json'));
+    fs.rmdirSync(path.join(stage, 'shipped-packs'));
+    expect(() => sealBuildSession(stage)).toThrow(/Missing shipped pack staging directory/);
+    expect(fs.existsSync(path.join(stage, 'build-integrity.json'))).toBe(false);
+  });
+
   it('refuses to seal a build whose bundler recorded nothing of what it inlined, an empty list being a record', () => {
     for (const unrecorded of APP_WORKSPACES) {
       const stage = createBuildSession({ APACK_ENV: 'production' });

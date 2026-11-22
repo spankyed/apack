@@ -3,6 +3,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
 
+export const SHIPPED_PACKS_DIRECTORY = 'shipped-packs';
+
+/** Older packaged hosts put their starter among the app workspaces. */
+export function packagedShippedPacksDir(appDir: string): string {
+  const manifest = path.join(appDir, 'build-manifest.json');
+  const metadata = fs.existsSync(manifest) ? JSON.parse(fs.readFileSync(manifest, 'utf8')) : {};
+  return path.join(appDir, metadata.shippedPackLayouts === true ? SHIPPED_PACKS_DIRECTORY : 'packages');
+}
+
 function sha256(content: string | Buffer): string {
   return crypto.createHash('sha256').update(content).digest('hex');
 }

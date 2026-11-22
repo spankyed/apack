@@ -217,22 +217,15 @@ describe("the packaged app's file list", () => {
 
   it("ships no pack's working directory", () => {
     const found = workDirs();
-    if (found.length === 0) return; // nothing built here; the mutation case below says when that hides something
+    if (found.length === 0) return; // no pack working directories in this checkout
     expect(population('the pack working directories', found).filter(ships)).toEqual([]);
   });
 
-  /**
-   * The mutation, and what it is about: the recursive include of `packages` is what would carry these, so
-   * dropping the one exclusion has to bring them back. Without this, "none of them ships" passes just as well
-   * on a machine where no pack has been built — which is every fresh clone.
-   */
-  it('would carry them without the one pattern that excludes them', () => {
-    const found = workDirs();
-    expect(found.length, `no pack has a ${PACK_WORK_DIR} directory here, so this case proves nothing: run npm run build:default-setup`)
-      .toBeGreaterThan(0);
-    const stripped = without(`!packages/*/${PACK_WORK_DIR}/**`);
-    expect(found.filter((file) => shipsUnder(stripped, file)).length,
-      'nothing came back, so this pattern is not what keeps the working directories out').toBeGreaterThan(0);
+  it('ships the starter only through the staged layout', () => {
+    const workspace = population('the starter workspace', filesUnder('packages/default-setup'));
+    expect(workspace.filter(ships)).toEqual([]);
+    const stripped = without('!packages/default-setup/**');
+    expect(workspace.filter((file) => shipsUnder(stripped, file))).toContain('packages/default-setup/apack.json');
   });
 
   /**

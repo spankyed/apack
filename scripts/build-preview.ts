@@ -17,10 +17,10 @@ if (process.argv.includes('--help')) {
   env.APACK_BUILD_ROOT = createBuildSession(env);
   const metadata = readBuildManifest(env.APACK_BUILD_ROOT);
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
-  const commands: ['npm' | 'npx', string[]][] = [
+  const commands: [command: 'npm' | 'npx', args: string[]][] = [
     ['npm', ['run', 'packages:ensure']],
-    ['npm', ['run', 'generate:entries', '-w', '@app/default-setup']],
     ['npm', ['run', 'build:default-setup']],
+    ['npx', ['tsx', 'scripts/stage-shipped-starter.ts']],
     ['npm', ['run', 'build:runtime']],
   ];
   if (process.platform === 'darwin') commands.push(['npm', ['run', 'build:speech-macos']]);

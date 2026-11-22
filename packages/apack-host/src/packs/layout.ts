@@ -139,6 +139,10 @@ export function stagedFileHashes(integrity: PackIntegrity): Record<string, strin
 
 /** Capture a verified source declaration and its published files without executing or staging it. */
 export function readBuiltPackSource(packRoot: string): { snapshot: PackSnapshot; files: Record<string, string>; sourceRevision: string } {
+  if (isPackLayout(packRoot)) {
+    const { snapshot, integrity } = readPackBuild(packRoot);
+    return { snapshot, files: integrity.files, sourceRevision: shippedPackRevision(integrity.files) };
+  }
   const dist = builtPackDirectory(packRoot);
   const manifest = JSON.parse(fs.readFileSync(path.join(packRoot, PACK_LAYOUT.manifest), 'utf8'));
   const build = readPackBuild(dist);

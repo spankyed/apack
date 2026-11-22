@@ -64,6 +64,22 @@ describe('installing the packs the app ships', () => {
 
   // The reason the comparison is over content: a boot that re-installed every time would rewrite the pack's
   // directory on every start, and `placePack` renames a fresh copy in, so every file's mtime would move
+  it('uses identical installed bytes and source revision for the ordinary release layout', async () => {
+    const source = shipPack('shipped-pack');
+    const original = readAppPackSources(shipped).sources[0]!;
+    const flat = path.join(tmp, 'flat');
+    const staged = path.join(flat, original.id);
+    stagePack(source, staged);
+    expect(readAppPackSources(flat).sources[0]).toMatchObject({
+      id: original.id, sourceRevision: original.sourceRevision, files: original.files,
+    });
+    await restoreShippedPack(original.id, staged, packsDir, {
+      installedPacksFile: recordsFile(), expectedSourceRevision: original.sourceRevision,
+    });
+    expect(readPackIntegrity(path.join(packsDir, original.id))).toEqual(readPackIntegrity(staged));
+    expect(await outcomes()).toEqual(['shipped-pack=unchanged']);
+  });
+
   it('writes nothing on a second boot', async () => {
     shipPack('shipped-pack');
     await installShippedPacks(shipped, packsDir, { installedPacksFile: recordsFile() });

@@ -1,6 +1,7 @@
 import {app} from 'electron';
 import * as path from 'node:path';
 import {readFileSync} from 'node:fs';
+import {packagedShippedPacksDir} from '@apackdev/host/packs/assets';
 import {_inferElectronAppEnv, resolveAppEnvironment, type AppEnvironment} from '@apackdev/sdk/env';
 
 /** The app's environment and paths, plus the log directory only this process can resolve. */
@@ -53,16 +54,10 @@ function initialise(): MainAppEnvironment {
   return {...resolved, logsDir};
 }
 
-/**
- * The directory the app's own packs ship in: `resources/app/packages` packaged, the checkout's `packages/`
- * from source.
- *
- * One declaration, because two processes need the same answer: the API installs the packs it finds here at
- * first boot (`SHIPPED_PACKS_DIR`), and the `pack://` handler serves a pack's frontend from here until it
- * is installed. A disagreement would be a pack whose backend runs and whose frontend 404s.
- */
+/** The server installs offered packs from here before it starts their runtimes. */
 export function shippedPacksDir(): string {
-  return app.isPackaged ? path.join(process.resourcesPath, 'app', 'packages') : path.join(app.getAppPath(), 'packages');
+  const appDir = app.getAppPath();
+  return app.isPackaged ? packagedShippedPacksDir(appDir) : path.join(appDir, 'packages');
 }
 
 /** Decides the app environment if it hasn't been decided yet. Idempotent; `getAppEnvironment()` does the same. */

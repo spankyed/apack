@@ -28,7 +28,7 @@ pass their closing checks. Record evidence on the tested commits and the owner's
 
 - **Source.** The initial survey used apack `19adecce0d` on `rename-server-workspace`. Phase 1 branches from this goal commit on top of `origin/master` at `3d9e9a4c78`. Boot lives in `packages/server` on this base. [Server boot](../../packages/server/src/runtime/index.ts)
 - **Proven.** The Phase 0 scaffold passed a clean local install, validation, typecheck, registration test, facade check, build and archive creation. The archive digest and all seven receipt entries verified. It has zero features and the production ID. Use disposable profiles for experiments. Its toolchain still comes from a prepared app checkout. [Scaffold and bootstrap instructions at bb6ebb3](https://github.com/spankyed/default-setup/blob/bb6ebb3/README.md)
-- **Next.** Build the full in-tree starter once, package its ordinary archive in a preview, then build a dependent pack against that installed preview. This tests the riskiest assumption while both source trees are available for diagnosis. No external pack release is needed for this PR. Phases 1–5 have no implementation or integrated acceptance recorded here.
+- **Next.** Review the shared starter packaging for preview, beta, and production in [PR #610](https://github.com/spankyed/apack/pull/610). The [Phase 1 evidence](../references/evidence/starter-release-layout.md) records the local builds, offline first launches, and earlier authoring round trip. The app PRs remain open for owner review. The external archive pin still requires a published pack release.
 
 ## Branches and review
 
@@ -71,9 +71,9 @@ Cut dependent branches from the updated base after the prerequisite lands. Indep
 
 ### Phase 1. Prove an archive can serve the desktop app and pack authors
 
-Today the shipped catalog reads an authoring root with nested `dist/`; the ordinary installer already reads a flat release layout. Feed the full in-tree starter archive into preview staging. Teach the shipped catalog and CLI host lookup to locate the staged packs. Compare the files in the finished app with the receipt after Electron applies its filters. The existing production build can keep using the workspace during this PR. [Catalog](../../packages/apack-host/src/packs/app-sources.ts) · [Preview](../../scripts/build-preview.ts) · [Packaged host lookup](../../packages/apack-cli/src/app/pack-host.ts) · [Build verification](../../build/build-metadata.ts)
+Package the in-tree starter as an ordinary archive for preview, beta, and production. Each channel calls the same staging command before Electron packages the app. The shipped catalog and CLI read the staged layout, with support for older installed hosts. Compare the files in the finished app with the sealed build receipt. The later release-pin phase replaces the archive source. [Catalog](../../packages/apack-host/src/packs/app-sources.ts) · [Preview](../../scripts/build-preview.ts) · [Packaged host lookup](../../packages/apack-cli/src/app/pack-host.ts) · [Build verification](../../build/build-metadata.ts)
 
-**Done when** a packaged preview starts offline on fresh data and exercises backend, frontend, styles and compiled content. Build a dependent fixture against that preview with sibling source, installed-profile fallback and warm dependency cache unavailable. Show the resolved revision and exercise its build facets. Corrupt a selected archive and supply an incompatible one; each must fail preparation before a usable installer is produced.
+**Done when** unsigned local beta, production, and preview builds package the same verified layout. A packaged preview starts offline on fresh data and exercises backend, frontend, styles and compiled content. Build a dependent fixture against that preview with sibling source, installed-profile fallback and warm dependency cache unavailable. Show the resolved revision and exercise its build facets. Corrupt a selected archive and supply an incompatible one; each must fail preparation before a usable installer is produced.
 
 ### Phase 2. Prove a replacement survives an app upgrade
 
