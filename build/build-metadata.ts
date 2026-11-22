@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { SHIPPED_PACKS_DIRECTORY } from '@apackdev/host/packs/assets';
 import pkg from '../package.json' with { type: 'json' };
 
 export const APP_WORKSPACES = ['main', 'server', 'renderer', 'preload'] as const;
@@ -14,6 +15,7 @@ export interface BuildMetadata {
   appId: string;
   productName: string;
   urlScheme: string;
+  shippedPackLayouts?: true;
 }
 
 export function resolveBuildMetadata(env: NodeJS.ProcessEnv = process.env): BuildMetadata {
@@ -66,7 +68,7 @@ export function appBuildOutput(workspace: AppWorkspace): string {
   return path.join(root, 'packages', workspace, 'dist');
 }
 
-function buildOutputHashes(root: string): Record<string, string> {
+function buildOutputHashes(root: string, shippedPackLayouts: boolean): Record<string, string> {
   const files = APP_WORKSPACES.flatMap(workspace => {
     const dir = path.join(root, 'packages', workspace, 'dist');
     const entries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
@@ -76,6 +78,16 @@ function buildOutputHashes(root: string): Record<string, string> {
     if (!output.length) throw new Error(`Missing build output: ${workspace}`);
     return output;
   });
+  if (shippedPackLayouts) {
+    const dir = path.join(root, SHIPPED_PACKS_DIRECTORY);
+    if (fs.existsSync(dir)) {
+      for (const entry of fs.readdirSync(dir, { recursive: true, withFileTypes: true })) {
+        const file = path.join(entry.parentPath, entry.name);
+        if (entry.isFile()) files.push(file);
+        else if (!entry.isDirectory()) throw new Error(`Unexpected shipped pack output: ${file}`);
+      }
+    }
+  }
   files.push(path.join(root, 'build-manifest.json'));
   return Object.fromEntries(files.sort().map(file => [
     path.relative(root, file).split(path.sep).join('/'),
@@ -111,17 +123,17 @@ export function recordBundledPackages(workspace: AppWorkspace, packages: { name:
  * run's, and one missing is a bundler that no longer records, whose packages the notices would leave out.
  */
 export function sealBuildSession(root: string): void {
-  readBuildManifest(root);
+  const metadata = readBuildManifest(root);
   const unrecorded = APP_WORKSPACES.filter(workspace => !fs.existsSync(bundledPackagesFile(root, workspace)));
   if (unrecorded.length) {
     throw new Error(`No record of the packages ${unrecorded.join(', ')} inlined: each bundler's config records them (recordBundledPackages)`);
   }
-  fs.writeFileSync(path.join(root, 'build-integrity.json'), JSON.stringify(buildOutputHashes(root), null, 2) + '\n');
+  fs.writeFileSync(path.join(root, 'build-integrity.json'), JSON.stringify(buildOutputHashes(root, metadata.shippedPackLayouts === true), null, 2) + '\n');
 }
 
 export function verifyBuildOutputs(root: string, appDir = root): void {
   const expected = JSON.parse(fs.readFileSync(path.join(root, 'build-integrity.json'), 'utf8'));
-  const actual = buildOutputHashes(appDir);
+  const actual = buildOutputHashes(appDir, readBuildManifest(root).shippedPackLayouts === true);
   if (!isDeepStrictEqual(actual, expected)) throw new Error('Build outputs differ from the completed staging build');
 }
 

@@ -28,7 +28,7 @@ pass their closing checks. Record evidence on the tested commits and the owner's
 
 - **Source.** The initial survey used apack `19adecce0d` on `rename-server-workspace`. Phase 1 branches from this goal commit on top of `origin/master` at `3d9e9a4c78`. Boot lives in `packages/server` on this base. [Server boot](../../packages/server/src/runtime/index.ts)
 - **Proven.** The Phase 0 scaffold passed a clean local install, validation, typecheck, registration test, facade check, build and archive creation. The archive digest and all seven receipt entries verified. It has zero features and the production ID. Use disposable profiles for experiments. Its toolchain still comes from a prepared app checkout. [Scaffold and bootstrap instructions at bb6ebb3](https://github.com/spankyed/default-setup/blob/bb6ebb3/README.md)
-- **Next.** Build the full in-tree starter once, package its ordinary archive in a preview, then build a dependent pack against that installed preview. This tests the riskiest assumption while both source trees are available for diagnosis. No external pack release is needed for this PR. Phases 1–5 have no implementation or integrated acceptance recorded here.
+- **Next.** Finish Phase 1 validation on `session/starter-release-layout` and hand the PR to the owner. The archive-backed preview, selected-host CLI lookup and pack inventory verification are implemented. The [Phase 1 evidence](../references/evidence/starter-release-layout.md) records the packaged boot, authoring round trip and remaining offline desktop check. Start the replacement PR after the Phase 1 base lands.
 
 ## Branches and review
 

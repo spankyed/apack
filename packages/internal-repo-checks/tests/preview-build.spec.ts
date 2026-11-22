@@ -68,6 +68,24 @@ describe('local preview builds', () => {
     expect(() => verifyBuildOutputs(preview)).toThrow(/outputs differ/);
   });
 
+  it('compares the packaged release layout, including its receipt, to the sealed stage', () => {
+    const stage = createBuildSession(previewEnvironment('0.4.0-preview.1', {}));
+    const app = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-package-'));
+    dirs.push(stage, app);
+    fs.writeFileSync(path.join(stage, 'build-manifest.json'), JSON.stringify({
+      ...readBuildManifest(stage), shippedPackLayouts: true,
+    }));
+    const pack = 'shipped-packs/example';
+    fs.mkdirSync(path.join(stage, pack), { recursive: true });
+    fs.writeFileSync(path.join(stage, pack, 'integrity.json'), '{}');
+    completeBuildFixture(stage);
+    fs.cpSync(stage, app, { recursive: true });
+    fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ version: '0.4.0-preview.1' }));
+    expect(() => verifyPackagedBuild(app, stage)).not.toThrow();
+    fs.unlinkSync(path.join(app, pack, 'integrity.json'));
+    expect(() => verifyPackagedBuild(app, stage)).toThrow(/outputs differ/);
+  });
+
   it('refuses to seal a build whose bundler recorded nothing of what it inlined, an empty list being a record', () => {
     for (const unrecorded of APP_WORKSPACES) {
       const stage = createBuildSession({ APACK_ENV: 'production' });

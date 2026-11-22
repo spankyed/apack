@@ -2,6 +2,7 @@ import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
+import {SHIPPED_PACKS_DIRECTORY} from '@apackdev/host/packs/assets';
 import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
@@ -270,6 +271,7 @@ export default /** @type import('electron-builder').Configuration */
     '!**/node_modules/**/docs/**',
     '!**/node_modules/**/CHANGELOG*',
     '!**/node_modules/**/.eslintrc*',
+    ...(metadata.shippedPackLayouts ? ['!packages/default-setup/**'] : []),
     ...APP_WORKSPACES.map(name => ({
       from: path.join(buildRoot, 'packages', name, 'dist'), to: `packages/${name}/dist`, filter: ['**/*'],
     })),
@@ -283,6 +285,11 @@ export default /** @type import('electron-builder').Configuration */
   // Extra resources
   extraResources: [
     {from: path.join(buildRoot, 'build-manifest.json'), to: 'app/build-manifest.json'},
+    ...(metadata.shippedPackLayouts ? [{
+      from: path.join(buildRoot, SHIPPED_PACKS_DIRECTORY),
+      to: `app/${SHIPPED_PACKS_DIRECTORY}`,
+      filter: ['**/*'],
+    }] : []),
     ...speechResources,
     // `apack` launcher for "Install 'apack' command in PATH"; runs packages/apack-cli/dist/package
     ...(process.platform === 'darwin'

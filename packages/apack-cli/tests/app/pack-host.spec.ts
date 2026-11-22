@@ -325,6 +325,18 @@ describe('configuredHostPackagesDir', () => {
     expect(beta).toHaveBeenCalledTimes(1);
   });
 
+  it('reads release layouts from the exact packaged host selected by either input', async () => {
+    const bundle = path.join(tmp, 'apack Preview.app');
+    const app = path.join(bundle, 'Contents', 'Resources', 'app');
+    fs.mkdirSync(app, { recursive: true });
+    fs.writeFileSync(path.join(app, 'build-manifest.json'), JSON.stringify({ shippedPackLayouts: true }));
+    const expected = path.join(app, 'shipped-packs');
+    expect((await configuredHostPackagesDir(opts({ APACK_HOST: bundle })))?.dir).toBe(expected);
+    expect((await configuredHostPackagesDir(opts({
+      APACK_HOST_EXECUTABLE: path.join(bundle, 'Contents', 'MacOS', 'apack Preview'),
+    })))?.dir).toBe(expected);
+  });
+
   it('resolves nothing without a configured app', async () => {
     await expect(configuredHostPackagesDir(opts({}))).resolves.toBeNull();
   });

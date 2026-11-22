@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createBuildSession, readBuildManifest } from '../build/build-metadata.ts';
@@ -15,12 +16,15 @@ if (process.argv.includes('--help')) {
   const npmCli = process.env.npm_execpath;
   if (!npmCli) throw new Error('Run preview builds with npm run build:preview -- --version <x.y.z>');
   env.APACK_BUILD_ROOT = createBuildSession(env);
-  const metadata = readBuildManifest(env.APACK_BUILD_ROOT);
+  const metadata = { ...readBuildManifest(env.APACK_BUILD_ROOT), shippedPackLayouts: true };
+  fs.writeFileSync(path.join(env.APACK_BUILD_ROOT, 'build-manifest.json'), JSON.stringify(metadata, null, 2) + '\n');
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
-  const commands: ['npm' | 'npx', string[]][] = [
+  const commands: [command: 'npm' | 'npx', args: string[], cwd?: string][] = [
     ['npm', ['run', 'packages:ensure']],
-    ['npm', ['run', 'generate:entries', '-w', '@app/default-setup']],
     ['npm', ['run', 'build:default-setup']],
+    ['npx', ['apack', 'pack', 'archive', '--out', path.join(env.APACK_BUILD_ROOT, 'pack-archives')],
+      path.join(root, 'packages', 'default-setup')],
+    ['npx', ['tsx', 'scripts/stage-preview-starter.ts']],
     ['npm', ['run', 'build:runtime']],
   ];
   if (process.platform === 'darwin') commands.push(['npm', ['run', 'build:speech-macos']]);
@@ -28,10 +32,10 @@ if (process.argv.includes('--help')) {
     ['npx', ['electron-builder', 'build', '--config', 'electron-builder.mjs', '--dir', '--publish', 'never', `--${platform}`, `--${process.arch}`]],
   );
   console.log(`Building ${metadata.productName} ${metadata.version}`);
-  for (const [command, args] of commands) {
+  for (const [command, args, cwd = root] of commands) {
     console.log(`\n${command} ${args.join(' ')}`);
     const invocation = command === 'npm' ? [npmCli, ...args] : [npmCli, 'exec', '--', ...args];
-    const result = await boundedSpawn(process.execPath, invocation, BUDGET_MS.scenario.ms, { cwd: root, env, stream: true });
+    const result = await boundedSpawn(process.execPath, invocation, BUDGET_MS.scenario.ms, { cwd, env, stream: true });
     if (result.code !== 0) throw new Error(`${command} ${args.join(' ')} failed${result.timedOut ? ' (timed out)' : ''}`);
   }
   console.log('\nPreview built in dist/preview. It keeps its own data in apack-preview.');

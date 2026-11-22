@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import envPaths from 'env-paths';
 import semver from 'semver';
+import { packagedShippedPacksDir } from '@apackdev/host/packs/assets';
 import { parseAppEnv, type AppChannel } from '@apackdev/sdk/env';
 import { cachedBetaBuilds, ensureBetaApp, type PackagedApp } from './beta-app';
 import { checkoutFor } from '../build/checkout-packages';
@@ -56,9 +57,9 @@ function packagedAppDir(executable: string): string {
   return path.join(path.dirname(path.dirname(executable)), 'Resources', 'app');
 }
 
-/** Packaged apps ship each package's dist dir (electron-builder.mjs) next to the app code. */
+/** Offers from the selected executable's own app bundle. */
 export function packagedAppPackagesDir(executable: string): string {
-  return path.join(packagedAppDir(executable), 'packages');
+  return packagedShippedPacksDir(packagedAppDir(executable));
 }
 
 /** What a packaged build says its own version is, beside the packages dir above. */
@@ -158,7 +159,7 @@ export async function configuredHostPackagesDir(options: HostPackagesOptions = {
     // Dependency builds only need packages/, not the Electron and runtime outputs a launch requires.
     const root = path.resolve(expandHome(named.choice.path));
     return root.endsWith('.app')
-      ? { dir: path.join(root, 'Contents', 'Resources', 'app', 'packages'), label: `apack bundle ${root}` }
+      ? { dir: packagedShippedPacksDir(path.join(root, 'Contents', 'Resources', 'app')), label: `apack bundle ${root}` }
       : { dir: path.join(root, 'packages'), label: `apack checkout ${root}` };
   }
 
