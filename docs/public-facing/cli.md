@@ -206,9 +206,11 @@ Selected hosts supply their built-in pack dependencies before ambient workspace 
 
 A build resolves the pack's `@apackdev` packages to the `dist` each published package ships — the one layout a pack ever has, whether the packages came from the registry or from a link to an apack checkout. There is nothing to configure, and a pack's own configs set no resolution conditions. `apack pack test` and `apack pack dev` resolve the same way, so a pack's tests run against what its build compiled; against a checkout they first bring that `dist` up to date with the checkout's sources.
 
-#### `apack pack archive [--out <dir>]`
+#### `apack pack export [--out <dir>]`
 
 Verify the build-owned `dist/integrity.json` and stage its recorded files into a verified pack (`integrity.json` lists a sha256 per file) and write `<id>-<version>.tgz` and `<id>-<version>.tgz.sha256` to `--out` (default: `.apack/archives`). Run `apack pack build` first (`--release` for publishable output). Verifies sealed output and recorded source/dependency inputs under the build lock, using the selected build’s compiler/options context. Rechecks inputs before publishing the archive; changed inputs refuse without replacing the previous archive. Keep custom output under `.apack/` or outside the pack to avoid introducing generated files into authored inputs.
+
+Existing scripts can continue to use `apack pack archive` as an alias.
 
 #### `apack pack dev`
 

@@ -279,7 +279,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   const archive = path.join(releaseDir, packArchiveName(manifest.id, version));
   const checksumFile = `${archive}.sha256`;
   if (!fs.existsSync(archive) || !fs.existsSync(checksumFile)) {
-    throw new Error(`No ${path.basename(archive)} (+ .sha256) in ${releaseDir}. Run "apack pack archive --out ${releaseDir}" first.`);
+    throw new Error(`No ${path.basename(archive)} (+ .sha256) in ${releaseDir}. Run "apack pack export --out ${releaseDir}" first.`);
   }
 
   // Refuse to publish anything that doesn't verify

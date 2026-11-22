@@ -170,7 +170,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(ele
   for (const file of ['runtime/index.cjs', 'runtime/fe.js']) expect(fs.statSync(path.join(pack, 'dist', file)).size).toBeGreaterThan(0);
   fs.rmSync(proof);
   // Passive inspection uses the recorded build context, even under a different Node runtime.
-  await command(pack, ['archive', '--out', path.join(root, 'archive')], {
+  await command(pack, ['export', '--out', path.join(root, 'archive')], {
     runtime: { executable: process.execPath, runtimeDirectory: path.dirname(process.execPath) },
   });
   expect(fs.statSync(path.join(root, 'archive/electron-proof-0.1.0.tgz')).size).toBeGreaterThan(0);

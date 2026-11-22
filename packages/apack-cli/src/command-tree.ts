@@ -5,6 +5,7 @@ export interface Command {
   load?: () => Promise<Handler>;
   detailedHelp?: boolean;
   children?: Record<string, Command>;
+  aliases?: Readonly<Record<string, string>>;
 }
 
 /** Routing and help share the same explicit app/pack command tree. */
@@ -20,13 +21,14 @@ export const COMMANDS = {
   'profiles': { usage: '[command] [options]', description: 'Manage app data directories and profiles', load: async () => (await import('./commands/profiles')).profiles, detailedHelp: true },
   pack: {
     description: 'Author, build, test, and manage packs',
+    aliases: { archive: 'export' },
     children: {
       'init': { usage: '[name]', description: 'Scaffold a new pack', load: async () => (await import('./commands/init')).init },
       'add': { usage: '<entity> [options]', description: 'Add a feature, step, action, or other pack entity', load: async () => (await import('./commands/add')).add, detailedHelp: true },
       'generate-entries': { usage: '[--force]', description: 'Generate manifest entry files', load: async () => (await import('./commands/generate-entries')).generateEntries },
       'fetch-deps': { usage: '', description: 'Fetch dependency type manifests', load: async () => (await import('./commands/fetch-deps')).fetchDeps },
       'build': { usage: '[--watch] [--skip-generate] [--skip-fe] [--release]', description: 'Build the pack into dist/', load: async () => (await import('./commands/build')).buildCommand },
-      'archive': { usage: '[--out <dir>]', description: 'Create a verified .tgz and checksum from dist/', load: async () => (await import('./commands/archive')).archive, detailedHelp: true },
+      'export': { usage: '[--out <dir>]', description: 'Write an installable pack archive and checksum', load: async () => (await import('./commands/archive')).exportPack, detailedHelp: true },
       'release': { usage: '[patch|minor|major|publish] [options]', description: 'Release a pack', load: async () => (await import('./commands/release')).release, detailedHelp: true },
       'validate': { usage: '[--json]', description: 'Validate the manifest and types', load: async () => (await import('./commands/validate')).validate },
       'facade-report': { usage: '[--update] [--skip-generate] | --from-build', description: 'Check or update the pack facade report', load: async () => (await import('./commands/facade-report')).facadeReport },
@@ -71,9 +73,10 @@ export async function runCommand(args: string[]): Promise<void> {
   while (command.children) {
     const name = rest[0];
     if (!name || name === '--help' || name === '-h') return help(command, words);
-    const child = command.children[name];
+    const canonical = command.aliases && Object.hasOwn(command.aliases, name) ? command.aliases[name]! : name;
+    const child = command.children[canonical];
     if (!child) throw new Error(`Unknown command: ${['apack', ...words, name].join(' ')}. Use ${['apack', ...words].join(' ')} --help.`);
-    words.push(name);
+    words.push(canonical);
     command = child;
     rest = rest.slice(1);
   }

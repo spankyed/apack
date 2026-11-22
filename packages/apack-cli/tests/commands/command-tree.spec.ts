@@ -4,12 +4,22 @@ import { COMMANDS, runCommand } from '../../src/command-tree';
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('explicit app and pack command routing', () => {
-  it('bare pack and pack --help display help without loading an archive command', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    const archive = vi.spyOn(COMMANDS.pack!.children!.archive!, 'load');
+  it('advertises export in pack help without loading its handler', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const load = vi.spyOn(COMMANDS.pack.children.export, 'load');
     await runCommand(['pack']);
     await runCommand(['pack', '--help']);
-    expect(archive).not.toHaveBeenCalled();
+    const help = output.mock.calls.flat().join('\n');
+    expect(help).toMatch(/^  export +Write an installable pack archive and checksum$/m);
+    expect(help).not.toMatch(/^  archive\s/m);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it.each(['export', 'archive'])('routes pack %s to the export handler', async name => {
+    const exportPack = vi.fn(async () => {});
+    vi.spyOn(COMMANDS.pack.children.export, 'load').mockResolvedValue(exportPack);
+    await runCommand(['pack', name, '--out', '.apack/release']);
+    expect(exportPack).toHaveBeenCalledWith(['--out', '.apack/release']);
   });
 
   it.each(['dev', 'drive', 'test', 'build', 'init', 'clean'])('rejects removed root %s', async name => {

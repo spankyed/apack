@@ -20,7 +20,7 @@ const COMMANDS = {
   'add': async () => (await import('../../src/commands/add')).add,
   'generate-entries': async () => (await import('../../src/commands/generate-entries')).generateEntries,
   'build': async () => (await import('../../src/commands/build')).build,
-  'archive': async () => (await import('../../src/commands/archive')).archive,
+  'export': async () => (await import('../../src/commands/archive')).exportPack,
   'init-tests': async () => (await import('../../src/commands/init-tests')).initTests,
   'facade-report': async () => (await import('../../src/commands/facade-report')).facadeReport,
 } satisfies Record<string, () => Promise<(args: string[]) => unknown>>;
