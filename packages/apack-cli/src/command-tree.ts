@@ -5,7 +5,6 @@ export interface Command {
   load?: () => Promise<Handler>;
   detailedHelp?: boolean;
   children?: Record<string, Command>;
-  aliases?: Readonly<Record<string, string>>;
 }
 
 /** Routing and help share the same explicit app/pack command tree. */
@@ -21,7 +20,6 @@ export const COMMANDS = {
   'profiles': { usage: '[command] [options]', description: 'Manage app data directories and profiles', load: async () => (await import('./commands/profiles')).profiles, detailedHelp: true },
   pack: {
     description: 'Author, build, test, and manage packs',
-    aliases: { archive: 'export' },
     children: {
       'init': { usage: '[name]', description: 'Scaffold a new pack', load: async () => (await import('./commands/init')).init },
       'add': { usage: '<entity> [options]', description: 'Add a feature, step, action, or other pack entity', load: async () => (await import('./commands/add')).add, detailedHelp: true },
@@ -73,10 +71,9 @@ export async function runCommand(args: string[]): Promise<void> {
   while (command.children) {
     const name = rest[0];
     if (!name || name === '--help' || name === '-h') return help(command, words);
-    const canonical = command.aliases && Object.hasOwn(command.aliases, name) ? command.aliases[name]! : name;
-    const child = command.children[canonical];
+    const child = command.children[name];
     if (!child) throw new Error(`Unknown command: ${['apack', ...words, name].join(' ')}. Use ${['apack', ...words].join(' ')} --help.`);
-    words.push(canonical);
+    words.push(name);
     command = child;
     rest = rest.slice(1);
   }

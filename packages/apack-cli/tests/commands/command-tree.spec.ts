@@ -15,11 +15,15 @@ describe('explicit app and pack command routing', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it.each(['export', 'archive'])('routes pack %s to the export handler', async name => {
+  it('routes pack export to the export handler', async () => {
     const exportPack = vi.fn(async () => {});
     vi.spyOn(COMMANDS.pack.children.export, 'load').mockResolvedValue(exportPack);
-    await runCommand(['pack', name, '--out', '.apack/release']);
+    await runCommand(['pack', 'export', '--out', '.apack/release']);
     expect(exportPack).toHaveBeenCalledWith(['--out', '.apack/release']);
+  });
+
+  it('rejects the removed pack archive command', async () => {
+    await expect(runCommand(['pack', 'archive'])).rejects.toThrow('Unknown command: apack pack archive.');
   });
 
   it.each(['dev', 'drive', 'test', 'build', 'init', 'clean'])('rejects removed root %s', async name => {

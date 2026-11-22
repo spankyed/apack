@@ -114,16 +114,11 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     // produces: the archive extractPackArchive/verifyPack read below
     const packed = await callCli(pack, 'export', ['--out', out]);
     expect(packed.code, packed.output).toBe(0);
-    const archive = 'demo-pack-0.1.0.tgz';
-    const extracted = await extractPackArchive(path.join(out, archive), path.join(tmp, 'extract'));
+    const archive = path.join(out, 'demo-pack-0.1.0.tgz');
+    const [sha256] = fs.readFileSync(`${archive}.sha256`, 'utf8').split(/\s+/);
+    expect(sha256).toMatch(/^[a-f0-9]{64}$/);
+    const extracted = await extractPackArchive(archive, path.join(tmp, 'extract'), sha256);
     expect(verifyPack(extracted).id).toBe('demo-pack');
-
-    const legacyOut = path.join(tmp, 'legacy-out');
-    const legacy = await callCli(pack, 'archive', ['--out', legacyOut]);
-    expect(legacy.code, legacy.output).toBe(0);
-    for (const file of [archive, `${archive}.sha256`]) {
-      expect(fs.readFileSync(path.join(legacyOut, file)).equals(fs.readFileSync(path.join(out, file))), file).toBe(true);
-    }
     const guide = fs.readFileSync(path.join(REPO_ROOT, 'docs/public-facing/pack-builds.md'), 'utf8');
     for (const file of [PACK_LAYOUT.manifest, PACK_LAYOUT.integrity, PACK_LAYOUT.runtimeEntry, PACK_LAYOUT.feEntry, PACK_LAYOUT.snapshot]) {
       expect(fs.existsSync(path.join(extracted, file)), file).toBe(true);
