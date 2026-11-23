@@ -77,7 +77,7 @@ export async function createClaudeTerminalBridge(options: {
   let policyGeneration = randomUUID()
   let transportEpoch = randomBytes(16).toString('hex'), relaunched = false, relaunching = false
   const generations = { main: randomUUID(), subagent: randomUUID() }
-  const helperHandoffs: Partial<Record<keyof typeof generations, {generation: string; command: string | null; policyKey: string}>> = {}
+  const helperHandoffs: Partial<Record<keyof typeof generations, {generation: string; command: string | null; policyKey: string; shellPrefix: string | null}>> = {}
   const waiting: Record<string, unknown>[] = []
   let saveObserver: (() => Promise<void>) | undefined
   const nativeQuote = (value: string) => /^[A-Za-z0-9_./:=@+,-]+$/.test(value) ? value : quote(value)
@@ -383,8 +383,8 @@ export async function createClaudeTerminalBridge(options: {
         let rotated = false
         for (const kind of ['main', 'subagent'] as const) {
           if (!policyChanged && !changedSession && !shellChanged && nextCommands[kind] === helperCommands[kind]) continue
-          if (changedSession || shellChanged) delete helperHandoffs[kind]
-          else helperHandoffs[kind] = {generation: generations[kind], command: helperCommands[kind], policyKey: helperPolicyKey}
+          if (changedSession) delete helperHandoffs[kind]
+          else helperHandoffs[kind] = { generation: generations[kind], command: helperCommands[kind], policyKey: helperPolicyKey, shellPrefix }
           generations[kind] = randomUUID()
           helperCommands[kind] = nextCommands[kind]
           if (kind === 'main') projection.clearMain()
@@ -396,7 +396,10 @@ export async function createClaudeTerminalBridge(options: {
         // A helper may finish before this poll; only its native launch policy can cross the handoff.
         for (const event of waiting.splice(0)) {
           const kind = event.kind as 'main' | 'subagent'
-          if ((event.policyKey === helperPolicyKey || !policyChanged && event.policyKey === undefined) && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matchesHelperCommand(kind, event.command)) projection.accept(event)
+          const policyMatches = event.policyKey === helperPolicyKey || (!policyChanged && event.policyKey === undefined)
+          const shellMatches = event.shellPrefix === shellPrefix || (!shellChanged && event.shellPrefix === undefined)
+          if (policyMatches && shellMatches && event.sessionId === projection.sessionId && event.parentPid === observerPid
+            && event.generation === previous[kind] && matchesHelperCommand(kind, event.command)) projection.accept(event)
         }
         if (rotated) await saveObserver?.()
         if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; promptQueue = undefined; session.reset(value.sessionId); lastTurn = undefined; activeTurnId = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
@@ -546,14 +549,19 @@ export async function createClaudeTerminalBridge(options: {
         const kind = value.kind
         if (!observerPid || value.parentPid !== observerPid || !Number.isSafeInteger(value.childPid) || (value.childPid as number) < 2 || (kind !== 'main' && kind !== 'subagent')) return reply(409, {})
         if (value.policyKey !== undefined && (typeof value.policyKey !== 'string' || !/^\[(true|false),(true|false),(true|false)\]$/.test(value.policyKey))) return reply(400, {})
+        if (value.shellPrefix !== undefined && value.shellPrefix !== null && (typeof value.shellPrefix !== 'string' || value.shellPrefix.length > 32768)) return reply(400, {})
         const currentCommand = matchesHelperCommand(kind, value.command)
+        const currentShell = value.shellPrefix === shellPrefix
+        const shellMatches = currentShell || value.shellPrefix === undefined
         if (value.generation !== generations[kind]) {
           const previous = helperHandoffs[kind]
           // The helper can start under the new native settings before the observer file receives its next
           // generation. A receipt that could belong to the superseded settings still has no authority.
-          if (!previous || value.generation !== previous.generation || !currentCommand || value.policyKey !== helperPolicyKey
-            || (value.policyKey === previous.policyKey && matchesHelperCommand(kind, value.command, previous.command))) return reply(409, {})
-        } else if (!currentCommand || value.policyKey !== undefined && value.policyKey !== helperPolicyKey) {
+          if (!previous || value.generation !== previous.generation || !currentCommand || !shellMatches || value.policyKey !== helperPolicyKey) return reply(409, {})
+          const shellChanged = previous.shellPrefix !== shellPrefix
+          if (shellChanged && !currentShell) return reply(409, {})
+          if (!shellChanged && value.policyKey === previous.policyKey && matchesHelperCommand(kind, value.command, previous.command)) return reply(409, {})
+        } else if (!currentCommand || !shellMatches || value.policyKey !== undefined && value.policyKey !== helperPolicyKey) {
           waiting.push(value); if (waiting.length > 16) waiting.shift()
           return reply(202, {})
         }

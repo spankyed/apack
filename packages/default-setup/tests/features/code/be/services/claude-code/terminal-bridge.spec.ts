@@ -586,6 +586,62 @@ it('admits a newly configured command without accepting the preceding command or
   expect(bridge!.projection.mainStatus).toBeUndefined()
 })
 
+it.each(['main', 'subagent'] as const)('does not publish a queued %s receipt across a shell-prefix change', async kind => {
+  await create()
+  const agents = [{ id: 'task', type: 'worker', status: 'running' }]
+  const body = { sessionId: session, agents }
+  await request('/poll', { ...body, shellPrefix: 'old-shell' })
+  const queued = {
+    ...await observed('replacement'),
+    kind, generation: (await config()).generations[kind],
+    policyKey: '[false,false,false]',
+    stdout: kind === 'main' ? 'Previous shell output' : '{"id":"task","content":"Previous shell output"}',
+    ...(kind === 'subagent' ? { tasks: [{ id: 'task', status: 'running' }] } : {}),
+  }
+  const newCommand = kind === 'main' ? { statusCommand: 'replacement' } : { subagentCommand: 'replacement' }
+  const status = () => kind === 'main' ? bridge!.projection.mainStatus : bridge!.projection.tasks[0].statusText
+  expect((await request('/native-status', queued)).status).toBe(202)
+  await request('/poll', { ...body, ...newCommand, shellPrefix: 'new-shell' })
+  expect(status()).toBeUndefined()
+  expect((await request('/native-status', queued)).status).toBe(409)
+
+  const fresh = { ...queued, generation: (await config()).generations[kind], startedAt: '200',
+    stdout: kind === 'main' ? 'Current shell output' : '{"id":"task","content":"Current shell output"}' }
+  expect((await request('/native-status', fresh)).status).toBe(200)
+  expect(status()).toBe('Current shell output')
+})
+
+it.each(['main', 'subagent'] as const)('admits only a stamped fresh %s receipt before or after the prefix poll', async kind => {
+  await create()
+  const agents = [{ id: 'task', type: 'worker', status: 'running' }]
+  const body = { sessionId: session, agents }
+  const status = () => kind === 'main' ? bridge!.projection.mainStatus : bridge!.projection.tasks[0].statusText
+  const receipt = async (shellPrefix: string, startedAt: string, caption: string) => ({
+    ...await observed(kind === 'main' ? 'main' : 'sub'),
+    kind, startedAt, generation: (await config()).generations[kind], shellPrefix,
+    policyKey: '[false,false,false]',
+    ...(kind === 'subagent' ? { tasks: [{ id: 'task', status: 'running' }] } : {}),
+    stdout: kind === 'main' ? caption : JSON.stringify({ id: 'task', content: caption }),
+  })
+  await request('/poll', { ...body, shellPrefix: 'initial-shell' })
+  const early = await receipt('second-shell', '200', 'New shell finished before poll')
+  expect((await request('/native-status', early)).status).toBe(202)
+  expect(status()).toBeUndefined()
+  await request('/poll', { ...body, shellPrefix: 'second-shell' })
+  expect(status()).toBe('New shell finished before poll')
+
+  const stale = await receipt('second-shell', '300', 'Retired shell finished after poll')
+  const late = await receipt('third-shell', '400', 'New shell finished after poll')
+  await request('/poll', { ...body, shellPrefix: 'third-shell' })
+  expect(status()).toBeUndefined()
+  for (const retired of [stale, { ...late, shellPrefix: undefined }]) {
+    expect((await request('/native-status', retired)).status).toBe(409)
+  }
+  expect((await request('/native-status', late)).status).toBe(200)
+  expect(status()).toBe('New shell finished after poll')
+  expect((await request('/native-status', late)).status).toBe(409)
+})
+
 it('refuses a queued old-policy result even when the new command matches',async()=>{
  await create()
  expect((await request('/native-status',{...await observed('next main'),policyKey:'[false,false,false]'})).status).toBe(202)
