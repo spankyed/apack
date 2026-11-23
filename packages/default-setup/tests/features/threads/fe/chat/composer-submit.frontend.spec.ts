@@ -294,7 +294,7 @@ it('answers native host reads/fills through the actual input and refuses stale, 
 })
 
 
-it('shows native ghost text without changing the draft, accepts Tab and retires it for busy or attached input', async () => {
+it('shows native ghost text without changing the draft, accepts Tab, waits for idle and refuses attachments', async () => {
   const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   try {
     const f = mount(vi.fn(async () => undefined))
@@ -307,9 +307,21 @@ it('shows native ghost text without changing the draft, accepts Tab and retires 
     expect(f.root.querySelector('.claude-prompt-suggestion')?.textContent).toBe('Native ghost')
     editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); await nextTick()
     expect(editor.state.doc.textContent).toBe('Native ghost'); expect(f.send).not.toHaveBeenCalled()
-    editor.commands.clearContent(); await nextTick(); f.state.isBusy = true
-    propose(); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ shown: false })
-    f.state.isBusy = false; propose(); await nextTick(); expect(f.root.querySelector('.claude-prompt-suggestion')).not.toBeNull()
+    editor.commands.clearContent()
+    await nextTick()
+    f.state.isBusy = true
+    const previousResponses = f.hostResponse.mock.calls.length
+    propose()
+    const deferredRequestId = f.state.nativePrompt.hostRequest!.requestId
+    await nextTick()
+    expect(f.hostResponse).toHaveBeenCalledTimes(previousResponses)
+    expect(f.root.querySelector('.claude-prompt-suggestion')).toBeNull()
+
+    f.state.isBusy = false
+    await nextTick()
+    expect(f.hostResponse).toHaveBeenCalledTimes(previousResponses + 1)
+    expect(f.hostResponse).toHaveBeenLastCalledWith({ requestId: deferredRequestId, kind: 'suggest', shown: true })
+    expect(f.root.querySelector('.claude-prompt-suggestion')?.textContent).toBe('Native ghost')
     attachments.pendingFiles.value = [file('context.txt')]; await nextTick()
     expect(f.root.querySelector('.claude-prompt-suggestion')).toBeNull()
     propose(); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ shown: false })
