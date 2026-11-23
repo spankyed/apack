@@ -596,9 +596,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         // process generations while that authority still exists. A server name or pane number
         // alone can be reused after a crash. Failed identity reads leave ordinary attach usable.
         const identify = async (address: string[], abort: AbortSignal) => {
-          const [socket, serverPid, workerPid, targetSession, targetPane, dead, active] = (await probe([
+          const [socket, serverPid, workerPid, targetSession, targetPane, dead, activePane, activeWindow] = (await probe([
             'display-message', '-p', '-t', paneId,
-            '#{socket_path}\t#{pid}\t#{pane_pid}\t#{session_id}\t#{pane_id}\t#{pane_dead}\t#{pane_active}',
+            '#{socket_path}\t#{pid}\t#{pane_pid}\t#{session_id}\t#{pane_id}\t#{pane_dead}\t#{pane_active}\t#{window_active}',
           ], abort, address)).split('\t')
           if (!socket || !isAbsolute(socket) || !serverPid || !workerPid || !/^[1-9][0-9]*$/.test(serverPid)
             || !/^[1-9][0-9]*$/.test(workerPid) || targetSession !== session || targetPane !== paneId || dead !== '0')
@@ -613,9 +613,12 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
             lstat(socket, {bigint:true}), processStart(serverPid), processStart(workerPid),
           ])
           if (!file.isSocket() || file.uid !== BigInt(process.getuid!())) throw new Error('The native teammate socket changed')
-          return {socket, active:active === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
+          return {socket, active:activePane === '1' && activeWindow === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
         }
-        const verified = process.platform === 'linux' ? await identify(server, signal).catch(() => undefined) : undefined
+        const verified = process.platform === 'linux' ? await identify(server, signal).catch(error => {
+          if (!signal.aborted) console.warn('Claude teammate reconnect identity unavailable', error)
+          return undefined
+        }) : undefined
         const attach = (address: string[], abort: AbortSignal) => openClaudeTerminalAttachment(
           executable, [...address, 'attach-session', '-f', 'ignore-size', '-t', session],
           { id: taskId, sessionId, cwd: options.cwd }, { env, signal:abort })
