@@ -14,9 +14,9 @@ import { createFormatApplier } from '../../src/content/format-applier.ts';
 import { findRelations } from '@apackdev/sdk/ears';
 import type { PackManifest } from '../../src/build/manifest.ts';
 
-const DEFAULT_SETUP = path.resolve(import.meta.dirname, '../../../default-setup');
-const FACET = path.join(DEFAULT_SETUP, 'dist', 'build', 'content-runtime.mjs');
-// dist/ is gitignored; CI builds default-setup (apack pack build) and requires the facet
+const DEFAULT_SETUP = path.resolve(import.meta.dirname, '../../../../.temp/shipped-distribution/shipped-packs/default-setup');
+const FACET = path.join(DEFAULT_SETUP, 'build', 'content-runtime.mjs');
+// CI stages the shipped release and requires the facet.
 const built = fs.existsSync(FACET);
 if (!built && process.env.REQUIRE_CONTENT_RUNTIME) throw new Error(`${FACET} is required (REQUIRE_CONTENT_RUNTIME) but not built`);
 

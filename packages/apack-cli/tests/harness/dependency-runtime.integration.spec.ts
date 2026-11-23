@@ -6,13 +6,14 @@ import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ALLOW_UNBUILT } from '@apackdev/host/build/packages-built';
 import { generatePackFiles, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import { PACK_LAYOUT, cacheDependency, readCachedDependency, sealPackBuild } from '@apackdev/host/packs';
 import { runCommand } from '../_support/run-command.ts';
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
-const DEFAULT_SETUP_DIST = path.join(REPO_ROOT, 'packages', 'default-setup', 'dist');
+const DEFAULT_SETUP_DIST = path.join(checkoutShippedPacksDir(REPO_ROOT), 'default-setup');
 const built = fs.existsSync(path.join(DEFAULT_SETUP_DIST, 'runtime', 'index.cjs')) && fs.existsSync(path.join(DEFAULT_SETUP_DIST, PACK_LAYOUT.snapshot));
-if (!built && process.env[ALLOW_UNBUILT] !== '1') throw new Error('default-setup must be built (apack pack build) for the dependency runtime spec');
+if (!built && process.env[ALLOW_UNBUILT] !== '1') throw new Error('default-setup must be staged (npm run packs:stage) for the dependency runtime spec');
 
 const dirs: string[] = [];
 afterAll(() => {

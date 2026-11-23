@@ -105,11 +105,20 @@ Run `npm run chain` before releasing to validate changes, including migration te
 |------|-------------|
 | 1. Prepare | Selects the production or beta build environment |
 | 2. Install | `npm install` (skipped when `APACK_DEPENDENCIES_INSTALLED` is set, as the release workflows do after their own `npm ci`), then create a fresh staging directory |
-| 3. Compile DSL | `npm run build:default-setup` (skip with `SKIP_DEFAULT_SETUP_BUILD=1`) |
+| 3. Stage packs | Verify the archive and redistribution files pinned by `build/shipped-packs.lock.json` |
 | 4. Build packages | API (tsc + tsup), main/preload (Vite), renderer (Vite); outputs go to the staging directory |
 | 5. Native helpers | macOS speech recognition binary (macOS only) |
 | 6. Package | electron-builder → on macOS `.app`, `.dmg`, `.zip`; on Windows `.exe`; on Linux `.AppImage`, `.deb`; each with its SBOM, in `dist/` |
 | 7. Verify signing | Validates code signature + notarization (skipped if unsigned) |
+
+Preview, beta and production use the same distribution lock. Each entry names one exact pack
+version and pins the SHA-256 of its archive and redistribution descriptor. The descriptor pins
+the license, notices and SBOM. The installer carries the verified pack layout and those files, so
+a new profile can install the selection offline. Existing profiles keep their installation choices.
+
+A custom distribution can set `APACK_SHIPPED_PACKS_LOCK` to another lock of the same format. Use
+`{"format":1,"packs":[]}` for an app with no starter. For source launches, stage a selection with
+`npm run packs:stage`.
 
 **Output on macOS:**
 - `dist/mac-arm64/apack.app` — app bundle
