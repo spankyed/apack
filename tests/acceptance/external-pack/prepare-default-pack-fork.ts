@@ -54,13 +54,13 @@ async function prepare(): Promise<void> {
     }
     const npmCli = process.env.npm_execpath;
     if (!npmCli) throw new Error('Run the fork scenario through npm');
-    const acquire = async (command: string, args: string[], cwd: string) => {
-      const result = await boundedSpawn(command, args, DEFAULT_FORK_BUDGET_MS.acquire, { cwd, stream: true });
+    const acquire = async (command: string, args: string[], cwd: string, stream = true) => {
+      const result = await boundedSpawn(command, args, DEFAULT_FORK_BUDGET_MS.acquire, { cwd, stream });
       if (result.code !== 0) throw new Error(`Default fork preparation failed: ${command} ${args.join(' ')}`);
       return result.output.trim();
     };
     await acquire('git', ['clone', '--depth', '1', '--branch', `v${integrity.version}`, repo, fork], temporary);
-    if (await acquire('git', ['rev-parse', 'HEAD'], fork) !== commit) throw new Error('The pack release tag moved');
+    if (await acquire('git', ['rev-parse', 'HEAD'], fork, false) !== commit) throw new Error('The pack release tag moved');
     await acquire(process.execPath, [npmCli, 'run', 'toolchain'], fork);
     await acquire(process.execPath, [npmCli, 'ci'], fork);
     const manifest = JSON.parse(fs.readFileSync(path.join(fork, 'apack.json'), 'utf8'));

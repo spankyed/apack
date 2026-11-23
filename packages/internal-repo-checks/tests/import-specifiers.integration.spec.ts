@@ -484,7 +484,7 @@ describe('findElmdbImports', () => {
   const allowed = () => {
     write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@elmdb/ears/database';\n");
     write('packages/server/src/setup/backend.ts', "import { openDatabase } from '@elmdb/ears/database';\n");
-    write('packages/default-setup/src/features/notes/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
+    write('tests/packs/external-pack/src/features/memos/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
   };
 
   it('allows @elmdb/ears/database to load elmdb, and the host and the API to open a database through it', () => {
@@ -497,7 +497,7 @@ describe('findElmdbImports', () => {
     ['packages/apack-host/tests/store.spec.ts', "const elmdb = await import('elmdb');"],
     ['packages/server/src/setup/backend.ts', "import type { Database } from 'elmdb';"],
     ['packages/server/scripts/db/fix.ts', "const { Database } = require('elmdb/index.js');"],
-    ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@elmdb/ears/database';"],
+    ['tests/packs/external-pack/src/features/memos/be/system.ts', "import { openDatabase } from '@elmdb/ears/database';"],
     ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('elmdb');"],
   ])('flags %s', (file, code) => {
     allowed();

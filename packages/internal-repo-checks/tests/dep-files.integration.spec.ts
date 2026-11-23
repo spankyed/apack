@@ -421,8 +421,9 @@ describe('apack pack build says what it read', () => {
     for (const packDir of population('built packs', buildReads.packsWithReads())) {
       expect(buildReads.readsOf(packDir), `${buildReads.untrustworthy(packDir)}`).toBeDefined();
     }
-    expect(readsByPack().flatMap(({ files }) => files).length, 'every record is empty of files')
-      .toBeGreaterThan(100);
+    for (const { packDir, files } of readsByPack()) {
+      expect(files, `${packDir} did not record any source reads`).not.toEqual([]);
+    }
   });
 
   /**
@@ -432,8 +433,8 @@ describe('apack pack build says what it read', () => {
    * A capture that stops reporting takes its phase out of this set, which is the only thing that can see it
    * go; the gate below cannot, because fewer reads is never a finding there.
    *
-   * Whether a record is here at all is the case above's question, and one record answers this one: every
-   * pack is built by `apack pack build`, so each records all nine phases its manifest asks for.
+   * Whether a record is here at all is the case above's question, and one record answers this one: the fixtures are built by `apack pack build` and record the phases their manifests use.
+   * The staged DSL integration spec checks the separate DSL definition trace.
    */
   it('says which phases it can speak for, so a dropped capture is not a quiet one', (ctx) => {
     BUILD_RECORDS.orSkip(ctx);
@@ -441,7 +442,7 @@ describe('apack pack build says what it read', () => {
     const phases = new Set(built.flatMap((packDir) => Object.keys(buildReads.readsOf(packDir)?.phases ?? {})));
     expect([...phases].sort(), 'a phase gone from here is a bundler that stopped reporting; a new one is a '
       + 'bundle that started').toEqual([
-      'contentCompilers', 'contentRuntime', 'dslDefs', 'fe', 'flowHelperTypes',
+      'contentCompilers', 'contentRuntime', 'fe', 'flowHelperTypes',
       'flowHelpersModule', 'runtime', 'stepBuild', 'types',
     ]);
   });
@@ -663,8 +664,8 @@ describe('what has looked at a step at all', () => {
       // outright — which is the protection `test:packaged-authoring` relies on for the same reason.
       'api:check',
       'build:runtime',
-      'packs:stage',
       'packages:check',
+      'packs:stage',
       'test:e2e',
       'test:external-pack:app',
       'test:external-pack:contract',
