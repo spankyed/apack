@@ -495,7 +495,7 @@ export function createClaudeTerminalViews(dependencies: {
           const state = owner.state, view = state.view
           const sameView = taskId === undefined ? view?.kind === 'main' : view?.kind === 'agent' && view.taskId === taskId
           return state.status === 'live' && state.sessionId === sessionId && sameView
-            && view.revision === viewRevision && !state.inputBlocked
+            && view?.revision === viewRevision && !state.inputBlocked
         }
         const pending = target.policyRecheck
         if (!sameScope() || pending?.status === 'pending' && pending.sessionId === sessionId && pending.viewRevision === viewRevision) return
