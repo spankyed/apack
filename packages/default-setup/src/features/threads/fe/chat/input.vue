@@ -1101,6 +1101,8 @@ const handleSubmit = async () => {
 .input :global(.tiptap-wrapper .ProseMirror) { padding: 0; }
 /* The draft area owns scrolling so the caret stays above the fixed composer controls. */
 .input :global(.composer-document .ProseMirror) { max-height: none; overflow: visible; }
+/* Wide decimal markers need space inside the draft's scrolling viewport. */
+.input :global(.composer-document .ProseMirror ol:has(> li:nth-child(1000))) { padding-inline-start: 6ch; }
 .input {
   --composer-default-history-reserve: clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem);
   border-color: rgba(255, 255, 255, 0.09);
