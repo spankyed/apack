@@ -1,3 +1,4 @@
+import { deferred } from '../../../../_support/deferred.ts'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import NativeAgentComposer from '#features/threads/fe/chat/NativeAgentComposer.vue'
@@ -66,7 +67,7 @@ it('preserves newer typing when native admission returns a cleaned older draft',
 })
 
 it('keeps only the formatted next draft when the selected Agent acknowledges Send', async () => {
-  const { promise, resolve } = Promise.withResolvers<{ accepted: true }>()
+  const { promise, resolve } = deferred<{ accepted: true }>()
   const send = vi.fn(() => promise)
   const f = await mount(send, true)
   f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -81,7 +82,7 @@ it('keeps only the formatted next draft when the selected Agent acknowledges Sen
 })
 
 it.each([false, true])('waits for active composition before removing an accepted Agent draft (preedit transaction: %s)', async preeditTransaction => {
-  const { promise, resolve } = Promise.withResolvers<{ accepted: true }>()
+  const { promise, resolve } = deferred<{ accepted: true }>()
   const send = vi.fn(() => promise)
   const f = await mount(send, true)
   f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -102,7 +103,7 @@ it.each([false, true])('waits for active composition before removing an accepted
 })
 
 it('ignores an acknowledgement after the attachment changes', async () => {
-  const { promise, resolve } = Promise.withResolvers<void>()
+  const { promise, resolve } = deferred<void>()
   const send = vi.fn(() => promise)
   const f = await mount(send, true)
   f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))

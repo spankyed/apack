@@ -1,3 +1,4 @@
+import { deferred } from '../../../../_support/deferred.ts'
 import { SurfaceScope } from '@apackdev/sdk/fe'
 import { CommandSuggestion } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
@@ -74,7 +75,7 @@ it.each([
   ['new block', '<h2>Next draft</h2>', '<h2>Next draft</h2><p></p>'],
 ])('keeps only the %s typed while Claude acknowledges Send', async (kind, added, expected) => {
   const f = mount(async () => undefined)
-  const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()
+  const { promise, resolve } = deferred<{ queued: boolean }>()
   const nativeSubmit = vi.fn(() => promise)
   f.state.nativeSubmit = nativeSubmit
   await nextTick()
@@ -84,7 +85,6 @@ it.each([
   const end = editor.state.doc.content.size
   const position = kind === 'new block' ? end : end - 1
   editor.commands.insertContentAt(position, added)
-  const head = editor.state.selection.$head
   attachments.pendingFiles.value.push(file('next.txt'))
   resolve({ queued: false })
   await new Promise<void>(resolve => setImmediate(resolve))
@@ -95,7 +95,7 @@ it.each([
 
 it.each([false, true])('waits for composing text before cleaning up Send (thread replaced: %s)', async replaced => {
   const f = mount(async () => undefined)
-  const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()
+  const { promise, resolve } = deferred<{ queued: boolean }>()
   const nativeSubmit = vi.fn(() => promise)
   f.state.nativeSubmit = nativeSubmit
   await nextTick()
@@ -119,7 +119,7 @@ it.each([false, true])('waits for composing text before cleaning up Send (thread
 
 it('keeps the full replacement draft if the user edits the submitted text before acknowledgement', async () => {
   const f = mount(async () => undefined)
-  const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()
+  const { promise, resolve } = deferred<{ queued: boolean }>()
   const nativeSubmit = vi.fn(() => promise)
   f.state.nativeSubmit = nativeSubmit
   await nextTick()
@@ -133,7 +133,7 @@ it('keeps the full replacement draft if the user edits the submitted text before
 
 it('keeps both the submitted text and the continuation when Claude refuses Send', async () => {
   const f = mount(async () => undefined)
-  const { promise, reject } = Promise.withResolvers<void>()
+  const { promise, reject } = deferred<void>()
   const nativeSubmit = vi.fn(() => promise)
   f.state.nativeSubmit = nativeSubmit
   await nextTick()

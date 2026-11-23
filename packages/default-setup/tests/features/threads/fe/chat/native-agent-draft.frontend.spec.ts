@@ -1,3 +1,4 @@
+import { deferred } from '../../../../_support/deferred.ts'
 import { ClaudePromptSource } from '#features/threads/fe/chat/native-prompt-source.ts'
 import { Editor, Node, type Content } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
@@ -165,7 +166,7 @@ it.each(['structured', 'empty'] as const)('prefers the committed %s draft over a
 it('keeps new input when the committed draft arrives after editing starts', async () => {
   vi.stubGlobal('indexedDB', {})
   const owner = crypto.randomUUID(), earlier = create('older draft')
-  const {promise, resolve} = Promise.withResolvers<ReturnType<typeof captureClaudeAgentDraft>>()
+  const {promise, resolve} = deferred<ReturnType<typeof captureClaudeAgentDraft>>()
   vi.mocked(readDurableClaudeWindowDraft).mockReturnValue(promise)
   const fresh = create(''), dispose = bindClaudeWindowDraft(fresh, owner)
   await new Promise(done => fresh.on('create', done))
