@@ -214,6 +214,8 @@ onBeforeUnmount(() => {
   padding-block: .25rem;
   scroll-padding-block: 2px;
 }
+.native-agent-composer--tools:not(.native-agent-composer--background) :deep(.native-extension-surface .native-field) { gap: .25rem; }
+.native-agent-composer--tools:not(.native-agent-composer--background) :deep(.native-extension-surface .native-field-hint) { line-height: 1rem; }
 .native-agent-body--background-tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
 .native-agent-body--background-tools .native-agent-draft-scroll { overflow: visible; }
 /* The draft viewport owns scrolling; inherited input-theme overflow must not add another. */
