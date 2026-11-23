@@ -52,11 +52,14 @@ function fixture(withFeedback = false) {
     nativeFunctionName: (name: string) => name,
     nativeFunctionHash: () => createHash('sha256').update(jat.toString()).digest('hex'),
     nativeGenericPermissionText: (_runtime: unknown, node: string) => Promise.resolve(node),
+    nativeGenericPermissionDetail: async (_runtime: unknown, label: string, node: { props: { children: { props: { children: string } } } }) => ({
+      label, value: node.props.children.props.children, ansi: '\x1b[33m' + node.props.children.props.children + '\x1b[0m',
+    }),
     nativeDialog: () => current,
   })
   const show = () => runtime.show(n, dialog)
   const answer = (token: string, decision: string, choice: string, feedback?: string, prefix?: string) => runtime.answer(n, dialog, { feedback, prefix, toolName: 'PowerShell', choiceToken: token, decision, choice }, new AbortController().signal)
-  return { show, answer, usePrefix, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  return { show, answer, usePrefix, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, body, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 
 it.each([['allow', 'yes'], ['deny', 'no'], ['cancel', '']])('sends %s to the original PowerShell control', async (decision, choice) => {
@@ -144,4 +147,27 @@ it('presents the original withheld marker with one-time choices and leaves the r
   expect(shown.presentation.choices.map((choice: { value: string }) => choice.value)).toEqual(['yes', 'no'])
   f.usePrefix(f.command.text)
   expect(await f.show()).toBeUndefined()
+})
+
+it('preserves the original warning and refuses a decision after the warning changes', async () => {
+  const f = fixture()
+  const warning = (children: string, color = 'warning') => ({ props: { children: { props: { color, children } } } })
+  f.body[2] = warning('Original PowerShell warning')
+  const prior = await f.show()
+  expect(prior.presentation.details.at(-1)).toEqual({
+    label: 'Warning', value: 'Original PowerShell warning', ansi: '\x1b[33mOriginal PowerShell warning\x1b[0m',
+  })
+  f.body[2] = warning('Updated original warning')
+  await expect(f.answer(prior.presentation.token, 'deny', 'no')).rejects.toThrow('choices changed')
+  expect(f.onChange).not.toHaveBeenCalled()
+  f.body[2] = warning('Unexpected native row', 'error')
+  expect(await f.show()).toBeUndefined()
+  f.body[2] = warning('Updated original warning')
+  f.command.kind = 'withheld'
+  f.command.marker = '(Original withheld marker)'
+  expect(await f.show()).toBeUndefined()
+  f.command.kind = 'full'
+  const fresh = await f.show()
+  await f.answer(fresh.presentation.token, 'deny', 'no')
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('no')
 })

@@ -15,16 +15,19 @@ function nativePowerShellControl(n,d){
    const withheld=command?.kind==='withheld';
    const preview=withheld?command.marker:command?.kind==='full'?command.text:undefined;
    const selector=body?.[4],control=selector?.props;
+   const warning=body?.[2],warningText=warning?.props?.children?.props;
    if(Array.isArray(children)&&children.length===4&&typeof panel.title==='string'&&panel.title.length>0&&panel.title.length<=4000&&
       typeof preview==='string'&&preview.length>0&&preview.length<=200000&&
-      Array.isArray(body)&&body.length===5&&!body[0]&&!body[2]&&selector?.type?.name==='Xe'&&
+      Array.isArray(body)&&body.length===5&&!body[0]&&
+      (!warning||!withheld&&warningText?.color==='warning'&&typeof warningText.children==='string'&&warningText.children.length>0&&warningText.children.length<=4000)&&
+      selector?.type?.name==='Xe'&&
       typeof control?.onChange==='function'&&typeof control.onCancel==='function'&&
       Array.isArray(control.options)&&(!withheld||control.options.length===2)&&supportedPowerShellChoices(control.options)){
     const memo=fiber.updateQueue?.memoCache?.data?.filter(row=>Array.isArray(row)&&row.length===35&&
      row[34]?.handleInputModeToggle===control.onInputModeToggle&&typeof row[34]?.setAcceptFeedback==='function'&&
      typeof row[34]?.setRejectFeedback==='function'&&typeof row[34]?.acceptFeedback==='string'&&typeof row[34]?.rejectFeedback==='string');
     const feedback=memo?.length===1?memo[0][34]:undefined;
-    matches.push({fiber,wrapper,panel,preview,withheld,body,control,feedback});
+    matches.push({fiber,wrapper,panel,preview,withheld,body,control,feedback,warning,warningText:warningText?.children});
    }
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
@@ -54,6 +57,11 @@ async function nativePowerShellPresentation(n,d){
  const details=[];
  if(typeof wrapper.fitted?.description==='string'&&wrapper.fitted.description)details.push({label:'Description',value:wrapper.fitted.description});
  details.push({label:'Command',value:preview});
+ if(source.warning){
+  const warning=await nativeGenericPermissionDetail(n,'Warning',source.warning);
+  if(warning.value!==source.warningText.trim())return;
+  details.push(warning);
+ }
  const reason=await nativeGenericPermissionText(n,body[1]);
  const current=nativePowerShellControl(n,d);
  if(current?.control!==control||current?.fiber!==fiber||current?.panel!==panel)throw Error('Native PowerShell permission changed while formatting');
