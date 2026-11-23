@@ -98,6 +98,8 @@ jobs:
           if (( ${#native[@]} )); then run native 1 "${native[@]}"; fi
       - name: Prepare external default fork
         if: ${{ inputs.suite == 'all' || inputs.suite == 'external' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: npm run test:external-pack:fork
       - name: External pack app suite including step services and settings ownership
         if: ${{ inputs.suite == 'all' || inputs.suite == 'external' }}

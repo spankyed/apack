@@ -173,6 +173,8 @@ jobs:
   # suite from the pack dir against the built app — the third-party pack path.
   external-pack-e2e:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+    permissions:
+      contents: read
     runs-on: macos-26
     # Measured 2026-11-17: 30 minutes reached the packaged pack authoring E2E, its last step, with every
     # earlier step passing. A budget for a stuck job, not a target
@@ -208,6 +210,8 @@ jobs:
         run: npm run packages:ensure && npm run packs:stage && npm run build:runtime
 
       - name: External pack E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: npm run test:external-pack
 
       # Outside-author end state: packed @apackdev/* tarballs only, in a temp dir outside the repo
