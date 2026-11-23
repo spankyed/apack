@@ -2959,7 +2959,9 @@ interface ClaudeNativeTerminalOwner {
     }>;
     /** A separately attached tmux client can outlive a parent killed outside the app. */
     readonly keepAttachedTeammatesAfterCrash?: boolean;
-    openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>;
+    openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment & {
+        reconnect?: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>;
+    }>;
     getMcpStatus(): Promise<ClaudeMcpStatus>;
     getMemoryDialog(): Promise<ClaudeMemoryDialog>;
     setAutoMemory(enabled: boolean): Promise<void>;
@@ -3508,6 +3510,13 @@ type ClaudeSettingsView = {
     savedKey?: string;
 };
 
+type ClaudeTeammateReconnect = {
+    ownerId: string;
+    sessionId: string;
+    taskId: string;
+    name: string;
+};
+
 interface ClaudeTerminalStopState {
     ownerId: string;
     revision: number;
@@ -3685,6 +3694,7 @@ type ClaudeTerminalViewRequest = {
 });
 
 type ClaudeTerminalViewSnapshot = {
+    teammateReconnect?: ClaudeTeammateReconnect;
     backgroundInfo?: ClaudeBackgroundStatus;
     canReplyBackground?: boolean;
     attachment?: ClaudeBackgroundAttachmentView;
@@ -12649,8 +12659,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

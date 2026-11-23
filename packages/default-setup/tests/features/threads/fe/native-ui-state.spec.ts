@@ -262,6 +262,25 @@ it('retains native MCP form acknowledgments only in the live addressed terminal 
 })
 
 
+it('shows a teammate reconnect offer only in the addressed live window until the offer retires', () => {
+  const actor = createActor(nativeState).start()
+  const identity = {mountId:'teammate-view', threadId:'thread'}
+  const teammateReconnect = {ownerId:'owner', sessionId:'session', taskId:'worker', name:'Reviewer'}
+  const reply = {type:'CLAUDE_TERMINAL_STATE' as const, ...identity, opening:false, output:[], teammateReconnect}
+  const projected = () => actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.teammateReconnect
+  actor.send({type:'CLAUDE_TERMINAL_MOUNT', ...identity})
+  actor.send({...reply, threadId:'another-thread'})
+  expect(projected()).toBeUndefined()
+  actor.send(reply)
+  expect(projected()).toEqual(teammateReconnect)
+  actor.send({...reply, teammateReconnect:undefined})
+  expect(projected()).toBeUndefined()
+  actor.send({type:'CLAUDE_TERMINAL_UNMOUNT', ...identity})
+  actor.send(reply)
+  expect(projected()).toBeUndefined()
+  actor.stop()
+})
+
 it('retains Stop acknowledgements only in the live addressed terminal view', () => {
   const actor = createActor(nativeState).start(), identity = { mountId: 'stop-view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity })
