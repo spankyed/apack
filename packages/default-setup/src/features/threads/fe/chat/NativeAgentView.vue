@@ -7,6 +7,8 @@
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
+    <NativeManagedSettingsNotice v-if="active && managedSettingsDiagnostics?.length" :diagnostics="managedSettingsDiagnostics"
+      :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
     <details v-show="!panelActive && !panelDecisionPending" v-if="state?.agent?.metadata" class="native-agent-details mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
     <p v-show="!panelDecisionPending" v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
     <NativeIdePanel v-show="!panelDecisionPending" v-if="panelActive && state?.agentInput?.panel?.commandName === 'ide'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
@@ -83,6 +85,7 @@ import NativeSettingsPanel from './NativeSettingsPanel.vue'
 import NativeHelpPanel from './NativeHelpPanel.vue'
 import NativeIdePanel from './NativeIdePanel.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
+import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import type { ThreadsState } from '../state.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
@@ -120,6 +123,26 @@ provideClaudeHoverGroups(() => props.active && selectedOwner.value && snapshot.v
   ? JSON.stringify([props.threadId, uiMount.value, snapshot.value.attachmentId, props.target.ownerId, props.target.sessionId, props.target.taskId, props.target.revision]) : undefined)
 const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task.id === props.target.taskId))
 const agentComposer = ref<InstanceType<typeof NativeAgentComposer>>(), commandPanel = ref<HTMLElement>(), cancelCommand = ref<HTMLButtonElement>(), commandSending = ref(false)
+const managedSettingsDiagnostics = computed(() => selectedOwner.value ? state.value?.managedSettingsDiagnostics : undefined)
+const canRecheckManagedSettings = computed(() => props.active && !!selectedOwner.value && !selectedOwner.value.inputBlocked
+  && !!managedSettingsDiagnostics.value?.some(row => row.file === '/etc/claude-code/managed-settings.json' && row.errno === 'EACCES'))
+const managedSettingsRecheck = computed(() => {
+  const operation = terminal.value?.policyRecheck
+  if (selectedOwner.value && operation?.sessionId === props.target.sessionId && operation.viewRevision === props.target.revision) return operation
+})
+function recheckManagedSettings() {
+  if (!canRecheckManagedSettings.value) return
+  const {ownerId, sessionId, taskId, revision: viewRevision} = props.target
+  sendToThreads({type:'CLAUDE_TERMINAL_POLICY_RECHECK', ...terminalIdentity(), ownerId, sessionId, taskId, viewRevision})
+}
+function restoreManagedSettingsFocus() {
+  const mount = uiMount.value
+  void nextTick(() => {
+    if (document.hasFocus() && document.activeElement === document.body && mount && uiMount.value === mount && props.active && selectedOwner.value
+      && !managedSettingsDiagnostics.value?.length && !props.approvalPending && !props.panelDecisionPending && !commandActive.value && !outputActive.value
+      && !returning.value && !stopping.value && state.value?.agent?.canInput) agentComposer.value?.focus()
+  })
+}
 const dismissedOutput = ref<string>()
 const outputActive = computed(() => state.value?.agentInput?.status === 'command_output' && !!state.value.agentInput.output && state.value.agentInput.output.messageId !== dismissedOutput.value)
 function jumpToLatest() {

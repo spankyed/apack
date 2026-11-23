@@ -36,7 +36,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
       { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_CANCEL'; itemId: string }
     ))
   | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED'; ownerId: string; sessionId: string; itemId: string }
-  | { type: 'CLAUDE_TERMINAL_POLICY_RECHECK'; ownerId: string; sessionId: string; viewRevision: number }
+  | { type: 'CLAUDE_TERMINAL_POLICY_RECHECK'; ownerId: string; sessionId: string; viewRevision: number; taskId?: string }
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
@@ -490,20 +490,22 @@ export function createClaudeTerminalViews(dependencies: {
         return editing ? pending : undefined
       }
       if (event.type === 'CLAUDE_TERMINAL_POLICY_RECHECK') {
-        const {sessionId, viewRevision} = event
+        const {sessionId, viewRevision, taskId} = event
         const sameScope = () => {
-          const state = owner.state
-          return state.status === 'live' && state.sessionId === sessionId && state.view?.kind === 'main'
-            && state.view.revision === viewRevision && !state.inputBlocked
+          const state = owner.state, view = state.view
+          const sameView = taskId === undefined ? view?.kind === 'main' : view?.kind === 'agent' && view.taskId === taskId
+          return state.status === 'live' && state.sessionId === sessionId && sameView
+            && view.revision === viewRevision && !state.inputBlocked
         }
-        if (!sameScope() || target.policyRecheck?.status === 'pending') return
+        const pending = target.policyRecheck
+        if (!sameScope() || pending?.status === 'pending' && pending.sessionId === sessionId && pending.viewRevision === viewRevision) return
         const operation: NonNullable<ClaudeTerminalViewSnapshot['policyRecheck']> = {sessionId, viewRevision, status: 'pending'}
         target.policyRecheck = operation; publish(key, target)
         const current = () => views.get(key) === target && dependencies.get(event.threadId) === owner
           && target.owner === owner && target.policyRecheck === operation
         void Promise.resolve().then(async () => {
           if (!current() || !sameScope()) throw new Error('Claude settings owner changed')
-          const result = await owner.uiTransport.request({subtype:'apack_managed_settings_recheck', session_id:sessionId, view_revision:viewRevision}) as {rechecked?: unknown}
+          const result = await owner.uiTransport.request({subtype:'apack_managed_settings_recheck', session_id:sessionId, view_revision:viewRevision, ...(taskId === undefined ? {} : {task_id:taskId})}) as {rechecked?: unknown}
           if (result.rechecked !== true) throw new Error('Claude did not acknowledge the settings recheck')
         }).then(() => {
           if (current()) { target.policyRecheck = {...operation, status:'done'}; publish(key, target) }

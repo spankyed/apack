@@ -44,7 +44,7 @@
           </template>
         </ClaudeNativeSession>
         <NativeMemoryPanel v-if="showMemory && memoryTarget" :key="memoryTarget.attachmentId" :target="memoryTarget" :busy="nativeComposerOwner?.busy" @close="closeMemory" />
-        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
+        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && !focusedAgent && !agentSelection && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
             <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>

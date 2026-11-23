@@ -34,7 +34,8 @@ async function runNativeManagedSettingsRecheck(n,request,abort){
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal')throw Error('Claude settings owner changed');
   const facts=nativeViewFacts(n,binding,abort);
-  if(facts.view.kind!=='main'||facts.sessionId!==request.session_id||facts.sequence!==request.view_revision)throw Error('Claude settings owner changed');
+  const sameView=request.task_id===undefined?facts.view.kind==='main':facts.view.kind==='agent'&&facts.view.taskId===request.task_id;
+  if(!sameView||facts.sessionId!==request.session_id||facts.sequence!==request.view_revision)throw Error('Claude settings owner changed');
   return binding.toolContext(abort);
  };
  const hasWarning=()=>settings.D_().some(row=>row.file===nativeLinuxManagedSettingsFile&&row.errno==='EACCES');

@@ -150,7 +150,7 @@ it('runs the original managed ConfigChange gate before notifying and refuses a s
   const handler = ast.body.find((node: any) => node.type === 'FunctionDeclaration' && node.id.name === 'runNativeManagedSettingsRecheck')
   const file = '/etc/claude-code/managed-settings.json'
   const request = {session_id: 'session', view_revision: 2}
-  const facts = {view: {kind: 'main'}, sessionId: 'session', sequence: 2}
+  const facts: {view: {kind: 'main' | 'agent'; taskId?: string}; sessionId: string; sequence: number} = {view: {kind: 'main'}, sessionId: 'session', sequence: 2}
   const context = {session: {}, storageV5: {}, credentials: {}}
   const hook = vi.fn(async () => false), producer = vi.fn(() => hook)
   const notifyChange = vi.fn(), publish = vi.fn(), stamp = vi.fn(() => 'original')
@@ -185,4 +185,15 @@ it('runs the original managed ConfigChange gate before notifying and refuses a s
   expect(hook).toHaveBeenLastCalledWith('policy_settings', file)
   expect(notifyChange).toHaveBeenCalledExactlyOnceWith('policySettings')
   expect(publish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({managed_settings_diagnostics: true}))
+
+  facts.view = {kind: 'agent', taskId: 'selected'}
+  await expect(run(native, request, new AbortController())).rejects.toThrow('owner changed')
+  await expect(run(native, {...request, task_id: 'different'}, new AbortController())).rejects.toThrow('owner changed')
+  const selected = {...request, task_id: 'selected'}
+  hook.mockImplementationOnce(async () => { facts.view = {kind: 'agent', taskId: 'different'}; return false })
+  await expect(run(native, selected, new AbortController())).rejects.toThrow('owner changed')
+  expect(notifyChange).toHaveBeenCalledTimes(1)
+  facts.view = {kind: 'agent', taskId: 'selected'}
+  await expect(run(native, selected, new AbortController())).resolves.toEqual({rechecked: true})
+  expect(notifyChange).toHaveBeenCalledTimes(2)
 })
