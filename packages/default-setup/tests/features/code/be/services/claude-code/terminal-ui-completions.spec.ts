@@ -142,6 +142,34 @@ it('advances MCP template parameters through the original connected client and r
   expect((await query('@docs:resource://release/main/no')).suggestions).toEqual([])
 })
 
+it('uses the native team roster for addressed completion and refuses changed recipients', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  const state = { viewingAgentTaskId: undefined as string | undefined, teamContext: {
+    teamName: 'release', leadAgentId: 'lead', teammates: {
+      lead: { name:'team-lead' }, reviewer: { name:'release-reviewer' },
+    },
+  } }
+  const context = { getAppState: () => state }
+  const originalContext = { surface:'terminal',toolContext:()=>context }
+  const { autocomplete, nativeTeamAddress, sameNativeTeamAddress } = vm.runInNewContext(
+    claudeTerminalUiRuntime.slice(start,end)+';({autocomplete,nativeTeamAddress,sameNativeTeamAddress})',{
+      AbortController,originalContext,clientViewCurrent:()=>true,
+    })
+  const native = { planTeams:{is:()=>true}, session:{rwt:()=>undefined}, fileSuggestions:{s5t:async()=>[],RSe:{}} }
+  expect((await autocomplete(native,'main',{text:'@rele',cursor:5})).suggestions).toEqual([
+    {label:'@release-reviewer',text:'@release-reviewer ',description:'Send message',replacement:{start:0,end:5}},
+  ])
+  expect(nativeTeamAddress(native,context,'@team-lead Hello')).toBeUndefined()
+  expect(nativeTeamAddress(native,context,'@release-reviewer ')).toBeUndefined()
+  const address = nativeTeamAddress(native,context,'@release-reviewer Check this')
+  expect(address).toEqual({id:'reviewer',team:'release',name:'release-reviewer'})
+  state.teamContext.teamName = 'replacement'
+  expect(sameNativeTeamAddress(address,nativeTeamAddress(native,context,'@release-reviewer Check this'))).toBe(false)
+  state.viewingAgentTaskId = 'reviewer'
+  expect((await autocomplete(native,'main',{text:'@rele',cursor:5})).suggestions).toEqual([])
+})
+
 it('coalesces queued edits, adopts app changes and retires edits on detach', async () => {
   type Box = { text: string; cursor: number; superseded?: boolean }
   type Edit = { before: Box; after: Box; key?: { key: string; name: string } }

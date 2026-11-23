@@ -11916,6 +11916,9 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
         kind: "prepared";
         id: string;
     } | {
+        kind: "direct_message";
+        recipient: string;
+    } | {
         kind: "not_command";
     } | {
         kind: "review";
@@ -11966,6 +11969,9 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
         kind: "finished";
         id: string;
         result: {
+            kind: "direct_message";
+            recipient: string;
+        } | {
             kind: "not_command";
         } | {
             kind: "review";
@@ -13029,6 +13035,9 @@ declare const paneSelection: z.ZodObject<{
 }, z.core.$strict>;
 
 declare const parentCommandResult: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"direct_message">;
+    recipient: z.ZodString;
+}, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"not_command">;
 }, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"review">;

@@ -72,6 +72,7 @@
           <p v-if="nativeUiDrawing?.gestureProblem" role="alert" class="px-4 py-2 text-sm text-amber-200">{{ nativeUiDrawing.gestureProblem }}</p>
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :terminal-session="nativeComposerView?.state?.terminalSession" :input-blocked="nativeComposerView?.state?.inputBlocked" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @settings="mainSettings" @background="mainBackgroundReview" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
+          <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'direct_message'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">Sent to @{{ nativeComposerView.submission.command.recipient }}</p>
           <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
           <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
           <!-- Agent Chat Content -->
@@ -967,7 +968,7 @@ watch(nativeComposerView, view => {
     if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.threadId, pending.stageRevision)
     if (result.command?.kind === 'review') pending.resolve({ review: result.command })
     else if (result.command?.kind === 'confirmation') pending.resolve({ commandPending: true, revision: result.revision })
-    else pending.resolve(result.receipt ? { queued: result.receipt.queued === true } : undefined)
+    else pending.resolve(result.receipt || result.command?.kind === 'direct_message' ? { queued: result.receipt?.queued === true } : undefined)
   }
   else pending.reject(new Error(result.problem ?? 'Claude did not accept the message'))
 })

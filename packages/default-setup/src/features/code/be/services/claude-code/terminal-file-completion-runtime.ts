@@ -21,6 +21,22 @@ function nativeFileCompletionToken(box){
 function validNativeMention(value){
  return typeof value==='string'&&value.length>0&&value.length<=4096&&!/["\u0000-\u001f\u007f]/u.test(value);
 }
+function nativeTeamMembers(n,context){
+ if(!n.planTeams?.is())return [];
+ const state=context.getAppState(),team=state.teamContext;
+ if(!team||state.viewingAgentTaskId!==undefined)return [];
+ const self=context.agentId??team.leadAgentId;
+ return Object.entries(team.teammates??{}).flatMap(([id,member])=>
+  id!==self&&typeof member.name==='string'&&member.name.length<=256&&/^[\w-]+$/u.test(member.name)
+  ? [{id,team:team.teamName,name:member.name}] : []);
+}
+function nativeTeamAddress(n,context,text){
+ const address=/^@([\w-]+)\s+(.+)$/su.exec(text);
+ return address?.[2].trim()?nativeTeamMembers(n,context).find(member=>member.name===address[1]):undefined;
+}
+function sameNativeTeamAddress(left,right){
+ return !!left&&!!right&&left.id===right.id&&left.team===right.team&&left.name===right.name;
+}
 const templateRefreshes=new WeakMap(),templateReconnectFailures=new WeakMap();
 async function nativeResourceTemplates(transport,context,current){
  const mcp=context.getAppState().mcp;
@@ -138,6 +154,12 @@ async function nativeFileCompletions(n,clientId,token,abort){
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')return [];
  const context=binding.toolContext(abort),{storageV5}=context;
  const current=()=>!abort.signal.aborted&&clientViewCurrent(n,clientId)&&(originalContext??n.runtime.ey())===binding;
+ if(!token.quoted&&/^[\p{L}\p{N}\p{M}\u200C\u200D_-]*$/u.test(token.query)){
+  const query=token.query.toLowerCase();
+  const teammates=nativeTeamMembers(n,context).filter(member=>member.name.toLowerCase().startsWith(query)).slice(0,15);
+  if(teammates.length)return teammates.map(({name})=>({label:'@'+name,text:'@'+name+' ',description:'Send message',
+   replacement:{start:token.start,end:token.end}}));
+ }
  let listed={},templateRows;
  if(n.referenceTransport&&!n.referenceWorkspace.Ct()){
   const transport=n.referenceTransport.mcpClientModule();

@@ -126,6 +126,7 @@ export type ClaudeUiPromptFrame = z.infer<typeof promptFrame>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
 const parentCommandResult = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('direct_message'), recipient: z.string().min(1).max(256).regex(/^[\w-]+$/u) }).strict(),
   z.object({ kind: z.literal('not_command') }).strict(),
   z.object({ kind: z.literal('review'), text: z.string().max(32768), removed: z.number().int().positive() }).strict(),
   z.object({ kind: z.literal('panel'), id: z.string().uuid(), commandName: z.string().max(256) }).strict(),

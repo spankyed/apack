@@ -90,7 +90,10 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
  const text=prepared.input.trimEnd(),context=binding.toolContext(abort),composer=binding.composer;
  const parsed=n.commandInput.IS(text),command=parsed&&n.engine.Rs(parsed.commandName,binding.commands());
  const expectedRun=command&&['local','local-jsx'].includes(command.type)?n.engine.Cie(command,parsed.args):undefined;
- if(main&&!expectedRun)return {kind:'not_command'};
+ const addressed=parentTicket?.addressed;
+ const requireAddress=()=>{if(addressed&&!sameNativeTeamAddress(addressed,nativeTeamAddress(n,context,text)))throw Error('Claude teammate changed; your draft was retained');};
+ requireAddress();
+ if(main&&!expectedRun&&!addressed)return {kind:'not_command'};
  if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
  const task=main?undefined:Object.values(context.taskRegistry.all()).find(value=>n.runtime.flt(value)?.id===facts.view.taskId);
  // Pane-backed task records belong to a separate Claude process, which reads its own terminal.
@@ -109,15 +112,15 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
   return composer.attribute?composer.attribute({kind:'composer'},write):write();
  };
  const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await writeDraft(original.text);}catch{} };
- if(parentTicket&&command.type==='local')observeNativeParentCommand(command);
+ if(parentTicket&&command?.type==='local')observeNativeParentCommand(command);
  const operation={native:n,parentTicket,commandDefinition:command,clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
  try{
   await writeDraft(text);current();
   if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
-  current();await ownerPost('/view-enter',{pid:process.pid,kind:facts.view.kind,taskId:facts.view.taskId,revision:facts.sequence});
+  current();requireAddress();await ownerPost('/view-enter',{pid:process.pid,kind:facts.view.kind,taskId:facts.view.taskId,revision:facts.sequence});
   const deadline=Date.now()+4000;
-  while(parentTicket||Date.now()<deadline){
+  while(parentTicket&&!addressed||Date.now()<deadline){
    if(parentTicket){
     abort.signal.throwIfAborted();
     const run=parentTicket.lifecycle;
@@ -145,6 +148,13 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
    if(main&&expectedRun&&command.type==='local-jsx'){
     const inline=inlineParentCommandOutput(n,binding.messages?.()??[],parentBefore,expectedRun);
     if(inline)return inline;
+   }
+   if(addressed){
+    const receipt=notices().find(value=>!priorNotices.has(value)&&(
+     value.key==='direct-message-sent'&&value.text==='Sent to @'+addressed.name||
+     value.key==='direct-message-failed'&&value.text?.startsWith("Couldn't write to @"+addressed.name+"'s inbox")));
+    if(receipt?.key==='direct-message-failed')return {kind:'blocked',message:receipt.text};
+    if(receipt&&!(await composer.read()).text){current();return {kind:'direct_message',recipient:addressed.name};}
    }
    const notice=notices().find(value=>!priorNotices.has(value)&&value.key==='agent-view-command-notice');
    if(notice){await restore();return {kind:'blocked',message:notice.text??notice.segments?.map(segment=>segment.text??'').join('')??'Native command was blocked'};}
