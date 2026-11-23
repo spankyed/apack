@@ -3604,6 +3604,7 @@ type ClaudeTerminalViewRequest = {
     ownerId: string;
     sessionId: string;
     viewRevision: number;
+    taskId?: string;
 } | {
     type: 'CLAUDE_TERMINAL_NOTICE';
     ownerId: string;
@@ -12609,8 +12610,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
