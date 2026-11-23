@@ -24,6 +24,19 @@ async function mount(draft = 'Keep this draft') {
   const button = (text: string) => [...root.querySelectorAll('button')].find(element => element.textContent === text)!
   return { root, ui, terminal, owner, pending, returned, draftChange, approvalPending, button }
 }
+it('uses a matching teammate name while retaining the label for ordinary or stale views', async () => {
+  const f = await mount(), heading = f.root.querySelector('h2')!
+  const details = context.nativeUiViews[f.ui].state.agent
+  expect(heading.textContent).toBe('Worker')
+  details.teammateName = 'release-reviewer'; await nextTick()
+  expect(heading.textContent).toBe('release-reviewer')
+  details.taskId = 'other-agent'; await nextTick()
+  expect(heading.textContent).toBe('Worker')
+  details.taskId = 'agent'
+  context.nativeTerminalViews[f.terminal].state!.sessionId = 'replacement'; await nextTick()
+  expect(heading.textContent).toBe('Worker')
+})
+
 it('keeps the Agent editor mounted while a native approval owns input', async () => {
   const f = await mount(), draft = f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!
   draft.value = 'Keep the in-progress draft'

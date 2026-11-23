@@ -227,5 +227,6 @@ async function nativeTaskControl(n,binding,request,abort,current){
   tokenCount:numeric(task.result?.totalTokens??task.progress?.tokenCount),toolUseCount:numeric(task.result?.totalToolUseCount??task.progress?.toolUseCount),
   error:error?.slice(0,16384),errorTruncated:(error?.length??0)>16384};
  const handback=task.type==='local_agent'&&typeof task.handbackReport?.text==='string'?{taskId:request.task_id,text:task.handbackReport.text,...(typeof task.handbackReport.warning==='string'?{warning:task.handbackReport.warning}:{})}:undefined;
- return {details:{...(handback?{handback}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput,metadata,messages,truncated}};
+ const teammateName=task.type==='in_process_teammate'&&typeof task.identity?.agentName==='string'?task.identity.agentName.trim().slice(0,256):'';
+ return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput,metadata,messages,truncated}};
 }`

@@ -106,6 +106,17 @@ it('uses a teammate name only for a live record and keeps ended opaque identitie
   f.tasks[0].status = 'completed'; f.runner.mockClear()
   await f.request('send'); expect(f.runner.mock.calls[0][0]).toEqual(expect.objectContaining({ input: { to: 'agent-a', message: 'User instruction' } }))
 })
+it('keeps the native teammate name distinct from the task description across its lifetime', async () => {
+  const f = fixture()
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details?.teammateName).toBeUndefined()
+  Object.assign(f.tasks[0], { type: 'in_process_teammate', identity: { agentName: 'release-reviewer' } })
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details).toMatchObject({
+    name: 'Worker', teammateName: 'release-reviewer', taskId: 'agent-a',
+  })
+  f.tasks[0].status = 'killed'
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details?.teammateName).toBe('release-reviewer')
+})
+
 it('advertises focused input for a running teammate without using the local Agent queue', async () => {
   const f = fixture()
   Object.assign(f.tasks[0], { type: 'in_process_teammate', status: 'running', identity: { agentName: 'worker' } })

@@ -2817,6 +2817,7 @@ interface ClaudeNativeTaskDetails {
     };
     taskId: string;
     name: string;
+    teammateName?: string;
     status: string;
     canInput: boolean;
     canMessage: boolean;
