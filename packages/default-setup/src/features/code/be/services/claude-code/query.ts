@@ -137,7 +137,7 @@ export interface QueryHandle {
  * Resolves once the child has been spawned — the async iterable and promises
  * on the returned handle drive the rest of the lifecycle.
  */
-export async function query(opts: QueryOptions): Promise<QueryHandle> {
+export async function query(opts: QueryOptions, { promptSuggestions = false } = {}): Promise<QueryHandle> {
   const hooks = createHookRegistry(opts.hooks)
   const args = argsFromOptions(opts)
   let processId: number | undefined
@@ -197,7 +197,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // without a user prompt. Route the response independently from the public event consumer.
   let mcpControlActive = false
   // Cold initialization loads native settings/plugins before it can answer a control request.
-  const initialized = hostControls.request({ subtype: 'initialize', hooks: hooks.registrations }, 30_000)
+  const initialized = hostControls.request({ subtype: 'initialize', hooks: hooks.registrations, ...(promptSuggestions && { promptSuggestions }) }, 30_000)
     .then(value => ClaudeInitializationSchema.parse(value))
   initialized.catch(error => {
     hostControls.close(error)

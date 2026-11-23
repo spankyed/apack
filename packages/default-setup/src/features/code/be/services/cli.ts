@@ -267,7 +267,7 @@ function createCliService(): CliServiceType {
       openConversation(key, launchKey, opts, consumeAutonomous) {
         const { accountedCostUsd = 0, ...queryOptions } = opts
         return openConversation(key, launchKey, async () => claudeCode.query({ ...queryOptions, env: await prepareClaudeEnvironment(queryOptions.env), cwd: opts.cwd ?? resolveCwd(),
-          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous, accountedCostUsd)
+          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }, { promptSuggestions: true }), consumeAutonomous, accountedCostUsd)
       },
       getConversation,
       openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal, async launch => {

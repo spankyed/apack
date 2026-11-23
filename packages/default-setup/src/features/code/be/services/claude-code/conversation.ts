@@ -4,6 +4,7 @@ import { parseMcpElicitationForm, validateMcpElicitationForm } from '#features/c
 import { createClaudeNestedActivity, type ClaudeNestedActivity } from './nested-activity.ts'
 import { ClaudeProtocolError, ClaudeResultError } from './errors.ts'
 import { normaliseResult, type QueryHandle } from './query.ts'
+import { CLAUDE_UI_TEXT_MAX_LENGTH } from '../../../common/native-prompt-limits.ts'
 import { ControlRequestLineSchema, type ControlRequestLine, type QueryResult, type ResultLine, type StreamLine, type UserInputMessage } from './types.ts'
 
 export interface ClaudeConversationTurn {
@@ -16,6 +17,10 @@ export interface ClaudeConversationTurn {
   activity: ClaudeNestedActivity
 }
 export type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>
+export type ClaudePrintPrediction =
+  | { kind: 'result'; signal: AbortSignal }
+  | { kind: 'offer'; signal: AbortSignal; text: string }
+
 export interface ClaudeConversation {
   readonly billing?: ClaudeBillingObservation
   readonly handle: QueryHandle
@@ -31,6 +36,7 @@ export interface ClaudeConversation {
   ownsTurn(handle: QueryHandle): boolean
   hasPendingElicitation(requestId: string): boolean
   subscribe(listener: (event: StreamLine) => void): () => void
+  subscribePrediction(listener: (event: ClaudePrintPrediction) => void): () => void
   close(): Promise<void>
   kill(): void
 }
@@ -87,6 +93,15 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   let cumulativeCost = accountedCostUsd
   let consumerFailure: unknown
   const listeners = new Set<(event: StreamLine) => void>()
+  const predictionListeners = new Set<(event: ClaudePrintPrediction) => void>()
+  let prediction: { sessionId: string; lifetime: AbortController; offered: boolean } | undefined
+  function retirePrediction(): void {
+    prediction?.lifetime.abort()
+    prediction = undefined
+  }
+  function notifyPrediction(event: ClaudePrintPrediction): void {
+    for (const listener of predictionListeners) { try { listener(event) } catch { /* isolate presentation */ } }
+  }
   // Native workers can ask concurrently; present one permission, dialog or MCP input at a time.
   const permissionRequests = new Map<string, ControlRequestLine>()
   const settledPermissions = new Set<string>()
@@ -111,6 +126,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   const processHandle: QueryHandle = { ...native, async setModel(model) {
     if (closing || exited) throw new ClaudeProtocolError('conversation is closed')
     if (changingModel || active || pending || permissionRequests.size) throw new ClaudeProtocolError('conversation must be idle before changing model')
+    retirePrediction()
     changingModel = true
     try {
       await native.setModel(model)
@@ -157,6 +173,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
 
 
   function activate(consume: ClaudeTurnConsumer, inputId?: string): ActiveTurn {
+    retirePrediction()
     const queue = new ConversationQueue<StreamLine>()
     let resolve!: (result: QueryResult) => void
     let reject!: (error: unknown) => void
@@ -183,7 +200,18 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     try {
       for await (const event of native.events) {
         const line = event as Record<string, unknown>
+        if (line.type === 'prompt_suggestion') {
+          const text = line.suggestion
+          if (prediction && !prediction.offered && !closing && !active && !pending && !permissionRequests.size
+            && line.session_id === prediction.sessionId && typeof line.uuid === 'string' && line.uuid
+            && typeof text === 'string' && text.trim() && text.length <= CLAUDE_UI_TEXT_MAX_LENGTH) {
+            prediction.offered = true
+            notifyPrediction({ kind: 'offer', signal: prediction.lifetime.signal, text })
+          }
+          continue
+        }
         if (line.type === 'conversation_reset') {
+          retirePrediction()
           if (typeof line.new_conversation_id !== 'string' || !line.new_conversation_id.trim()) {
             throw new ClaudeProtocolError('native conversation reset has no identity')
           }
@@ -194,6 +222,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
           if (active) active.turn.costBaseline = 0
         }
         if (line.type === 'system' && line.subtype === 'init') {
+          if (line.session_id !== sessionId) retirePrediction()
           if (typeof line.session_id === 'string' && line.session_id) { sessionId = line.session_id; billing.reset(sessionId) }
           if (typeof line.cwd === 'string' && line.cwd) sessionCwd = line.cwd
         }
@@ -266,7 +295,14 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         current.queue.push(event)
         const normalized = normaliseResult(raw)
         cumulativeCost = Math.max(cumulativeCost, normalized.totalCostUsd)
-        if (raw.subtype === 'success' && raw.is_error !== true) current.resolve(normalized)
+        if (raw.subtype === 'success' && raw.is_error !== true) {
+          if (current.turn.inputId && sessionId && sessionId === raw.session_id && !closing) {
+            const lifetime = new AbortController()
+            prediction = { sessionId, lifetime, offered: false }
+            notifyPrediction({ kind: 'result', signal: lifetime.signal })
+          }
+          current.resolve(normalized)
+        }
         else current.reject(new ClaudeResultError(raw.subtype, raw.errors?.length ? raw.errors : raw.result ? [raw.result] : [], raw.session_id))
         trace('turn_end', {outcome:raw.subtype === 'success' && raw.is_error !== true ? 'ok' : 'error'})
         current.terminal = true
@@ -295,6 +331,8 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
       trace('exit', {outcome: failure ? 'error' : stopped ? 'cancelled' : 'closed'})
       activity.close()
       clearPermissions()
+      retirePrediction()
+      predictionListeners.clear()
       listeners.clear()
     }
     if (failure) throw failure
@@ -313,6 +351,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     start(input, consume) {
       if (closing || exited) throw new ClaudeProtocolError('conversation is closed')
       if (changingModel || active || pending || permissionRequests.size) throw new ClaudeProtocolError('conversation already has an active input or permission request')
+      retirePrediction()
       const inputId = native.send(input)
       pending = { consume, inputId }
       return inputId
@@ -336,11 +375,13 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
       return true
     },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    subscribePrediction(listener) { predictionListeners.add(listener); return () => { predictionListeners.delete(listener) } },
     async close() {
+      retirePrediction()
       closing = true
       await native.close()
       await done
     },
-    kill() { activity.close(); clearPermissions(); stopped = true; if (active) active.turn.stopped = true; closing = true; native.kill() },
+    kill() { retirePrediction(); activity.close(); clearPermissions(); stopped = true; if (active) active.turn.stopped = true; closing = true; native.kill() },
   }
 }

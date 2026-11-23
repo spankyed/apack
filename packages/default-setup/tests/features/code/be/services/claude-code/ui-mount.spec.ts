@@ -1,3 +1,4 @@
+import type { ClaudePrintPrediction } from '#features/code/be/services/claude-code/conversation.ts'
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { mountClaudeUi } from '#features/code/be/services/claude-code/ui-mount.ts'
@@ -47,6 +48,29 @@ describe('native UI mounted lifecycle', () => {
     expect(f.ui.detach).toHaveBeenCalledTimes(1)
     expect(f.listeners.size).toBe(0)
     expect(f.states.at(-1)).toEqual({ status: 'disconnected' })
+  })
+
+  it('offers predictions only to the same mounted draft revision and retires an outstanding delivery on release', async () => {
+    const f = fixture()
+    let listener: ((event: ClaudePrintPrediction) => void) | undefined
+    const offerPrediction = vi.fn(async (_text: string, _revision: number, _signal: AbortSignal) => {})
+    const owner = { ...f.owner, subscribePrediction(fn: (event: ClaudePrintPrediction) => void) { listener = fn; return () => { listener = undefined } } }
+    const view = mountClaudeUi({ owner, isCurrent: () => true, publish: () => {}, offerPrediction })
+    await view.ready
+    const old = new AbortController()
+    listener!({ kind: 'result', signal: old.signal })
+    await view.editPrompt({ revision: 1, by: 'person', text: 'new draft', cursor: 9 })
+    listener!({ kind: 'offer', signal: old.signal, text: 'old suggestion' })
+    expect(offerPrediction).not.toHaveBeenCalled()
+    const next = new AbortController()
+    listener!({ kind: 'result', signal: next.signal })
+    listener!({ kind: 'offer', signal: next.signal, text: 'fresh suggestion' })
+    const delivery = offerPrediction.mock.calls[0]!
+    expect(delivery.slice(0, 2)).toEqual(['fresh suggestion', 1])
+    expect(delivery[2].aborted).toBe(false)
+    await view.dispose()
+    expect(delivery[2].aborted).toBe(true)
+    expect(listener).toBeUndefined()
   })
 
   it('keeps an unchanged ordinary callback actionable across Client-only redraws', async () => {

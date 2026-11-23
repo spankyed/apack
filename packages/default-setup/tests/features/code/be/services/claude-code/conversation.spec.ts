@@ -60,6 +60,46 @@ describe('persistent Claude conversation owner', () => {
     expect(f.native.close).toHaveBeenCalledOnce()
   })
 
+  it('offers a single prediction for a settled human turn and retires it when the next input begins', async () => {
+    const f = fixture()
+    const calls: string[] = []
+    const consume = async (turn: ClaudeConversationTurn) => {
+      for await (const event of turn.handle.events) calls.push(event.type)
+      owner.release(turn.handle)
+    }
+    const owner = createClaudeConversation(f.native, consume)
+    const prediction = vi.fn()
+    owner.subscribePrediction(prediction)
+    const offer = (session_id = 'native-session', suggestion = 'review the next item') => ({
+      type: 'prompt_suggestion', uuid: 'prediction-1', session_id, suggestion,
+    })
+    f.push({ type: 'system', subtype: 'init', session_id: 'native-session' })
+    f.push(offer())
+    const first = owner.start('review this item', consume)
+    f.push(started(first))
+    f.push(offer())
+    f.push(result(1, first))
+    f.push(offer('foreign-session'))
+    f.push(offer('native-session', '  '))
+    f.push(offer())
+    f.push(offer())
+    await vi.waitFor(() => expect(prediction).toHaveBeenCalledTimes(2))
+    const lifetime = prediction.mock.calls[0]![0].signal
+    expect(prediction.mock.calls.map(([event]) => event)).toEqual([
+      { kind: 'result', signal: lifetime }, { kind: 'offer', signal: lifetime, text: 'review the next item' },
+    ])
+    expect(calls).toEqual(['command_lifecycle', 'result'])
+    const second = owner.start('a newer item', consume)
+    expect(lifetime.aborted).toBe(true)
+    f.push(offer())
+    f.push(started(second))
+    f.push({ ...result(2, second), is_error: true })
+    f.push(offer())
+    await vi.waitFor(() => expect(calls).toEqual(['command_lifecycle', 'result', 'command_lifecycle', 'result']))
+    await owner.close()
+    expect(prediction).toHaveBeenCalledTimes(2)
+  })
+
   it('does not assign autonomous work to a host input awaiting native acceptance', async () => {
     const f = fixture()
     const ordered: Array<{ id?: string; baseline: number }> = []

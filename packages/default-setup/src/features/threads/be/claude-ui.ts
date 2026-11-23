@@ -110,13 +110,14 @@ function bind(view: ClaudeUiView): void {
   view.attachmentId = owner ? randomUUID() : undefined
   if (!owner) { publish(view, { status: 'disconnected' }); return }
   let promptQueue: Promise<unknown> = Promise.resolve()
-  function ask(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
-    const result = promptQueue.then(() => dispatch(request, signal, expiresAt))
+  function ask(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number, expectedRevision?: number): Promise<ClaudePromptHostResponse | undefined> {
+    const result = promptQueue.then(() => dispatch(request, signal, expiresAt, expectedRevision))
     promptQueue = result.then(() => undefined, () => undefined)
     return result
   }
-  function dispatch(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
+  function dispatch(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number, expectedRevision?: number): Promise<ClaudePromptHostResponse | undefined> {
     if (signal.aborted || Date.now() >= expiresAt || !viewCurrent(view) || view.owner !== owner || getClaudeUiOwner(view.threadId, view.nativeView, view.backgroundView) !== owner) return Promise.resolve(undefined)
+    if (expectedRevision !== undefined && (!view.promptFocused || view.mount?.promptRevision !== expectedRevision)) return Promise.resolve(undefined)
     // Queue each view's requests so Vue cannot collapse two host operations into one state update.
     if (view.pendingPrompt) return Promise.resolve(undefined)
     return new Promise(resolve => {
@@ -148,6 +149,11 @@ function bind(view: ClaudeUiView): void {
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
   view.mount = mountClaudeUi({ owner, promptHost, nativeView: owner.nativeView,
+    offerPrediction: !view.nativeView && !view.backgroundView && owner.subscribePrediction ? (text, revision, lifetime) => {
+      const timeout = 1000
+      const signal = AbortSignal.any([lifetime, AbortSignal.timeout(timeout)])
+      return ask({ kind: 'suggest', text }, signal, Date.now() + timeout, revision)
+    } : undefined,
     pauseQuestion: !view.nativeView && !view.backgroundView ? async (row, ownerId) => {
       if (!viewCurrent(view) || view.owner !== owner || getClaudeUiOwner(view.threadId) !== owner || owner.question?.ownerId !== ownerId) throw Error('Native question owner changed');
       const result = await services.action.executeIfFound('CC: Pause Turn', { threadId: view.threadId, nativeDecision: { ...row, ownerId, toolName: 'AskUserQuestion' } });

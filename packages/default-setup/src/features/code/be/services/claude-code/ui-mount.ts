@@ -22,6 +22,7 @@ export interface ClaudeUiOwner {
   readonly sessionId?: string
   readonly billing?: import('../../../common/native-billing.ts').ClaudeBillingObservation
   subscribe(listener: (event: unknown) => void): () => void
+  subscribePrediction?(listener: (event: import('./conversation.ts').ClaudePrintPrediction) => void): () => void
   handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentsGesture' | 'backgroundReview' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'dismissIde' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> & Partial<Pick<ClaudeUiControls, 'transcriptTimestamps'>> }
 }
 
@@ -35,6 +36,7 @@ export function mountClaudeUi(options: {
   pauseQuestion?(row: import('./ui-presentation.ts').ClaudeUiQuestionRow, ownerId: string): Promise<void>
   messages?(groups: readonly import('./ui-controls.ts').ClaudeUiToolGroup[]): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
+  offerPrediction?(text: string, revision: number, signal: AbortSignal): Promise<unknown>
   nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
 }) {
   const { owner } = options
@@ -58,6 +60,8 @@ export function mountClaudeUi(options: {
   let stopPromptHost: (() => void) | undefined
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
+  let unsubscribePrediction = () => {}
+  const mountLifetime = new AbortController()
   let unsubscribeQuestion = () => {}
   let unsubscribeApproval = () => {}
   let promptPalette: Record<string, string> | undefined
@@ -198,6 +202,7 @@ export function mountClaudeUi(options: {
   function dispose(): Promise<void> {
     if (disposal) return disposal
     disposed = true
+    mountLifetime.abort()
     ide = undefined
     actionKeyState = undefined
     if (agentTimer) clearInterval(agentTimer)
@@ -218,6 +223,7 @@ export function mountClaudeUi(options: {
     scheduled = undefined
     unsubscribeApproval()
     unsubscribeQuestion()
+    unsubscribePrediction()
     unsubscribe()
     promptPalette = undefined
     publish({ status: 'disconnected' })
@@ -235,6 +241,18 @@ export function mountClaudeUi(options: {
   publish({ status: 'connecting' })
   unsubscribeApproval = owner.approval?.subscribe(() => approval.refresh()) ?? (() => {})
   unsubscribeQuestion = owner.question?.subscribe?.(() => question.refresh()) ?? (() => {})
+  let predictionSource: { signal: AbortSignal; revision: number } | undefined
+  const offerPrediction = options.offerPrediction
+  if (offerPrediction) unsubscribePrediction = owner.subscribePrediction?.(event => {
+    if (!current() || !attached || event.signal.aborted) return
+    if (event.kind === 'result') {
+      predictionSource = { signal: event.signal, revision: promptRevision }
+      return
+    }
+    if (predictionSource?.signal !== event.signal || predictionSource.revision !== promptRevision) return
+    const signal = AbortSignal.any([event.signal, mountLifetime.signal])
+    void offerPrediction(event.text, predictionSource.revision, signal).catch(() => {})
+  }) ?? (() => {})
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
     if (current() && line.type === 'system' && ['apack_native_editor_changed', 'apack_native_editor_failed'].includes(String(line.subtype))) {
