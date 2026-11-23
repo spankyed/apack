@@ -100,6 +100,22 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     prediction?.lifetime.abort()
     prediction = undefined
   }
+  let nativePredictionsPaused = false
+  let syncingPredictions = false
+  async function syncPredictionAvailability(): Promise<void> {
+    if (syncingPredictions || closing || exited) return
+    syncingPredictions = true
+    try {
+      // One native switch governs every window attached to this process.
+      while (!closing && !exited && nativePredictionsPaused !== (predictionListeners.size === 0)) {
+        const pause = predictionListeners.size === 0
+        try { await native.setPromptSuggestionsPaused(pause) }
+        catch { return } // Older clients may refuse this control; local presentation is still fenced.
+        nativePredictionsPaused = pause
+      }
+    } finally { syncingPredictions = false }
+  }
+  queueMicrotask(() => { void syncPredictionAvailability() })
   function notifyPrediction(event: ClaudePrintPrediction): void {
     for (const listener of predictionListeners) { try { listener(event) } catch { /* isolate presentation */ } }
   }
@@ -306,7 +322,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         const normalized = normaliseResult(raw)
         cumulativeCost = Math.max(cumulativeCost, normalized.totalCostUsd)
         if (raw.subtype === 'success' && raw.is_error !== true) {
-          if (current.turn.inputId && sessionId && sessionId === raw.session_id && !closing) {
+          if (current.turn.inputId && sessionId && sessionId === raw.session_id && !closing && predictionListeners.size) {
             const lifetime = new AbortController()
             prediction = { sessionId, lifetime, offered: false }
             notifyPrediction({ kind: 'result', signal: lifetime.signal })
@@ -385,7 +401,16 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
       return true
     },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
-    subscribePrediction(listener) { predictionListeners.add(listener); return () => { predictionListeners.delete(listener) } },
+    subscribePrediction(listener) {
+      const wasEmpty = predictionListeners.size === 0
+      predictionListeners.add(listener)
+      if (wasEmpty) void syncPredictionAvailability()
+      return () => {
+        if (!predictionListeners.delete(listener) || predictionListeners.size) return
+        retirePrediction()
+        void syncPredictionAvailability()
+      }
+    },
     async close() {
       retirePrediction()
       closing = true

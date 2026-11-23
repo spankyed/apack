@@ -12,6 +12,7 @@ function fixture() {
     respond: vi.fn(),
     respondElicitation: vi.fn(),
     setModel: vi.fn().mockResolvedValue(undefined),
+    setPromptSuggestionsPaused: vi.fn().mockResolvedValue(undefined),
     cancelUserDialog: vi.fn(),
     close: vi.fn(async () => { events.end() }),
     kill: vi.fn(() => { events.end() }),
@@ -98,6 +99,32 @@ describe('persistent Claude conversation owner', () => {
     await vi.waitFor(() => expect(calls).toEqual(['command_lifecycle', 'result', 'command_lifecycle', 'result']))
     await owner.close()
     expect(prediction).toHaveBeenCalledTimes(2)
+  })
+
+  it('pauses only after the last prediction consumer detaches and resumes when a different window attaches', async () => {
+    const f = fixture()
+    const pause = vi.mocked(f.native.setPromptSuggestionsPaused)
+    const owner = createClaudeConversation(f.native, async () => {})
+    await vi.waitFor(() => expect(pause.mock.calls).toEqual([[true]]))
+
+    const closeFirst = owner.subscribePrediction(vi.fn())
+    const closeSecond = owner.subscribePrediction(vi.fn())
+    await vi.waitFor(() => expect(pause.mock.calls).toEqual([[true], [false]]))
+    closeFirst()
+    await Promise.resolve()
+    expect(pause).toHaveBeenCalledTimes(2)
+
+    let finishPause!: () => void
+    pause.mockImplementationOnce(() => new Promise(resolve => { finishPause = resolve }))
+    closeSecond()
+    expect(pause.mock.calls).toEqual([[true], [false], [true]])
+    const closeReplacement = owner.subscribePrediction(vi.fn())
+    expect(pause).toHaveBeenCalledTimes(3)
+    finishPause()
+    await vi.waitFor(() => expect(pause.mock.calls).toEqual([[true], [false], [true], [false]]))
+    await owner.close()
+    closeReplacement()
+    expect(pause).toHaveBeenCalledTimes(4)
   })
 
   it('does not assign autonomous work to a host input awaiting native acceptance', async () => {

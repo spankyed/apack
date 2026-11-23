@@ -244,16 +244,19 @@ export function mountClaudeUi(options: {
   unsubscribeQuestion = owner.question?.subscribe?.(() => question.refresh()) ?? (() => {})
   let predictionSource: { signal: AbortSignal; revision: number } | undefined
   const offerPrediction = options.offerPrediction
-  if (offerPrediction) unsubscribePrediction = owner.subscribePrediction?.(event => {
-    if (!current() || !attached || event.signal.aborted) return
-    if (event.kind === 'result') {
-      predictionSource = { signal: event.signal, revision: promptRevision }
-      return
-    }
-    if (predictionSource?.signal !== event.signal || predictionSource.revision !== promptRevision) return
-    const signal = AbortSignal.any([event.signal, mountLifetime.signal])
-    void offerPrediction(event.text, predictionSource.revision, signal).catch(() => {})
-  }) ?? (() => {})
+  function watchPredictions(): void {
+    if (!offerPrediction) return
+    unsubscribePrediction = owner.subscribePrediction?.(event => {
+      if (!current() || !attached || event.signal.aborted) return
+      if (event.kind === 'result') {
+        predictionSource = { signal: event.signal, revision: promptRevision }
+        return
+      }
+      if (predictionSource?.signal !== event.signal || predictionSource.revision !== promptRevision) return
+      const signal = AbortSignal.any([event.signal, mountLifetime.signal])
+      void offerPrediction(event.text, predictionSource.revision, signal).catch(() => {})
+    }) ?? (() => {})
+  }
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
     if (current() && line.type === 'system' && ['apack_native_editor_changed', 'apack_native_editor_failed'].includes(String(line.subtype))) {
@@ -299,6 +302,7 @@ export function mountClaudeUi(options: {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
       await owner.handle.ui.attach({ ...client, ...((options.nativeView ?? owner.nativeView) ? { native_view: options.nativeView ?? owner.nativeView } : {}) })
       attached = true
+      if (current()) watchPredictions()
       if (current()) { await refreshAgent(); if (!current()) return; invalidate(); messages.start(); question.start(); approval.refresh(); await panes?.start(); if (current()) agentTimer = setInterval(() => { void refreshAgent() }, 1000) }
     } catch (error) {
       stopPromptHost?.(); stopPromptHost = undefined
