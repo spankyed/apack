@@ -1,6 +1,32 @@
-/** A thrown value's message: an Error's own, anything else as text */
+function isSuppressedError(value: unknown): value is Error & { error: unknown; suppressed: unknown } {
+  return Error.isError(value) && value.name === 'SuppressedError' && 'error' in value && 'suppressed' in value;
+}
+
+function collectSuppressedChain(value: unknown, out: unknown[], visited: Set<unknown>): void {
+  if (!isSuppressedError(value) || visited.has(value)) {
+    out.push(value);
+    return;
+  }
+  visited.add(value);
+  // `suppressed` always happened before `error`; in-order traversal flattens both nested `using`
+  // blocks and multi-disposer `DisposableStack` trees into chronological order.
+  collectSuppressedChain(value.suppressed, out, visited);
+  collectSuppressedChain(value.error, out, visited);
+}
+
+/**
+ * A thrown value's message: an Error's own, anything else as text.
+ * Unwraps `SuppressedError` trees (from `using` / `DisposableStack`) into chronological order so
+ * the primary failure is preserved ahead of any disposal failures instead of returning V8's generic text.
+ */
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (isSuppressedError(error)) {
+    const chain: unknown[] = [];
+    collectSuppressedChain(error, chain, new Set());
+    const [primary, ...cleanup] = chain.map((item) => (Error.isError(item) ? item.message : String(item)));
+    return cleanup.length > 0 ? `${primary} (cleanup also failed: ${cleanup.join('; ')})` : primary!;
+  }
+  return Error.isError(error) ? error.message : String(error);
 }
 
 /** Whether `object` has `key` itself, not by inheritance: a key such as `__proto__` read as data */
