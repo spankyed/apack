@@ -1,5 +1,10 @@
 /** The original settings store owns diagnostic discovery and policy effects. */
-export const claudeManagedSettingsDiagnosticRuntime=String.raw`async function readNativeManagedSettingsDiagnostics(current){
+export const claudeManagedSettingsDiagnosticRuntime=String.raw`function observeNativeManagedSettings(detector){
+ detector.subscribe(source=>{
+  if(source==='policySettings'&&clients.size)publish({type:'system',subtype:'ui_invalidate',event:'ui.render',managed_settings_diagnostics:true});
+ });
+}
+async function readNativeManagedSettingsDiagnostics(current){
  if(!current())throw Error('Native settings diagnostic view is detached');
  const settings=await import('/$bunfs/root/chunk-1pjd7qsk.js');
  if(!current())throw Error('Native settings diagnostic view changed');
@@ -49,7 +54,6 @@ async function runNativeManagedSettingsRecheck(n,request,abort){
  if(!hasWarning())return {rechecked:true};
  if(stamp!==nativeManagedFileStamp())throw Error('The managed settings file changed during the recheck');
  detector.Ta.notifyChange('policySettings');
- publish({type:'system',subtype:'ui_invalidate',event:'ui.render',managed_settings_diagnostics:true});
  return {rechecked:true};
 }
 `

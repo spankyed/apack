@@ -349,6 +349,24 @@ it('shows native managed settings diagnostics without fabricating a transcript a
   expect(f.host.managedSettingsDiagnostics).toEqual([warning]);expect(f.host.state).toEqual([])
   f.replace();expect(f.host.managedSettingsDiagnostics).toEqual([]);f.host.dispose()
 })
+it('refreshes managed warnings without a new transcript row when policy changes', async () => {
+  const f = fixture()
+  const warning = { file: 'per-user managed preferences', path: '', message: 'Settings unavailable', severity: 'warning' as const }
+  const update = { type: 'system', subtype: 'ui_invalidate', event: 'ui.render', managed_settings_diagnostics: true }
+  f.setRows([])
+  f.host.start()
+  await vi.advanceTimersByTimeAsync(50)
+  f.ui.managedSettingsDiagnostics.mockResolvedValue([warning])
+  f.host.receive(update)
+  await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.managedSettingsDiagnostics).toEqual([warning])
+  f.ui.managedSettingsDiagnostics.mockResolvedValue([])
+  f.host.receive(update)
+  await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.managedSettingsDiagnostics).toEqual([])
+  expect(f.host.state).toEqual([])
+  await f.host.dispose()
+})
 it('does not publish a managed policy diagnostic reply after its view is disposed', async () => {
   const f=fixture();let finish!:(rows:Awaited<ReturnType<typeof f.ui.managedSettingsDiagnostics>>)=>void
   f.ui.managedSettingsDiagnostics.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));f.host.start();await vi.advanceTimersByTimeAsync(50)
