@@ -1,1 +1,1 @@
-export type ClaudeComposerSubmitResult = void | { review: { text: string; removed: number } } | { commandPending: true; revision: number } | { queued: true }
+export type ClaudeComposerSubmitResult = void | { review: { text: string; removed: number } } | { commandPending: true; revision: number } | { queued: boolean }

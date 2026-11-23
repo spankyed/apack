@@ -69,6 +69,59 @@ it('keeps the draft editable while native input is busy and sends it once Claude
   await vi.waitFor(() => expect(editor.state.doc.textContent).toBe(''))
 })
 
+it.each([
+  ['inline continuation', '<strong>next draft</strong>', '<p><strong>next draft</strong></p>'],
+  ['new block', '<h2>Next draft</h2>', '<h2>Next draft</h2><p></p>'],
+])('keeps only the %s typed while Claude acknowledges Send', async (kind, added, expected) => {
+  const f = mount(async () => undefined)
+  const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()
+  const nativeSubmit = vi.fn(() => promise)
+  f.state.nativeSubmit = nativeSubmit
+  await nextTick()
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledExactlyOnceWith('first', {}))
+
+  const end = editor.state.doc.content.size
+  const position = kind === 'new block' ? end : end - 1
+  editor.commands.insertContentAt(position, added)
+  const head = editor.state.selection.$head
+  attachments.pendingFiles.value.push(file('next.txt'))
+  resolve({ queued: false })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  expect(editor.getHTML()).toBe(expected)
+  expect(editor.state.selection.$head.parentOffset).toBe(editor.state.selection.$head.parent.content.size)
+  expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['next.txt'])
+})
+
+it('keeps the full replacement draft if the user edits the submitted text before acknowledgement', async () => {
+  const f = mount(async () => undefined)
+  const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()
+  const nativeSubmit = vi.fn(() => promise)
+  f.state.nativeSubmit = nativeSubmit
+  await nextTick()
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledOnce())
+  editor.commands.setContent('first is also the beginning of my replacement')
+  resolve({ queued: false })
+  await vi.waitFor(() => expect(f.root.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.disabled).toBe(false))
+  expect(editor.state.doc.textContent).toBe('first is also the beginning of my replacement')
+})
+
+it('keeps both the submitted text and the continuation when Claude refuses Send', async () => {
+  const f = mount(async () => undefined)
+  const { promise, reject } = Promise.withResolvers<void>()
+  const nativeSubmit = vi.fn(() => promise)
+  f.state.nativeSubmit = nativeSubmit
+  await nextTick()
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledOnce())
+  editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+  editor.commands.insertContent(' continuation')
+  reject(new Error('Claude did not accept the message'))
+  await vi.waitFor(() => expect(f.root.textContent).toContain('Claude did not accept the message'))
+  expect(editor.state.doc.textContent).toBe('first continuation')
+})
+
 it('sends an attached image with an empty caption despite the Markdown paragraph marker', async () => {
   const f = mount(async () => '/media/image.png')
   const nativeSubmit = vi.fn(async () => undefined)

@@ -266,6 +266,7 @@
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { trackNativeSubmittedDraft } from './native-submitted-draft.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE } from '#features/code/common/native-prompt-limits.ts'
 import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
@@ -1013,6 +1014,8 @@ const handleSubmit = async () => {
   const epoch = composerEpoch, bridge = promptEditor
   const threadId = props.currentThread?.id
   let nativeSubmission: { doc: ProseMirrorNode; sessionId: string } | undefined
+  let submittedDraft: ReturnType<typeof trackNativeSubmittedDraft> | undefined
+  let nativeMessageAccepted = false
   if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
   submitting.value = true
   submissionProblem.value = undefined
@@ -1036,6 +1039,7 @@ const handleSubmit = async () => {
     const attachments = captureAttachments()
     const contextRefs = collectContextReferences(editor)
     const cmdState = commandSuggestionKey.getState(editor.state)
+    if (props.nativeSubmit && !(cmdState?.active && cmdState.selectedCommand)) submittedDraft = trackNativeSubmittedDraft(editor, doc)
     const attachmentRefs = await attachments.collect(entityId)
     if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const references: MessageReferences = {
@@ -1073,7 +1077,10 @@ const handleSubmit = async () => {
         return
       }
       if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
-      queuedNotice.value = props.isBusy && !!result && 'queued' in result
+      if (result && 'queued' in result) {
+        nativeMessageAccepted = true
+        queuedNotice.value = props.isBusy && result.queued
+      }
     } else {
       emit('send-message', md, references)
     }
@@ -1086,6 +1093,8 @@ const handleSubmit = async () => {
       editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
       messageContent.value = ''
       hasTextContent.value = false
+    } else if (nativeMessageAccepted) {
+      submittedDraft?.removeAcceptedPrefix()
     }
     attachments.clear()
   } catch (error) {
@@ -1095,7 +1104,10 @@ const handleSubmit = async () => {
       rejectedNativeDraft.value = { ...nativeSubmission, sessionChanged: message === CLAUDE_STALE_DRAFT_MESSAGE }
     }
     if (epoch === composerEpoch) submissionProblem.value = message
-  } finally { submitting.value = false }
+  } finally {
+    submittedDraft?.dispose()
+    submitting.value = false
+  }
 }
 
 </script>
