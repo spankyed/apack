@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ClaudeBackgroundStatus } from '#features/code/common/native-background.ts'
 import { createClaudeTerminalViews, type ClaudeTerminalViewReply } from '#features/threads/be/claude-terminal-views.ts'
+import { ClaudeTeammateEnded } from '#features/code/be/services/claude-code/teammate-recovery.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/be/services/claude-code/ui-text-limits.ts'
 const mount = { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: randomUUID() } as const
@@ -1297,5 +1298,52 @@ it('restores a verified sleeping backend checkpoint only for the saved conversat
     saved = owner.state.sessionId = randomUUID()
     views.handle(mount, 'restart', f.send)
     expect(latest()?.teammateReconnects).toBeUndefined()
+  } finally { views.clear() }
+})
+
+
+it('retires a confirmed ended checkpoint in every window but keeps a temporarily unavailable offer', async () => {
+  const f = fixture(), { ownerId, sessionId } = f.owner.state
+  const first = vi.fn(async () => { throw new ClaudeTeammateEnded() })
+  const second = vi.fn(async () => { throw Error('The original teammate pane is unavailable') })
+  const target = (taskId: string) => ({ ownerId, sessionId, taskId, name: taskId })
+  const views = createClaudeTerminalViews({
+    get: () => undefined, open: f.open, savedSession: () => sessionId,
+    loadTeammateRecovery: async () => [
+      { target: target('ended'), open: first },
+      { target: target('inactive'), open: second },
+    ],
+  })
+  const other = { ...mount, mountId: randomUUID() }
+  const sendOther = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
+  const latest = () => f.send.mock.lastCall?.[0]
+  const latestOther = () => sendOther.mock.lastCall?.[0]
+  try {
+    views.handle(mount, 'first', f.send)
+    views.handle(other, 'other', sendOther)
+    await vi.waitFor(() => expect(latest()?.teammateReconnects).toHaveLength(2))
+    await vi.waitFor(() => expect(latestOther()?.teammateReconnects).toHaveLength(2))
+    const open = (reply: ClaudeTerminalViewReply, taskId: string, revision: number) => ({
+      threadId: reply.threadId, mountId: reply.mountId, type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const,
+      ...target(taskId), recoveryId: reply.teammateReconnects!.find(offer => offer.taskId === taskId)!.recoveryId, revision,
+    })
+    const close = () => views.handle({ ...mount, type: 'CLAUDE_BACKGROUND_CLOSE', requestId: latest()!.attachment!.requestId }, 'first', f.send)
+    const replay = open(latestOther()!, 'ended', 1)
+
+    views.handle(open(latest()!, 'inactive', 1), 'first', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.problem).toBe('The original teammate pane is unavailable'))
+    close()
+    expect(latest()?.teammateReconnects).toHaveLength(2)
+
+    views.handle(open(latest()!, 'ended', 2), 'first', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.problem).toBe('The native teammate process ended'))
+    expect(latest()?.teammateReconnects?.map(offer => offer.taskId)).toEqual(['inactive'])
+    expect(latestOther()?.teammateReconnects?.map(offer => offer.taskId)).toEqual(['inactive'])
+    views.handle(replay, 'other', sendOther)
+    expect(latestOther()?.attachment).toBeUndefined()
+    expect(first).toHaveBeenCalledOnce()
+    close()
+    expect(latest()?.attachment).toBeUndefined()
+    expect(latest()?.teammateReconnects?.map(offer => offer.taskId)).toEqual(['inactive'])
   } finally { views.clear() }
 })

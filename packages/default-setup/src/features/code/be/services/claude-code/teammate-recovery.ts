@@ -83,6 +83,10 @@ export async function identifyClaudeRecoveryPane(target: PaneTarget, writerPid: 
   return recoveryPane.parse({ ...target, socket, socketIdentity, server, worker, executableIdentity: identity, bootId: await bootId(), writer: [writer, writerStart] })
 }
 
+export class ClaudeTeammateEnded extends Error {
+  constructor() { super('The native teammate process ended') }
+}
+
 export function createClaudeTeammateRecovery(pane: ClaudeRecoveryPane, env: NodeJS.ProcessEnv) {
   const address = ['-S', pane.socket]
   const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((value, index) => value === b[index])
@@ -93,7 +97,8 @@ export function createClaudeTeammateRecovery(pane: ClaudeRecoveryPane, env: Node
     if (pane.writer && await readProcessStart(pane.writer[0], signal) === pane.writer[1]) throw Error('The original Claude writer is still active')
     const file = await lstat(pane.socket, { bigint: true })
     if (!file.isSocket() || file.uid !== BigInt(process.getuid!()) || !same(fileIdentity(file), pane.socketIdentity)
-      || await processStart(pane.server[0], signal) !== pane.server[1] || await processStart(pane.worker[0], signal) !== pane.worker[1]) throw Error('The original teammate pane is unavailable')
+      || await processStart(pane.server[0], signal) !== pane.server[1]) throw Error('The original teammate pane is unavailable')
+    if (await readProcessStart(pane.worker[0], signal) !== pane.worker[1]) throw new ClaudeTeammateEnded()
     const current = await inspectPane(pane, address, env, signal)
     if (!current.activeWindow || current.socket !== pane.socket || !same(current.socketIdentity, pane.socketIdentity)
       || !same(current.server, pane.server) || !same(current.worker, pane.worker)) throw Error('The original teammate pane is unavailable')

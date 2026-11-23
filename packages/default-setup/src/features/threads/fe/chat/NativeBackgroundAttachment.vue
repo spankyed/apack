@@ -7,7 +7,7 @@
     </header>
     <p v-if="attachment.problem" role="alert">{{ attachment.problem }}</p>
     <div v-if="attachment.state" ref="viewport" class="child-terminal__viewport" :aria-label="attachment.teammate ? 'Claude teammate terminal output' : 'Background Claude output'" />
-    <p class="child-terminal__hint">{{ attachment.teammate ? 'Close connection to detach. The teammate keeps running.' : 'Closing the terminal does not stop a running background session. Use Stop to end it.' }}</p>
+    <p v-if="attachment.status === 'ready' && attachment.state?.status === 'live'" class="child-terminal__hint">{{ attachment.teammate ? 'Close connection to detach. The teammate keeps running.' : 'Closing the terminal does not stop a running background session. Use Stop to end it.' }}</p>
   </section>
 </template>
 <script setup lang="ts">

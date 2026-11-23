@@ -1,4 +1,5 @@
 import {claudeCreditRequest} from '#features/code/common/native-credit.ts'
+import { ClaudeTeammateEnded } from '#features/code/be/services/claude-code/teammate-recovery.ts'
 import type {ClaudeBackgroundAttachment} from '#features/code/be/services/claude-code/background-attachment.ts'
 import type {ClaudeBackgroundAttachmentSnapshot} from '#features/code/common/native-background.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
@@ -107,7 +108,7 @@ export type TeammateReconnectAuthority = {
   open(signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   available?(signal: AbortSignal): Promise<boolean>
 }
-type SurvivingTeammate = TeammateReconnectAuthority & {resumedOwnerId?: string}
+type SurvivingTeammate = TeammateReconnectAuthority & {resumedOwnerId?: string; ended?: boolean}
 type ParkedTeammate = {
   owner: ClaudeNativeTerminalOwner
   reconnect: TeammateReconnectAuthority
@@ -344,7 +345,7 @@ export function createClaudeTerminalViews(dependencies: {
       if (continued && moved) publish(...continued)
       for (const taskId of view.survivingTeammates.keys()) {
         const survivor = survivingTeammateCurrent(view, taskId)
-        if (survivor) parkTeammate(view.threadId, view.owner, survivor, survivor)
+        if (survivor && !survivor.ended) parkTeammate(view.threadId, view.owner, survivor, survivor)
       }
     }
     const owner = view?.owner, recovered = owner && queueDrafts.get(owner)
@@ -386,8 +387,9 @@ export function createClaudeTerminalViews(dependencies: {
           : !teammateResumeMatches(view, target, dependencies.get(view.threadId)))) view.teammateReconnects.delete(taskId)
     }
     for (const [taskId, survivor] of view.survivingTeammates) {
-      if (survivingTeammateCurrent(view, taskId)) teammateReconnects.push(survivor.target)
-      else if (survivor.resumedOwnerId ? state?.status !== 'starting' || state.ownerId !== survivor.resumedOwnerId
+      if (survivingTeammateCurrent(view, taskId)) {
+        if (!survivor.ended) teammateReconnects.push(survivor.target)
+      } else if (survivor.resumedOwnerId ? state?.status !== 'starting' || state.ownerId !== survivor.resumedOwnerId
         || state.sessionId !== survivor.target.sessionId : dependencies.savedSession?.(view.threadId) !== survivor.target.sessionId) view.survivingTeammates.delete(taskId)
     }
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
@@ -455,7 +457,7 @@ export function createClaudeTerminalViews(dependencies: {
     if (view.owner === owner) return
     // Recover the old terminal separately from the resumed owner's task registry. Mint a
     // new action for this mount so old task or terminal requests cannot cross the handoff.
-    const cold = [...view.survivingTeammates].filter(([, survivor]) => !survivor.resumedOwnerId && survivor.target.sessionId === owner.state.sessionId)
+    const cold = [...view.survivingTeammates].filter(([, survivor]) => !survivor.ended && !survivor.resumedOwnerId && survivor.target.sessionId === owner.state.sessionId)
     view.survivingTeammates.clear()
     if (!view.queueComposer) {
       for (const [taskId, survivor] of cold) view.survivingTeammates.set(taskId, {
@@ -563,7 +565,7 @@ export function createClaudeTerminalViews(dependencies: {
       const target = view
       if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN' && event.recoveryId !== undefined) {
         const survivor = survivingTeammateCurrent(target, event.taskId)
-        if (!survivor || survivor.target.recoveryId !== event.recoveryId || survivor.target.taskId !== event.taskId
+        if (!survivor || survivor.ended || survivor.target.recoveryId !== event.recoveryId || survivor.target.taskId !== event.taskId
           || survivor.target.ownerId !== event.ownerId || survivor.target.sessionId !== event.sessionId
           || target.attachment || target.opening || !Number.isSafeInteger(event.revision)
           || event.revision <= (target.attachmentRevision ?? 0)) return
@@ -571,7 +573,22 @@ export function createClaudeTerminalViews(dependencies: {
         const operation: ClaudeBackgroundAttachmentView = {requestId:randomUUID(), revision:event.revision, status:'opening',
           sessionId:event.sessionId, continuedInSessionId:event.sessionId,
           teammate:{ownerId:event.ownerId, taskId:event.taskId, recoveryId:event.recoveryId}}
-        openAttachment(key, target, operation, survivor.open, 'Surviving teammate terminal is unavailable')
+        openAttachment(key, target, operation, async signal => {
+          try { return await survivor.open(signal) }
+          catch (error) {
+            if (error instanceof ClaudeTeammateEnded && !signal.aborted) {
+              // Keep the failed operation visible until dismissal, but retire its action in every window.
+              for (const [id, candidate] of views) {
+                if (candidate.threadId !== target.threadId) continue
+                const offer = candidate.survivingTeammates.get(event.taskId)
+                if (!offer || offer.target.ownerId !== event.ownerId || offer.target.sessionId !== event.sessionId) continue
+                offer.ended = true
+                if (id !== key) publish(id, candidate)
+              }
+            }
+            throw error
+          }
+        }, 'Surviving teammate terminal is unavailable')
         return
       }
       if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN') {
