@@ -20,6 +20,20 @@ export function disposeClaudeTerminalHistory() {
   for (const dispose of historyWatchers) dispose()
 }
 
+/** A saved native launch can outlive its in-process owner after the backend exits. */
+export function reconcileDisconnectedClaudeTerminal(threadId: EntityId, hasOwner: () => boolean) {
+  const thread = repository.threadQueries.byId(threadId)
+  const state = thread?.context?.claudeCode
+  if (!thread || state?.chatState !== 'working' || state.isRunning || !state.sessionId) return
+  const launch = object(state.nativeLaunch)
+  if (launch?.sessionId !== state.sessionId || launch.cwd !== state.cwd
+    || object(state.nativeContinuation)?.sessionId === state.sessionId || hasOwner()) return
+  repository.threadCommands.update(threadId, {
+    context: { ...thread.context, claudeCode: { ...state, chatState: 'paused' } },
+    ...(thread.chatState === 'working' ? { chatState: 'paused' } : {}),
+  })
+}
+
 /** Mirror the process, independent of mounted windows; UUIDs make repeated journal rows idempotent. */
 export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean, readLaunch: () => Promise<ClaudeNativeLaunch | undefined>) {
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean; queuedPrompt?: boolean; timestamp?: number; order?: number }>()

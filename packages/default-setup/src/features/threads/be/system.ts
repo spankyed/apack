@@ -4,7 +4,7 @@ import { parseClaudeNativeContinuation } from '#features/code/be/services/claude
 import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
 import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
 import { prepareClaudeNativeInput } from './claude-native-input.ts';
-import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
+import { reconcileDisconnectedClaudeTerminal, syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { createClaudeTeammateRecovery, readClaudeTeammateCheckpoint } from '#features/code/be/services/claude-code/teammate-recovery.ts';
 import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts';
@@ -476,6 +476,11 @@ export const threadsSystem = setup({
     ...answers.actions,
     ...threadsSpec.actions({
     claudeTerminalView: ({ event, client }) => {
+      if (client && event.type === 'CLAUDE_TERMINAL_MOUNT' && event.queueComposer === true) {
+        const threadId = event.threadId as EARS.EntityId
+        reconcileDisconnectedClaudeTerminal(threadId, () => !!services.cli.claudeCode.getNativeTerminal(threadId)
+          || services.cli.claudeCode.isConversationBusy(threadId))
+      }
       if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN' || event.type === 'CLAUDE_BACKGROUND_OPEN' || event.type === 'CLAUDE_BACKGROUND_INPUT' || event.type === 'CLAUDE_BACKGROUND_RESIZE' || event.type === 'CLAUDE_BACKGROUND_CLOSE' || event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_CANCEL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_BACKGROUND' || event.type === 'CLAUDE_TERMINAL_TASK' || event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL' || event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED' || event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'CLAUDE_TERMINAL_POLICY_RECHECK' || event.type === 'CLAUDE_TERMINAL_NOTICE' || event.type === 'CLAUDE_TERMINAL_MCP_FORM' || event.type === 'CLAUDE_TERMINAL_MCP_URL') terminalViews.handle(event, client, client ? result => sendToWindow(client, 'threads', result) : undefined);
     },
     claudeUiView: ({ event, client }) => {

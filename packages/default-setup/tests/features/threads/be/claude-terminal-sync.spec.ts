@@ -7,7 +7,7 @@ import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claud
 import { createClaudeNativeJournalReader } from '#features/code/be/services/claude-code/terminal-journal.ts'
 const fake = vi.hoisted(() => ({
   messages: [] as Record<string, unknown>[],
-  thread: { context: {} as Record<string, unknown> },
+  thread: { context: {} as Record<string, unknown>, chatState: 'idle' },
   broadcast: vi.fn(),
   // A block is a row with an id of its own, and `blocksOf` is how a writer finds the one it owns. The
   // double names each one after the message and the type it holds, which is unique per message here:
@@ -23,7 +23,7 @@ vi.mock('#generated/repository.ts', () => ({ repository: {
     addMessage: (message: Record<string, unknown>) => { const id = String(fake.messages.length); const row = { ...message, id, ...(message.blocks ? { blocks: fake.stamp(id, message.blocks) } : {}) }; fake.messages.push(row); return row },
     updateMessageState: vi.fn(),
   },
-  threadCommands: { update: (_: unknown, updates: { context: Record<string, unknown> }) => { fake.thread.context = updates.context } },
+  threadCommands: { update: (_: unknown, updates: Partial<typeof fake.thread>) => { Object.assign(fake.thread, updates) } },
 } }))
 vi.mock('#features/threads/be/services/chat.ts', () => ({ sendBlockMessage: vi.fn((options: Record<string, unknown>) => { const id = String(fake.messages.length); const row = { ...options, id, ...(options.blocks ? { blocks: fake.stamp(id, options.blocks) } : {}) }; fake.messages.push(row); return { messageId: row.id } }), updateMessageState: vi.fn((id: string, updates: Record<string, unknown>) => { Object.assign(fake.messages.find(message => message.id === id)!, updates) }), // A block is a row, so a sync writes each one by id. The double keeps them on the fake message, replacing
 // the one of that type it already holds, which is what the real writer does by passing the row's id
@@ -35,9 +35,24 @@ let directory: string
 beforeEach(async () => {
   vi.resetModules()
   directory = await mkdtemp(join(tmpdir(), 'native-sync-'))
-  fake.messages.length = 0; fake.thread.context = { claudeCode: { sessionId } }; fake.broadcast.mockClear()
+  fake.messages.length = 0; fake.thread.chatState = 'idle'; fake.thread.context = { claudeCode: { sessionId } }; fake.broadcast.mockClear()
 })
 afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
+it.each([
+  { label: 'disconnected native owner', override: {}, owner: false, expected: 'paused' },
+  { label: 'live owner or handoff', override: {}, owner: true, expected: 'working' },
+  { label: 'print conversation', override: { isRunning: true }, owner: false, expected: 'working' },
+  { label: 'background continuation', override: { nativeContinuation: { sessionId } }, owner: false, expected: 'working' },
+  { label: 'foreign launch', override: { nativeLaunch: { sessionId: 'different', cwd: '/project' } }, owner: false, expected: 'working' },
+])('reconciles saved native working status for $label', async ({ override, owner, expected }) => {
+  const { reconcileDisconnectedClaudeTerminal } = await import('#features/threads/be/claude-terminal-sync.ts')
+  const state = { sessionId, cwd: '/project', nativeLaunch: { sessionId, cwd: '/project' }, chatState: 'working', totalCostUsd: 2, ...override }
+  fake.thread.context = { claudeCode: state }; fake.thread.chatState = 'working'
+  reconcileDisconnectedClaudeTerminal('thread' as EntityId, () => owner)
+  expect(fake.thread.chatState).toBe(expected)
+  expect(fake.thread.context.claudeCode).toEqual({ ...state, chatState: expected })
+})
+
 it.each([false, true])('persists the final row beyond the batch boundary on exit, damaged row: %s', async damaged => {
   const path = join(directory, sessionId + '.jsonl'), read = createClaudeNativeJournalReader()
   const row = (uuid: string, text: string) => JSON.stringify({ sessionId, uuid, timestamp: '2026-10-20T10:00:00Z', type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } }) + '\n'
