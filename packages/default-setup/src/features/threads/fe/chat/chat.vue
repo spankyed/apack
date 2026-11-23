@@ -756,6 +756,7 @@ watch([agentSelection, nativeTerminalViews, () => currentThread.value?.id], ([re
   if (result.status === 'error' || result.status === 'done' && result.view?.taskId === request.taskId && owner.view?.kind === 'agent' && owner.view.taskId === request.taskId) agentSelection.value = undefined
 })
 provide(claudeTaskControls, {
+  openTeammateTerminal: task => nativeSession.value?.openTeammateTerminal(task),
   foregroundAvailable: computed(() => !nativeTerminalActive.value && !agentSelection.value && !pendingNativeSend.value && !agentPending.value && taskView.value?.[1].state?.view?.kind === 'main'),
   ownerId: computed(() => taskView.value?.[1].state?.ownerId),
   state: computed(() => taskView.value?.[1].task),

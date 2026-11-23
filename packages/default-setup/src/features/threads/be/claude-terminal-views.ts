@@ -41,6 +41,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
   | ({ type: 'CLAUDE_TERMINAL_BACKGROUND'; sessionId: string; continuedInSessionId: string; revision: number } & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest))
+  | { type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN'; ownerId: string; sessionId: string; taskId: string; revision: number }
   | { type: 'CLAUDE_BACKGROUND_OPEN'; sessionId: string; continuedInSessionId: string; jobId: string; revision: number }
   | { type: 'CLAUDE_BACKGROUND_INPUT'; attachmentId: string; text: string }
   | { type: 'CLAUDE_BACKGROUND_RESIZE'; attachmentId: string; columns: number; rows: number; cell?: {width:number;height:number} }
@@ -95,6 +96,7 @@ export interface ClaudeBackgroundAttachmentView {
   revision: number
   sessionId: string
   continuedInSessionId: string
+  teammate?: { ownerId: string; taskId: string }
   status: 'opening' | 'ready' | 'error'
   state?: ClaudeBackgroundAttachmentSnapshot
   problem?: string
@@ -193,8 +195,38 @@ export function createClaudeTerminalViews(dependencies: {
     view.attachmentOwner = undefined; view.attachment = undefined
   }
   function attachmentCurrent(view: View) {
+    const target = view.attachment?.teammate
+    if (target) {
+      const owner = view.owner
+      const state = owner?.state
+      return owner === dependencies.get(view.threadId) && state?.status === 'live' && state.ownerId === target.ownerId
+        && state.sessionId === view.attachment?.sessionId && state.tasks.some(task => task.id === target.taskId && task.canStop)
+    }
     const continuation = dependencies.continuation?.(view.threadId)
     return !!view.attachment && continuation?.sessionId === view.attachment.sessionId && continuation.continuedInSessionId === view.attachment.continuedInSessionId
+  }
+  function openAttachment(key: string, view: View, operation: ClaudeBackgroundAttachmentView,
+    open: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>, fallback: string) {
+    const abort = new AbortController()
+    view.attachmentAbort = abort
+    view.attachment = operation
+    publish(key, view)
+    const current = () => views.get(key) === view && view.attachment === operation && attachmentCurrent(view) && !abort.signal.aborted
+    void Promise.resolve().then(() => current() ? open(abort.signal) : undefined).then(client => {
+      if (!client) return
+      if (!current()) { void client.close().catch(() => {}); return }
+      view.attachmentOwner = client
+      operation.status = 'ready'
+      view.attachmentUnsubscribe = client.subscribe(() => {
+        if (views.get(key) === view && view.attachment === operation) publish(key, view)
+      })
+      publish(key, view)
+    }, error => {
+      if (!current()) return
+      operation.status = 'error'
+      operation.problem = error instanceof Error ? error.message : fallback
+      publish(key, view)
+    })
   }
   function drop(key: string) {
     const view = views.get(key); if (view) retireAttachment(view)
@@ -334,6 +366,18 @@ export function createClaudeTerminalViews(dependencies: {
       }
       if (!view) return
       const target = view
+      if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN') {
+        const owner = target.owner, state = owner?.state
+        if (!owner?.openTeammateTerminal || owner !== dependencies.get(event.threadId) || state?.status !== 'live'
+          || state.ownerId !== event.ownerId || state.sessionId !== event.sessionId
+          || !state.tasks.some(task => task.id === event.taskId && task.canStop)
+          || !Number.isSafeInteger(event.revision) || event.revision <= (target.attachmentRevision ?? 0) || target.attachment) return
+        target.attachmentRevision = event.revision
+        const operation: ClaudeBackgroundAttachmentView = { requestId:randomUUID(), revision:event.revision, status:'opening',
+          sessionId:event.sessionId, continuedInSessionId:event.sessionId, teammate:{ownerId:event.ownerId, taskId:event.taskId} }
+        openAttachment(key, target, operation, signal => owner.openTeammateTerminal!(event.taskId, signal), 'Teammate terminal attachment failed')
+        return
+      }
       if (event.type === 'CLAUDE_BACKGROUND_OPEN') {
         const continuation = dependencies.continuation?.(event.threadId)
         if (!continuation || !dependencies.openAttachment || event.sessionId !== continuation.sessionId || event.continuedInSessionId !== continuation.continuedInSessionId
@@ -343,15 +387,7 @@ export function createClaudeTerminalViews(dependencies: {
         if (target.attachmentOwner?.snapshot.jobId === event.jobId && target.attachmentOwner.snapshot.status === 'live') {publish(key,target);return}
         retireAttachment(target)
         const operation: ClaudeBackgroundAttachmentView = {...continuation, requestId:randomUUID(), revision:event.revision, status:'opening'}
-        const abort = new AbortController(); target.attachmentAbort = abort; target.attachment = operation; publish(key,target)
-        const current = () => views.get(key) === target && target.attachment === operation && attachmentCurrent(target) && !abort.signal.aborted
-        void Promise.resolve().then(() => current() ? dependencies.openAttachment!(continuation,event.jobId,event.threadId,abort.signal) : undefined).then(owner => {
-          if (!owner) return
-          if (!current()) {void owner.close().catch(() => {}); return}
-          target.attachmentOwner = owner; operation.status = 'ready'
-          target.attachmentUnsubscribe = owner.subscribe(() => {if (views.get(key) === target && target.attachment === operation) publish(key,target)})
-          publish(key,target)
-        },error => {if (current()) {operation.status='error';operation.problem=error instanceof Error?error.message:'Background attachment failed';publish(key,target)}})
+        openAttachment(key, target, operation, signal => dependencies.openAttachment!(continuation, event.jobId, event.threadId, signal), 'Background attachment failed')
         return
       }
       if (event.type === 'CLAUDE_BACKGROUND_CLOSE') {

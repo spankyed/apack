@@ -745,6 +745,10 @@ interface ClaudeBackgroundAttachmentView {
     revision: number;
     sessionId: string;
     continuedInSessionId: string;
+    teammate?: {
+        ownerId: string;
+        taskId: string;
+    };
     status: 'error' | 'opening' | 'ready';
     state?: ClaudeBackgroundAttachmentSnapshot;
     problem?: string;
@@ -2822,6 +2826,7 @@ interface ClaudeNativeTaskDetails {
     canInput: boolean;
     canFocusInput?: boolean;
     externalPane?: true;
+    canAttach?: true;
     canMessage: boolean;
     metadata?: {
         prompt?: string;
@@ -2952,6 +2957,7 @@ interface ClaudeNativeTerminalOwner {
         stopped?: boolean;
         details?: ClaudeNativeTaskDetails;
     }>;
+    openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>;
     getMcpStatus(): Promise<ClaudeMcpStatus>;
     getMemoryDialog(): Promise<ClaudeMemoryDialog>;
     setAutoMemory(enabled: boolean): Promise<void>;
@@ -3644,6 +3650,12 @@ type ClaudeTerminalViewRequest = {
     continuedInSessionId: string;
     revision: number;
 } & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest)) | {
+    type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN';
+    ownerId: string;
+    sessionId: string;
+    taskId: string;
+    revision: number;
+} | {
     type: 'CLAUDE_BACKGROUND_OPEN';
     sessionId: string;
     continuedInSessionId: string;

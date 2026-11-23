@@ -1356,6 +1356,16 @@ async function control(request,abort){
   dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
  }
+ if(request.subtype==='apack_tmux_teammate_target'){
+  const binding=originalContext??n.runtime.ey(),facts=nativeViewFacts(n,binding,abort);
+  if(facts.sessionId!==request.session_id)throw Error('Native teammate session changed');
+  const context=binding.toolContext(abort);
+  const matches=Object.values(context.taskRegistry.all()).filter(task=>n.runtime.flt(task)?.id===request.task_id);
+  if(matches.length!==1)throw Error('Native teammate is no longer owned by this session');
+  const paneId=nativeExternalTmuxPane(context,matches[0]),executable=Bun.which('tmux');abort.signal.throwIfAborted();
+  if(!paneId||!executable||nativeViewFacts(n,binding,abort).sessionId!==request.session_id)throw Error('The private teammate terminal is unavailable');
+  return {paneId,executable};
+ }
  if(request.subtype==='apack_task_control'){
   const expected=request.session_id;
   const current=()=>{abort.signal.throwIfAborted();if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native task session changed');};

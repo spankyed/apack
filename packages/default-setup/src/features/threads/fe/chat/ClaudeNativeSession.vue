@@ -317,6 +317,11 @@ function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBack
     revision: (view.value?.background?.revision ?? 0) + 1, ...request })
 }
 let attachmentRevision = 0
+function openTeammateTerminal(task: { id: string; ownerId: string; sessionId: string }) {
+  const state = view.value?.state
+  if (!state || state.ownerId !== task.ownerId || state.sessionId !== task.sessionId || view.value?.attachment) return
+  send({type:'CLAUDE_TEAMMATE_TERMINAL_OPEN',...identity(),ownerId:task.ownerId,sessionId:task.sessionId,taskId:task.id,revision:++attachmentRevision})
+}
 function openBackground(target: ClaudeNativeContinuation, jobId: string) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.attachment) return
   expanded.value = true
@@ -359,7 +364,7 @@ watch([view, active], async ([value, showing]) => {
   }
   terminal?.setInputBlocked(value?.state?.inputBlocked===true)
 }, { flush: 'post' })
-defineExpose({ open })
+defineExpose({ openTeammateTerminal, open })
 renew();
 watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.continuedInSessionId]), () => {
   if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })

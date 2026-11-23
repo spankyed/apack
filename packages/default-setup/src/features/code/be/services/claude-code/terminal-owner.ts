@@ -27,7 +27,10 @@ import { resolveClaudeExecutable } from './native-executable.ts'
 import { projectClaudeTerminalImageReferences } from './terminal-image-reference.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
-import { stripVTControlCharacters } from 'node:util'
+import { promisify, stripVTControlCharacters } from 'node:util'
+import { execFile } from 'node:child_process'
+import { isAbsolute } from 'node:path'
+import { openClaudeTerminalAttachment, type ClaudeBackgroundAttachment } from './background-attachment.ts'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv, DENIED_TO_A_CHILD } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
@@ -79,6 +82,7 @@ export interface ClaudeNativeTerminalOwner {
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
+  openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   getMcpStatus(): Promise<ClaudeMcpStatus>
   getMemoryDialog(): Promise<ClaudeMemoryDialog>
   setAutoMemory(enabled: boolean): Promise<void>
@@ -556,6 +560,34 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native approval session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback, choice: response.choice, choiceToken: response.choiceToken }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
+      },
+      async openTeammateTerminal(taskId, signal) {
+        const {nativePid, sessionId} = currentState()
+        if (closed || process.platform === 'win32' || !nativePid) throw Error('The private teammate terminal is unavailable')
+        const ensureCurrent = () => {
+          signal.throwIfAborted()
+          const state = currentState()
+          if (closed || state.sessionId !== sessionId || state.nativePid !== nativePid
+            || !state.tasks.some(task => task.id === taskId && task.canStop))
+            throw Error('The native teammate session changed')
+        }
+        ensureCurrent()
+        const result = await bridge.uiTransport.request({ subtype: 'apack_tmux_teammate_target', session_id: sessionId, task_id: taskId }) as { executable?: unknown; paneId?: unknown }
+        ensureCurrent()
+        const { executable, paneId } = result
+        if (typeof executable !== 'string' || !isAbsolute(executable) || typeof paneId !== 'string' || !/^%[0-9]+$/.test(paneId))
+          throw Error('The native teammate terminal target is invalid')
+        const server = ['-L', `claude-swarm-${nativePid}`]
+        const probe = (args: string[]) => promisify(execFile)(executable, [...server, ...args],
+          { env, signal, cwd: options.cwd, timeout: 2000, maxBuffer: 8192 }).then(value => value.stdout.trim())
+        const sessions = await probe(['list-sessions', '-F', '#{session_id} #{session_name}'])
+        const session = /^([$][0-9]+) claude-swarm$/m.exec(sessions)?.[1]
+        if (!session || await probe(['show-options', '-Av', '-t', session, 'destroy-unattached']) !== 'off'
+          || !(await probe(['list-panes', '-s', '-t', session, '-F', '#{pane_id}'])).split('\n').includes(paneId))
+          throw Error('The native teammate terminal cannot be safely attached')
+        ensureCurrent()
+        return openClaudeTerminalAttachment(executable, [...server, 'attach-session', '-f', 'ignore-size', '-t', session],
+          { id: taskId, sessionId, cwd: options.cwd }, { env, signal })
       },
       async operateTask(taskId, operation, text, worker) {
         if (closed || operation !== 'background' && !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')

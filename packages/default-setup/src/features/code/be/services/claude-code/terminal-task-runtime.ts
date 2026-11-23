@@ -6,6 +6,12 @@ function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).fi
 function nativeTeammateName(task){
  return task.type==='in_process_teammate'&&typeof task.identity?.agentName==='string'?task.identity.agentName.trim().slice(0,256):'';
 }
+function nativeExternalTmuxPane(context,task){
+ if(task?.type!=='in_process_teammate'||task.status!=='running'||typeof task.paneTeardown!=='function')return;
+ const member=context.getAppState().teamContext?.teammates?.[task.identity.agentId];
+ // An existing host tmux uses "current"; iTerm2 pane IDs do not have tmux's %number form.
+ if(member?.tmuxSessionName==='claude-swarm'&&/^%[0-9]+$/.test(member.tmuxPaneId))return member.tmuxPaneId;
+}
 function nativeTeammateTasks(n,registry){
  const observations=new Map();
  for(const task of Object.values(registry.all())){
@@ -242,5 +248,6 @@ async function nativeTaskControl(n,binding,request,abort,current){
   error:error?.slice(0,16384),errorTruncated:(error?.length??0)>16384};
  const handback=task.type==='local_agent'&&typeof task.handbackReport?.text==='string'?{taskId:request.task_id,text:task.handbackReport.text,...(typeof task.handbackReport.warning==='string'?{warning:task.handbackReport.warning}:{})}:undefined;
  const teammateName=nativeTeammateName(task);
- return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput:canUseLocalInput,...(canFocusInput===undefined?{}:{canFocusInput}),...(externalPane?{externalPane:true}:{}),metadata,messages,truncated}};
+ const canAttach=!!nativeExternalTmuxPane(context,task);
+ return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput:canUseLocalInput,...(canFocusInput===undefined?{}:{canFocusInput}),...(externalPane?{externalPane:true}:{}),...(canAttach?{canAttach:true}:{}),metadata,messages,truncated}};
 }`

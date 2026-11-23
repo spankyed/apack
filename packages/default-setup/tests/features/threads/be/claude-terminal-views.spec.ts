@@ -864,3 +864,30 @@ it('requires an owned cancellable queue item and the matching native cancellatio
     expect(request).toHaveBeenLastCalledWith(expect.objectContaining({subtype: 'apack_main_queue_cancel', item_id: eligible}))
   } finally { f.views.clear() }
 })
+
+it('owns only the teammate terminal client and retires it when the addressed task exits', async () => {
+  const f = fixture(), { ownerId, sessionId } = f.owner.state
+  const child = {
+    snapshot: { id: randomUUID(), terminalSession: {id:'client',target:null}, jobId:'agent', sessionId, cwd:'/fixture', clientPid:234, status:'live' as const, output:[] },
+    input: vi.fn(), resize: vi.fn(), subscribe: vi.fn(() => () => {}), close: vi.fn(async () => {}),
+  }
+  const open = vi.fn(async () => child)
+  f.owner.openTeammateTerminal = open
+  f.owner.state.tasks = [{ id:'agent', name:'Reviewer', status:'idle', canStop:true }]
+  const request = { ...mount, type:'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId:'agent', revision:1 }
+  try {
+    f.views.handle(mount,'one',f.send)
+    f.views.handle({...request,sessionId:randomUUID()},'one',f.send)
+    f.views.handle({...request,taskId:'other'},'one',f.send)
+    f.views.handle(request,'two',f.send)
+    expect(open).not.toHaveBeenCalled()
+    f.views.handle(request,'one',f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].attachment).toMatchObject({teammate:{ownerId,taskId:'agent'},status:'ready'}))
+    expect(open).toHaveBeenCalledExactlyOnceWith('agent',expect.any(AbortSignal))
+    f.owner.state.tasks = []
+    for (const notify of f.listeners) notify()
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].attachment).toBeUndefined())
+    expect(child.close).toHaveBeenCalledOnce()
+    expect(f.owner.close).not.toHaveBeenCalled()
+  } finally { f.views.clear() }
+})

@@ -32,6 +32,12 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   await access(executable, constants.X_OK)
   if (!(await stat(session.cwd)).isDirectory()) throw new Error('Background session directory is unavailable')
   if (options.signal?.aborted) throw new Error('Background attachment cancelled')
+  return openClaudeTerminalAttachment(executable, ['attach', session.id], session, options)
+}
+
+export async function openClaudeTerminalAttachment(executable: string, args: string[],
+  session: { id: string; sessionId: string; cwd: string }, options: SubcommandOptions = {}): Promise<ClaudeBackgroundAttachment> {
+  if (options.signal?.aborted) throw new Error('Terminal attachment cancelled')
   const env: Record<string,string> = {}
   for (const [key,value] of Object.entries(buildChildEnv(options.env))) if (typeof value === 'string') env[key] = value
   // The attached client draws through the same image-capable broker as a main native owner.
@@ -49,7 +55,7 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   const client = await services.terminal.open(
     // `unset` rather than an omission from `env`: a session inherits the host's environment, so leaving a
     // key out of the overrides leaves it inherited
-    {images:true,imageFiles:true,colors:CLAUDE_NATIVE_TERMINAL_COLORS,cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
+    {images:true,imageFiles:true,colors:CLAUDE_NATIVE_TERMINAL_COLORS,cols: 100, rows: 30, shell: executable, args, env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
     {
       onOutput: text => {
         if (ended) return

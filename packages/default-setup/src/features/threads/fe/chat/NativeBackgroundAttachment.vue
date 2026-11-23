@@ -1,13 +1,13 @@
 <template>
-  <section aria-label="Background Claude terminal" class="child-terminal">
+  <section :aria-label="attachment.teammate ? 'Claude teammate terminals' : 'Background Claude terminal'" class="child-terminal">
     <header>
-      <div><h3>Background session</h3><p :title="attachment.state?.cwd">{{ attachment.status === 'opening' ? 'Opening connection…' : attachment.state?.status === 'exited' ? 'Connection ended' : attachment.status === 'error' ? 'Connection unavailable' : 'Connected to Claude' }}</p></div>
+      <div><h3>{{ attachment.teammate ? 'Teammate terminals' : 'Background session' }}</h3><p :title="attachment.state?.cwd">{{ attachment.status === 'opening' ? 'Opening connection…' : attachment.state?.status === 'exited' ? 'Connection ended' : attachment.status === 'error' ? 'Connection unavailable' : 'Connected to Claude' }}</p></div>
       <button type="button" class="child-terminal__size" :aria-expanded="expanded" @click="emit('toggle-expanded')">{{ expanded ? 'Minimize' : 'Expand' }}</button>
       <button type="button" @click="emit('close', attachment.requestId)">{{ attachment.status === 'opening' ? 'Cancel' : 'Close connection' }}</button>
     </header>
     <p v-if="attachment.problem" role="alert">{{ attachment.problem }}</p>
-    <div v-if="attachment.state" ref="viewport" class="child-terminal__viewport" aria-label="Background Claude output" />
-    <p class="child-terminal__hint">Closing the terminal does not stop a running background session. Use Stop to end it.</p>
+    <div v-if="attachment.state" ref="viewport" class="child-terminal__viewport" :aria-label="attachment.teammate ? 'Claude teammate terminal output' : 'Background Claude output'" />
+    <p class="child-terminal__hint">{{ attachment.teammate ? 'Close connection to detach. The teammate keeps running.' : 'Closing the terminal does not stop a running background session. Use Stop to end it.' }}</p>
   </section>
 </template>
 <script setup lang="ts">
