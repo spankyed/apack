@@ -198,7 +198,7 @@ export type ClaudePromptHostRequest = { requestId: string; revision: number; exp
 )
 export type ClaudePromptHostResponse = { requestId: string } & (
   | { kind: 'read'; box?: import('./ui-prompt-host.ts').ClaudePromptHostBox }
-  | { kind: 'fill'; filled: boolean }
+  | ({ kind: 'fill' } & import('./ui-prompt-host.ts').ClaudePromptHostFillResult)
   | { kind: 'suggest'; shown: boolean }
   | { kind: 'copy'; copied: boolean }
   | { kind: 'selection'; submitted: boolean }

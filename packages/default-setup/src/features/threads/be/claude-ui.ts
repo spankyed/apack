@@ -136,7 +136,7 @@ function bind(view: ClaudeUiView): void {
   const promptHost: ClaudePromptHost = {
     available: () => viewCurrent(view) && view.owner === owner && view.promptFocused,
     async read(signal, expiresAt) { const answer = await ask({ kind: 'read' }, signal, expiresAt); return answer?.kind === 'read' ? answer.box : undefined },
-    async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
+    async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' ? { filled: answer.filled, change: answer.change } : false },
     async selection(signal, expiresAt) {
       const reply = await createClaudeSelectionReply(signal, expiresAt, () => viewCurrent(view) && view.owner === owner)
       if (!reply.url) return undefined

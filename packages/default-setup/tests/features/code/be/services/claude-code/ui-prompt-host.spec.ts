@@ -46,6 +46,26 @@ it('allows a virtual anchor inside a paint span only from the private terminal',
   f.hosts.close()
 })
 
+it('returns a validated applied draft exclusively to the private terminal host', async () => {
+  const write = vi.fn((_value: unknown) => true)
+  const hosts = createClaudePromptHosts(write)
+  const changed = { text: 'draft 👋', cursor: 8 }
+  const apply = vi.fn(async () => ({ filled: true, change: changed }))
+  hosts.register('view', { read: async () => undefined, fill: apply })
+  hosts.receive(fill('remote'))
+  hosts.receive(fill('owned'), true)
+  await flush()
+  expect(write.mock.calls.map(([value]) => value)).toEqual([
+    { type: 'control_response', response: { subtype: 'success', request_id: 'remote', response: { filled: true } } },
+    { type: 'control_response', response: { subtype: 'success', request_id: 'owned', response: { filled: true, change: changed } } },
+  ])
+  apply.mockResolvedValueOnce({ filled: true, change: { text: 'x', cursor: 2 } })
+  hosts.receive(fill('invalid'), true)
+  await flush()
+  expect(write).toHaveBeenLastCalledWith({ type: 'control_response', response: { subtype: 'success', request_id: 'invalid', response: { filled: true } } })
+  hosts.close()
+})
+
 it('validates host reads and falls back when the mounted editor refuses or fails', async () => {
   const f = fixture(); f.host.read.mockResolvedValueOnce({ text: 'x', cursor: 2 })
   f.hosts.receive(read()); await flush(); expect(f.answer()).toMatchObject({ response: { response: { text: '', cursor: 0 } } })

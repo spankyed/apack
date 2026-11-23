@@ -535,6 +535,19 @@ it('preserves exact decoration boundaries through a long list rewrite', () => {
   bridge.dispose()
 })
 
+it('reports the actual host-fill text change, excluding no-ops and stale fills', () => {
+  editor.commands.setContent('initial draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const previous = bridge.revision
+    expect(bridge.fillHostDraft({ mode: 'append', text: ' with context' }, previous)).toEqual({
+      filled: true, change: { text: 'initial draft with context', cursor: 26 },
+    })
+    expect(bridge.fillHostDraft({ mode: 'replace', text: 'stale' }, previous)).toEqual({ filled: false })
+    expect(bridge.fillHostDraft({ mode: 'replace', text: 'initial draft with context' }, bridge.revision)).toEqual({ filled: true })
+  } finally { bridge.dispose() }
+})
+
 it('keeps inward decoration projection around canonical structural Markdown delimiters', () => {
   editor.commands.setContent('safe')
   const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn()), text = '**styled**'

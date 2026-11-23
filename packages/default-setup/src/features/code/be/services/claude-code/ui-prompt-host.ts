@@ -27,10 +27,11 @@ const fill = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH), mode: z
 const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy', 'ui_read_selection']), client_id: z.string(), surface: z.enum(['desktop', 'mobile', 'vscode']) }).passthrough()
 export type ClaudePromptHostBox = z.infer<typeof box>
 export type ClaudePromptHostFill = z.infer<typeof fill>
+export type ClaudePromptHostFillResult = { filled: boolean; change?: ClaudePromptHostBox }
 export interface ClaudePromptHost {
   available?(): boolean
   read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>
-  fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>
+  fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean | ClaudePromptHostFillResult>
   suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>
   selection?(signal: AbortSignal, expiresAt: number): Promise<ClaudeUiSelection | undefined>
   copy?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>
@@ -58,7 +59,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       return host && host.available?.() !== false ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : []
     },
     detach,
-    receive(line: ControlRequestLine, allowVirtualDecorations = false): boolean {
+    receive(line: ControlRequestLine, ownedTerminal = false): boolean {
       if (!['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy', 'ui_read_selection'].includes(line.request.subtype)) return false
       if (closed || seen.has(line.request_id)) return true
       const read = line.request.subtype === 'ui_prompt_read', filling = line.request.subtype === 'ui_prompt_fill', copying = line.request.subtype === 'ui_copy', selecting = line.request.subtype === 'ui_read_selection'
@@ -72,7 +73,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       const parsed = request.safeParse(line.request)
       const host = parsed.success && parsed.data.surface === 'desktop' ? hosts.get(parsed.data.client_id) : undefined
       const input = !filling ? undefined : fill.safeParse({ text: line.request.text, mode: line.request.mode, ...(line.request.ifEmpty!==undefined?{ifEmpty:line.request.ifEmpty}:{}), ...(line.request.focus!==undefined?{focus:line.request.focus}:{}), ...(line.request.decorations !== undefined ? { decorations: line.request.decorations } : {}) })
-      const fillInput = input?.success && (allowVirtualDecorations || !input.data.decorations?.some(run => run.virtualText !== undefined)) ? input.data : undefined
+      const fillInput = input?.success && (ownedTerminal || !input.data.decorations?.some(run => run.virtualText !== undefined)) ? input.data : undefined
       const textInput = !read && !filling && !selecting ? z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH).safeParse(line.request.text) : undefined
       const requestText = textInput?.success && (copying || textInput.data.trim()) ? textInput.data : undefined
       if (!host || host.available?.() === false || (selecting && !host.selection) || (filling && !fillInput) || (!read && !filling && !selecting && (!(copying ? host.copy : host.suggest) || requestText === undefined))) { reply(fallback); return true }
@@ -98,7 +99,12 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       }).then(value => {
         if (selecting) { const valid = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH).optional(), instance_id: z.string().min(1).max(256).optional() }).strict().safeParse(value); finish(valid.success && valid.data.text ? valid.data : {}) }
         else if (read) { const valid = box.safeParse(value); finish(valid.success ? valid.data : fallback) }
-        else finish(filling ? { filled: value === true } : copying ? { copied: value === true } : { shown: value === true })
+        else if (filling) {
+          const result = value as ClaudePromptHostFillResult | undefined
+          const filled = value === true || result?.filled === true
+          const change = filled && ownedTerminal ? box.safeParse(result?.change) : undefined
+          finish(change?.success ? { filled, change: change.data } : { filled })
+        } else finish(copying ? { copied: value === true } : { shown: value === true })
       }, () => finish())
       return true
     },

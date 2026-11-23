@@ -140,7 +140,10 @@ watch(() => props.hostRequest, request => {
   }
   const available = !props.disabled && !submitting.value && Date.now() < request.expiresAt && document.hasFocus() && !!bridge
   if (request.kind === 'read') { const box = available ? bridge?.readDraft() : undefined; emit('host', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) }) }
-  else if (request.kind === 'fill') emit('host', { requestId: request.requestId, kind: 'fill', filled: available && (bridge?.fillDraft(request.input, request.revision) ?? false) })
+  else if (request.kind === 'fill') {
+    const result = (available ? bridge?.fillHostDraft(request.input, request.revision) : undefined) ?? { filled: false }
+    emit('host', { requestId: request.requestId, kind: 'fill', ...result })
+  }
   else emit('host', { requestId: request.requestId, kind: 'suggest', shown: available && (bridge?.showSuggestion(request.text, request.revision) ?? false) })
 })
 function updateDraft(text: string) {

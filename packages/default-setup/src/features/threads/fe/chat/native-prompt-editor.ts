@@ -243,13 +243,22 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   const ownerWindow = dom.ownerDocument.defaultView
   ownerWindow?.addEventListener('blur', onWindowBlur)
   publish()
+  function currentDraft() {
+    if (disposed || editor.isDestroyed || editor.view.composing) return
+    const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
+    return snapshot ? { text: snapshot.text, cursor: snapshot.cursor } : undefined
+  }
   return {
     get revision() { return revision },
     readDraft() {
       synchronizeSelection()
-      if (disposed || editor.isDestroyed || editor.view.composing) return
-      const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
-      return snapshot ? { text: snapshot.text, cursor: snapshot.cursor } : undefined
+      return currentDraft()
+    },
+    fillHostDraft(input: DraftFill, expectedRevision: number) {
+      const before = currentDraft()
+      const filled = placeDraft(input, expectedRevision, 'app')
+      const change = filled && before ? currentDraft() : undefined
+      return change && change.text !== before?.text ? { filled, change } : { filled }
     },
     fillDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number): boolean {
       return placeDraft(input, expectedRevision, 'app')

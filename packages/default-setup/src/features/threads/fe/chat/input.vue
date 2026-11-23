@@ -587,8 +587,8 @@ watch(() => props.nativePrompt?.hostRequest, request => {
     const box = available ? promptEditor?.readDraft() : undefined
     emit('native-prompt-host-response', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) })
   } else {
-    const filled = available && (promptEditor?.fillDraft(request.input, request.revision) ?? false)
-    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'fill', filled })
+    const result = (available ? promptEditor?.fillHostDraft(request.input, request.revision) : undefined) ?? { filled: false }
+    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'fill', ...result })
   }
 })
 watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })

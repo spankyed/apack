@@ -348,6 +348,7 @@ async function initialize(){
   const roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
+  const hookPresence=await import('/$bunfs/root/chunk-cg8hxhdr.js');
   const commandInput=await import('/$bunfs/root/chunk-bkgw23zx.js');
   const commandOutput=await import('/$bunfs/root/chunk-1svntv7y.js');
   const commandTags=await import('/$bunfs/root/chunk-nhvhsxnt.js'),commandEntities=await import('/$bunfs/root/chunk-25a3z2dq.js');
@@ -398,7 +399,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -441,12 +442,42 @@ function restoreHosts(n){
  originalContext=undefined;wrappedContext=undefined;
 }
 const nativeFillForRequester=new AsyncLocalStorage();
-function requestNativeFill(n,args){
- const captured=nativeFillForRequester.getStore();
- const local=captured&&captured.text===args.text&&captured.mode===args.mode
+const nativeFillOrigin=new AsyncLocalStorage(), desktopPromptChanges=new Map();
+function retireDesktopPromptChanges(clientId){
+ const state=desktopPromptChanges.get(clientId);desktopPromptChanges.delete(clientId);state?.abort.abort();
+}
+function reportDesktopPromptChange(n,clientId,box,origin){
+ if(!clientViewCurrent(n,clientId))return;
+ let state=desktopPromptChanges.get(clientId);
+ if(!state){state={count:0,abort:new AbortController()};desktopPromptChanges.set(clientId,state)}
+ state.pending={...box,origin};
+ if(state.running)return;
+ state.running=true;
+ queueMicrotask(async()=>{
+  try{
+   while(state.pending&&!state.abort.signal.aborted&&clientViewCurrent(n,clientId)){
+    const change=state.pending;state.pending=undefined;
+    // Bound feedback from plugins filling in response to the original hook, like the REPL.
+    if(state.count>=8)break;
+    try{
+     if(!n.hookPresence.tl('prompt.change'))break;
+     state.count++;
+     await n.runtime.$i('prompt.change',{signal:state.abort.signal})(change);
+    }catch{if(!state.abort.signal.aborted)process.stderr.write('apack: native desktop prompt.change failed\n')}
+   }
+  }finally{state.running=false;state.pending=undefined}
+ });
+}
+async function requestNativeFill(n,args){
+ const fill=nativeFillForRequester.getStore();
+ const captured=fill?.text===args.text&&fill.mode===args.mode?fill:undefined;
+ const local=captured?.decorations?.some(run=>run.start===run.end&&run.virtualText)
   ? ownedPromptDecorations(n,captured.decorations,args.text,true) : undefined;
  const decorations=local?.some(run=>run.start===run.end)?local:args.decorations;
- return askHost('ui_prompt_fill',{...args,...(decorations!==undefined?{decorations:nativeThemePromptDecorations(n,decorations)}:{})});
+ const view=clientViews.get(args.clientId),origin=captured?.origin;
+ const result=await askHost('ui_prompt_fill',{...args,...(decorations!==undefined?{decorations:nativeThemePromptDecorations(n,decorations)}:{})});
+ if(result?.filled===true&&result.change&&origin?.kind==='plugin'&&typeof origin.name==='string'&&view===clientViews.get(args.clientId))reportDesktopPromptChange(n,args.clientId,result.change,origin);
+ return result;
 }
 function installHosts(n){
  if(wrappedContext&&n.runtime.ey()===wrappedContext)return;
@@ -455,11 +486,11 @@ function installHosts(n){
  originalContext=current;
  releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async args=>(await askHost('ui_copy',args))?.copied,readSelection:async args=>{const value=await askHost('ui_read_selection',args);return value===undefined?n.runtime.j_r('aborted'):n.runtime.CXs(value.text,value.instance_id)},readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await requestNativeFill(n,args))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
  const remote=n.runtime.AXs(current.composer),selection=n.runtime.RXs(),has=answer=>n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes(answer));
- wrappedContext={...current,selection:{read:()=>has('ui_read_selection')?selection.read():current.selection?.read()},composer:{...current.composer,read:()=>remote.read(),write:(text,mode,decorations)=>{
+ wrappedContext={...current,selection:{read:()=>has('ui_read_selection')?selection.read():current.selection?.read()},composer:{...current.composer,read:()=>remote.read(),attribute:(origin,write)=>
+  nativeFillOrigin.run(origin,()=>current.composer.attribute?current.composer.attribute(origin,write):write()),write:(text,mode,decorations)=>{
   if(!has('ui_prompt_fill'))return current.composer.write(text,mode,decorations);
   // Keep original reach, refusal, and size checks. Only the selected owned desktop requester can use the pre-filter runs.
-  const captured=decorations?.some(run=>run.start===run.end&&run.virtualText)?{text,mode,decorations}:undefined;
-  return nativeFillForRequester.run(captured,()=>remote.write(text,mode,decorations));
+  return nativeFillForRequester.run({text,mode,decorations,origin:nativeFillOrigin.getStore()},()=>remote.write(text,mode,decorations));
  },propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
  n.runtime.Zao(wrappedContext);
 }
@@ -681,7 +712,8 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false,queueRequested=f
    decorations=decorations.map(run=>({...run,start:offset(run.start),end:offset(run.end)}));
   }
   const write=()=>composer.write(value,input.mode,decorations);
-  return composer.attribute?composer.attribute(input.origin,write):write();
+  // Transporting the person's draft to Enter is a composer change, not a second plugin fill notification.
+  return composer.attribute?composer.attribute({kind:'composer'},write):write();
  }};
  const result=await n.runtime.$i('prompt.fill',{core:{'prompt.fill':core}})({text,mode:'replace',origin:{kind:'plugin',name:'apack-native-terminal'}});
  const actual=(await composer.read()).text,filled=result.isFilled===true&&actual===text;
@@ -713,6 +745,7 @@ function ownedPromptDecorations(n,runs,text,latest){
  return n.runtime.qgr(normalized);
 }
 function clearEdit(clientId){
+ retireDesktopPromptChanges(clientId);
  const state=edits.get(clientId);if(!state)return;
  edits.delete(clientId);state.active?.abort();
  for(const item of state.waiting)item.answer({...item.box,superseded:true});state.waiting=[];
@@ -725,6 +758,8 @@ function editPrompt(n,clientId,box,key,by){
   for(const item of state.waiting)item.answer({...item.box,superseded:true});
   state.waiting=[];state.box=box;state.offered=undefined;state.stale=!!state.active;return box;
  }
+ const change=desktopPromptChanges.get(clientId);
+ if(change&&state.box.text!==box.text){change.count=0;change.pending=undefined}
  return new Promise(answer=>{state.waiting.push({box,key,answer});drainEdit(n,clientId,state);});
 }
 function drainEdit(n,clientId,state){
