@@ -1744,8 +1744,8 @@ declare const ClaudeNativeMcpUrlOperationSchema: z.ZodObject<{
         accept: "accept";
         decline: "decline";
         cancel: "cancel";
-        open: "open";
         continue: "continue";
+        open: "open";
     }>;
 }, z.core.$strict>;
 
@@ -1782,8 +1782,8 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
             accept: "accept";
             decline: "decline";
             cancel: "cancel";
-            open: "open";
             continue: "continue";
+            open: "open";
         }>;
         label: z.ZodString;
         selected: z.ZodBoolean;
@@ -1886,11 +1886,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
-                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
+                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1965,8 +1965,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    pending: "pending";
                     idle: "idle";
+                    pending: "pending";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -2208,8 +2208,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        warning: "warning";
         feedback: "feedback";
+        warning: "warning";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -4205,6 +4205,7 @@ type ClaudeUiToolGroup = z.infer<typeof toolGroup>;
 type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
     instanceRevision: number;
     nativeHint?: boolean;
+    idleReturnHint?: string;
     groupExpanded?: boolean;
     displayText: string;
     outputRewritten?: boolean;
@@ -11442,11 +11443,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -11521,8 +11522,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -13179,6 +13180,7 @@ declare const renderResult: z.ZodObject<{
         }, z.core.$strict>>>;
     }, z.core.$strict>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
+    idle_return_hint: z.ZodOptional<z.ZodString>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
