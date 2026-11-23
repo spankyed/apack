@@ -91,6 +91,28 @@ describe('reportError', () => {
     expect(JSON.stringify(reported)).not.toContain('sk-proj-abcdef123456');
   });
 
+  it('unwraps SuppressedError chains and redacts secrets across primary and disposal failures', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let caught: unknown;
+    try {
+      using stack = new DisposableStack();
+      stack.defer(() => { throw new Error('close failed with sk-ant-secret1234567890'); });
+      throw new Error('primary failed with sk-proj-abcdef1234567890');
+    } catch (err) {
+      caught = err;
+    }
+    const { logs, outgoing } = capture(() => {
+      reportError({ error: caught, source: 'packs', operation: 'install' });
+    });
+    expect(outgoing).toHaveLength(1);
+    const message = String(outgoing[0]!.event.message);
+    expect(message).toContain('primary failed with');
+    expect(message).toContain('(cleanup also failed: close failed with');
+    expect(message).not.toContain('An error was suppressed during disposal');
+    expect(JSON.stringify({ logs, outgoing })).not.toContain('sk-proj-abcdef1234567890');
+    expect(JSON.stringify({ logs, outgoing })).not.toContain('sk-ant-secret1234567890');
+  });
+
   it('without step context logs a system error and sends it to the app to show', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('boom');

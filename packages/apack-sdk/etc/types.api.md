@@ -172,9 +172,8 @@ export interface DocumentEntity extends BaseEntity {
 export type DocumentShortCode = ShortCode<typeof SDK_SHORT_CODES.Document>;
 
 // @public (undocumented)
-export namespace EARS {
-    const // (undocumented)
-    Entity: {
+export const EARS: {
+    readonly Entity: {
         readonly Flow: "Flow";
         readonly Node: "Node";
         readonly Action: "Action";
@@ -182,41 +181,41 @@ export namespace EARS {
         readonly Document: "Document";
         readonly Collection: "Collection";
     };
+    readonly RelKind: {
+        readonly CONTAINS: "contains";
+        readonly TRANSITIONS_TO: "transitions_to";
+        readonly INSTANCE_OF: "instance_of";
+        readonly PARENT_OF: "parent_of";
+    };
+    readonly RoleKind: {
+        readonly ROOT_FLOW: "root_flow";
+        readonly ENTRY_EVENT: "entry_event";
+    };
+    readonly AttrKindValues: {
+        readonly Role: "role";
+    };
+    readonly AttrKind: {
+        readonly Custom: <T extends string>(k: T) => T & EARS_2.AttrKind;
+        readonly Role: "role";
+    };
+};
+
+// @public (undocumented)
+export namespace EARS {
     // (undocumented)
     export type AttributePayloads = EARS_2.AttributePayloads;
     // (undocumented)
     export type AttributeStore = EARS_2.AttributeStore;
     // (undocumented)
     export type AttributeType = EARS_2.AttributeType;
-    const // (undocumented)
-    RelKind: {
-        readonly CONTAINS: "contains";
-        readonly TRANSITIONS_TO: "transitions_to";
-        readonly INSTANCE_OF: "instance_of";
-        readonly PARENT_OF: "parent_of";
-    };
     // (undocumented)
     export type AttributeTypeMap = EARS_2.AttributeTypeMap;
-    const // (undocumented)
-    RoleKind: {
-        readonly ROOT_FLOW: "root_flow";
-        readonly ENTRY_EVENT: "entry_event";
-    };
     // (undocumented)
     export type AttributeValue<K extends AttrKind = AttrKind> = EARS_2.AttributeValue<K>;
-    const // (undocumented)
-    AttrKindValues: {
-        readonly Role: "role";
-    };
-    const // (undocumented)
-    AttrKind: {
-        readonly Custom: <T extends string>(k: T) => T & EARS_2.AttrKind;
-        readonly Role: "role";
-    };
     // (undocumented)
     export type AttrKind = EARS_2.AttrKind;
     // (undocumented)
-    export type Entity = typeof Entity[keyof typeof Entity] | (string & {});
+    export type Entity = typeof EARS.Entity[keyof typeof EARS.Entity] | (string & {});
     // (undocumented)
     export type EntityId<E extends string = string> = EARS_2.EntityId<E>;
     // (undocumented)

@@ -1,5 +1,9 @@
+// Node 24+ / ES2026 `Error.isError` typed directly so source consumers without `ESNext.Error` in `lib` still typecheck.
+const isError = (value: unknown): value is Error =>
+  (Error as ErrorConstructor & { isError(v: unknown): v is Error }).isError(value);
+
 function isSuppressedError(value: unknown): value is Error & { error: unknown; suppressed: unknown } {
-  return Error.isError(value) && value.name === 'SuppressedError' && 'error' in value && 'suppressed' in value;
+  return isError(value) && value.name === 'SuppressedError' && 'error' in value && 'suppressed' in value;
 }
 
 function collectSuppressedChain(value: unknown, out: unknown[], visited: Set<unknown>): void {
@@ -25,10 +29,10 @@ export function errorMessage(error: unknown): string {
     const chain: unknown[] = [];
     collectSuppressedChain(error, chain, new Set());
     if (chain.length === 0) return error.message;
-    const [primary, ...cleanup] = chain.map((item) => (Error.isError(item) ? item.message : String(item)));
+    const [primary, ...cleanup] = chain.map((item) => (isError(item) ? item.message : String(item)));
     return cleanup.length > 0 ? `${primary} (cleanup also failed: ${cleanup.join('; ')})` : primary!;
   }
-  return Error.isError(error) ? error.message : String(error);
+  return isError(error) ? error.message : String(error);
 }
 
 /** Whether `object` has `key` itself, not by inheritance: a key such as `__proto__` read as data */

@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit",
-    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest": "node ../../scripts/ensure-packages-built.ts",
     "test": "vitest run",
     "generate:entries": "apack pack generate-entries",
     "build": "apack pack build",

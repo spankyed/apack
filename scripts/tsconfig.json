@@ -12,6 +12,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "allowJs": true,
     "checkJs": true,
     "strict": true,
