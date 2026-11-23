@@ -40,6 +40,17 @@ const installed=function(...args){
  if(child.stdin){const write=child.stdin.write,end=child.stdin.end;child.stdin.write=function(...values){try{if(!ending)remember(values[0],values[1])}catch{invalid=true}return Reflect.apply(write,this,values)};child.stdin.end=function(...values){try{remember(values[0],values[1]);classify()}catch{invalid=true}ending=true;try{return Reflect.apply(end,this,values)}finally{ending=false}}}
  if(child.stdout){const emit=child.stdout.emit;child.stdout.emit=function(event,...values){if(event==='data'&&kind&&outputBytes<=32768)try{const bytes=typeof values[0]==='string'?Buffer.from(values[0],this.readableEncoding??'utf8'):values[0];outputBytes+=bytes.length;if(outputBytes<=32768)output.push(Buffer.from(bytes))}catch{invalid=true}return Reflect.apply(emit,this,[event,...values])}}
  child.once('close',(code,signal)=>{if(kind==='main'&&BigInt(startedAt)===latestMainStartedAt)mainObservationPending=false;if(closed||!kind||invalid)return;const cancelled=args[0]?.signal?.aborted===true,command=observedCommand();const event={sessionId:payload.session_id,parentPid:process.pid,childPid:child.pid,kind,generation,...(policyKey===undefined?{}:{policyKey}),...(commands?{shellPrefix:commands.prefix??null}:{}),command,...(command!==executedCommand?{executedCommand}:{}),startedAt,code,signal:cancelled?'aborted':signal,stdout:Buffer.concat(output).toString('utf8'),truncated:outputBytes>32768,...(kind==='main'?{totalCostUsd:payload.cost.total_cost_usd}:{tasks:payload.tasks.slice(0,256).map(task=>({id:task.id,status:task.status}))})};
+ // Native policy can change before the app receives its next state report.
+ // Keep observing the native helper, but never publish output from superseded settings.
+ function scopeCurrent(){
+  try{
+   if(policyKey!==undefined&&readPolicy?.()!==policyKey)return false;
+   if(!commands)return true;
+   const current=readCommands();
+   return !!current&&current[kind]===commands[kind]&&(current.prefix??null)===(commands.prefix??null);
+  }catch{return false}
+ }
+ if(!scopeCurrent())return;
  if(kind==='main'&&typeof policyKey==='string'&&BigInt(startedAt)===latestMainStartedAt&&Buffer.byteLength(JSON.stringify(event))<=262144)latestMainObservation={...event};
  // The owned worker starts this observer before CLI code. Keep only its latest original main
  // result until registration claims startup, without delaying or reexecuting the native helper.
@@ -56,10 +67,10 @@ const installed=function(...args){
  // to clear before projecting that failure; a newer settled result replaces it.
  if(kind==='main'&&reconcileSignalledMain?.()){
   if(event.signal){
-   if(BigInt(startedAt)===latestMainStartedAt)signalledMain=event;
+   if(BigInt(startedAt)===latestMainStartedAt)signalledMain={event,scopeCurrent};
    return;
   }
-  if(signalledMain&&BigInt(startedAt)>=BigInt(signalledMain.startedAt))signalledMain=undefined;
+  if(signalledMain&&BigInt(startedAt)>=BigInt(signalledMain.event.startedAt))signalledMain=undefined;
  }
  reportResult(event);});
  return result;
@@ -68,11 +79,11 @@ const installed=function(...args){
  else warn();
  function reportResult(event){void publish('/native-status',event).catch(()=>{})}
  return{
-  get signalledMainStartedAt(){return signalledMain?.startedAt},
+  get signalledMainStartedAt(){return signalledMain?.event.startedAt},
   reconcileMainStatus(startedAt,snapshot){
-   const event=signalledMain;
+   const event=signalledMain?.event;
    if(closed||!event||startedAt!==event.startedAt)return;
-   if(event.sessionId!==snapshot.sessionId||event.command!==snapshot.statusCommand){signalledMain=undefined;return;}
+   if(!signalledMain.scopeCurrent()||event.sessionId!==snapshot.sessionId||event.command!==snapshot.statusCommand){signalledMain=undefined;return;}
    if(snapshot.cachedMainStatus!==null)return;
    signalledMain=undefined;reportResult(event);
   },
