@@ -183,7 +183,6 @@ function install(): void {
   <key>ProgramArguments</key>
   <array>
     <string>${process.execPath}</string>
-    <string>--disable-warning=ExperimentalWarning</string>
     <string>${path.join(REPO_ROOT, 'scripts', 'janitor.ts')}</string>
   </array>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>${pathEnv}</string></dict>

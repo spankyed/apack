@@ -3,10 +3,12 @@ import { defaultServerConditions } from 'vite';
 
 // Vitest's own defaults: Vite's server conditions without 'module'
 const conditions = ['@apackdev/source', ...defaultServerConditions.filter((c) => c !== 'module')];
-import { config as dotenvConfig } from 'dotenv';
-
-// Load environment variables from .env file
-dotenvConfig();
+// Load environment variables from .env file when present
+try {
+  process.loadEnvFile();
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+}
 
 export default defineConfig({
   /* Vite‑level plugins -------------------------------------------------- */

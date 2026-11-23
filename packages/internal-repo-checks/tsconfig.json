@@ -12,7 +12,8 @@
     "allowJs": true,
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
-    "target": "ES2022",
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,

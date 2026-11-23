@@ -47,7 +47,7 @@ describe('packages/renderer/src', () => {
   it('names no folder for a layer, at any depth', () => {
     const dirs = read('paths', fs.readdirSync(SRC, { recursive: true, withFileTypes: true }))
       .filter((e) => e.isDirectory())
-      .map((e) => ({ name: e.name, path: path.relative(SRC, path.join(e.parentPath ?? e.path, e.name)) }));
+      .map((e) => ({ name: e.name, path: path.relative(SRC, path.join(e.parentPath, e.name)) }));
 
     // `core/shared/debug/` was three of these deep: the rule is only worth anything below the top level too
     const LAYER_NAMES = ['core', 'shared', 'lib', 'libs', 'utils', 'util', 'common', 'helpers', 'misc'];

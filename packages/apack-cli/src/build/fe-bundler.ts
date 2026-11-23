@@ -665,7 +665,7 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
         emptyOutDir: false,
         sourcemap: !release,
         minify: release,
-        target: 'es2022',
+        target: 'es2024',
         cssCodeSplit: false,
         rollupOptions: {
           /**

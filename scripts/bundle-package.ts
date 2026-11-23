@@ -164,7 +164,7 @@ const sharedOptions = {
   bundle: true,
   format: 'esm',
   platform: 'node',
-  target: 'node22',
+  target: 'node24',
   metafile: true,
   logLevel: 'warning',
   conditions: ['@apackdev/source', 'module'],
@@ -217,7 +217,7 @@ async function main(): Promise<void> {
     splitting: true,
     format: 'esm',
     platform: 'node',
-    target: 'node22',
+    target: 'node24',
     metafile: true,
     logLevel: 'warning',
     // Inlined workspace packages bundle from source (see their package.json exports)
@@ -230,7 +230,7 @@ async function main(): Promise<void> {
   const commonjs = config.commonjsEntries && await build({
     entryPoints: Object.fromEntries(Object.entries(config.commonjsEntries).map(([name, src]) => [name, path.join(pkgDir, src)])),
     outdir: path.join(stagedDir, 'dist'), outExtension: { '.js': '.cjs' },
-    bundle: true, format: 'cjs', platform: 'node', target: 'node22', metafile: true,
+    bundle: true, format: 'cjs', platform: 'node', target: 'node24', metafile: true,
     conditions: ['@apackdev/source'], plugins: [externalizeAllButInlined],
   });
 

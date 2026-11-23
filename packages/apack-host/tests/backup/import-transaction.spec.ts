@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -12,22 +13,26 @@ vi.mock('@elmdb/ears/database', async importOriginal => ({
 }));
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) fs.removeSync(root); });
+afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 const log = { info: () => {}, warn: () => {} };
+const writeFile = (file: string, content: string) => {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+};
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-import-transaction-'));
   roots.push(root);
   const primary = path.join(root, 'lmdb');
   const backup = path.join(root, 'backup');
   const media = path.join(root, 'media');
-  fs.outputFileSync(path.join(primary, 'data.mdb'), 'incumbent');
-  fs.outputFileSync(path.join(backup, 'lmdb', 'data.mdb'), 'candidate');
-  fs.outputFileSync(path.join(backup, 'media', 'asset'), 'candidate media');
-  fs.writeJsonSync(path.join(backup, 'metadata.json'), { databases: ['lmdb'] });
+  writeFile(path.join(primary, 'data.mdb'), 'incumbent');
+  writeFile(path.join(backup, 'lmdb', 'data.mdb'), 'candidate');
+  writeFile(path.join(backup, 'media', 'asset'), 'candidate media');
+  writeFile(path.join(backup, 'metadata.json'), JSON.stringify({ databases: ['lmdb'] }));
   const store = {
     path: primary,
-    copyTo: (dest: string) => fs.copy(primary, dest),
-    replaceWith: (dir: string) => fs.copySync(path.join(dir, 'data.mdb'), path.join(primary, 'data.mdb')),
+    copyTo: (dest: string) => fsp.cp(primary, dest, { recursive: true }),
+    replaceWith: (dir: string) => fs.cpSync(path.join(dir, 'data.mdb'), path.join(primary, 'data.mdb'), { recursive: true }),
   } satisfies BackupStore;
   return { root, primary, backup, media, store };
 }

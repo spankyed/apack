@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

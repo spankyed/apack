@@ -246,8 +246,8 @@ describe('compiled content admission', () => {
     const indexFile = path.join(dir, 'content.json');
     const read = fs.readFileSync;
     let reads = 0;
-    const capture = vi.spyOn(fs, 'readFileSync').mockImplementation(((file, ...args) => {
-      const bytes = read(file, ...args);
+    const capture = vi.spyOn(fs, 'readFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      const bytes = Reflect.apply(read, fs, [file, ...args]);
       if (String(file) === indexFile && ++reads === 1) fs.writeFileSync(indexFile, JSON.stringify({ ...index, packId: 'replacement-pack' }));
       return bytes;
     }) as typeof fs.readFileSync);
