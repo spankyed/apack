@@ -1744,8 +1744,8 @@ declare const ClaudeNativeMcpUrlOperationSchema: z.ZodObject<{
         accept: "accept";
         decline: "decline";
         cancel: "cancel";
-        continue: "continue";
         open: "open";
+        continue: "continue";
     }>;
 }, z.core.$strict>;
 
@@ -1782,8 +1782,8 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
             accept: "accept";
             decline: "decline";
             cancel: "cancel";
-            continue: "continue";
             open: "open";
+            continue: "continue";
         }>;
         label: z.ZodString;
         selected: z.ZodBoolean;
@@ -1886,11 +1886,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
+                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
-                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1965,8 +1965,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    idle: "idle";
                     pending: "pending";
+                    idle: "idle";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -2208,8 +2208,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        feedback: "feedback";
         warning: "warning";
+        feedback: "feedback";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -4484,6 +4484,7 @@ interface CliServiceType {
         openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & {
             cwd?: string;
             accountedCostUsd?: number;
+            onSessionCost?: (sessionId: string, totalCostUsd: number) => void;
         }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>;
         getConversation(key: string): {
             owner: ClaudeConversation;
@@ -11437,11 +11438,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
+            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
-            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -11516,8 +11517,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -12603,8 +12604,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

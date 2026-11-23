@@ -186,6 +186,7 @@ export default {
             threadId: "$.event.data.payload.threadId",
             sessionId: "$.event.data.payload.sessionId",
             costUsd: "$.event.data.payload.costUsd",
+            sessionCostUsd: "$.event.data.payload.sessionCostUsd",
             durationMs: "$.event.data.payload.durationMs",
             toolCallCount: "$.event.data.payload.toolCallCount",
             mutatedFileCount: "$.event.data.payload.mutatedFileCount",

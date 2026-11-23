@@ -11,7 +11,7 @@ import type { ClaudeNativeLaunch } from '../../../common/native-launch.ts'
 import {ClaudeNativeLaunchSchema,snapshotClaudeNativeLaunch} from './native-launch.ts'
 import type { ClaudePreparedNativeTerminal, ClaudeNativeTerminalOwner, ClaudeNativeTerminalOptions } from './terminal-owner.ts'
 import type { QueryHandle } from './query.ts'
-import { createClaudeConversation, type ClaudeConversation, type ClaudeTurnConsumer } from './conversation.ts'
+import { createClaudeConversation, type ClaudeConversation, type ClaudePrintCostOptions, type ClaudeTurnConsumer } from './conversation.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { registerThreadTeardown } from '#features/threads/be/thread-teardown.ts'
@@ -116,7 +116,7 @@ function stop(key: string): void {
 }
 registerThreadTeardown(stop)
 
-export async function openConversation(key: string, launchKey: string, spawn: () => Promise<QueryHandle>, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0): Promise<ClaudeConversation> {
+export async function openConversation(key: string, launchKey: string, spawn: () => Promise<QueryHandle>, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0, readCostOptions?: () => ClaudePrintCostOptions | undefined): Promise<ClaudeConversation> {
   if (!Number.isFinite(accountedCostUsd) || accountedCostUsd < 0) throw new Error('Invalid accounted native cost baseline')
   if (starting.has(key) || conversations.has(key) || terminals.has(key) || activeHandles.has(key)) throw new Error('Claude conversation already exists')
   const ticket = {}
@@ -126,7 +126,13 @@ export async function openConversation(key: string, launchKey: string, spawn: ()
     if (starting.get(key) !== ticket) throw new Error('Claude conversation startup was cancelled')
     const handle = await spawn()
     if (starting.get(key) !== ticket) { handle.kill(); throw new Error('Claude conversation startup was cancelled') }
-    const owner = createClaudeConversation(handle, consumeAutonomous, accountedCostUsd)
+    const cost = readCostOptions?.()
+    const owner: ClaudeConversation = createClaudeConversation(handle, consumeAutonomous, accountedCostUsd, cost && {
+      ...cost,
+      report(sessionId, total) {
+        if (conversations.get(key)?.owner === owner) cost.report(sessionId, total)
+      },
+    })
     terminalResumes.delete(key)
     conversations.set(key, { owner, launchKey })
     const cleanup = () => {

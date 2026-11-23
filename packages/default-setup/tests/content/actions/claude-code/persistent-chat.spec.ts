@@ -3,7 +3,10 @@ import { PassThrough } from 'node:stream';
 import { mockService, startApp, importFlows, type TestApp } from '@apackdev/testing/harness';
 import { actionLabel } from '../../../_support/flows.ts';
 import { importCompiledContent } from '@apackdev/sdk/utils';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { sessionJournalPath } from '#features/code/be/services/claude-code/sessions.ts';
 import { readFileSync } from 'node:fs';
 import { services, type Services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
@@ -219,3 +222,39 @@ it('retains explicit channel intent while a fork queues input and refuses live n
  expect(getClaudeState(services,id)?.queuedMessage?.text).toBe('Review')
  expect(await chat({threadId:id,text:'Invalid',channels:['--dangerously-load-development-channels']},services,{} as never,'')).toMatchObject({success:false})
 })
+
+it('applies idle native charges once when the next result and the completion flow arrive', async () => {
+  const config = await mkdtemp(resolve(tmpdir(), 'claude-print-cost-'));
+  const sessionId = '4a625f55-b81d-43ec-85bf-af03a48072d3';
+  const cwd = '/fixture', env = { CLAUDE_CONFIG_DIR: config };
+  const journal = sessionJournalPath(sessionId, cwd, env);
+  const { id } = repository.threadCommands.create({ topic: 'Native accounting', instructions: '', tags: [] });
+  repository.threadCommands.update(id, { context: { claudeCode: { sessionId, totalCostUsd: 1 } } });
+  const events = new PassThrough({ objectMode: true });
+  const native = { events, close: async () => { events.end(); }, kill: () => events.end() } as unknown as QueryHandle;
+  await mkdir(dirname(journal), { recursive: true });
+  try {
+    const report = vi.fn((observedSession: string, totalCostUsd: number) => {
+      const current = getClaudeState(services, id);
+      if (current?.sessionId === observedSession && totalCostUsd > (current.totalCostUsd ?? 0)) {
+        repository.threadCommands.update(id, { context: { claudeCode: { ...current, totalCostUsd } } });
+      }
+    });
+    const owner = await store.openConversation(id, 'fixture', async () => native, async () => {}, 1, () => ({ cwd, env, report }));
+    events.write({ type: 'system', subtype: 'init', session_id: sessionId, cwd });
+    const record = (nativeSession: string, total: number) => JSON.stringify({ type: 'cost-state', sessionId: nativeSession, totalCostUSD: total });
+    await appendFile(journal, record(sessionId, 1.25) + '\n' + record('foreign', 8) + '\n');
+    await vi.waitFor(() => expect(getClaudeState(services, id)?.totalCostUsd).toBe(1.25));
+    expect(getClaudeState(services, id)?.turns).toBeUndefined();
+    await complete({ threadId: id, sessionId, costUsd: 1, sessionCostUsd: 1 }, services);
+    expect(getClaudeState(services, id)).toMatchObject({ totalCostUsd: 1.25, turns: 1 });
+    await complete({ threadId: id, sessionId, costUsd: .75, sessionCostUsd: 1.75 }, services);
+    expect(getClaudeState(services, id)).toMatchObject({ totalCostUsd: 1.75, turns: 2 });
+    await appendFile(journal, record(sessionId, 2));
+    await owner.close();
+    expect(getClaudeState(services, id)?.totalCostUsd).toBe(1.75);
+  } finally {
+    await store.closeIdleConversation(id);
+    await rm(config, { recursive: true, force: true });
+  }
+});

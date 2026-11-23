@@ -215,7 +215,7 @@ export async function consumeStream(
 
   // Extracted from the `result` line directly — survives even if handle.result
   // rejects (error subtypes like error_during_execution).
-  let resultFromLine: { sessionId: string; text: string; totalCostUsd: number; durationMs: number; subtype?: string; isError?: boolean; errors?: string[] } | undefined;
+  let resultFromLine: { sessionId: string; text: string; totalCostUsd: number; sessionCostUsd?: number; durationMs: number; subtype?: string; isError?: boolean; errors?: string[] } | undefined;
 
   /** Finalize the current message and create a new "Thinking…" placeholder. */
   function splitMessage() {
@@ -715,10 +715,12 @@ export async function consumeStream(
           result: ((line as any).result || '').slice(0, 200),
           errors: (line as any).errors,
         });
+        const reportedTotal = (line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage)
         resultFromLine = {
           sessionId: (line as any).session_id ?? '',
           text: (line as any).result ?? '',
-          totalCostUsd: Math.max(0, ((line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage)) - (ctx.costBaseline ?? 0)),
+          totalCostUsd: Math.max(0, reportedTotal - (ctx.costBaseline ?? 0)),
+          sessionCostUsd: ctx.persistent && line.session_id && Number.isFinite(reportedTotal) && reportedTotal >= 0 ? reportedTotal : undefined,
           durationMs: (line as any).duration_ms ?? 0,
           subtype: (line as any).subtype,
           isError: (line as any).is_error === true,
@@ -846,6 +848,7 @@ export async function consumeStream(
         threadId,
         sessionId: result.sessionId,
         costUsd: result.totalCostUsd,
+        sessionCostUsd: resultFromLine?.sessionCostUsd,
         durationMs: result.durationMs,
         toolCallCount: priorSegmentToolCount + toolActivity.entries.length + nestedToolCount,
         mutatedFileCount: mutatedPaths.length,
@@ -919,6 +922,7 @@ export async function consumeStream(
           threadId,
           sessionId: resultFromLine?.sessionId || state?.sessionId || '',
           costUsd: resultFromLine?.totalCostUsd ?? 0,
+          sessionCostUsd: resultFromLine?.sessionCostUsd,
           durationMs: resultFromLine?.durationMs ?? 0,
           toolCallCount: priorSegmentToolCount + toolActivity.entries.length + nestedToolCount,
           mutatedFileCount: mutatedPaths.length,

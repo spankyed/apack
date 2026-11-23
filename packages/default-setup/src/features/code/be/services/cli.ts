@@ -13,7 +13,7 @@ import type { ClaudeNativeTerminalHandoffOptions } from './claude-code/handle-st
 import { getModels } from './claude-code/models.ts'
 import { setClaudeAutoMemory } from './claude-code/memory.ts'
 import type { ClaudeModelCatalog } from './claude-code/host-controls.ts'
-import type { ClaudeConversation, ClaudeTurnConsumer } from './claude-code/conversation.ts'
+import type { ClaudeConversation, ClaudePrintCostOptions, ClaudeTurnConsumer } from './claude-code/conversation.ts'
 import { getSessionPlan, type ClaudeSessionPlanOptions } from './claude-code/plan.ts'
 import type { ClaudePlan } from './claude-code/host-controls.ts'
 import './thread-history.ts'
@@ -77,7 +77,7 @@ export interface CliServiceType {
     parseMcpElicitationForm: typeof parseMcpElicitationForm
     validateMcpElicitationForm: typeof validateMcpElicitationForm
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
-    openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string; accountedCostUsd?: number }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
+    openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string; accountedCostUsd?: number; onSessionCost?: (sessionId: string, totalCostUsd: number) => void }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
     getConversation(key: string): { owner: ClaudeConversation; launchKey: string } | undefined
     isConversationBusy(key: string): boolean
     isCurrentTurn(key: string, handle: QueryHandle): boolean
@@ -265,9 +265,14 @@ function createCliService(): CliServiceType {
         return claudeCode.query({ replayUserMessages: true, ...opts, env, cwd })
       },
       openConversation(key, launchKey, opts, consumeAutonomous) {
-        const { accountedCostUsd = 0, ...queryOptions } = opts
-        return openConversation(key, launchKey, async () => claudeCode.query({ ...queryOptions, env: await prepareClaudeEnvironment(queryOptions.env), cwd: opts.cwd ?? resolveCwd(),
-          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }, { promptSuggestions: true }), consumeAutonomous, accountedCostUsd)
+        const { accountedCostUsd = 0, onSessionCost, ...queryOptions } = opts
+        let cost: ClaudePrintCostOptions | undefined
+        return openConversation(key, launchKey, async () => {
+          const env = await prepareClaudeEnvironment(queryOptions.env), cwd = opts.cwd ?? resolveCwd()
+          if (onSessionCost && !queryOptions.noSessionPersistence) cost = { cwd, env, report: onSessionCost }
+          return claudeCode.query({ ...queryOptions, env, cwd,
+            prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }, { promptSuggestions: true })
+        }, consumeAutonomous, accountedCostUsd, () => cost)
       },
       getConversation,
       openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal, async launch => {
