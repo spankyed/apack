@@ -271,6 +271,7 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
   overscroll-behavior: contain;
 }
 .native-agent-view:has(.native-agent-composer--tools) > .native-agent-messages {
+  flex-basis: 6.5rem;
   min-height: 0;
 }
 </style>
