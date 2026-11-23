@@ -292,9 +292,9 @@ const MUTATIONS: readonly Mutation[] = [
     in: 'core-budget',
     from: 'Math.min(width.cores, cores)',
     to: 'width.cores',
-    // A one-core box against `build:default-setup`'s two: 1 against 2. On any box wider than the width the clamp is
+    // A one-core box against `test:external-pack:fork`'s two: 1 against 2. On any box wider than the width the clamp is
     // invisible, which is why this asks about the smallest machine rather than a plausible one
-    call: (lib) => lib.coresFor('build:default-setup', 1),
+    call: (lib) => lib.coresFor('test:external-pack:fork', 1),
   },
   {
     why: 'a share rounds to the nearest core rather than down',

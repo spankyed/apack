@@ -83,9 +83,8 @@ const runnerText = (stepName: string): string =>
 // setting `noEmit`, so it emits nothing a step whose product is `APP_OUTPUTS` could carry, and
 // `typecheck:sdk` runs that identical compile as its own step.
 describe('the chain builds every workspace that has a build', () => {
-  const OWNED_BY_COMPILE = '@app/default-setup';
   const EMITS_NOTHING = '@apackdev/sdk';
-  const ELSEWHERE = [OWNED_BY_COMPILE, EMITS_NOTHING];
+  const ELSEWHERE = [EMITS_NOTHING];
 
   it('names them all in build:runtime, or leaves them to another step', () => {
     const named = new Set(RUNTIME_BUILD_LEGS.map((leg) => leg.name));
@@ -135,14 +134,14 @@ describe('a pool step and its projects cache on the same inputs', () => {
   const poolStep = (kind: 'host' | 'pack'): ChainStep => CHAIN_STEPS.find((s) => s.name === `test:unit:${kind}`)!;
   const projects = (kind: 'host' | 'pack'): UnitSuite[] => UNIT_SUITES.filter((suite) => suite.kind === kind);
 
-  it.each(['host', 'pack'] as const)('%s reads everything its projects read', (kind) => {
+  it.each(['host'] as const)('%s reads everything its projects read', (kind) => {
     const declared = new Set(poolStep(kind).inputs);
     const missing = projects(kind)
       .flatMap((suite) => suiteInputs(suite, 'fast').filter((input) => !declared.has(input)).map((input) => `${suite.workspace} reads ${input}`));
     expect([...new Set(missing)]).toEqual([]);
   });
 
-  it.each(['host', 'pack'] as const)('%s declares nothing its projects cannot see', (kind) => {
+  it.each(['host'] as const)('%s declares nothing its projects cannot see', (kind) => {
     // Either provenance: it changes the preimage's command and never the declared inputs, which is what
     // keeps this question — does the step declare anything its projects cannot see — about the inputs alone
     const fingerprinted = new Set(projects(kind).flatMap((suite) => poolUnitFor(suite, kind, 'chain').inputs.map(repoRelative)));
@@ -262,7 +261,6 @@ describe('every pool runs at the width core-budget.ts says it does', () => {
    */
   const STEP_OF: Record<Pool, string> = {
     host: 'test:unit:host',
-    pack: 'test:unit:pack',
     integration: 'test:integration',
     native: 'test:native',
   };
@@ -471,9 +469,7 @@ describe("the chain runs every recorded file's check", () => {
     'session:check': 'runs the full chain over explicitly named branches in another checkout; nesting it in the chain would recurse',
     // These are commands over a rule a spec already asserts, so the recorded file is checked and the script is
     // a way to ask by hand.
-    'content-parity:check': 'a wrapper for `npm test -- tests/content`; those specs run in test:unit:pack',
     'sdk-modules:check': 'a wrapper for `sdk-bridge-drift.spec.ts`, which compares the generated file against a fresh render; it runs in test:unit:host',
-    'flow-export:check': 'a wrapper for `npm test -- tests/extensions/steps/export-example.spec.ts`; that spec runs in test:unit:pack, where it compares the flow DSL example rather than recording it',
   };
 
   /** Every `<name>:check` in the repo, as the label of the manifest declaring it and the script's name */

@@ -110,7 +110,7 @@ ends when the worker's pipe closes, and nothing read from outside tells that one
 Windows has no process groups to read, so nothing is judged there, nor in a pool of threads, whose one process's
 descendants are every file's.
 
-The run's dir is named `<prefix><pid>-XXXXXX`; `isolatedDataDir` first removes dirs with its prefix whose process is gone, left by runs that crashed before their teardown. The per-worker split matters when spec files run in parallel: without it, a spec resetting the media store deletes another worker's files mid-test. The entry uses only Node built-ins (`src/vitest.ts`, `vitest-worker.ts`, `vitest-teardown.ts`), so it loads without the `@apackdev/source` condition; the guard inlines `@apackdev/host`'s process reading. The bundle ships them as separate entries, since vitest loads the worker, guard and teardown modules by path. The global setup also `provide`s the vitest project's root (`PROJECT_ROOT_KEY`), which the harness `inject`s to find the pack. A pack's config sets no `resolve.conditions`: a pack resolves the `@apackdev` packages' published `dist` whether they came from the registry or a checkout link, so there is nothing to select, and `check:specifiers` fails a pack config that declares the `@apackdev/source` condition. This is the config `apack pack init` scaffolds (`apack-cli/src/commands/init.ts`). default-setup's `vitest.config.ts` uses `isolatedDataDir` and is a pack config too: it also declares no condition, and `npm run typecheck:pack` and `npm run test:external-pack` run `packages:ensure` first so the `dist` it reads is current.
+The run's dir is named `<prefix><pid>-XXXXXX`; `isolatedDataDir` first removes dirs with its prefix whose process is gone, left by runs that crashed before their teardown. The per-worker split matters when spec files run in parallel: without it, a spec resetting the media store deletes another worker's files mid-test. The entry uses only Node built-ins (`src/vitest.ts`, `vitest-worker.ts`, `vitest-teardown.ts`), so it loads without the `@apackdev/source` condition; the guard inlines `@apackdev/host`'s process reading. The bundle ships them as separate entries, since vitest loads the worker, guard and teardown modules by path. The global setup also `provide`s the vitest project's root (`PROJECT_ROOT_KEY`), which the harness `inject`s to find the pack. A pack's config sets no `resolve.conditions`: a pack resolves the `@apackdev` packages' published `dist` whether they came from the registry or a checkout link, so there is nothing to select, and `check:specifiers` fails a pack config that declares the `@apackdev/source` condition. This is the config `apack pack init` scaffolds (`apack-cli/src/commands/init.ts`). default-setup's `vitest.config.ts` uses `isolatedDataDir` and is a pack config too: it also declares no condition, and `npm run test:external-pack` runs `packages:ensure` first so the `dist` it reads is current.
 
 ## Keeping a checkout's packages current
 
@@ -125,10 +125,10 @@ carries no comments.
 
 | # | Door | Covers | Where |
 |---|---|---|---|
-| 1 | `npm run packages:ensure &&` in a root script | a repo command: `test`, `test:headed`, `test:explorer`, `test:external-pack`, `typecheck`, `typecheck:pack`, `build:default-setup`, `api:update` | root `package.json` |
+| 1 | `npm run packages:ensure &&` in a root script | a repo command: `test`, `test:headed`, `test:explorer`, `test:external-pack`, `typecheck`, `api:update` | root `package.json` |
 | 2 | that workspace's `pretest` | `npm test -w @apackdev/cli`, `-w @app/default-setup` and `-w @app/internal-repo-checks` run directly, which no root script wraps | each package's `package.json` |
 | 3 | `ensureCheckoutPackages(packRoot)` | `apack pack build`, `apack pack test`, `apack pack dev`, `dev:drive` — from any directory, for a pack whose packages are a checkout's — and every watched rebuild, which an edit to a unit's input triggers | `apack-cli/src/build/checkout-packages.ts`, called from `build/build-process.ts`, `commands/test.ts` and `commands/drive.ts` |
-| 4 | the `Build publishable packages` step | CI, whose typecheck step already built them through `typecheck:pack` | `.github/workflows/ci.yml` |
+| 4 | the `Build publishable packages` step | CI, for app and external-pack checks | `.github/workflows/ci.yml` |
 
 **Checkers** run inside a process that has already started, where the modules are loaded and rebuilding
 mid-run would be wrong. All they can do is fail, and say what to run.
@@ -160,8 +160,8 @@ Three things follow.
 
 One path is deliberately not in the table twice. `npm run dev` reaches door 3, because its
 dev launcher runs the built-in pack's watcher with `apack pack build --watch`, whose builds ensure —
-so the script carries no prefix of its own. For a full app build, run `npm run build:default-setup` before
-`npm run build:runtime`; `build:default-setup` ensures the package bundles before building the built-in pack.
+so the script carries no prefix of its own. For a full app build, run `npm run packages:ensure` and `npm run packs:stage` before
+`npm run build:runtime`.
 
 For an installed pack there is no checkout above it, every one of these is a no-op, and what npm
 delivered is what there is.
@@ -192,8 +192,7 @@ every input of every unit in `BUILD_UNITS`, so a saved package source runs door 
 The one that bites in practice is the facade. `packages/default-setup/tsconfig.json` declares no
 condition — it is a pack config — so **your editor type-checks default-setup against the packages'
 `dist`**. While `npm run dev` runs, an SDK type reaches the editor once the watcher has refreshed that `dist`.
-Without a watcher it stays stale until a command with a door runs (`npm run typecheck`, `typecheck:pack`,
-`build:default-setup`), or `npm run packages:ensure` on its own. This is the cost single mode trades for: a
+Without a watcher it stays stale until a command with a door runs (`npm run typecheck`), or `npm run packages:ensure` on its own. This is the cost single mode trades for: a
 pack, the built-in one included, compiles against the layout a pack author has, and in a checkout that layout
 is only as current as the last build.
 

@@ -151,7 +151,7 @@ Flows import via a compiled DSL JSON file. The DSL is validated against availabl
 
 ## Import Pack Content
 
-Settings → General → "Import Pack Content" imports a pack's compiled content from a directory (any pack's `runtime/content/` — `dist/runtime/content/` in a workspace pack after `npm run build:default-setup`). The settings system previews it with `previewPackContent(dir)` (`@apackdev/sdk/content`), then calls `importCompiledContent({ compiledDir, include, mode })` (`@apackdev/sdk/utils`), which runs the pack's registered applier for each `<key>.content.json` listed in `content.json` (actions, prompts, flows, documents, commands, notes, …), with media from `media/`.
+Settings → General → "Import Pack Content" imports a pack's compiled content from a directory (any pack's `runtime/content/` — `dist/runtime/content/` in a pack checkout after `apack pack build`). The settings system previews it with `previewPackContent(dir)` (`@apackdev/sdk/content`), then calls `importCompiledContent({ compiledDir, include, mode })` (`@apackdev/sdk/utils`), which runs the pack's registered applier for each `<key>.content.json` listed in `content.json` (actions, prompts, flows, documents, commands, notes, …), with media from `media/`.
 
 ## Content pipeline
 

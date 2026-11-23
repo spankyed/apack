@@ -11,6 +11,7 @@ import { readReportedRun, SPEC_DURATIONS_FILE, SPEC_DURATIONS_PROGRESS_FILE } fr
 import { durationsOf } from '../../../scripts/lib/spec-durations.ts';
 import { DEADLINE_FACTOR, SIZE_MS } from '../../../scripts/lib/unit-suites.ts';
 import { CONFIG_BY_HALF } from '../../../scripts/lib/spec-halves.ts';
+import { planTargets } from '../../../scripts/lib/spec-plan.ts';
 import { POOLS, type Pool } from '../../../scripts/lib/unit-pool.ts';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'reporter-agrees-'));
@@ -48,7 +49,7 @@ interface Run {
 }
 
 /**
- * Every shape a pool invokes vitest in, which is the population and not an example of it.
+ * Vitest invocation shapes exercised by the pools and the focused spec command.
  *
  * `standalone` is a package's own config run directly, the **pack** pool's shape — and the one where
  * `TestProject.name` is empty, so the fallback has a subject. `rootConfig` is the root config with
@@ -221,9 +222,12 @@ describe('the durations reporter agrees with the console it replaced', () => {
   });
 
   // The population, so neither case above can pass over a shape nobody runs
-  it('covers every shape a pool invokes vitest in', () => {
-    const invoked = (Object.keys(POOLS) as Pool[]).map((pool) =>
-      POOLS[pool].run(POOLS[pool].suites())[0]!.command);
+  it('covers the invocation shapes of the pools and the focused spec command', () => {
+    const focused = planTargets(['packages/internal-repo-checks/tests/spec-plan.spec.ts'], [], REPO_ROOT);
+    const invoked = [
+      ...focused.runs.map((run) => run.command),
+      ...(Object.keys(POOLS) as Pool[]).map((pool) => POOLS[pool].run(POOLS[pool].suites())[0]!.command),
+    ];
     expect(new Set(invoked), 'a pool invokes vitest some way these shapes do not cover')
       .toEqual(new Set(Object.keys(SHAPES).map((shape) => SHAPES[shape as Shape]().command)));
   });

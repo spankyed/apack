@@ -163,13 +163,6 @@ export interface Adaptation {
 /** The app's own files adapted from third-party code */
 export const ADAPTED: readonly Adaptation[] = [
   {
-    file: 'packages/default-setup/src/content/actions/codex/_helpers/goal-prompts.ts',
-    upstream: "OpenAI Codex's goal templates, https://github.com/openai/codex, codex-rs/ext/goal/templates/goals",
-    license: 'Apache-2.0',
-    // Apache-2.0 asks a derivative work to carry the license and the upstream's NOTICE
-    files: ['codex-LICENSE', 'codex-NOTICE'],
-  },
-  {
     file: 'packages/apack-host/src/features/application/fe/input.ts',
     upstream: "VueUse's useMagicKeys, https://github.com/vueuse/vueuse, packages/core/useMagicKeys",
     license: 'MIT',

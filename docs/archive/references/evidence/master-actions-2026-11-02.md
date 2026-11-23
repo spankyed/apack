@@ -55,7 +55,7 @@ Inclusive stack categories can overlap; their times are not additive wall-time s
   capture under that stack. The snapshot file itself is 1,115,265 bytes. These are transient sampled JS
   allocation estimates, not retained memory, native allocations or exact byte accounting.
 - **Message timestamp formatting is a smaller, simpler renderer lead.** `formatTime` in
-  [message.vue](../../../../packages/default-setup/src/features/threads/fe/chat/message.vue) calls
+  [message.vue](https://github.com/spankyed/apack/blob/18d8a47b19495498f5a4bf52b41dae684c6efc12/packages/default-setup/src/features/threads/fe/chat/message.vue) calls
   `Date.toLocaleTimeString` with options during rendering. Inclusive sampled time was a median
   131.1 ms (46.7–293.9 ms). Any reusable formatter must preserve default locale, timezone and displayed
   values; the startup capture does not establish its effect on warm thread-opening latency.

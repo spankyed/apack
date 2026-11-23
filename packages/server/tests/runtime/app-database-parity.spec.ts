@@ -1,10 +1,11 @@
 import { _declarationRevision } from '@apackdev/sdk/build';
 // The API's boot and a tool opening the data dir (openAppDatabase, which apack db uses) read the same entities,
 // relations and roles: both open the store through @apackdev/host/database, and the tool reads the installed packs'
-// manifests where the API registers their code. Runs the built-in packs' built runtimes (npm run build:default-setup).
+// manifests where the API registers their code. Runs the built-in packs' built runtimes (npm run packs:stage).
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Ears } from '@elmdb/ears';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
@@ -21,7 +22,7 @@ const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
 const { unbindHost } = await import('@apackdev/sdk/runtime/internals');
 const { untypedCreate } = await import('@apackdev/sdk/ears');
 
-const PACKAGES_DIR = path.resolve(__dirname, '..', '..', '..');
+const PACKAGES_DIR = checkoutShippedPacksDir(path.resolve(__dirname, '../../../..'));
 
 afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 

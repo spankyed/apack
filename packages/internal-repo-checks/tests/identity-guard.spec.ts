@@ -35,9 +35,7 @@ const ALLOWED: Record<string, { patterns: readonly PatternId[]; why: string }> =
   'packages/apack-sdk/src/logger/logger.ts': {
     patterns: ['node-env'], why: 'whether debug logging is on by default — a build-mode question, not an identity one',
   },
-  'packages/default-setup/src/features/brain/be/system.ts': {
-    patterns: ['node-env'], why: 'whether the flow inspector defaults on — a build-mode question, not an identity one',
-  },
+
 };
 
 type PatternId = 'data-dir' | 'env-read' | 'channel' | 'node-env';

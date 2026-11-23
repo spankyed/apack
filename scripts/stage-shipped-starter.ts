@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -123,27 +122,6 @@ async function stagePackagedShippedPacks(): Promise<void> {
   const root = process.env.APACK_BUILD_ROOT;
   if (!root) throw new Error('Starter staging requires an app build session');
   const metadata = readBuildManifest(root);
-  const lock = selectedLock();
-  if (process.env.APACK_SHIPPED_PACKS_LOCK || fs.existsSync(lock)) {
-    const shippedPackIds = await stagePinnedShippedPacks(root, metadata.version, readShippedPackLock(lock), cache);
-    fs.writeFileSync(path.join(root, 'build-manifest.json'), JSON.stringify({ ...metadata, shippedPackIds }, null, 2) + '\n');
-  } else {
-    if (!process.env.SKIP_DEFAULT_SETUP_BUILD) {
-      const npmCli = process.env.npm_execpath;
-      if (!npmCli) throw new Error('Run starter staging through npm when compiling the workspace pack');
-      execFileSync(process.execPath, [npmCli, 'run', 'build', '-w', '@app/default-setup'], { cwd: repo, stdio: 'inherit' });
-    }
-    const archiveDir = path.join(root, 'pack-archives');
-    execFileSync(process.execPath, [
-      '--import', 'tsx', 'packages/apack-cli/scripts/export-built-pack.ts',
-      path.join(repo, 'packages', 'default-setup'), archiveDir,
-    ], { cwd: repo, stdio: 'inherit' });
-    const archives = fs.readdirSync(archiveDir).filter(name => name.endsWith('.tgz'));
-    if (archives.length !== 1) throw new Error(`Expected one starter archive in ${archiveDir}`);
-    const archive = path.join(archiveDir, archives[0]!);
-    const [sha256] = fs.readFileSync(`${archive}.sha256`, 'utf8').trim().split(/\s+/);
-    if (!sha256 || !/^[a-f0-9]{64}$/.test(sha256)) throw new Error(`Invalid checksum for ${archive}`);
-    const id = await stageShippedPack(archive, sha256, path.join(root, SHIPPED_PACKS_DIRECTORY), metadata.version);
-    fs.writeFileSync(path.join(root, 'build-manifest.json'), JSON.stringify({ ...metadata, shippedPackIds: [id] }, null, 2) + '\n');
-  }
+  const shippedPackIds = await stagePinnedShippedPacks(root, metadata.version, readShippedPackLock(selectedLock()), cache);
+  fs.writeFileSync(path.join(root, 'build-manifest.json'), JSON.stringify({ ...metadata, shippedPackIds }, null, 2) + '\n');
 }

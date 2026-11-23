@@ -171,12 +171,6 @@ export const POOLS = {
     // with-source supplies the @apackdev/source condition the host suites resolve under
     run: (stale: readonly UnitSuite[], workers?: number) => [{ suites: stale, command: 'node', args: ['scripts/with-source.mjs', 'npx', 'vitest', 'run', ...projectArgs(stale), ...workerArgs(workers), ...reporterArgs()] }],
   },
-  pack: {
-    half: 'fast' as Half,
-    suites: () => UNIT_SUITES.filter((suite) => suite.kind === 'pack'),
-    // `--` so npm forwards the reporter flags to vitest rather than reading them itself
-    run: (stale: readonly UnitSuite[], workers?: number) => stale.map((suite) => ({ suites: [suite], command: 'npm', args: ['test', '-w', suite.workspace, '--', ...workerArgs(workers), ...reporterArgs()] })),
-  },
   integration: {
     half: 'integration' as Half,
     suites: () => INTEGRATION_SUITES,

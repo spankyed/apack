@@ -157,7 +157,7 @@ describe('isolated editing sessions', () => {
     expect(result.stdout).toContain('Combined validation passed');
     const commands = fs.readFileSync(path.join(dir, 'commands'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
     expect(commands.map(command => command.args)).toEqual([
-      ['ci', '--no-audit', '--no-fund'], ['run', 'build:default-setup'], ['run', 'build:runtime'],
+      ['ci', '--no-audit', '--no-fund'], ['run', 'packages:ensure'], ['run', 'packs:stage'], ['run', 'build:runtime'],
       ['run', 'chain', '--', '--strict', '--all', '--cores', '2'],
     ]);
     expect(commands.every(command => command.cwd !== repo)).toBe(true);

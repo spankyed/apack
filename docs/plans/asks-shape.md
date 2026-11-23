@@ -79,8 +79,7 @@ resolves the invoked ask. A spec's mock of `#generated/events` that a machine's 
 
 - `npm run typecheck` before each commit.
 - `npm run spec` for what the package touched, then `npm run chain -- --no-native` once a package is complete.
-- A public export of the SDK changed: `npm run api:update`. default-setup's facade changed: `npm run facade:update -w
-  @app/default-setup`. An event added to a contract: `npm run generate:entries -w @app/default-setup`.
+- A public export of the SDK changed: `npm run api:update`. default-setup's facade changed: `npm run facade:update in the default-setup checkout`. An event added to a contract: `npm run generate:entries` in the default-setup checkout.
 - A package is one commit, or one per feature for package 6.
 
 ## Done

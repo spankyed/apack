@@ -29,7 +29,6 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
 /** One pack the app ships, and one that is not in `packages/` at all, reached the same way */
 const PACKS = [
-  { label: 'the pack the app ships', component: 'packages/default-setup/src/features/notes/fe/canvas.vue' },
   { label: 'a pack outside the workspace', component: 'tests/packs/external-pack/src/features/memos/fe/settings.vue' },
 ];
 

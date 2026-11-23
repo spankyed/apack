@@ -151,7 +151,7 @@ unless you rebuild first:
 | `packages/apack-host/src/**`, `packages/apack-sdk/src/**`, `packages/server/src/**` | `npm run build:server` (bundles them into the API) |
 | `packages/renderer/src/**` | `npm run build -w @app/renderer` |
 | `packages/main/src/**`, `packages/preload/src/**` | `npm run build -w @app/main`, `-w @app/preload` |
-| a built-in pack (`packages/default-setup/**`) | `npm run build:default-setup` |
+| the distribution lock | `npm run packs:stage` |
 
 A first instrumented run that prints nothing usually means this, not that the line wasn't reached.
 

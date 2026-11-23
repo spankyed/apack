@@ -364,10 +364,10 @@ describe('a step keys on a staged publish tree only if it reads one', () => {
 
   /** The data is a list, so the case mutates it rather than trusting that it could fail */
   it('names a step that starts keying on one', () => {
-    const compile = CHAIN_STEPS.find((step) => step.name === 'build:default-setup')!;
+    const compile = CHAIN_STEPS.find((step) => step.name === 'packs:stage')!;
     const widened = { ...compile, inputs: [...compile.inputs, `packages/apack-ui/${PUBLISH_TREE}`] };
     expect(unexplained([widened]), 'a step given a staged tree was not reported').toEqual([
-      'build:default-setup keys on a staged publish tree and does not read one — spread PACKAGE_BUILD_READS',
+      'packs:stage keys on a staged publish tree and does not read one — spread PACKAGE_BUILD_READS',
     ]);
   });
 
@@ -539,7 +539,7 @@ describe('a unit suite whose specs name build output declares it', () => {
   // boundaries it also matched `APACK_DEV_PACK_DIRS`, which names a pack's *source* and says nothing about
   // anyone reading a built pack. A detector over identifiers has to mean the identifier.
   const readsPack = (texts: string[]): boolean =>
-    texts.some((text) => /\bPACK_DIR\b|default-setup['"`, )\]]*,?\s*['"`]dist|default-setup\/dist/.test(text));
+    texts.some((text) => /checkoutShippedPacksDir|shipped-distribution|\bPACK_DIR\b|default-setup['"`, )\]]*,?\s*['"`]dist|default-setup\/dist/.test(text));
 
   it('matches the ways a suite reaches a built pack, and nothing that merely contains one of their names', () => {
     expect(readsPack(['process.env.PACK_DIR']), 'the fixture variable').toBe(true);
@@ -625,7 +625,6 @@ describe('a pool declares the modules that run it', () => {
  */
 describe("a suite's half declares the config that runs it", () => {
   const host = UNIT_SUITES.find((suite) => suite.kind === 'host')!;
-  const pack = UNIT_SUITES.find((suite) => suite.kind === 'pack')!;
   const FAST = 'vitest.config.ts';
   const INTEGRATION = 'vitest.integration.config.ts';
 
@@ -636,11 +635,7 @@ describe("a suite's half declares the config that runs it", () => {
     expect(suiteInputs(host, 'integration'), 'the expensive half passes --config and reads no other').not.toContain(FAST);
   });
 
-  it('gives a pack suite neither, its own config being in its workspace', () => {
-    expect(suiteInputs(pack, 'fast').filter((input) => [FAST, INTEGRATION].includes(input))).toEqual([]);
-    expect(suiteInputs(pack, 'fast'), 'its own config is what it runs under, through its workspace')
-      .toContain(path.join('packages', pack.dir, 'vitest.config.ts'));
-  });
+
 
   it('declares generated fixture inputs only for the repository integration half', () => {
     const suite = UNIT_SUITES.find(suite => suite.dir === 'internal-repo-checks')!;
@@ -808,7 +803,7 @@ describe('a step keys on the command it runs', () => {
     expect(cached.filter((step) => step.inputs.includes('package.json')).map((step) => step.name),
       'a step keying on the whole manifest re-runs when any unrelated script is edited; add one here only '
       + 'with the dep-file evidence that it reads the manifest').toEqual([
-        'build:default-setup', 'facade:check', 'test:external-pack:contract', 'test:external-pack:fork',
+        'packs:stage', 'test:external-pack:contract',
         'typecheck:renderer', 'typecheck:server', 'check:specifiers', 'typecheck:scripts', 'check:tiers',
         'lint:check', 'test:unit:host', 'test:integration', 'build:runtime',
       ]);
@@ -819,7 +814,7 @@ describe('a step keys on the command it runs', () => {
 describe('consumer fingerprints observe runtime and shared test inputs', () => {
   it.each([
     ...['test:external-pack:app', 'test:smoke', 'test:e2e', 'test:packaged-authoring:app']
-      .map(name => [name, 'packages/default-setup/dist/runtime/fe.js']),
+      .map(name => [name, '.temp/shipped-distribution/shipped-packs/default-setup/runtime/fe.js']),
     ...['typecheck:scripts', 'lint:check', 'test:unit:host', 'test:e2e']
       .map(name => [name, 'tests/_support/conversations.ts']),
   ])(

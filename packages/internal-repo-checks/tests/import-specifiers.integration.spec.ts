@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findPackMachineSelectors, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findSwallowedAskEnds, findHandKeptAskEnds, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs, findMachineLibraryVueImports } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findPackMachineSelectors, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findSwallowedAskEnds, findHandKeptAskEnds, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs, findMachineLibraryVueImports } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -384,12 +384,6 @@ describe('findUpwardImports', () => {
       .toEqual(['packages/preload: holds code and has no layer, so nothing says which @apackdev packages it may import']);
   });
 
-  it('reports a workspace that is both layered and excused', () => {
-    const also = [...LAYERS, { name: '@app/default-setup', dir: 'packages/default-setup', allowed: [] }];
-    expect(findUpwardImports(also).filter((problem) => problem.startsWith('packages/default-setup:')))
-      .toEqual([`packages/default-setup: has a layer and is also excused as "${UNLAYERED_BY_DESIGN.get('packages/default-setup')!}" — drop one`]);
-  });
-
   /**
    * **The direction that asks whether `allowed` is too wide**, which the three above do not.
    *
@@ -490,7 +484,7 @@ describe('findElmdbImports', () => {
   const allowed = () => {
     write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@elmdb/ears/database';\n");
     write('packages/server/src/setup/backend.ts', "import { openDatabase } from '@elmdb/ears/database';\n");
-    write('packages/default-setup/src/features/notes/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
+    write('tests/packs/external-pack/src/features/memos/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
   };
 
   it('allows @elmdb/ears/database to load elmdb, and the host and the API to open a database through it', () => {
@@ -503,7 +497,7 @@ describe('findElmdbImports', () => {
     ['packages/apack-host/tests/store.spec.ts', "const elmdb = await import('elmdb');"],
     ['packages/server/src/setup/backend.ts', "import type { Database } from 'elmdb';"],
     ['packages/server/scripts/db/fix.ts', "const { Database } = require('elmdb/index.js');"],
-    ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@elmdb/ears/database';"],
+    ['tests/packs/external-pack/src/features/memos/be/system.ts', "import { openDatabase } from '@elmdb/ears/database';"],
     ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('elmdb');"],
   ])('flags %s', (file, code) => {
     allowed();
@@ -708,10 +702,6 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
   findNodePtyImports: () => {
     packFixture({ 'src/f.ts': "import { spawn } from 'node-pty';" });
     return findNodePtyImports(PACK_SRC, root);
-  },
-  findEmulatorImports: () => {
-    packFixture({ 'src/view.ts': "import { TerminalView } from '@apackdev/terminal-view';" });
-    return findEmulatorImports(PACK_SRC, root);
   },
   findSchemeRegistrations: () => {
     write('schemes.ts', "protocol.registerSchemesAsPrivileged([]);");
@@ -1957,33 +1947,6 @@ describe('findNodePtyImports', () => {
   });
 });
 
-describe('findEmulatorImports', () => {
-  it('reports a pack file reaching the emulator outside the seam', () => {
-    packFixture({ 'src/panel.vue.ts': "import type { ViewOptions } from '@apackdev/terminal-view';" });
-    expect(findEmulatorImports(PACK_SRC, root)).toEqual([
-      `${PACK_FIXTURE}/src/panel.vue.ts:1: @apackdev/terminal-view`,
-    ]);
-  });
-
-  it('allows the one module that owns the emulator, and its spec', () => {
-    // Both are real paths in this repo rather than fixture ones, so the allowance is checked against the
-    // constants the rule uses rather than against a tree written to match them
-    expect(findEmulatorImports(['packages/default-setup/src/features/code/fe/utils'], repoRootDir())).toEqual([]);
-    expect(findEmulatorImports(['packages/default-setup/tests/features/code/fe/utils'], repoRootDir())).toEqual([]);
-  });
-
-  it('reports the owner itself when it has stopped importing an emulator, so the rule cannot pass over nothing', () => {
-    // The owner is read from disk rather than from the population, so a fixture tree does not report one;
-    // here it is a root where the owner's path exists and holds no import
-    const empty = path.join(root, 'packages/default-setup/src/features/code/fe/utils');
-    fs.mkdirSync(empty, { recursive: true });
-    fs.writeFileSync(path.join(empty, 'terminal-pool.ts'), 'export const terminalPool = {};\n');
-    expect(findEmulatorImports(['src'], root)).toEqual([
-      'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts: imports no emulator, so this rule has no subject',
-    ]);
-  });
-});
-
 describe('findSchemeRegistrations', () => {
   const REGISTRAR = 'packages/main/src/modules/privileged-schemes/PrivilegedSchemes.ts';
   const CALL = "import { protocol } from 'electron';\nprotocol.registerSchemesAsPrivileged([]);";
@@ -2028,7 +1991,7 @@ describe('findRepositoryCasts', () => {
   it("checks every package's src/", () => {
     expect(packageSourceDirs()).toEqual(expect.arrayContaining([
       'packages/apack-sdk/src', 'packages/apack-host/src', 'packages/apack-testing/src',
-      'packages/server/src', 'packages/default-setup/src', 'packages/renderer/src',
+      'packages/server/src', 'packages/renderer/src',
     ]));
     writeAt('packages/new-package/src/index.ts', 'export const x = (repository as unknown as Repos).x;');
     fs.mkdirSync(path.join(root, 'packages', 'no-sources'), { recursive: true });

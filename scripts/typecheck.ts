@@ -26,7 +26,7 @@ import { box, coresFor } from './lib/core-budget.ts';
 import { pruneDepFiles } from './lib/dep-files.ts';
 import { asCount, parseFlags } from './lib/measure.ts';
 import { BUDGET_MS, whyKilled, type BudgetClass } from './lib/step-budgets.ts';
-import { RECORDED_FILE_CHECKS, CODEGEN, GENERATE_ENTRIES, type TypecheckCommand } from './lib/typecheck-jobs.ts';
+import { RECORDED_FILE_CHECKS, type TypecheckCommand } from './lib/typecheck-jobs.ts';
 import { ENSURE, LEG_BUDGET, TYPECHECK_LEGS } from './lib/typecheck-legs.ts';
 
 /**
@@ -66,13 +66,13 @@ function borrowed({ name, command, cwd, budget }: TypecheckCommand): Job {
   if (!step) throw new Error(`${name} is not a chain step, so there is no class or cost to borrow — `
     + 'either it was renamed or it belongs in TYPECHECK_LEGS');
   return { name, command, cwd, budget: budget ?? step.budget, cores: coresFor(name),
-    dependsOn: [ENSURE, CODEGEN] };
+    dependsOn: [ENSURE] };
 }
 
 /**
  * Everything this command runs, in the order a failure is reported in.
  *
- * Two ordered prerequisites and then the rest at once. `cores` is `coresFor`, not one per job: the budget is
+ * The packaging prerequisite runs before the reader jobs. `cores` is `coresFor`, not one per job: the budget is
  * cores, and weighing a four-core `api:check` at one admits more work than the box has — the
  * two-schedulers-with-different-weights defect this file's header describes, which the legs were also paying.
  */
@@ -82,12 +82,8 @@ const JOBS: readonly Job[] = [
     command: leg.command,
     budget: LEG_BUDGET,
     cores: coresFor(leg.name),
-    dependsOn: leg.name === ENSURE ? [] : [ENSURE, CODEGEN],
+    dependsOn: leg.name === ENSURE ? [] : [ENSURE],
   })),
-  // Generation captures the compiler/dependency installation before compiling declarations; it is a
-  // pack compilation prerequisite, rather than one of the single-tsc reader legs.
-  { ...GENERATE_ENTRIES, budget: 'suite',
-    cores: 1, dependsOn: [ENSURE] },
   ...RECORDED_FILE_CHECKS.map(borrowed),
 ];
 

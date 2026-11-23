@@ -1,6 +1,0 @@
-node_modules/
-dist/
-src/__generated__/
-.apack/
-.env
-.DS_Store

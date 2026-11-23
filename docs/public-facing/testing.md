@@ -172,6 +172,13 @@ it('reaches its system and hears back', async () => {
 
 Start one shell per test, in place of `startFeTestRuntime`: it binds the frontend host itself, and refuses when one is already bound. Your systems' lookups (roles, steps) still see everything your pack registered while it runs. `useShell()` runs in a component's setup or an effect scope (`effectScope().run(() => useShell())` in a test).
 
+### Drive queries and transactions
+
+When using the drive session API from `@apackdev/testing`, pass the system that handles database
+requests to both `session.query(code, system)` and `session.transact(code, system)`. The system is
+a full feature ref such as `my-pack/database`. Tests for the official starter can pass
+`default-setup/database`. Use the feature your installed pack actually provides.
+
 ## Services
 
 `services` (from `#generated/services`) contains your pack's own services, the SDK baseline, and host/dependency APIs selected by `consumes.services`. `mockService` replaces one for the current test. The inference example requires `host/inference`:

@@ -109,7 +109,7 @@ describe('a facade whose type comes from EARS', () => {
 
   // The table's other half: what this repository's SDK declares, as a pack in it resolves the SDK
   it("holds for this repository's SDK: each entry re-exports its package whole", () => {
-    const pack = path.resolve(import.meta.dirname, '..', '..', '..', 'default-setup');
+    const pack = path.resolve(import.meta.dirname, '../..');
     for (const [pkg, entry] of Object.entries(THROUGH_SDK)) expect(reExportProblem(pack, pkg, entry)).toBeNull();
   });
 });

@@ -437,6 +437,7 @@
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
+    "elkjs": "^0.9.3",
     "vitest": "^4.1.12"
   }
 }

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { BUILD_UNITS, repoRelative, REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { isPackInputPath } from '@apackdev/host/build/pack-inputs';
 import { CHECKOUT_DISTRIBUTION_DIRECTORY, SHIPPED_PACKS_LOCK_FILE } from '@apackdev/host/packs/assets';
 import { PUBLISH_TREE } from '@apackdev/host/build/published-manifest';
 import { coresFor } from './core-budget.ts';
@@ -556,34 +555,8 @@ const SUITE_RUNNER = ['scripts/test-unit-pool.ts', 'scripts/lib/unit-pool.ts', '
   'scripts/lib/spec-durations-reporter.ts', 'scripts/lib/over-budget.ts', 'scripts/lib/test-timeouts.ts',
   'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts',
   ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
-/**
- * What `build:default-setup` writes. `src/__generated__` is under the `src` it also reads, so it has to be declared:
- * `fingerprintUnit` excludes a unit's own output from its own fingerprint, and that is what stops the step
- * invalidating itself the first time codegen stops being byte-identical.
- */
-export const PACK_OUTPUTS = ['packages/default-setup/dist', 'packages/default-setup/src/__generated__'];
+export const PACK_OUTPUTS = [CHECKOUT_DISTRIBUTION_DIRECTORY];
 
-/**
- * Authored pack inputs for its build and facade: the pack's whole tree as `apack pack build` scopes it (`isPackInputPath`),
- * tests and their configs included, since the compiler's freshness record covers every authored file under the pack
- * root. Declaring only `src` and the manifests left the chain keeping a build after a test edit that the compiler then
- * refused to replay ("Compiler startup input changed"), failing the steps that consume it. Runtime app checks consume
- * PACK_OUTPUTS instead.
- */
-const PACK_DIR = 'packages/default-setup';
-// Dot files are left out as `inputFiles` leaves them out of every directory it walks: editor and OS droppings
-const PACK_SOURCES = fs.readdirSync(path.join(REPO_ROOT, PACK_DIR)).filter((name) => !name.startsWith('.') && isPackInputPath(name)).sort()
-  .map((name) => `${PACK_DIR}/${name}`);
-
-/**
- * What a step reads to derive something from the pack's sources, which `build:default-setup` and `facade:check` both do:
- * those sources, the tsconfig the declaration bundler compiles them with, the committed facade report, and
- * the `@apackdev/cli` bundle that does the deriving.
- *
- * Named once because the two lists are identical and nothing would notice them drifting apart — the failure
- * `packages:ensure`' inputs are derived to avoid, a few hundred lines up. The two steps differ in what they
- * *write*, not in what they read: `build:default-setup` declares `PACK_OUTPUTS`, and the check declares nothing.
- */
 /**
  * The root manifest, for a step that runs `apack pack build`: the exception to `ROOT`'s leaving it out.
  *
@@ -593,9 +566,6 @@ const PACK_SOURCES = fs.readdirSync(path.join(REPO_ROOT, PACK_DIR)).filter((name
  * startup input changed"), failing the step that consumed it rather than rebuilding the one that made it.
  */
 const PACK_BUILD_MANIFEST = ['package.json'];
-
-const PACK_DERIVED_READS = [...ROOT, ...PACK_BUILD_MANIFEST, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
-  'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
 
 /**
  * What building the fixture packs writes, derived from the fixtures themselves. These sit *inside*
@@ -642,8 +612,7 @@ const FIXTURE_TEST_OUTPUT = FIXTURE_PACKS.flatMap((name) => [`tests/packs/${name
  * Without it the pool skips the project while the thing it checks moves — see `EVERY_SOURCE`.
  */
 export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: true; inputs?: readonly string[]; integrationInputs?: readonly string[] }> = {
-  // `pretest: ensure-packages-built`, `@apackdev/testing`'s bundle, and its own compiled content under `dist/`
-  'default-setup': { packages: true, pack: true },
+  'apack-sdk': { pack: true },
   // `pretest: ensure-packages-built`; it packs and installs the published packages, and `dependency-runtime`
   // builds a fixture pack against default-setup's `dist`
   'apack-cli': { packages: true, pack: true },
@@ -723,7 +692,7 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     ...(reads.inputs ?? []),
     ...(half !== 'fast' ? reads.integrationInputs ?? [] : []),
     ...(reads.packages ? PACKAGE_BUILD_READS : []),
-    ...(reads.pack ? [...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] : []),
+    ...(reads.pack ? PACK_OUTPUTS : []),
     ...(reads.repo ? EVERY_SOURCE : []),
   ];
 }
@@ -841,21 +810,15 @@ const TYPECHECK_STEPS: readonly ChainStep[] = TYPECHECK_LEGS
  * steps unlocatable. The table keeps its literals; this is the reverse lookup, and `unit-pool.spec.ts` holds the two to each other so neither can
  * be renamed alone.
  */
-export const poolStepName = (pool: 'host' | 'pack' | 'integration' | 'native'): string =>
+export const poolStepName = (pool: 'host' | 'integration' | 'native'): string =>
   (pool === 'integration' || pool === 'native' ? `test:${pool}` : `test:unit:${pool}`);
 
-const POOL_STEPS: readonly ChainStep[] = (['host', 'pack'] as const).map((kind) => {
-  const suites = UNIT_SUITES.filter((suite) => suite.kind === kind);
-  return {
-    name: `test:unit:${kind}`,
-    // A pool fans out across workers
-    budget: 'suite' as const,
-    ...inputsForSuites(suites, 'fast'),
-    // It keeps a cache of its own, so the chain's `--all` has to reach inside it
-    forceArgs: ['--all'],
-  };
-});
-
+const HOST_UNIT_STEP: ChainStep = {
+  name: 'test:unit:host',
+  budget: 'suite',
+  ...inputsForSuites(UNIT_SUITES, 'fast'),
+  forceArgs: ['--all'],
+};
 
 export const CHAIN_STEPS: readonly ChainStep[] = [
   // Takes the package build lock, so it cannot share a lane with anything else that builds
@@ -934,27 +897,10 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-host/src/build/source-resolution.ts',
       'packages/apack-host/src/build/node-options.js', 'packages/apack-host/src/build/node-options.d.ts',
       'packages/apack-host/src/replace-dir.ts'] },
-  { name: 'packs:stage', budget: 'quick', outputs: [CHECKOUT_DISTRIBUTION_DIRECTORY],
-    inputs: [...ROOT, SHIPPED_PACKS_LOCK_FILE, 'package.json', ...workspace('apack-host'), ...PACKAGE_BUILD_READS,
+  { name: 'packs:stage', budget: 'suite', outputs: PACK_OUTPUTS,
+    inputs: [...ROOT, SHIPPED_PACKS_LOCK_FILE, 'package.json', ...workspace('apack-host'), ...workspaceDeps('apack-host').flatMap(dependencySource), ...PACKAGE_BUILD_READS,
       'scripts/with-source.mjs', 'scripts/stage-shipped-starter.ts', 'scripts/lib/shipped-pack-lock.ts', 'build/build-metadata.ts'] },
-  // The source workspace remains during the distribution cutover for its authoring checks.
-  // Includes cold compiler capture, codegen, all bundles and final source/input verification.
-  { name: 'build:default-setup', budget: 'suite', outputs: PACK_OUTPUTS,
-    // The pack's whole authored tree, tests included: `apack pack build` records all of it (`PACK_SOURCES`)
-    //
-    // The CLI's sources reach here through `PACKAGE_BUILD_OUTPUTS`, since an edit to them makes the
-    // `@apackdev/cli` build unit stale and `packages:ensure` rewrites the bundle this declares — and what the
-    // bundle does decides what this step writes.
-    //
-    // `etc` is the committed facade report, which the build reads to warn when the bundle it has just
-    // produced has outgrown it. A read is a read, so a hand-edited report invalidates this step, even though
-    // what it buys here is a warning rather than a verdict — `facade:check` below is the step that fails
-    inputs: PACK_DERIVED_READS },
-  // Compare the committed report with a verified current build; never regenerate shared inputs here.
-  // Source/dependency freshness uses the build's recorded context, not this inspecting command's compiler.
-  { name: 'facade:check', budget: 'quick',
-    inputs: [...PACK_DERIVED_READS, ...PACK_OUTPUTS] },
-  // The fixture packs depend on default-setup, so they need its snapshot from build:default-setup
+  // The fixture packs depend on default-setup, so they need the staged release snapshot
   //
   // The third place in this chain with a cache inside a cached step, and the one that is benign: `apack
   // build` skips `generate-entries` when its generation stamp matches. It takes no `forceArgs` because a skip
@@ -969,19 +915,19 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // by `:app`, changes every run, and is read by nothing
     excludes: FIXTURE_TEST_OUTPUT,
     inputs: [...ROOT, ...PACK_BUILD_MANIFEST, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-contract.sh',
-      'tests/acceptance/external-pack/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      'tests/acceptance/external-pack/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite. Its build,
   // archive and housekeeping phases take shares of this step's bound (`DEFAULT_FORK_BUDGET_MS`).
   { name: 'test:external-pack:fork', budget: 'scenario', outputs: [DEFAULT_FORK_OUTPUT],
-    inputs: [...PACK_DERIVED_READS, ...BOUNDED_RUNNER, 'tests/acceptance/external-pack/prepare-default-pack-fork.ts',
+    inputs: [...ROOT, ...PACKAGE_BUILD_READS, ...BOUNDED_RUNNER, 'tests/acceptance/external-pack/prepare-default-pack-fork.ts',
       ...['apack-host', ...workspaceDeps('apack-host')].flatMap(dependencySource), ...PACK_OUTPUTS] },
   // The widest inputs in the table, and honestly so: it compiles every workspace, the scripts and the
   // tests, and lints them. A change anywhere in the repo's TypeScript is a change to what it checks.
   ...TYPECHECK_STEPS,
-  ...POOL_STEPS,
+  HOST_UNIT_STEP,
   // The CLI specs that run a real build, install or child process. They need the built packages,
   // never the app — which is why they can run before `build` rather than behind it.
-  // Needs `build:default-setup` and not just `packages:ensure`, because `dependency-runtime` builds a pack that depends
+  // Needs `packs:stage` and not just `packages:ensure`, because `dependency-runtime` builds a pack that depends
   // on default-setup and so reads its `dist`. Table order promises nothing (`orderedSteps`), so the edge is declared.
   { name: 'test:integration', budget: 'acceptance', expensive: true,
     // It keeps a cache of its own, like the two unit pools, so `--all` has to reach inside it
@@ -1001,7 +947,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   { name: 'build:runtime', budget: 'suite', outputs: APP_OUTPUTS,
     inputs: [...ROOT, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host'].flatMap(workspace),
       'packages/server/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
-      ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   // App checks load the shipped pack separately at runtime. Its bytes can change while every
   // app workspace bundle stays identical, so their cache keys must include PACK_OUTPUTS too.
   // Each fixture pack's Playwright suite on one worker per three cores, with the default-fork lifecycle
@@ -1014,7 +960,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // name rather than by path, so nothing that reads a step's text can see the edge
     keepsOnFailure: FIXTURE_TEST_OUTPUT,
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
-      'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // Never cached: it drives real Electron with real timing and is the likeliest step to be flaky, and a
   // flaky pass cached green hides an intermittent failure indefinitely. 28s is cheap enough to always pay.
   // It declares what it writes although it is never cached and so never reads a stamp: the guard that a
@@ -1043,7 +989,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // so the next run would take it
     evidence: ['.apack/tests/results'],
     inputs: [...ROOT, 'tests/e2e/smoke', 'playwright.config.ts',
-      ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // The rest of the E2E suite, a gate like the others. A spec nothing runs breaks unseen when the app changes under
   // it, and a broken one is a broken promise about the app whether or not it was written to drive it; about 1.5
   // minutes of the chain, after `test:smoke`. Never cached, so a flaky pass is never what a later run reads.
@@ -1055,7 +1001,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // reader must not observe. Declaring them is what makes that a mutex instead of a scheduling accident;
     // the step is never cached, so it buys the ordering and costs no precision
     inputs: [...ROOT, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
-      ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   /**
    * Two steps, split at the app boundary: only the last of the check's nine phases launches one.
    *
@@ -1071,8 +1017,8 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     outputs: ['.apack/tests/authoring-handoff', '.apack/tests/authoring-handoff/work-ready', '.apack/tests/authoring-handoff/archive'],
     // APACK_HOST selects default-setup's built snapshot for the external pack's dependency.
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
-      'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   { name: 'test:packaged-authoring:app', budget: 'suite', expensive: true,
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
-      'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
+      'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

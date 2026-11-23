@@ -49,7 +49,7 @@ export type Contract = {
    only `answers`, every reply of an event still in `outgoing` fails to compile, and so does every broadcast of a
    moved one. Where an event is genuinely sent both ways, it splits into two events.
 4. **Rule and docs.** The guide's section states the rule as the contract now enforces it. Run `npm run api:update`
-   (SDK exports) and `npm run facade:update -w @app/default-setup`, and read each regenerated diff.
+   (SDK exports) and `npm run facade:update` in the default-setup checkout, and read each regenerated diff.
 5. **The pack rule, now statable** (optional, last). Codegen has types, so it can refuse an `outgoing` event whose
    payload holds a shape a feature's view serves. This is the step 5 rule from live queries. It ships only if it
    fires on no news in the tree that is actually right. If it does, keep the guide as the rule, as now.

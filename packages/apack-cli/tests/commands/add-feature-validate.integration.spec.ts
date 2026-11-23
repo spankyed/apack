@@ -165,7 +165,7 @@ describe('apack pack validate', () => {
   });
 
   describe('content sources (the checks code generation makes)', () => {
-    const DEFAULT_SETUP = path.resolve(import.meta.dirname, '../../../default-setup');
+    const DEFAULT_SETUP = path.resolve(import.meta.dirname, '../../../../.temp/shipped-distribution/shipped-packs/default-setup');
     function editManifest(edit: (manifest: any) => void) {
       const manifest = readManifest();
       edit(manifest);

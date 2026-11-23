@@ -16,8 +16,7 @@ export interface Difference {
 
 /**
  * Every tree a build writes, taken from the declarations that already say so rather than listed again here:
- * the five `BUILD_UNITS` (each `dist` and its publish tree), `PACK_OUTPUTS` (default-setup's `dist` and its
- * generated sources) and `APP_OUTPUTS` (the four app trees). A list of someone else's outputs is a guess, and
+ * the five `BUILD_UNITS` (each `dist` and its publish tree), `PACK_OUTPUTS` (the staged distribution) and `APP_OUTPUTS` (the four app trees). A list of someone else's outputs is a guess, and
  * this one would go stale the first time a package is added.
  *
  * The families are one argument rather than one each, so a fourth is an entry here and no new parameter. Both
@@ -73,7 +72,7 @@ export function snapshot(paths: readonly string[], root = REPO_ROOT): Map<string
  * Outputs measured as irreproducible, with the cause, so a difference at one of them is reported rather than
  * failing the run. Everything else failing is the point of the check.
  *
- * **Empty, and it took holding three entries to get there.** The first run recorded
+ * **Empty, and it took holding three entries to get there.** Before the pack moved out, the first run recorded
  * `pack-types.d.ts`, `action-defs.d.ts` and `snapshot.json`, all of them `tsc` printing a union's members in
  * the order it created the member types — an order that changes between builds, so the same sources emitted
  * different bytes. That was fixed rather than accepted: `sortLiteralUnions`

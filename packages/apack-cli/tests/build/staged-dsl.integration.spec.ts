@@ -35,6 +35,7 @@ describe('staged DSL definitions', () => {
       expect(first.snapshot.dslDefinitions).toEqual({ rows: original });
       expect(fs.readFileSync(path.join(dir, PACK_LAYOUT.feEntry), 'utf8')).not.toContain('before: true');
       const reads = fs.readFileSync(path.join(root, '.apack/reads.json'), 'utf8');
+      expect(JSON.parse(reads).phases.dslDefs).toContain('src/rows.ts');
       const cache = fs.readFileSync(path.join(dir, 'phase-cache.json'), 'utf8');
       fs.writeFileSync(path.join(root, 'src/rows.ts'), 'export interface Row { after: true }');
       const lifecycle = path.join(root, 'src/lifecycle.ts');

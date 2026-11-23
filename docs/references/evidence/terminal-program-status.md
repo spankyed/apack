@@ -161,7 +161,7 @@ Monorepo branch `session/terminal-program-status`: `de083926a2` (host and SDK) a
   record leaves `working`; the flow event per state entered; none for a `mismatched` record; a flow that
   listens running; no error with none listening.
 - `tests/features/code/fe/features/terminal/terminal-status.frontend.spec.ts`: 16 passed.
-- `npm run facade:update -w @app/default-setup`: the report gained the two events, `TerminalStatus`, the
+- `npm run facade:update` in the default-setup checkout: the report gained the two events, `TerminalStatus`, the
   row's seen mark, `statuses` on `TerminalInfo`, the setting and `recordStatusSeen`, and nothing else.
 - **Two changes from the goal as written, both narrower than a decision:**
   - A window says the person looked when what waits is `blocked` as well as `done` or `error`. Otherwise a

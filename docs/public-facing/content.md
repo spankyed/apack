@@ -25,7 +25,7 @@ Three things follow from the split that are easy to conflate. Editing a content 
 the content still reaches every user who has not edited that entity. **Apply and import are different operations**:
 an apply never overwrites the user's work, and an import is the user asking for the content back and does. And this
 repo's `content-parity` goldens record what an apply *produces*: re-recording them
-(`npm run content-parity:update -w @app/default-setup`) rewrites a test expectation and no user data.
+(`npm run content-parity:update` in the default-setup checkout) rewrites a test expectation and no user data.
 
 The SDK compiles three content keys itself:
 
@@ -361,7 +361,7 @@ readiness rather than an unconditional entry track.
 `exportFlowsToDSL` writes for a flow that uses every step default-setup registers, including a
 `FlowConfig` with `root`, the `exits` nesting and a `subflow` reference. It is recorded by the spec
 beside it rather than kept by hand, so it cannot drift from the types: re-record it with
-`npm run flow-export:update -w @app/default-setup`, and never edit it.
+`npm run flow-export:update` in the default-setup checkout, and never edit it.
 
 A step's options:
 

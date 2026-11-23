@@ -327,17 +327,7 @@ export const LAYERS: {
   { name: '@app/internal-publish-checks', dir: 'packages/internal-publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
 ];
 
-/**
- * The workspaces this rule does not layer, and why — one entry, derived from the same fact that makes it a
- * pack.
- *
- * A pack's imports are governed by the pack rules instead (`findInternalPackageImports`, `findHostImports`),
- * which is a stricter answer than a layer row: a pack may reach only the three published packages, and that
- * `@app/default-setup` imports no `@apackdev/host` is those rules working rather than a coincidence.
- */
-export const UNLAYERED_BY_DESIGN = new Map<string, string>([
-  ['packages/default-setup', 'a pack: the pack rules govern what it may import, more narrowly than a layer'],
-]);
+export const UNLAYERED_BY_DESIGN = new Map<string, string>();
 
 const apackPackage = (specifier: string) => specifier.match(/^@apackdev\/[^/]+/)?.[0];
 
@@ -600,78 +590,6 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
   return problems.sort();
 }
 
-/**
- * The one module in the code surface that reaches what draws its terminals.
- *
- * Every host that shows a terminal holds a `TerminalAttachment` from this module and nothing of the view,
- * which is what makes what draws a terminal an implementation behind one file. With two hosts each reaching
- * it and wiring listeners of their own, one host's detach tears the terminal out of whichever host holds
- * it, and the two disagree about where the user had scrolled to.
- */
-const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
-
-/**
- * The package that draws a terminal, named once so the rule and its message cannot disagree about what
- * they are about — and so that replacing it is this line rather than a search for a prefix.
- */
-const EMULATOR_PACKAGE = '@apackdev/terminal-view';
-
-/**
- * And the specs that **stand in** for it, so a terminal's bookkeeping and the components that show one can
- * be driven without a canvas or a broker. Each names the package because it is replacing it, which is the
- * one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and mocking the
- * pool instead would turn every case here into "the component called `release()`" — the shape of a test
- * that restates the implementation instead of observing it. The stand-in itself is the fourth, since it is
- * typed by what it stands in for.
- *
- * A listed path that has stopped naming the package is reported too, so this allowance cannot outlive the
- * stand-in it was added for.
- */
-const EMULATOR_STAND_INS = [
-  'packages/default-setup/tests/features/code/fe/_support/terminal-view.ts',
-  'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts',
-  'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
-  'packages/default-setup/tests/features/code/fe/canvas/terminal-view-drop.frontend.spec.ts',
-  'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
-] as const;
-
-/**
- * `file:line: <the emulator package>` for each import of it outside `EMULATOR_OWNER`, and the owner itself
- * when it has stopped importing one.
- *
- * **The second half is the check having a subject.** A rule that only ever reports the absence of something
- * passes just as happily when the thing it is about has been renamed out from under it, so the owner is
- * derived from the same constant and asserted to be an importer.
- */
-export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
-  const rule: Rule = (node) => (ts.isStringLiteralLike(node)
-    && (node.text === EMULATOR_PACKAGE || node.text.startsWith(`${EMULATOR_PACKAGE}/`))
-    ? [node.text] : undefined);
-  const allowed = new Set<string>([EMULATOR_OWNER, ...EMULATOR_STAND_INS]);
-  const outside = filesUnder(dirs, root)
-    .filter((file) => !allowed.has(repoRelative(root, file)))
-    .flatMap((file) => findInFiles([file], root, rule));
-
-  // **Asked of the owner on disk, not of the population.** The rule runs over whatever directories it is
-  // given — a fixture tree in a spec, a pack's `src` in a sweep — and in none of those does the owner exist,
-  // so deriving the subject from the files walked would report every one of them as having no subject. An
-  // owner that has been deleted outright is caught by the other half instead: the emulator's imports move
-  // somewhere, and everywhere else is a finding.
-  const owner = path.join(root, EMULATOR_OWNER);
-  const ownerStopped = fs.existsSync(owner) && findInFiles([owner], root, rule).length === 0;
-  // The same question of each stand-in, and for the same reason: an allowance for a spec that no longer
-  // replaces the emulator is an exemption nobody is using, which the next file moved into that path inherits
-  const staleStandIns = EMULATOR_STAND_INS.filter((standIn) => {
-    const file = path.join(root, standIn);
-    return fs.existsSync(file) && findInFiles([file], root, rule).length === 0;
-  });
-  return [
-    ...outside,
-    ...(ownerStopped ? [`${EMULATOR_OWNER}: imports no emulator, so this rule has no subject`] : []),
-    ...staleStandIns.map((standIn) => `${standIn}: names no emulator, so its allowance is stale`),
-  ].sort();
-}
-
 /** The one module that hands Electron its custom schemes' privileges */
 const SCHEME_REGISTRAR = 'packages/main/src/modules/privileged-schemes/PrivilegedSchemes.ts';
 
@@ -742,14 +660,6 @@ const PRE_ADMISSION_SPAWN = 'a native loader query made before admission verifie
 const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
-  'packages/default-setup/src/features/code/be/services/github-api.ts': "a request to GitHub's API: network, which no CPU reading describes",
-  'packages/default-setup/src/features/code/be/services/github.ts': "a request to GitHub's sign-in or API: network, which no CPU reading describes",
-  'packages/default-setup/src/features/code/be/services/claude-code/runner.ts':
-    "a one-shot claude subcommand waits on the model's API, during which the child is idle by design",
-  'packages/default-setup/src/features/code/be/services/codex/runner.ts':
-    "a one-shot codex task waits on the model's API, during which the child is idle by design",
-  'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
-    "a request to the codex app-server waits on the model's API, during which the server is idle by design",
   // The native loader queries run before admission has verified the process, so they may load nothing into it. A
   // synchronous spawn loads nothing; a worker thread does. Bounding them by progress meant starting one from the
   // synchronous admission, and on Windows its DLL loads followed a planted `.local` override, which ran —
@@ -1090,13 +1000,6 @@ const RULE_LIST = [
     repoOnly: { kind: 'inapplicable', note: "The pack-facing half is the pack bundle's own check: `apack pack build` refuses a bundle importing a native binding it cannot ship" },
     find: findNodePtyImports,
     rule: 'A pack asks services.terminal for a session and never loads node-pty: the pty belongs to the broker, in a process of its own, which is what makes a session outlive the API and what owns a process tree on Windows',
-  },
-  {
-    id: 'findEmulatorImports',
-    over: PACK_CODE_DIRS,
-    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to its terminal emulator, which is this pack's choice and not a contract any other pack is held to" },
-    find: findEmulatorImports,
-    rule: "Only the code surface's terminal pool imports the terminal emulator: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

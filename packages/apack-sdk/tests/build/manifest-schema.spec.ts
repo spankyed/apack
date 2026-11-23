@@ -101,9 +101,9 @@ describe('parseManifest', () => {
     expect(parseManifest({ ...pack, features: { notes: { description: 'Write notes.' } } }).status).toBe('valid');
     expect(FeatureEntrySchema.parse({ description: '  Write notes.  ' }).description).toBe('  Write notes.  ');
   });
-  it('accepts default-setup apack.json', () => {
+  it('accepts the shipped starter manifest', () => {
     const raw = JSON.parse(
-      readFileSync(resolve(__dirname, '../../../default-setup/apack.json'), 'utf-8'),
+      readFileSync(resolve(__dirname, '../../../../.temp/shipped-distribution/shipped-packs/default-setup/apack.json'), 'utf-8'),
     );
     const result = parseManifest(raw);
     expect(messagesOf(result)).toEqual([]);

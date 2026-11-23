@@ -69,24 +69,13 @@ describe('schedule', () => {
     'reserves the full pack-build width for %s on a two-core budget', async name => {
       const r = runner();
       const cores = coresFor(name, 10);
-      expect(cores).toBe(coresFor('build:default-setup', 10));
+      expect(cores).toBe(2);
       const done = schedule({ steps: [step(name, [], { cores }), step('other')],
         budget: 2, skip: never, run: r.run });
       await r.drain();
       await done;
       expect(r.peak()).toBe(1);
     });
-
-  it('reserves both cores for the pack typecheck', async () => {
-    const r = runner();
-    const cores = coresFor('typecheck:pack', 10);
-    expect(cores).toBe(2);
-    const done = schedule({ steps: [step('typecheck:pack', [], { cores }), step('other')],
-      budget: 2, skip: never, run: r.run });
-    await r.drain();
-    await done;
-    expect(r.peak()).toBe(1);
-  });
 
   it('never runs a step beside one it conflicts with', async () => {
     const r = runner();

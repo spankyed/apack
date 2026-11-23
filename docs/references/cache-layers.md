@@ -24,7 +24,7 @@ only after the work it records succeeded, so an interrupted or failed run reads 
 
 - **The outer layer never answers for the inner one.** A chain step stamp says the step's declared inputs
   have not moved since it passed. It says nothing about the caches the step consults while it runs: the
-  pool steps keep project stamps, `build:default-setup` keeps a phase cache and a codegen stamp, and
+  pool steps keep project stamps, external fixture builds keep their own pack compiler caches, and
   `packages:ensure` keeps package build stamps.
 - **`packages:ensure` is never cached at the chain level**, and the reason is the relation above. What it
   guarantees is recorded in the package build stamps, which its chain fingerprint cannot see: with the

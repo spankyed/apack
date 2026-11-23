@@ -144,7 +144,7 @@ describe('the chain graph', () => {
     const generated = CHAIN_STEPS.filter((step) => STEP_TABLES.every((file) =>
       !fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8').includes(`name: '${step.name}'`)));
     expect(generated.map((step) => step.name), 'no step has a generated name, so this would pass over nothing')
-      .toEqual(['test:unit:host', 'test:unit:pack']);
+      .toEqual([]);
     for (const step of generated) {
       for (const file of STEP_TABLES) {
         const lines = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8').split('\n');
@@ -350,12 +350,6 @@ describe('every spawn an orchestrator makes is bounded', () => {
         + 'on `suite` takes ten minutes to die').toEqual([]);
     });
 
-    it('keeps the pack typecheck on quick when its compiler reserves background CPU', () => {
-      const step = CHAIN_STEPS.find(step => step.name === 'typecheck:pack')!;
-      expect(POOL_WIDTH[step.name]).toEqual({ cores: 2 });
-      expect(factsFor(step).fansOut).toBe(false);
-      expect(step.budget).toBe('quick');
-    });
 
     it('asks it of every step, so the rule passes over nothing', () => {
       const asked = CHAIN_STEPS.filter((step) => DECLARED_AGAINST_THE_FACTS[step.name] === undefined);
@@ -542,7 +536,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
     expect(producer).toBeDefined();
     expect(CHAIN_STEPS.filter(step => step.outputs?.includes(output)).map(step => step.name))
       .toEqual([producer.name]);
-    expect(dependsOn(producer)).toContain('build:default-setup');
+    expect(dependsOn(producer)).toContain('packs:stage');
     const app = CHAIN_STEPS.find(step => step.name === 'test:external-pack:app')!;
     expect(dependsOn(app)).toEqual(expect.arrayContaining([producer.name, 'test:external-pack:contract']));
     const scripts = rootScripts();
@@ -553,13 +547,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
     expect(combined.indexOf('prepare-default-pack-fork.ts')).toBeLessThan(combined.indexOf('test-external-pack-app.sh'));
   });
 
-  it('checks the current built facade after its producer without running codegen', () => {
-    expect(rootScripts()['facade:check']).toContain('--from-build');
-    const step = CHAIN_STEPS.find((candidate) => candidate.name === 'facade:check');
-    expect(step, 'no facade:check step, so this would pass over nothing').toBeDefined();
 
-    expect(dependsOn(step!)).toContain('build:default-setup');
-  });
 
   it('prepares external fixture frontends before integration reads their module graph', () => {
     const integration = CHAIN_STEPS.find(step => step.name === 'test:integration')!;
