@@ -3,7 +3,7 @@ import { cpuBudget } from '@apackdev/testing/vitest'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import http from 'node:http'
-import { readFile, writeFile, readdir, stat, utimes } from 'node:fs/promises'
+import { readFile, writeFile, readdir, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createClaudeTerminalBridge } from '#features/code/be/services/claude-code/terminal-bridge.ts'
@@ -31,25 +31,26 @@ async function create(enter = () => {}, pasteImage?: (path: string) => void) {
   await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
 }
 afterEach(async () => { vi.useRealTimers(); await bridge?.close(); bridge = undefined })
-it('reopens a parent bridge using its retained background observer and refreshes the plugin', async () => {
+it('reopens a parent bridge with fresh plugin bindings and preserves the prior worker files', async () => {
   await create()
   const previous = bridge!, observer = previous.backgroundObserver, pluginRoot = previous.pluginRoot
   const previousPlugin = await readFile(join(pluginRoot, 'hooks/register.ts'), 'utf8')
-  const metadata = ['.claude-plugin/plugin.json', 'hooks/hooks.json'].map(file => join(pluginRoot, file))
-  for (const file of metadata) await utimes(file, 1000, 1000)
-  const previouslyWatched = await Promise.all(metadata.map(file => stat(file, {bigint:true})))
+  const watchedFiles = ['.claude-plugin/plugin.json', 'hooks/hooks.json', 'hooks/register.ts'].map(file => join(pluginRoot, file))
+  const previouslyWatched = await Promise.all(watchedFiles.map(file => stat(file, {bigint:true})))
   await previous.close(); bridge = undefined
   try {
     bridge = await createClaudeTerminalBridge({ backgroundObserver: observer, backgroundAuthority: () => ({ identify: async () => { throw Error('No child in this fixture') }, close: async () => {} }), sessionId: session, settings: { effective: {}, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter() {} })
     expect(bridge.backgroundObserver).toBe(observer)
-    expect(bridge.pluginRoot).toBe(pluginRoot)
-    expect(await readFile(join(pluginRoot, 'hooks/register.ts'), 'utf8')).not.toBe(previousPlugin)
-    expect(JSON.parse(await readFile(join(pluginRoot, 'hooks/hooks.json'), 'utf8')).modules).toEqual(['./register.ts'])
-    const watched = await Promise.all(metadata.map(file => stat(file, {bigint:true})))
+    expect(bridge.pluginRoot).not.toBe(pluginRoot)
+    expect(await readFile(join(pluginRoot, 'hooks/register.ts'), 'utf8')).toBe(previousPlugin)
+    expect(await readFile(join(bridge.pluginRoot, 'hooks/register.ts'), 'utf8')).not.toBe(previousPlugin)
+    expect(JSON.parse(await readFile(join(bridge.pluginRoot, 'hooks/hooks.json'), 'utf8')).modules).toEqual(['./register.ts'])
+    const watched = await Promise.all(watchedFiles.map(file => stat(file, {bigint:true})))
     expect(watched.map(({ino, mtimeNs}) => ({ino, mtimeNs}))).toEqual(previouslyWatched.map(({ino, mtimeNs}) => ({ino, mtimeNs})))
     expect((await request('/observer-ready', { sessionId: session, pid: process.pid })).status).toBe(200)
     expect((await request('/poll', { sessionId: session, agents: [] })).status).toBe(200)
   } finally { await bridge?.close(); bridge = undefined; await observer.close() }
+  await expect(stat(pluginRoot)).rejects.toMatchObject({code:'ENOENT'})
 })
 
 it('fences prompt requests by session and nonce and never enters a rejected or repeated request', async () => {
