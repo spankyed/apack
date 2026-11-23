@@ -1,0 +1,5 @@
+SPDX license ranges for comparison, packaged by Kyle E. Mitchell
+Source: https://github.com/jslicense/spdx-ranges.js
+
+The package declares MIT for the code and Creative Commons Attribution 3.0 Unported
+for the SPDX data from the Linux Foundation and its contributors: https://creativecommons.org/licenses/by/3.0/

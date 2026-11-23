@@ -29,6 +29,8 @@ export interface PackIntegrity {
   hostVersion?: string;
   sdkVersion?: string;
   provenance?: { repo?: string; commit?: string };
+  /** The exact producer output and lockfile used to generate release notices. */
+  releaseEvidence?: { buildRevision: string; lockSha256: string; required?: true };
   /** sha256 of every file in the pack except integrity.json, keyed by pack-relative path. */
   files: Record<string, string>;
 }

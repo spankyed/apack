@@ -272,8 +272,8 @@ function spdxText(node: SpdxNode, exceptions = true): string {
  * name it with the exception. What is chosen is what the notices name: an AND comes to all of its parts, and an OR to
  * its accepted branch whose parts are each satisfied earliest in `ACCEPTED`.
  */
-export function chooseLicense(expression: string, carried: Carried): string | undefined {
-  const allowed = ACCEPTED.filter((id) => !(carried !== 'files' && SHIPPED_ONLY.test(id)));
+export function chooseLicense(expression: string, carried: Carried, accepted: readonly string[] = ACCEPTED): string | undefined {
+  const allowed = accepted.filter((id) => !(carried !== 'files' && SHIPPED_ONLY.test(id)));
   let tree: SpdxNode;
   try { tree = parse(expression); } catch { return undefined; }
   const fine = (node: SpdxNode) => satisfies(spdxText(node, false), allowed);
@@ -369,6 +369,7 @@ function statedLicense(pkg: NoticePackage, byName: ReadonlyMap<string, readonly 
 /** One package's notice, or the problem that keeps it from having one */
 export function noticeOf(
   pkg: NoticePackage, licensesDir: string, byName: ReadonlyMap<string, readonly NoticePackage[]>, overrides: Readonly<Record<string, Override>> = OVERRIDES,
+  accepted: readonly string[] = ACCEPTED,
 ): PackageNotice | string {
   const manifest = manifestOf(pkg.dir);
   const label = `${pkg.name}@${pkg.version} (${CARRIED_LABEL[pkg.carried]})`;
@@ -380,7 +381,7 @@ export function noticeOf(
   const unreadable = declared === stated && !readsAsSpdx(stated)
     ? ": when its own license text is one ACCEPTED names, give that as the license of its OVERRIDES entry, with why" : '';
   if (!declared) return `${label} declares no license${unreadable}`;
-  const license = chooseLicense(declared, pkg.carried);
+  const license = chooseLicense(declared, pkg.carried, accepted);
   if (!license) return `${label} is under ${declared}, which does not parse as SPDX or which this app may not ${pkg.carried === 'files' ? 'ship' : 'inline'} (ACCEPTED)${unreadable}`;
   let texts = ownLicenseTexts(pkg.dir);
   if (!texts.length && parent) texts = ownLicenseTexts(parent.dir);
@@ -420,7 +421,7 @@ export function staleExtras(packages: readonly NoticePackage[]): string[] {
  * The notices' text: a header naming what else carries notices, then each distinct text with the packages it covers,
  * then each file of the app's own adapted from third-party code, with its texts
  */
-export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[], adapted: readonly (Adaptation & { text: string })[] = []): string {
+export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[], adapted: readonly (Adaptation & { text: string })[] = [], subject?: string): string {
   const groups = new Map<string, PackageNotice[]>();
   for (const notice of notices) groups.set(notice.text, [...(groups.get(notice.text) ?? []), notice]);
   const line = (notice: PackageNotice) => `  ${notice.package.name} ${notice.package.version}, ${notice.license}, `
@@ -436,10 +437,12 @@ export function renderNotices(notices: readonly PackageNotice[], pointers: reado
   return [
     'THIRD-PARTY NOTICES',
     '',
+    ...(subject ? [`Packages and license texts carried by ${subject}.`] : [
     "apack is built from its own code and from third-party packages, each under its own license. This file holds the",
     'license and notices of each package the app carries, as files under its node_modules or inlined into its',
     "bundles; a package carried as files also keeps its own license files beside it. It ends with the licenses of",
     "third-party code adapted into apack's own files. Native code carries its own notices beside it:",
+    ]),
     '',
     ...pointers.map((pointer) => `  - ${pointer}`),
     '',

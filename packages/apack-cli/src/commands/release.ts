@@ -11,13 +11,14 @@ import { resolveDeps } from './generate';
 import { runPackBuild } from '../build/build-process.ts';
 import { withBuildSignals } from '../build/build-signals.ts';
 import { buildPackArchive } from './archive';
-import { packArchiveName, readPackIntegrity, verifyPack, extractPackArchive } from '@apackdev/host/packs';
+import { readRedistributionAssets, requiresRedistribution } from './release-redistribution.ts';
+import { packArchiveName, readPackIntegrity, verifyPack, extractPackArchive, type PackIntegrity } from '@apackdev/host/packs';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const HELP = `
 Usage:
   apack pack release [patch|minor|major] [--beta] [--dry-run] [--local] [--skip-tests] [--skip-e2e]
-  apack pack release publish [--dir <dir>] [--dry-run]
+  apack pack release publish [--dir <dir>] [--require-redistribution] [--dry-run]
 
 release   Preflight, bump the version (beta cycle: 1.2.3 → 1.2.4-beta.0 → -beta.1 → 1.2.4),
           build --release, typecheck, unit tests, E2E, pack, then commit, tag v<version>
@@ -29,6 +30,8 @@ release   Preflight, bump the version (beta cycle: 1.2.3 → 1.2.4-beta.0 → -b
 
 publish   Upload <id>-<version>.tgz, .sha256 and .integrity.json from <dir> (default .apack/release)
           to a draft. Publish after verification. Rerun with the same files to resume an upload.
+          Packs that set apackRelease.requireRedistribution in package.json always include their license,
+          notices and SBOM. For other packs, --require-redistribution requests the same verification.
           Needs GITHUB_TOKEN (or GH_TOKEN) and GITHUB_REPOSITORY or an origin remote.
 `.trim();
 
@@ -90,13 +93,14 @@ export function isResumable(state: ReleaseState): boolean {
  * Printed where the failure is, because the instinct at that point is `git reset --hard`, which takes
  * whatever else is in the tree with it and loses a commit the rerun is going to look for.
  */
-export function releaseStateReport(version: string, state: ReleaseState): string {
+export function releaseStateReport(version: string, state: ReleaseState, local = false): string {
   const mark = (done: boolean) => (done ? '✓' : '·');
   const next = isResumable(state)
     ? ['Rerun the same `apack pack release` command to continue: it resumes this version instead of bumping again.',
        'Nothing needs reverting first.']
     : ['The tag is on origin, so the release itself is done and a rerun would cut the next version.',
-       'To finish publishing it, run `apack pack release publish`.'];
+       local ? 'To finish publishing it, run `apack pack release publish`.'
+         : 'To finish publishing it, rerun the release workflow for the existing tag.'];
   return [
     `Release v${version} stopped part-way. What exists now:`,
     `  ${mark(state.committed)} version commit "release: v${version}"`,
@@ -184,6 +188,9 @@ export async function preflight(root: string, options: { local: boolean; run: Ru
   }
 
   const hasWorkflow = fs.existsSync(path.join(root, '.github', 'workflows', 'release.yml'));
+  if (requiresRedistribution(root) && !hasWorkflow) {
+    errors.push('apackRelease.requireRedistribution needs a release workflow that generates redistribution evidence');
+  }
   if (options.local && !(env.GITHUB_TOKEN || env.GH_TOKEN)) {
     errors.push('--local publishing needs GITHUB_TOKEN or GH_TOKEN');
   }
@@ -265,6 +272,7 @@ export function resolveRepository(root: string, env: NodeJS.ProcessEnv, run: Run
 
 export interface PublishOptions {
   dryRun?: boolean;
+  requireRedistribution?: boolean;
   env?: NodeJS.ProcessEnv;
   run?: Runner;
   /** Injected for tests; defaults to an authenticated Octokit. */
@@ -312,6 +320,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   const infoFile = `${archive}.integrity.json`;
   let infoBytes: Buffer;
   let sourceCommit: string | undefined;
+  let releaseEvidence: PackIntegrity['releaseEvidence'];
   try {
     const verifiedArchive = path.join(scratch, path.basename(archive));
     fs.writeFileSync(verifiedArchive, archiveBytes);
@@ -320,6 +329,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
     if (info.version !== version) throw new Error(`Pack version ${info.version} does not match apack.json ${version}`);
     if (info.id !== manifest.id) throw new Error(`Pack ID ${info.id} does not match apack.json ${manifest.id}`);
     sourceCommit = info.provenance?.commit;
+    releaseEvidence = info.releaseEvidence;
     infoBytes = Buffer.from(JSON.stringify(info, null, 2) + '\n');
     fs.writeFileSync(infoFile, infoBytes);
   } finally {
@@ -329,9 +339,23 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   const tag = `v${version}`;
   const prerelease = semver.prerelease(version) !== null;
   const { owner, repo } = resolveRepository(root, env, run);
+  const archiveName = path.basename(archive);
+  const extras = (options.requireRedistribution || releaseEvidence?.required || requiresRedistribution(root))
+    ? readRedistributionAssets(releaseDir, manifest, {
+      file: archiveName, sha256: sha256.toLowerCase(), lockSha256: releaseEvidence?.lockSha256,
+    })
+    : [];
+  const releaseFiles = [
+    { name: archiveName, bytes: archiveBytes, contentType: 'application/gzip' },
+    { name: path.basename(checksumFile), bytes: checksum, contentType: 'text/plain' },
+    { name: path.basename(infoFile), bytes: infoBytes, contentType: 'application/json' },
+    ...extras,
+  ];
 
   if (options.dryRun) {
-    console.log(`[dry-run] Would create GitHub release ${owner}/${repo}@${tag}${prerelease ? ' (prerelease)' : ''} with ${path.basename(archive)}, ${path.basename(checksumFile)} and ${path.basename(infoFile)}`);
+    const names = releaseFiles.map(file => file.name);
+    const last = names.pop();
+    console.log(`[dry-run] Would create GitHub release ${owner}/${repo}@${tag}${prerelease ? ' (prerelease)' : ''} with ${names.join(', ')} and ${last}`);
     return { tag, prerelease };
   }
 
@@ -360,11 +384,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
   const releaseRef = { ...repository, release_id: release.id };
   const assets = await octokit.paginate(repos.listReleaseAssets, { ...releaseRef, per_page: 100 });
   const digest = (bytes: Buffer) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-  const files = [
-    { name: path.basename(archive), bytes: archiveBytes, contentType: 'application/gzip' },
-    { name: path.basename(checksumFile), bytes: checksum, contentType: 'text/plain' },
-    { name: path.basename(infoFile), bytes: infoBytes, contentType: 'application/json' },
-  ].map(file => ({ ...file, digest: digest(file.bytes) }));
+  const files = releaseFiles.map(file => ({ ...file, digest: digest(file.bytes) }));
   const verified = async (asset: { id: number; name: string; state: string; size: number; digest?: unknown },
     file: (typeof files)[number]): Promise<boolean> => {
     if (asset.name !== file.name || asset.state !== 'uploaded' || asset.size !== file.bytes.length) return false;
@@ -450,7 +470,7 @@ export async function runRelease(root: string, options: ReleaseOptions): Promise
   const versionFiles = !options.dryRun && !existing.committed ? writeVersion(root, version) : [];
   const reportVerificationFailure = () => {
     if (options.dryRun) return;
-    if (existing.committed) console.error(releaseStateReport(version, existing));
+    if (existing.committed) console.error(releaseStateReport(version, existing, options.local));
     else console.error(`Verification failed; version files were bumped to ${version} — revert them before retrying.`);
   };
   try {
@@ -496,7 +516,7 @@ export async function runRelease(root: string, options: ReleaseOptions): Promise
     }
     return { version, archive: packed.file };
   } catch (err) {
-    console.error(`\n${releaseStateReport(version, releaseInProgress(root, version, run))}`);
+    console.error(`\n${releaseStateReport(version, releaseInProgress(root, version, run), options.local)}`);
     throw err;
   }
 }
@@ -511,7 +531,10 @@ export async function release(args: string[]) {
   if (args[0] === 'publish') {
     const dirIdx = args.indexOf('--dir');
     const dir = dirIdx >= 0 && args[dirIdx + 1] ? path.resolve(args[dirIdx + 1]) : path.join(root, '.apack', 'release');
-    await publishRelease(root, dir, { dryRun: args.includes('--dry-run') });
+    await publishRelease(root, dir, {
+      dryRun: args.includes('--dry-run'),
+      requireRedistribution: args.includes('--require-redistribution'),
+    });
     return;
   }
 

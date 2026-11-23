@@ -4,7 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { findPackRoot, readValidManifest, sdkVersion } from '../utils';
 import { createPackArchive, stagePack, type PackIntegrity } from '@apackdev/host/packs';
 import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
+import { packInputFiles } from '@apackdev/host/build/pack-inputs';
 import { holdPackBuildLock } from '../build/build-lock.ts';
+import { requiresRedistribution } from './release-redistribution.ts';
 
 const HELP = `
 Usage: apack pack export [--out <dir>]
@@ -17,18 +19,24 @@ Options:
   --out <dir>   Output directory (default: .apack/archives)
 `.trim();
 
-export function gitProvenance(root: string): PackIntegrity['provenance'] | undefined {
+export function gitProvenance(root: string, authoredFiles = packInputFiles(root)): PackIntegrity['provenance'] | undefined {
   const git = (...args: string[]) => {
     try {
-      return execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || undefined;
+      return execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
     } catch {
       return undefined;
     }
   };
-  const commit = git('rev-parse', 'HEAD');
-  if (!commit) return undefined;
+  const commit = git('rev-parse', 'HEAD')?.trim();
+  if (!commit || git('status', '--porcelain', '--untracked-files=normal') !== '') return undefined;
+  // Git status skips ignored inputs and does not observe the target of a source symlink.
+  const tree = git('ls-tree', '-r', '-z', commit, '--', '.');
+  if (tree === undefined) return undefined;
+  const committed = new Set(tree.split('\0').filter(entry => /^100(?:644|755) /.test(entry))
+    .map(entry => entry.slice(entry.indexOf('\t') + 1)));
+  if (authoredFiles.some(file => !committed.has(file))) return undefined;
   // An https remote can carry credentials (https://user:token@host/…); never publish them
-  return { commit, repo: git('remote', 'get-url', 'origin')?.replace(/^(\w+:\/\/)[^@/]+@/, '$1') };
+  return { commit, repo: (git('remote', 'get-url', 'origin')?.trim() || undefined)?.replace(/^(\w+:\/\/)[^@/]+@/, '$1') };
 }
 
 export interface PackResult {
@@ -52,10 +60,22 @@ export async function buildPackArchive(root: string, outDir = path.join(root, '.
     const inputs = readPackBuildInputs(path.join(root, 'dist'));
     assertPackBuildInputsCurrent(root, inputs);
     const stageDir = path.join(root, '.apack', 'staged', manifest.id);
-    const integrity = stagePack(root, stageDir, { sdkVersion: sdkVersion(), provenance: gitProvenance(root) });
+    const observations = new Map(inputs.observations);
+    const authoredFiles = JSON.parse(observations.get('["authored-files"]')!) as string[];
+    const lockHash: unknown = JSON.parse(observations.get('["file","package-lock.json"]') ?? 'null');
+    const releaseLockSha256 = typeof lockHash === 'string' && /^[a-f0-9]{64}$/.test(lockHash) ? lockHash : undefined;
+    const requireRedistribution = requiresRedistribution(root);
+    if (requireRedistribution && !releaseLockSha256) {
+      throw new Error('Release evidence requires a package-lock.json captured by the build; rebuild the complete pack.');
+    }
+    const provenance = gitProvenance(root, authoredFiles);
+    const integrity = stagePack(root, stageDir, { sdkVersion: sdkVersion(), provenance, releaseLockSha256, requireRedistribution });
     temporary = fs.mkdtempSync(path.join(root, '.apack', 'archive-'));
     const archive = await createPackArchive(stageDir, temporary);
     assertPackBuildInputsCurrent(root, inputs);
+    if (provenance && gitProvenance(root, authoredFiles)?.commit !== provenance.commit) {
+      throw new Error('Pack source changed while exporting; rebuild and export again.');
+    }
     fs.mkdirSync(outDir, { recursive: true });
     const file = path.join(outDir, path.basename(archive.file));
     const checksumFile = `${file}.sha256`;
