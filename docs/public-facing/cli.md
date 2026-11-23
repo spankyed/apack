@@ -216,7 +216,7 @@ Launch apack with your pack installed and keep it in step with your edits.
 
 It picks an app the way you tell it to — `--host <path>` for a local apack checkout, `--host beta` for a Beta that satisfies your `hostVersion` (a downloaded one if you have it, the newest otherwise) — and **with neither it works one out rather than asking**: the apack checkout your pack is built against, if there is one, else a cached/downloaded compatible Beta. Nothing is remembered, nothing is asked, and it prints which app it chose and which rule chose it.
 
-Deriving the checkout is the right pairing rather than a convenience: a pack whose `@apackdev/*` resolve into a checkout is *compiled against that checkout's packages*, so running it inside a released Beta would pair source-built pack code with a released host. If that checkout is not built, `dev` says so and names `npm run build:default-setup && npm run build:runtime` instead of quietly using a Beta you were not built against.
+Deriving the checkout is the right pairing rather than a convenience: a pack whose `@apackdev/*` resolve into a checkout is *compiled against that checkout's packages*, so running it inside a released Beta would pair source-built pack code with a released host. If that checkout is not built, `dev` says so and names `npm run packs:stage && npm run build:runtime` instead of quietly using a Beta you were not built against.
 
 `apack pack test` deliberately derives nothing — it pins from your `hostVersion` — so a test run means the same thing on a fresh machine as on one you have been developing on.
 
