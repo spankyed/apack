@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { bindClaudeWindowDraft } from '#features/threads/fe/chat/native-window-draft.ts'
+import { readDurableClaudeWindowDraft, saveDurableClaudeWindowDraft } from '#features/threads/fe/chat/native-window-draft-storage.ts'
 import { claudeWindowStorageKey } from '#features/threads/fe/chat/native-window-storage.ts'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft } from '#features/threads/fe/chat/native-agent-draft.ts'
 
@@ -11,6 +12,10 @@ const reference = Node.create({ name: 'reference', group: 'inline', inline: true
   addAttributes: () => ({ id: { default: 'notes' }, retained: { default: 'parsed' } }), renderHTML: () => ['span', '@notes'],
   addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('@notes') } } }),
 })
+vi.mock('#features/threads/fe/chat/native-window-draft-storage.ts', () => ({
+  readDurableClaudeWindowDraft: vi.fn(),
+  saveDurableClaudeWindowDraft: vi.fn(),
+}))
 const editors: Editor[] = []
 const emptyParagraph = Node.create({ name: 'paragraph', priority: 1000, group: 'block', content: 'inline*', parseHTML: () => [{ tag: 'p' }], renderHTML: () => ['p', 0],
   addStorage: () => ({ markdown: { serialize(state: { write(text: string): void; renderInline(node: unknown): void; closeBlock(node: unknown): void }, node: { childCount: number }) { if (!node.childCount) state.write('&nbsp;'); else state.renderInline(node); state.closeBlock(node) }, parse: {} } }),
@@ -18,7 +23,7 @@ const emptyParagraph = Node.create({ name: 'paragraph', priority: 1000, group: '
 function create(content: Content, preserveEmpty = false) {
   const editor = new Editor({ extensions: [preserveEmpty ? StarterKit.configure({ paragraph: false }) : StarterKit, Markdown, reference, ClaudePromptSource, ...(preserveEmpty ? [emptyParagraph] : [])], content }); editors.push(editor); return editor
 }
-afterEach(() => { for (const editor of editors.splice(0)) editor.destroy() })
+afterEach(() => { for (const editor of editors.splice(0)) editor.destroy(); vi.unstubAllGlobals(); vi.resetAllMocks() })
 const rich = { type: 'doc', content: [
   { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Review' }] },
   { type: 'codeBlock', attrs: { language: 'typescript' }, content: [{ type: 'text', text: 'const value = 1' }] },
@@ -131,6 +136,46 @@ it('restores persisted structured input without any in-memory owner and clears i
   expect(restored.getJSON()).toEqual(snapshot.doc); expect(restored.state.selection.toJSON()).toEqual(snapshot.selection)
   expect(claudeWindowStorageKey('parent-draft', owner,'?popout=surface&surfaceId=default-setup/threads')).not.toBe(key)
   restored.commands.clearContent(); detach(); expect(localStorage.getItem(`default-setup/threads:${key}`)).toBeNull()
+})
+
+it.each(['structured', 'empty'] as const)('prefers the committed %s draft over a stale renderer cache', async kind => {
+  vi.stubGlobal('indexedDB', {})
+  const owner = crypto.randomUUID(), legacy = create('already sent'), persisted = create(rich)
+  const expected = kind === 'structured' ? captureClaudeAgentDraft(persisted)! : null
+  const key = claudeWindowStorageKey('parent-draft', owner)!
+  const legacyKey = `default-setup/threads:${key}`
+  localStorage.setItem(legacyKey, JSON.stringify(captureClaudeAgentDraft(legacy)))
+  vi.mocked(readDurableClaudeWindowDraft).mockResolvedValue(expected)
+  const fresh = create('')
+  const dispose = bindClaudeWindowDraft(fresh, owner)
+  await new Promise(resolve => fresh.on('create', resolve))
+  await vi.waitFor(() => expect(readDurableClaudeWindowDraft).toHaveBeenCalledExactlyOnceWith(key))
+  await Promise.resolve()
+  if (expected) expect(fresh.getJSON()).toEqual(expected.doc)
+  else {
+    expect(fresh.isEmpty).toBe(true)
+    expect(localStorage.getItem(legacyKey)).toBeNull()
+  }
+  fresh.commands.setContent('new draft')
+  fresh.commands.clearContent()
+  expect(saveDurableClaudeWindowDraft).toHaveBeenLastCalledWith(key, null)
+  dispose()
+})
+
+it('keeps new input when the committed draft arrives after editing starts', async () => {
+  vi.stubGlobal('indexedDB', {})
+  const owner = crypto.randomUUID(), earlier = create('older draft')
+  const {promise, resolve} = Promise.withResolvers<ReturnType<typeof captureClaudeAgentDraft>>()
+  vi.mocked(readDurableClaudeWindowDraft).mockReturnValue(promise)
+  const fresh = create(''), dispose = bindClaudeWindowDraft(fresh, owner)
+  await new Promise(done => fresh.on('create', done))
+  fresh.commands.insertContent('typed during restore')
+  resolve(captureClaudeAgentDraft(earlier))
+  await Promise.resolve()
+  expect(fresh.state.doc.textContent).toBe('typed during restore')
+  expect(saveDurableClaudeWindowDraft).toHaveBeenLastCalledWith(claudeWindowStorageKey('parent-draft', owner),
+    expect.objectContaining({text:'typed during restore'}))
+  dispose()
 })
 
 it('restores exact literal source and its hidden-syntax caret only during untouched editor initialization', () => {
