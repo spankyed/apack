@@ -4,7 +4,7 @@ Status: closed and archived 2026-10-21, with [PR #249](https://github.com/spanky
 2026-10-19. The [outcome](#outcome-2026-10-21) records what was delivered, the two criteria dropped and why,
 and what carries forward.
 
-This plan owns feedback budgets and coverage. The [Nx evaluation](../../plans/nx-orchestration-evaluation.md) decides
+This plan owns feedback budgets and coverage. The [Nx evaluation](nx-orchestration-evaluation.md) decides
 whether Nx or the existing runner owns generic task execution. **The lead developer chose to extend the
 existing runner before that evaluation finished** (2026-10-20): the strict gate's cost made waiting the more
 expensive option. So the parallel gate below is built on `scripts/chain.ts`. If Nx is adopted later, it has to

@@ -2,7 +2,7 @@
 
 Status: **all three closed.** Found reviewing `session/terminal-ownership` (#379) on 2026-11-08,
 confirmed or relayed as noted. They are here rather than in
-[the terminal integration review](../../issues/ISSUE-terminal-integration-review.md) because none of them is a row in it:
+[the terminal integration review](ISSUE-terminal-integration-review.md) because none of them is a row in it:
 that document's subject is the terminal, and these are a tab-group prune, a test-runner's toolchain lookup
 and a stale comment. The goal that closed the review's rows is
 [archived](../goals/goal-terminal-ownership.md); it did not own these and did not fix them.

@@ -642,6 +642,6 @@ fixing the behaviour itself. Until one of those happens there is nothing here to
   chain tests the working tree while CI clones the pin — compare them before trusting a run.
 - Native execution belongs in the Linux test container, and Windows verification on the approved VM. Neither
   is a CI dispatch per experiment.
-- The [terminal integration review](../../issues/ISSUE-terminal-integration-review.md) is dated investigation
+- The [terminal integration review](../issues/ISSUE-terminal-integration-review.md) is dated investigation
   material. Its findings were closed by the ownership goal; recheck anything cited from it against current
   code.

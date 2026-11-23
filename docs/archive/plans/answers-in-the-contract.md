@@ -1,6 +1,6 @@
 # A system's contract declares its answers apart from its news
 
-Status: superseded, not built as written; the asks that replaced it are [asks-shape.md](../../plans/asks-shape.md).
+Status: superseded, not built as written; the asks that replaced it are [asks-shape.md](asks-shape.md).
 Planned 2026-10-26, following live queries ([live-queries.md](live-queries.md)), which left this as the condition
 its step 5 pack rule needed.
 

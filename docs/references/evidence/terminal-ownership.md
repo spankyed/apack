@@ -2,7 +2,7 @@
 
 Checkpoint history and the acceptance table for
 [goal-terminal-ownership](../../archive/goals/goal-terminal-ownership.md). Findings keep their authoritative home in
-[the terminal integration review](../../issues/ISSUE-terminal-integration-review.md); this record owns their
+[the terminal integration review](../../archive/issues/ISSUE-terminal-integration-review.md); this record owns their
 **disposition** and the evidence that closed each one.
 
 ## Acceptance table
