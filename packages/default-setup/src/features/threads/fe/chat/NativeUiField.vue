@@ -118,9 +118,12 @@ function send(kind: ClaudeUiFieldEvent['kind']) {
   problem.value = undefined
   emit('field', { actionId: props.node.actionId, revision, kind, value: draft.value })
 }
+function updateDraft(value: string, isComposing = false) {
+  draft.value = value
+  if (!composing && !isComposing && value !== lastChangeValue) { lastChangeValue = value; send('change') }
+}
 function change(event: Event) {
-  draft.value = (event.target as HTMLTextAreaElement).value
-  if (!composing && !('isComposing' in event && event.isComposing === true) && draft.value !== lastChangeValue) { lastChangeValue = draft.value; send('change') }
+  updateDraft((event.target as HTMLTextAreaElement).value, 'isComposing' in event && event.isComposing === true)
 }
 function compositionStart() { composing = true }
 function compositionEnd(event: CompositionEvent) {
@@ -139,8 +142,18 @@ function keydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.isComposing || composing) return
   // The outer message composer must never treat field Enter as message submission.
   event.stopPropagation()
-  if (event.shiftKey && props.node.kind === 'input' && props.node.rows > 1) return
+  const multiline = props.node.kind === 'input' && props.node.rows > 1
+  if (event.shiftKey && multiline) return
   event.preventDefault()
+  const field = textarea.value
+  if (multiline && field && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const caret = field.selectionStart
+    if (caret === field.selectionEnd && field.value[caret - 1] === '\\') {
+      field.setRangeText('\n', caret - 1, caret, 'end')
+      updateDraft(field.value)
+      return
+    }
+  }
   send('submit')
 }
 </script>

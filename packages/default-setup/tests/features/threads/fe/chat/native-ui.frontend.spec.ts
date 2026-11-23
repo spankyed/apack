@@ -210,6 +210,27 @@ it('keeps field typing across native echoes and submits the field without submit
   expect(f.submit).not.toHaveBeenCalled()
 })
 
+it.each([1, 3])('routes backslash Enter according to the native Input row count (%s)', async rows => {
+  const f = await mount({ nativeUi: { status: 'live', tree: {
+    kind: 'input', revision: 0, submitLabel: 'save', actionId: 'native-field', label: 'Release notes',
+    value: 'first\\second', rows, autoFocus: false,
+  } } })
+  const field = f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Release notes"]')!
+  field.setSelectionRange(6, 6)
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+  const value = rows > 1 ? 'first\nsecond' : 'first\\second'
+  expect(field.value).toBe(value)
+  expect(field.selectionStart).toBe(6)
+  expect(f.field).toHaveBeenCalledExactlyOnceWith({
+    actionId: 'native-field', revision: 1, kind: rows > 1 ? 'change' : 'submit', value,
+  })
+  if (rows > 1) {
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(f.field).toHaveBeenLastCalledWith({ actionId: 'native-field', revision: 2, kind: 'submit', value })
+  }
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
 it('uses native select values and leaves the message composer untouched', async () => {
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0, actionId: 'select-authority', label: 'Mode', value: 'a',
     autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })
