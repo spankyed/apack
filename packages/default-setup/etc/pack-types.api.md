@@ -1183,6 +1183,7 @@ interface ClaudeConversation {
     ownsTurn(handle: QueryHandle): boolean;
     hasPendingElicitation(requestId: string): boolean;
     subscribe(listener: (event: StreamLine) => void): () => void;
+    subscribePrediction(listener: (event: ClaudePrintPrediction) => void): () => void;
     close(): Promise<void>;
     kill(): void;
 }
@@ -3211,6 +3212,15 @@ interface ClaudePrintClientProjection {
     detach(clientId: string): Promise<void>;
     prompt?(clientId: string, decorations: NonNullable<ClaudePromptHostFill['decorations']>): Promise<NonNullable<ClaudePromptHostFill['decorations']>>;
 }
+
+type ClaudePrintPrediction = {
+    kind: 'result';
+    signal: AbortSignal;
+} | {
+    kind: 'offer';
+    signal: AbortSignal;
+    text: string;
+};
 
 type ClaudePromptCompletionReply = {
     revision: number;
