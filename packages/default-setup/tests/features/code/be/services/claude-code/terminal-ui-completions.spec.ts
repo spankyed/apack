@@ -66,6 +66,48 @@ it('keeps original indexed file rows distinct from plugin replacement ranges', a
   expect(files).toHaveBeenCalledOnce()
 })
 
+it('offers native Agent definitions and visible MCP resources with the native reference spelling', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  let remoteWorkspace = false
+  const state = {
+    agentDefinitions: { activeAgents: [{ agentType: 'release-reviewer', whenToUse: 'Review migration notes' }] },
+    mcp: { resources: { docs: [
+      { server: 'docs', uri: 'doc://release', name: 'Release notes' },
+      { server: 'docs', uri: 'doc://release-panel', mimeType: 'text/html;profile=mcp-app' },
+    ] } },
+  }
+  const originalContext = { surface: 'terminal', toolContext: () => ({ getAppState: () => state }) }
+  const api = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';autocomplete', {
+    AbortController, originalContext, clientViewCurrent: () => true,
+  }) as (native: unknown, client: string, box: { text: string; cursor: number }) => Promise<unknown>
+  const search = vi.fn((query: string, items: { displayText: string }[]) =>
+    items.filter(item => item.displayText.includes(query)).map(item => ({item,score:0.1})))
+  class Search {
+    constructor(private readonly items: { displayText: string }[]) {}
+    search(query: string) { return search(query, this.items) }
+  }
+  const native = {
+    fileSuggestions: { s5t: async () => [{ displayText: 'release.md', metadata: { score:0.6 } }], RSe: {} },
+    referenceSearch: { ohe: Search },
+    referenceWorkspace: { Ct: () => remoteWorkspace },
+    engine: { q0t: (resource: { mimeType?: string }) => resource.mimeType === 'text/html;profile=mcp-app' },
+    session: { rwt: () => undefined },
+  }
+  expect(await api(native,'attached',{text:'@release',cursor:8})).toEqual({
+    start:0,suggestions:[
+      {label:'release-reviewer (agent)',text:'@"release-reviewer (agent)" ',description:'Review migration notes',replacement:{start:0,end:8}},
+      {label:'docs:doc://release',text:'@docs:doc://release ',description:'Release notes',replacement:{start:0,end:8}},
+      {label:'release.md',text:'@release.md ',replacement:{start:0,end:8}},
+    ],
+  })
+  expect(search).toHaveBeenCalledOnce()
+  remoteWorkspace = true
+  expect(await api(native,'attached',{text:'@release',cursor:8})).toEqual({
+    start:0,suggestions:[{label:'release.md',text:'@release.md ',replacement:{start:0,end:8}}],
+  })
+})
+
 it('coalesces queued edits, adopts app changes and retires edits on detach', async () => {
   type Box = { text: string; cursor: number; superseded?: boolean }
   type Edit = { before: Box; after: Box; key?: { key: string; name: string } }
