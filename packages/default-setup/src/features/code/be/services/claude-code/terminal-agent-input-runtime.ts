@@ -93,7 +93,9 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
  if(main&&!expectedRun)return {kind:'not_command'};
  if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
  const task=main?undefined:Object.values(context.taskRegistry.all()).find(value=>n.runtime.flt(value)?.id===facts.view.taskId);
- if(!main&&(!task||task.type!=='local_agent'||task.resuming))throw Error('This Agent cannot accept input now');
+ // The original selected-view submit dispatches human input to a running teammate's native queue.
+ const acceptsInput=task?.type==='local_agent'&&!task.resuming||task?.type==='in_process_teammate'&&task.status==='running';
+ if(!main&&!acceptsInput)throw Error('This Agent cannot accept input now');
  const original=await composer.read();current();
  if(original.text)throw Error('The native terminal has an unsent draft; your app draft was retained');
  const saved=main?[]:await binding.savedAgentMessages(facts.view.taskId);current();

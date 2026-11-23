@@ -100,6 +100,17 @@ it('uses a teammate name only for a live record and keeps ended opaque identitie
   f.tasks[0].status = 'completed'; f.runner.mockClear()
   await f.request('send'); expect(f.runner.mock.calls[0][0]).toEqual(expect.objectContaining({ input: { to: 'agent-a', message: 'User instruction' } }))
 })
+it('advertises focused input for a running teammate without using the local Agent queue', async () => {
+  const f = fixture()
+  Object.assign(f.tasks[0], { type: 'in_process_teammate', status: 'running', identity: { agentName: 'worker' } })
+  expect((await f.request('inspect')).details.canInput).toBe(true)
+  await expect(f.request('input')).rejects.toThrow('cannot accept user input')
+  expect(f.queue).not.toHaveBeenCalled()
+  expect(f.runner).not.toHaveBeenCalled()
+  f.tasks[0].status = 'killed'
+  expect((await f.request('inspect')).details.canInput).toBe(false)
+})
+
 it('refuses an ended teammate address so a reused name cannot receive the old task message', async () => {
   const f = fixture(); Object.assign(f.tasks[0], { type: 'in_process_teammate', agentId: 'worker@team', status: 'completed', identity: { agentName: 'worker' } })
   expect((await f.request('inspect', 'worker@team')).details.canMessage).toBe(false)

@@ -141,9 +141,10 @@ async function nativeTaskControl(n,binding,request,abort,current){
  const liveTeammate=task.type==='in_process_teammate'&&!['completed','failed','killed'].includes(task.status);
  const endedTeammateAddress=task.type==='in_process_teammate'&&!liveTeammate&&request.task_id.includes('@');
  const canMessage=!endedTeammateAddress&&typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
- const canInput=task.type==='local_agent'&&!task.resuming&&['running','completed','failed','killed'].includes(task.status);
+ const canUseLocalInput=task.type==='local_agent'&&!task.resuming&&['running','completed','failed','killed'].includes(task.status);
+ const canInput=canUseLocalInput||(task.type==='in_process_teammate'&&task.status==='running');
  if(request.operation==='input'){
-  if(!canInput)throw Error('This Agent cannot accept user input now');
+  if(!canUseLocalInput)throw Error('This Agent cannot accept user input now');
   if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent input must contain 1 to 16384 characters');
   if(task.status!=='running'&&(typeof context.messageQueue?.getCommandQueueSnapshot!=='function'||typeof context.getMessages!=='function'))throw Error('Native live transcript context is unavailable');
   n.runtime.Dhs(task.id,registry);

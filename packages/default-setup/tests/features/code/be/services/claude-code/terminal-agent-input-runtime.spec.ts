@@ -37,7 +37,7 @@ function fixture(main = false) {
     panel(n: unknown, request: { client_id: string; panel_id: string; operation: string; text?: string }): Promise<{ open: boolean }>
     retire(client: string): Promise<void>
   }
-  return { controller, native, module, command, changeSession: (id: string) => { sessionId = id; sequence++ }, composer, enter, cancel, confirm, dismissPanel, localJsx, notices, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
+  return { controller, native, module, command, task, changeSession: (id: string) => { sessionId = id; sequence++ }, composer, enter, cancel, confirm, dismissPanel, localJsx, notices, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
 }
 it('correlates the original human UUID and leaves native blocking policy in the dispatcher', async () => {
   const f = fixture()
@@ -47,6 +47,18 @@ it('correlates the original human UUID and leaves native blocking policy in the 
   expect(f.composer.write.mock.calls).toEqual([['Human input', 'replace'], ['/model haiku', 'replace'], ['', 'replace']])
   expect(f.composer.attribute.mock.calls).toEqual(Array.from({ length: 3 }, () => [{ kind: 'composer' }, expect.any(Function)]))
 })
+it('submits to a running selected teammate through the native composer and refuses a stopped one', async () => {
+  const f = fixture()
+  Object.assign(f.task, { type: 'in_process_teammate', status: 'running' })
+  const input = { client_id: 'client', text: 'Review the final heading' }
+  await expect(f.controller.dispatch(f.native, input, new AbortController())).resolves.toMatchObject({ kind: 'input', messageId: f.messageId })
+  expect(f.enter).toHaveBeenCalledOnce()
+  expect(f.rows).toEqual([expect.objectContaining({ origin: { kind: 'human' }, message: { content: input.text } })])
+  f.task.status = 'killed'
+  await expect(f.controller.dispatch(f.native, input, new AbortController())).rejects.toThrow('cannot accept input')
+  expect(f.enter).toHaveBeenCalledOnce()
+})
+
 it('keeps confirmation alive after the initial HTTP request completes and refuses replay/foreign clients', async () => {
   const f = fixture(), abort = new AbortController()
   const result = await f.controller.dispatch(f.native, { client_id: 'client', text: '/compact' }, abort)
