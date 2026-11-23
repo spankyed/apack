@@ -41,7 +41,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
   | ({ type: 'CLAUDE_TERMINAL_BACKGROUND'; sessionId: string; continuedInSessionId: string; revision: number } & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest))
-  | { type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN'; ownerId: string; sessionId: string; taskId: string; revision: number }
+  | { type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN'; ownerId: string; sessionId: string; taskId: string; revision: number; recoveryId?: string }
   | { type: 'CLAUDE_BACKGROUND_OPEN'; sessionId: string; continuedInSessionId: string; jobId: string; revision: number }
   | { type: 'CLAUDE_BACKGROUND_INPUT'; attachmentId: string; text: string }
   | { type: 'CLAUDE_BACKGROUND_RESIZE'; attachmentId: string; columns: number; rows: number; cell?: {width:number;height:number} }
@@ -96,12 +96,13 @@ export interface ClaudeBackgroundAttachmentView {
   revision: number
   sessionId: string
   continuedInSessionId: string
-  teammate?: { ownerId: string; taskId: string }
+  teammate?: { ownerId: string; taskId: string; recoveryId?: string }
   status: 'opening' | 'ready' | 'error'
   state?: ClaudeBackgroundAttachmentSnapshot
   problem?: string
 }
-type ClaudeTeammateReconnect = {ownerId: string; sessionId: string; taskId: string; name: string}
+type ClaudeTeammateReconnect = {ownerId: string; sessionId: string; taskId: string; name: string; recoveryId?: string}
+type TeammateReconnectAuthority = {target: ClaudeTeammateReconnect; open(signal: AbortSignal): Promise<ClaudeBackgroundAttachment>}
 export type ClaudeTerminalViewSnapshot = {
   teammateReconnect?: ClaudeTeammateReconnect
   backgroundInfo?: import('#features/code/common/native-background.ts').ClaudeBackgroundStatus
@@ -137,7 +138,8 @@ interface View {
   send(reply: ClaudeTerminalViewReply): void
   attachment?: ClaudeBackgroundAttachmentView
   attachmentRevision?: number
-  teammateReconnect?: {target: ClaudeTeammateReconnect; open(signal: AbortSignal): Promise<ClaudeBackgroundAttachment>}
+  teammateReconnect?: TeammateReconnectAuthority
+  survivingTeammate?: TeammateReconnectAuthority & {resumedOwnerId: string}
   attachmentOwner?: ClaudeBackgroundAttachment
   attachmentAbort?: AbortController
   attachmentUnsubscribe?: () => void
@@ -202,11 +204,30 @@ export function createClaudeTerminalViews(dependencies: {
     return state?.ownerId === ownerId && state.sessionId === sessionId && state.status === 'error'
       && owner?.keepAttachedTeammatesAfterCrash === true && (!current || current === owner)
   }
+  function teammateResumeMatches(view: View, target: ClaudeTeammateReconnect, replacement: ClaudeNativeTerminalOwner | undefined) {
+    const state = view.owner?.state
+    return replacement && replacement !== view.owner && replacement.state.sessionId === target.sessionId
+      && state?.status === 'error' && view.owner?.keepAttachedTeammatesAfterCrash
+      && state.ownerId === target.ownerId && state.sessionId === target.sessionId
+  }
+  function survivingTeammateCurrent(view: View) {
+    const survivor = view.survivingTeammate
+    const state = view.owner?.state
+    if (survivor && view.owner === dependencies.get(view.threadId) && state?.ownerId === survivor.resumedOwnerId
+      && state.sessionId === survivor.target.sessionId && state.status === 'live') return survivor
+  }
   function attachmentCurrent(view: View) {
     const target = view.attachment?.teammate
     if (target) {
       const owner = view.owner
       const state = owner?.state
+      if (target.recoveryId) {
+        const survivor = survivingTeammateCurrent(view)?.target
+        if (survivor?.recoveryId !== target.recoveryId || survivor.taskId !== target.taskId) return false
+        const client = view.attachmentOwner?.snapshot
+        return view.attachment?.status !== 'ready' || client?.status === 'live' && client.inputBlocked !== true
+          && client.jobId === survivor.taskId && client.sessionId === survivor.sessionId
+      }
       if (state?.ownerId !== target.ownerId || state.sessionId !== view.attachment?.sessionId) return false
       const currentOwner = dependencies.get(view.threadId)
       if (state.status === 'live') {
@@ -297,13 +318,19 @@ export function createClaudeTerminalViews(dependencies: {
     const reconnect = view.teammateReconnect?.target
     if (reconnect && (reconnect.ownerId !== state?.ownerId || reconnect.sessionId !== state.sessionId
       || (state.status === 'live' ? !state.tasks.some(task => task.id === reconnect.taskId && task.canStop)
-        : !teammateCrashCurrent(view, reconnect.ownerId, reconnect.sessionId)))) view.teammateReconnect = undefined
+        : !teammateCrashCurrent(view, reconnect.ownerId, reconnect.sessionId)
+          && !teammateResumeMatches(view, reconnect, dependencies.get(view.threadId))))) view.teammateReconnect = undefined
+    const surviving = survivingTeammateCurrent(view)
+    if (!surviving && view.survivingTeammate && (state?.status !== 'starting'
+      || state.ownerId !== view.survivingTeammate.resumedOwnerId || state.sessionId !== view.survivingTeammate.target.sessionId)) {
+      view.survivingTeammate = undefined
+    }
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state, attachment: view.attachment ? {...view.attachment} : undefined, teammateReconnect: state?.status === 'error' ? view.teammateReconnect?.target : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, teammateReconnect: surviving?.target ?? (reconnect && teammateCrashCurrent(view, reconnect.ownerId, reconnect.sessionId) ? view.teammateReconnect?.target : undefined), background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -361,6 +388,18 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
+    // Recover the old terminal separately from the resumed owner's task registry. Mint a
+    // new action for this mount so old task or terminal requests cannot cross the handoff.
+    const previous = !view.queueComposer && [view, ...views.values()].find(candidate => {
+      const known = candidate.teammateReconnect?.target
+      return known && candidate.threadId === view.threadId && candidate.expires > Date.now()
+        && teammateResumeMatches(candidate, known, owner)
+    }) || undefined
+    const reconnect = previous?.teammateReconnect
+    view.survivingTeammate = reconnect && {
+      ...reconnect, target: {...reconnect.target, recoveryId: randomUUID()}, resumedOwnerId:owner.state.ownerId,
+    }
+    if (previous) previous.teammateReconnect = undefined
     view.teammateReconnect = undefined
     view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined; view.policyRecheck = undefined
     view.unsubscribe = owner.subscribe(() => {
@@ -370,7 +409,7 @@ export function createClaudeTerminalViews(dependencies: {
     })
     // A reopened owner replaces the terminal authority for the entire thread.
     for (const [id, candidate] of views) {
-      if (candidate !== view && candidate.threadId === view.threadId && candidate.owner !== owner && (candidate.attachment?.teammate || candidate.teammateReconnect)) publish(id, candidate)
+      if (candidate !== view && candidate.threadId === view.threadId && candidate.owner !== owner && (candidate.attachment?.teammate || candidate.teammateReconnect || candidate.survivingTeammate)) publish(id, candidate)
     }
   }
   return {
@@ -406,6 +445,19 @@ export function createClaudeTerminalViews(dependencies: {
       }
       if (!view) return
       const target = view
+      if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN' && event.recoveryId !== undefined) {
+        const survivor = survivingTeammateCurrent(target)
+        if (!survivor || survivor.target.recoveryId !== event.recoveryId || survivor.target.taskId !== event.taskId
+          || survivor.target.ownerId !== event.ownerId || survivor.target.sessionId !== event.sessionId
+          || target.attachment || target.opening || !Number.isSafeInteger(event.revision)
+          || event.revision <= (target.attachmentRevision ?? 0)) return
+        target.attachmentRevision = event.revision
+        const operation: ClaudeBackgroundAttachmentView = {requestId:randomUUID(), revision:event.revision, status:'opening',
+          sessionId:event.sessionId, continuedInSessionId:event.sessionId,
+          teammate:{ownerId:event.ownerId, taskId:event.taskId, recoveryId:event.recoveryId}}
+        openAttachment(key, target, operation, survivor.open, 'Surviving teammate terminal is unavailable')
+        return
+      }
       if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN') {
         const owner = target.owner, state = owner?.state
         if (!state || state.ownerId !== event.ownerId || state.sessionId !== event.sessionId || target.attachment || target.opening

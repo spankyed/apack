@@ -82,7 +82,7 @@
     </section>
     <div v-if="view?.teammateReconnect && !view.attachment" class="native-launch__actions">
       <button type="button" class="native-button" :disabled="view.opening" @click="reconnectTeammate">
-        Reconnect to {{ view.teammateReconnect.name }}
+        {{ view.teammateReconnect.recoveryId ? 'Open surviving teammate ·' : 'Reconnect to' }} {{ view.teammateReconnect.name }}
       </button>
     </div>
     <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt' && (!continuation || launchProblem || view?.opening)" class="native-launch__actions">
@@ -329,7 +329,13 @@ function openTeammateTerminal(task: { id: string; ownerId: string; sessionId: st
 }
 function reconnectTeammate() {
   const target = view.value?.teammateReconnect
-  if (target) openTeammateTerminal({id: target.taskId, ownerId: target.ownerId, sessionId: target.sessionId})
+  if (!target || view.value?.attachment) return
+  if (!target.recoveryId) {
+    openTeammateTerminal({id: target.taskId, ownerId: target.ownerId, sessionId: target.sessionId})
+    return
+  }
+  send({type:'CLAUDE_TEAMMATE_TERMINAL_OPEN',...identity(),ownerId:target.ownerId,sessionId:target.sessionId,
+    taskId:target.taskId,recoveryId:target.recoveryId,revision:++attachmentRevision})
 }
 function openBackground(target: ClaudeNativeContinuation, jobId: string) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.attachment) return

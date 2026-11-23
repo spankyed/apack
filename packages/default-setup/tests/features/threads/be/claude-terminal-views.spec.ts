@@ -1094,3 +1094,58 @@ it('hands off a verified teammate reconnect when its detached window closes', as
     expect(main.mock.calls.at(-1)?.[0].teammateReconnect).toBeUndefined()
   } finally { f.views.clear() }
 })
+
+it('opens the earlier teammate separately after same-session resume and retires it on reset', async () => {
+  const f = fixture(), {ownerId, sessionId} = f.owner.state
+  const parent = {...f.owner, keepAttachedTeammatesAfterCrash:false}
+  f.setCurrent(parent)
+  parent.state.tasks = [{id:'agent', name:'Reviewer', status:'idle', canStop:true}]
+  const child = () => ({
+    snapshot: {id:randomUUID(), terminalSession:{id:randomUUID(), target:null}, jobId:'agent',
+      sessionId, cwd:'/fixture', clientPid:234, status:'live' as const, output:[]},
+    input:vi.fn(), resize:vi.fn(), subscribe:vi.fn(() => () => {}), close:vi.fn(async () => {}),
+  })
+  const old = child(), recovered = child()
+  const reconnect = vi.fn(async (_signal: AbortSignal) => recovered)
+  parent.openTeammateTerminal = vi.fn(async () => ({...old, reconnect}))
+  const request = {...mount, type:'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId:'agent', revision:1}
+  const latest = () => f.send.mock.calls.at(-1)?.[0]
+  try {
+    f.views.handle(mount, 'window', f.send)
+    f.views.handle(request, 'window', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.status).toBe('ready'))
+    parent.keepAttachedTeammatesAfterCrash = true
+    parent.state.status = 'error'
+    parent.state.tasks = []
+    f.setCurrent()
+    for (const notify of f.listeners) notify()
+    await vi.waitFor(() => expect(latest()?.teammateReconnect?.taskId).toBe('agent'))
+
+    const resumed = {...f.owner, state:{...parent.state, ownerId:randomUUID(), status:'live' as const, tasks:[]}}
+    f.setCurrent(resumed)
+    f.views.handle({...mount, mountId:randomUUID(), queueComposer:true}, 'window', vi.fn())
+    f.views.handle(mount, 'window', f.send)
+    expect(old.close).toHaveBeenCalledOnce()
+    expect(latest()?.state?.tasks).toEqual([])
+    const recoveryId = latest()?.teammateReconnect?.recoveryId
+    expect(recoveryId).toBeTruthy()
+    f.views.handle({...request, revision:2}, 'window', f.send)
+    f.views.handle({...request, revision:2, recoveryId:randomUUID()}, 'window', f.send)
+    f.views.handle({...request, revision:2, recoveryId}, 'other-window', f.send)
+    await Promise.resolve()
+    expect(reconnect).not.toHaveBeenCalled()
+
+    f.views.handle({...request, revision:2, recoveryId}, 'window', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.state?.id).toBe(recovered.snapshot.id))
+    expect(reconnect).toHaveBeenCalledOnce()
+    f.views.handle({...mount, type:'CLAUDE_BACKGROUND_INPUT', attachmentId:recovered.snapshot.id, text:'still the old worker'}, 'window', f.send)
+    expect(recovered.input).toHaveBeenCalledExactlyOnceWith(recovered.snapshot.id, 'still the old worker')
+    expect(resumed.operateTask).not.toHaveBeenCalled()
+
+    resumed.state.sessionId = randomUUID()
+    for (const notify of f.listeners) notify()
+    await vi.waitFor(() => expect(latest()?.attachment).toBeUndefined())
+    expect(latest()?.teammateReconnect).toBeUndefined()
+    expect(recovered.close).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})

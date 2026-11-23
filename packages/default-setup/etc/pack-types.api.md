@@ -748,6 +748,7 @@ interface ClaudeBackgroundAttachmentView {
     teammate?: {
         ownerId: string;
         taskId: string;
+        recoveryId?: string;
     };
     status: 'error' | 'opening' | 'ready';
     state?: ClaudeBackgroundAttachmentSnapshot;
@@ -3515,6 +3516,7 @@ type ClaudeTeammateReconnect = {
     sessionId: string;
     taskId: string;
     name: string;
+    recoveryId?: string;
 };
 
 interface ClaudeTerminalStopState {
@@ -3666,6 +3668,7 @@ type ClaudeTerminalViewRequest = {
     sessionId: string;
     taskId: string;
     revision: number;
+    recoveryId?: string;
 } | {
     type: 'CLAUDE_BACKGROUND_OPEN';
     sessionId: string;

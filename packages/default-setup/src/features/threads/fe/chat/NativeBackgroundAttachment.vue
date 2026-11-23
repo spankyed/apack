@@ -1,7 +1,7 @@
 <template>
   <section :aria-label="attachment.teammate ? 'Claude teammate terminals' : 'Background Claude terminal'" class="child-terminal">
     <header>
-      <div><h3>{{ attachment.teammate ? 'Teammate terminals' : 'Background session' }}</h3><p :title="attachment.state?.cwd">{{ attachment.status === 'opening' ? 'Opening connection…' : attachment.state?.status === 'exited' ? 'Connection ended' : attachment.status === 'error' ? 'Connection unavailable' : attachment.teammate && parentDisconnected ? 'Parent disconnected. Teammate still connected.' : 'Connected to Claude' }}</p></div>
+      <div><h3>{{ attachment.teammate ? 'Teammate terminals' : 'Background session' }}</h3><p :title="attachment.state?.cwd">{{ attachment.status === 'opening' ? 'Opening connection…' : attachment.state?.status === 'exited' ? 'Connection ended' : attachment.status === 'error' ? 'Connection unavailable' : attachment.teammate?.recoveryId ? 'Teammate from the earlier Claude process' : attachment.teammate && parentDisconnected ? 'Parent disconnected. Teammate still connected.' : 'Connected to Claude' }}</p></div>
       <button type="button" class="child-terminal__size" :aria-expanded="expanded" @click="emit('toggle-expanded')">{{ expanded ? 'Minimize' : 'Expand' }}</button>
       <button type="button" @click="emit('close', attachment.requestId)">{{ attachment.status === 'opening' ? 'Cancel' : 'Close connection' }}</button>
     </header>
