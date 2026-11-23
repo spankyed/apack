@@ -1,4 +1,15 @@
-# apack
+<p align="center">
+  <img src="resources/readme-banner.png" alt="apack" width="100%" />
+</p>
+
+<h1 align="center">apack</h1>
+
+<p align="center">
+  <strong>A programmable desktop workspace.</strong><br />
+  <strong>Build tools around your work, then share them as packs.</strong>
+</p>
+
+---
 
 **apack is a programmable desktop workspace for working with and building shared tools.**
 
