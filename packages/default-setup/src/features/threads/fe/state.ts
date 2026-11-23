@@ -210,8 +210,8 @@ type ViewEvent =
 
 type UIEvent =
   | Extract<import('./contract.ts').ThreadsInboxEvent, { type: 'SET_CLAUDE_PERMISSION_MODE' }>
-  | import('../be/claude-terminal-views.ts').ClaudeTerminalViewRequest
-  | ClaudeUiViewRequest
+  | (import('../be/claude-terminal-views.ts').ClaudeTerminalViewRequest & { localOnly?: true })
+  | (ClaudeUiViewRequest & { localOnly?: true })
   // Thread management events
   | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
   | { type: 'SHOW_CREATE_FORM' }
@@ -1719,8 +1719,8 @@ const threadsState = setup({
     } })), ({ context, event }) => { const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey; tell(id, { ...event, ...(resumeKey ? { resumeKey } : {}) }) }] },
     CLAUDE_UI_UNMOUNT: { actions: [({ context, event }) => {
       forgetClaudeUiLease(event)
-      const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey
-      tell(id, { ...event, ...(resumeKey ? { resumeKey } : {}) })
+      const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey ?? event.resumeKey
+      if (!event.localOnly) tell(id, { type: event.type, threadId: event.threadId, mountId: event.mountId, ...(resumeKey ? { resumeKey } : {}) })
     }, assign(({ context, event }) => {
       const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
       return { nativeUiViews }
@@ -1816,7 +1816,9 @@ const threadsState = setup({
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
     CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, queueComposer: event.queueComposer, opening: false, output: [] } } })), ({ event }) => tell(id, event)] },
-    CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => tell(id, event), assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
+    CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => {
+      if (!event.localOnly) tell(id, { type: event.type, threadId: event.threadId, mountId: event.mountId })
+    }, assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
     CLAUDE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_CANCEL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_SUBMIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },

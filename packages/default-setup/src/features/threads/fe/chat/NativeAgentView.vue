@@ -72,7 +72,7 @@ import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { computed, nextTick, onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useState, useSurface } from '@apackdev/sdk/fe'
-import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
+import { queueClaudeUiRetirement, useClaudeViewUnmount } from './native-ui-retirement.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
@@ -97,6 +97,7 @@ const scrollTarget = props.target
 const transcriptScroll = useClaudeAgentScroll({ viewport: transcriptViewport, content: transcriptContent, active: () => props.active, initial: props.scrollPosition, save: position => emit('scrollPosition', scrollTarget, position) })
 const actor: ThreadsState = useSurface(), uiMount = ref<string>(), terminalMount = crypto.randomUUID()
 const { state: threads, send: sendToThreads } = useState(actor)
+const unmountView = useClaudeViewUnmount(actor, sendToThreads)
 const context = computed(() => threads.value.data)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
 const state = computed(() => snapshot.value?.state)
@@ -170,7 +171,7 @@ function detach() {
     const snapshot = actor.getSnapshot()
     const resumeKey = snapshot.context.nativeUiViews[uiMount.value]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({ ...identity(), resumeKey })
-    if (snapshot.status !== 'stopped') sendToThreads({ type: 'CLAUDE_UI_UNMOUNT', ...identity() })
+    unmountView('CLAUDE_UI_UNMOUNT', identity())
   }
   uiMount.value = undefined
   submission?.reject(Error('Agent view changed before acknowledgment')); submission = undefined
@@ -266,7 +267,7 @@ function edit(value: ClaudePromptEdit) { if (uiMount.value) sendToThreads({ type
 function complete(value: ClaudePromptCompletionRequest) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value }) }
 function host(value: ClaudePromptHostResponse) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value }) }
 onMounted(() => { window.addEventListener('blur', nativeActionKey.cancel); window.addEventListener('focus', renew); window.addEventListener('blur', renew) })
-onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cancel); window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); sendToThreads({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
+onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cancel); window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); unmountView('CLAUDE_TERMINAL_UNMOUNT', terminalIdentity()); emit('pending', false); emit('returning', false) })
 </script>
 
 <style scoped>

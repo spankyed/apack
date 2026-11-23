@@ -152,6 +152,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
+import { useClaudeViewUnmount } from './native-ui-retirement.ts'
 import NativeBackgroundAttachment from './NativeBackgroundAttachment.vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
@@ -165,6 +166,7 @@ watch(backgroundComposing, value => emit('background-composing', value), {immedi
 const actor: ThreadsState = useSurface()
 const mountId = crypto.randomUUID()
 const { state: threads, send } = useState(actor)
+const unmountView = useClaudeViewUnmount(actor, send)
 const views = computed(() => threads.value.data.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
 
@@ -363,7 +365,7 @@ watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.c
   if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })
 }, { immediate: true, flush: 'post' })
 const heartbeat = setInterval(renew, 10000)
-onBeforeUnmount(() => { clearInterval(heartbeat); detach(); send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false); emit('background-composing', false) })
+onBeforeUnmount(() => { clearInterval(heartbeat); detach(); unmountView('CLAUDE_TERMINAL_UNMOUNT', identity()); emit('active', false); emit('background-composing', false) })
 </script>
 
 <style scoped>

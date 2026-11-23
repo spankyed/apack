@@ -350,7 +350,7 @@ import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { ask, tell } from '#generated/events.ts'
 import NativeMemoryPanel from './NativeMemoryPanel.vue'
-import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
+import { queueClaudeUiRetirement, useClaudeViewUnmount } from './native-ui-retirement.ts'
 import { claudeWindowAgentDrafts } from './native-window-draft.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
@@ -368,6 +368,7 @@ const actor: ThreadsState = useSurface();
 // saying so are one step, run once the toast is drawn: the machine drops exactly the failures told
 const toast = ref<InstanceType<typeof ToastNotification>>()
 const { state: threads, send } = useState(actor)
+const unmountView = useClaudeViewUnmount(actor, send)
 watchPostEffect(() => {
   const told = threads.value.data.sendFailures
   if (!toast.value || told.length === 0) return
@@ -634,11 +635,10 @@ function detachNativeUi() {
   nativeBlockExpansion.value = {}
   nativeBlockVisibility.value = {}
   if (mount) {
-    const snapshot = actor.getSnapshot()
     const resumeKey = threads.value.data.nativeUiViews[mount.mountId]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({ ...mount, resumeKey })
-    if (snapshot.status !== 'stopped') send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
-    send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount })
+    unmountView('CLAUDE_UI_UNMOUNT', mount)
+    unmountView('CLAUDE_TERMINAL_UNMOUNT', mount)
   }
   pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }

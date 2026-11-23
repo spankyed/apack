@@ -21,7 +21,7 @@ import NativeAgentComposer from './NativeAgentComposer.vue'
 import {provideClaudeUiSelection} from './native-ui-selection.ts'
 import {provideClaudeHoverGroups} from './native-ui-hover.ts'
 import {claudeTranscriptLayout} from './native-transcript-layout.ts'
-import {queueClaudeUiRetirement} from './native-ui-retirement.ts'
+import {queueClaudeUiRetirement, useClaudeViewUnmount} from './native-ui-retirement.ts'
 import {createClaudeActionKeyHandler} from './native-action-keys.ts'
 import type {ClaudeAgentDraftSnapshot} from './native-agent-draft.ts'
 import type {ClaudeBackgroundUiTarget} from '#features/code/common/native-background.ts'
@@ -31,6 +31,7 @@ const props = defineProps<{threadId: string; target: ClaudeBackgroundUiTarget; a
 const emit = defineEmits<{leave: []; 'open-native': []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]}>()
 const actor: ThreadsState = useSurface(), root = ref<HTMLElement>(), mountId = ref<string>()
 const { state: threads, send: sendToThreads } = useState(actor)
+const unmountView = useClaudeViewUnmount(actor, sendToThreads)
 const context = computed(() => threads.value.data)
 const attachment = computed(() => mountId.value ? context.value.nativeUiViews[mountId.value] : undefined)
 const state = computed(() => attachment.value?.state)
@@ -47,7 +48,7 @@ function detach() {
   if (mountId.value) {
     const snapshot = actor.getSnapshot(), resumeKey = snapshot.context.nativeUiViews[mountId.value]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({...identity(), resumeKey})
-    if (snapshot.status !== 'stopped') sendToThreads({type: 'CLAUDE_UI_UNMOUNT', ...identity()})
+    unmountView('CLAUDE_UI_UNMOUNT', identity())
   }
   mountId.value = undefined
 }

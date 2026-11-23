@@ -2,15 +2,16 @@ import type { ClaudeNativeNotice } from '#features/code/common/native-notice.ts'
 import { createApp, h, ref, nextTick, type App } from 'vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
-const actor = vi.hoisted(() => ({ send: vi.fn() }))
+const actor = vi.hoisted(() => ({ send: vi.fn(), getSnapshot: () => ({ status: 'active' }) }))
 const drawing = vi.hoisted(() => ({ focus: vi.fn() }))
 const links = vi.hoisted(() => ({ open: vi.fn() }))
+const settingsStatus = ref<'ready' | 'disconnected'>('ready')
 const activeSurface = ref({ id: 'default-setup/threads' })
 const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
-vi.mock('@apackdev/sdk/fe', async () => { const { computed } = await import('vue'); return ({ useState: () => ({ state: computed(() => ({ data: state.value.context })), send: actor.send }),  useSurface: () => actor, useShell: () => ({ activeSurface }), openLink: links.open }) })
+vi.mock('@apackdev/sdk/fe', async () => { const { computed } = await import('vue'); return ({ useSettingsStatus: () => settingsStatus, useState: () => ({ state: computed(() => ({ data: state.value.context })), send: actor.send }),  useSurface: () => actor, useShell: () => ({ activeSurface }), openLink: links.open }) })
 vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: drawing.focus,setInputBlocked:vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
 let app: App | undefined
-beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); drawing.focus.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+beforeEach(() => { settingsStatus.value = 'ready'; actor.send.mockClear(); links.open.mockClear(); drawing.focus.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
 async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
@@ -673,4 +674,19 @@ it('keeps pending input from starting or replacing an unavailable native owner',
  }
  f.publish({opening:false,output:[]});await nextTick()
  expect([...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Use native interface'))!.disabled).toBe(true)
+})
+
+
+it.each(['ready', 'disconnected'] as const)('retires the local terminal mount when settings transport is %s', async status => {
+  const { mount } = await fixture()
+  settingsStatus.value = status
+  actor.send.mockClear()
+  app?.unmount()
+  app = undefined
+  expect(actor.send).toHaveBeenCalledWith({
+    type: 'CLAUDE_TERMINAL_UNMOUNT',
+    threadId: 'thread',
+    mountId: mount.mountId,
+    ...(status === 'disconnected' ? { localOnly: true } : {}),
+  })
 })

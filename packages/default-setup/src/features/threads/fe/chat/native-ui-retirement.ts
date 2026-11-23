@@ -1,4 +1,17 @@
-import { surfaceSessionStorage } from '@apackdev/sdk/fe'
+import { surfaceSessionStorage, useSettingsStatus } from '@apackdev/sdk/fe'
+import type { ThreadsState } from '../state.ts'
+
+type ClaudeViewUnmount = 'CLAUDE_UI_UNMOUNT' | 'CLAUDE_TERMINAL_UNMOUNT'
+
+/** Clear the window's mount during a disconnect. Native hosts retire through their leases or queued credentials. */
+export function useClaudeViewUnmount(actor: ThreadsState, send: ThreadsState['send']) {
+  const settingsStatus = useSettingsStatus()
+  return (type: ClaudeViewUnmount, mount: { threadId: string; mountId: string }) => {
+    if (actor.getSnapshot().status === 'stopped') return
+    const status = settingsStatus.value
+    send({ type, ...mount, ...(status === 'disconnected' || status === 'disposed' ? { localOnly: true } : {}) })
+  }
+}
 import { ref as featureRef } from '#generated/ref.ts'
 /** Cleanup must outlive a replaced pack actor, but never the renderer window. */
 export type ClaudeUiRetirement = { threadId: string; mountId: string; resumeKey: string }
