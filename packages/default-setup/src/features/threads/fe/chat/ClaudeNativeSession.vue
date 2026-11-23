@@ -80,9 +80,10 @@
         </template>
       </div>
     </section>
-    <div v-if="view?.teammateReconnect && !view.attachment" class="native-launch__actions">
-      <button type="button" class="native-button" :disabled="view.opening" @click="reconnectTeammate">
-        {{ view.teammateReconnect.recoveryId ? 'Open surviving teammate ·' : 'Reconnect to' }} {{ view.teammateReconnect.name }}
+    <div v-if="view?.teammateReconnects?.length && !view.attachment" class="native-launch__actions">
+      <button v-for="target in view.teammateReconnects" :key="target.recoveryId ?? target.taskId" type="button"
+        class="native-button" :disabled="view.opening" @click="reconnectTeammate(target)">
+        {{ target.recoveryId ? 'Open surviving teammate ·' : 'Reconnect to' }} {{ target.name }}
       </button>
     </div>
     <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt' && (!continuation || launchProblem || view?.opening)" class="native-launch__actions">
@@ -327,9 +328,8 @@ function openTeammateTerminal(task: { id: string; ownerId: string; sessionId: st
   if (!state || state.ownerId !== task.ownerId || state.sessionId !== task.sessionId || view.value?.attachment) return
   send({type:'CLAUDE_TEAMMATE_TERMINAL_OPEN',...identity(),ownerId:task.ownerId,sessionId:task.sessionId,taskId:task.id,revision:++attachmentRevision})
 }
-function reconnectTeammate() {
-  const target = view.value?.teammateReconnect
-  if (!target || view.value?.attachment) return
+function reconnectTeammate(target: import('../../be/claude-terminal-views.ts').ClaudeTeammateReconnect) {
+  if (view.value?.attachment || !view.value?.teammateReconnects?.includes(target)) return
   if (!target.recoveryId) {
     openTeammateTerminal({id: target.taskId, ownerId: target.ownerId, sessionId: target.sessionId})
     return

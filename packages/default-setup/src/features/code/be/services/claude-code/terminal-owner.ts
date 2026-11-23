@@ -603,13 +603,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           // tmux can sanitize control characters in formats. Keep the socket path last
           // so the printable separator can also appear in a legitimate socket directory.
           const panes = await probe(['list-panes', '-s', '-t', session, '-F',
-            '#{pane_id}|#{pid}|#{pane_pid}|#{pane_dead}|#{pane_active}|#{window_active}|#{socket_path}',
+            '#{pane_id}|#{pid}|#{pane_pid}|#{pane_dead}|#{window_active}|#{socket_path}',
           ], abort, address)
           const [row, ...otherMatches] = panes.split('\n')
-            .map(line => /^(%[0-9]+)\|([1-9][0-9]*)\|([1-9][0-9]*)\|([01])\|([01])\|([01])\|(.*)$/.exec(line))
+            .map(line => /^(%[0-9]+)\|([1-9][0-9]*)\|([1-9][0-9]*)\|([01])\|([01])\|(.*)$/.exec(line))
             .filter(match => match?.[1] === paneId)
           if (!row || otherMatches.length) throw new Error('The original tmux pane is missing or ambiguous')
-          const [, , serverPid, workerPid, dead, activePane, activeWindow, socket] = row
+          const [, , serverPid, workerPid, dead, activeWindow, socket] = row
           if (!socket || !isAbsolute(socket) || !serverPid || !workerPid)
             throw new Error('The native teammate socket or process identity is unavailable')
           if (dead !== '0') throw new Error('The original tmux pane has ended')
@@ -623,7 +623,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
             lstat(socket, {bigint:true}), processStart(serverPid), processStart(workerPid),
           ])
           if (!file.isSocket() || file.uid !== BigInt(process.getuid!())) throw new Error('The native teammate socket changed')
-          return {socket, active:activePane === '1' && activeWindow === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
+          return {socket, activeWindow:activeWindow === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
         }
         const verified = process.platform === 'linux' ? await identify(server, signal).catch(error => {
           if (!signal.aborted) logger.warn('Claude teammate reconnect identity unavailable', {
@@ -631,29 +631,33 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           })
           return undefined
         }) : undefined
-        const attach = (address: string[], abort: AbortSignal) => openClaudeTerminalAttachment(
-          executable, [...address, 'attach-session', '-f', 'ignore-size', '-t', session],
-          { id: taskId, sessionId, cwd: options.cwd }, { env, signal:abort })
+        const attach = (args: string[], abort: AbortSignal) => openClaudeTerminalAttachment(
+          executable, args, { id: taskId, sessionId, cwd: options.cwd }, { env, signal:abort })
         ensureCurrent()
-        const client = await attach(server, signal)
+        const client = await attach([...server, 'attach-session', '-f', 'ignore-size', '-t', session], signal)
         if (!verified) return client
         const address = ['-S', verified.socket]
-        const verifyTarget = async (abort: AbortSignal, requireActive: boolean) => {
+        const verifyTarget = async (abort: AbortSignal) => {
           if (!keepAttachedTeammatesAfterCrash) return false
           const current = await identify(address, abort).catch(() => undefined)
-          return !!current && (!requireActive || current.active)
+          return !!current?.activeWindow
             && current.identity.every((value, index) => value === verified.identity[index])
             && await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], abort, address) === 'off'
         }
         return Object.assign(client, {
-          canReconnect: (abort: AbortSignal) => verifyTarget(abort, false),
+          canReconnect: verifyTarget,
           async reconnect(abort: AbortSignal) {
             const ensureTarget = async () => {
-              if (!await verifyTarget(abort, true)) throw new Error('The original teammate pane is no longer available')
+              if (!await verifyTarget(abort)) throw new Error('The original teammate pane is no longer available')
             }
             await ensureTarget()
-            const replacement = await attach(address, abort)
+            const ready = `apack-${randomUUID()}`
+            // Execute select-pane in the attaching client, whose independent active pane
+            // preserves the selection and input routing of other tmux clients.
+            const replacement = await attach([...address, 'attach-session', '-E', '-f', 'ignore-size,active-pane', '-t', session,
+              ';', 'select-pane', '-Z', '-t', `${session}:.${paneId}`, ';', 'wait-for', '-S', ready], abort)
             try {
+              await probe(['wait-for', ready], abort, address)
               await ensureTarget()
               abort.throwIfAborted()
               if (replacement.snapshot.status !== 'live') throw new Error('The teammate terminal disconnected')

@@ -262,18 +262,21 @@ it('retains native MCP form acknowledgments only in the live addressed terminal 
 })
 
 
-it('shows a teammate reconnect offer only in the addressed live window until the offer retires', () => {
+it('shows a teammate reconnect offers only in the addressed live window until the offer retires', () => {
   const actor = createActor(nativeState).start()
   const identity = {mountId:'teammate-view', threadId:'thread'}
-  const teammateReconnect = {ownerId:'owner', sessionId:'session', taskId:'worker', name:'Reviewer'}
-  const reply = {type:'CLAUDE_TERMINAL_STATE' as const, ...identity, opening:false, output:[], teammateReconnect}
-  const projected = () => actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.teammateReconnect
+  const teammateReconnects = [
+    {ownerId:'owner', sessionId:'session', taskId:'worker', name:'Reviewer'},
+    {ownerId:'owner', sessionId:'session', taskId:'other-worker', name:'Editor'},
+  ]
+  const reply = {type:'CLAUDE_TERMINAL_STATE' as const, ...identity, opening:false, output:[], teammateReconnects}
+  const projected = () => actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.teammateReconnects
   actor.send({type:'CLAUDE_TERMINAL_MOUNT', ...identity})
   actor.send({...reply, threadId:'another-thread'})
   expect(projected()).toBeUndefined()
   actor.send(reply)
-  expect(projected()).toEqual(teammateReconnect)
-  actor.send({...reply, teammateReconnect:undefined})
+  expect(projected()).toEqual(teammateReconnects)
+  actor.send({...reply, teammateReconnects:undefined})
   expect(projected()).toBeUndefined()
   actor.send({type:'CLAUDE_TERMINAL_UNMOUNT', ...identity})
   actor.send(reply)
