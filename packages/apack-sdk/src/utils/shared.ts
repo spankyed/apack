@@ -1,6 +1,4 @@
-// Node 24+ / ES2026 `Error.isError` typed directly so source consumers without `ESNext.Error` in `lib` still typecheck.
-const isError = (value: unknown): value is Error =>
-  (Error as ErrorConstructor & { isError(v: unknown): v is Error }).isError(value);
+import { isError } from './is-error.ts';
 
 function isSuppressedError(value: unknown): value is Error & { error: unknown; suppressed: unknown } {
   return isError(value) && value.name === 'SuppressedError' && 'error' in value && 'suppressed' in value;

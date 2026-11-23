@@ -44,7 +44,7 @@ describe('stopping a bounded spawn', () => {
     const childCode = `process.on('SIGTERM', () => {}); console.log(process.pid); setInterval(() => {}, 1000)`;
     fs.writeFileSync(script, `import { boundedSpawn } from ${JSON.stringify(helper)};
 await boundedSpawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], 30000, {stream: true});`);
-    const parent = spawn(process.execPath, ['--import', 'tsx', script], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    const parent = spawn(process.execPath, [script], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
     let grandchild = 0;
     try {
       const exited = once(parent, 'exit');

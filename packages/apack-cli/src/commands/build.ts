@@ -38,6 +38,7 @@ import { bundlePackFlowHelpers } from '../build/flow-helpers-bundler';
 import { PACK_LAYOUT, sealPackBuild, readPackBuild } from '@apackdev/host/packs';
 import { buildStagingDir, publishPackBuild, type PackBuildCandidate } from '../build/build-publication.ts';
 import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { createCompilerModuleLoader } from '../build/compiler-modules.ts';
 import { holdPackBuildLock } from '../build/build-lock.ts';
 import { dependencyTypes, resolveDependencyFiles } from './generate';
@@ -272,7 +273,7 @@ async function buildIntoStaging(args: string[], root: string) {
     await modules.dispose();
     // compilation.finish() below re-checks the captured inputs before anything is published.
     try { assertGeneratedStampCurrent(root, manifest, resolvedDependencies, compilation); }
-    catch (error) { failures.push(error instanceof Error ? error.message : String(error)); }
+    catch (error) { failures.push(errorMessage(error)); }
     if (packInputsHash(root) !== inputsHash) failures.push('Pack inputs changed during the build; retry before publishing');
     failures.push(...generatedDeclarationProblems(root, snapshot.declarationRevision, !args.includes('--skip-fe')));
     const validation = parseSnapshot(snapshot);

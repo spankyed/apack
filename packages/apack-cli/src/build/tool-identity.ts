@@ -6,6 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { packInputFiles, packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { dependencyClosure, packageIdentity } from '@apackdev/host/build/package-identity';
 
+const defaultModuleUrl = (): string =>
+  (typeof __filename === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+
 function packageRoot(entry: string): string {
   const manifest = findPackageJSON(pathToFileURL(entry));
   if (!manifest) throw new Error(`Cannot locate build tool package for ${entry}`);
@@ -21,7 +24,7 @@ function packageRoot(entry: string): string {
  * the SDK has linked from another checkout (`npm run deps:local`), and beside a published CLI the installed SDK,
  * whose declarations the bundled code reads.
  */
-export function buildToolHash(moduleUrl = import.meta.url): string {
+export function buildToolHash(moduleUrl = defaultModuleUrl()): string {
   const entry = fs.realpathSync.native(fileURLToPath(moduleUrl));
   const root = cliPackageDirectory(moduleUrl);
   const source = path.relative(root, entry).split(path.sep)[0] === 'src';
@@ -77,7 +80,7 @@ function identityLine(directory: string): string {
 }
 
 /** The executing CLI's owner, shared by implementation and npm resolution scopes. */
-export function cliPackageDirectory(moduleUrl = import.meta.url): string {
+export function cliPackageDirectory(moduleUrl = defaultModuleUrl()): string {
   const root = packageRoot(fileURLToPath(moduleUrl));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (manifest.name !== '@apackdev/cli') throw new Error(`Unexpected build tool package: ${manifest.name}`);

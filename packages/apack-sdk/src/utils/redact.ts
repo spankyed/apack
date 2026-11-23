@@ -1,4 +1,5 @@
 // Keeps API keys out of logs and error reports: a backstop for anything that writes text or data it didn't build
+import { isError } from './is-error.ts';
 
 /**
  * Strings shaped like provider API keys (OpenAI, Anthropic, Groq, Google), masked or not, wherever they start after a
@@ -128,8 +129,6 @@ export function redactSecrets<T>(value: T): T {
       if (Array.isArray(current)) return current.map(visit);
       const fields = Object.fromEntries(Object.entries(current).map(([key, field]) =>
         [key, SECRET_FIELDS.test(key) && field !== null && field !== undefined && field !== '' ? REDACTED : visit(field)]));
-      const isError = (value: unknown): value is Error =>
-        (Error as ErrorConstructor & { isError(v: unknown): v is Error }).isError(value);
       if (!isError(current)) return fields;
       // cause, AggregateError.errors, and SuppressedError.error/suppressed are non-enumerable own fields
       const { cause, errors, error, suppressed } = current as Error & {

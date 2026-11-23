@@ -12,6 +12,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     // Relative imports name the .ts source; tsdown resolves them. Not rewriteRelativeImportExtensions:
     // vue-tsc only emits declarations, and reports TS2876 for .vue imports with it
     "allowImportingTsExtensions": true,

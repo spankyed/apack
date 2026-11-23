@@ -79,7 +79,7 @@
     "test:explorer": "npm run packages:ensure && node scripts/with-source.mjs playwright test --ui",
     "test:external-pack": "npm run packages:ensure && node scripts/bounded.ts scenario bash tests/acceptance/external-pack/test-external-pack.sh",
     "test:external-pack:contract": "npm run packages:ensure && node scripts/bounded.ts suite bash tests/acceptance/external-pack/test-external-pack-contract.sh",
-    "test:external-pack:fork": "npm run packages:ensure && node scripts/bounded.ts scenario tsx tests/acceptance/external-pack/prepare-default-pack-fork.ts",
+    "test:external-pack:fork": "npm run packages:ensure && node scripts/bounded.ts scenario node tests/acceptance/external-pack/prepare-default-pack-fork.ts",
     "test:external-pack:app": "node scripts/bounded.ts scenario bash tests/acceptance/external-pack/test-external-pack-app.sh",
     "test:packaged-authoring": "node scripts/bounded.ts scenario bash tests/acceptance/packaged-authoring/test-packaged-authoring.sh",
     "test:packaged-authoring:author": "node scripts/bounded.ts scenario bash tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh",

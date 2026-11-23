@@ -14,6 +14,7 @@
     "customConditions": ["@apackdev/source"],
     // Their relative imports name .ts sources
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "noEmit": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
 

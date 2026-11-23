@@ -20,6 +20,7 @@ import { startPackFrontend, type PackFrontend, type PackFrontendAddress, type Fr
 import { findFEEntry, readPackDevServerInputs } from './fe-bundler.ts';
 import { assertCompilerLibraryEnvironment } from './compiler-native-libraries.ts';
 import { mergeCompilerWatchPaths, type CompilerWatchPaths } from './compiler-watch.ts';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 // Give worker SIGTERM handlers a short cleanup phase before forced termination.
 const STOP_GRACE_MS = 2_000;
@@ -206,7 +207,7 @@ export function createPackBuilder(root: string, {
               try { address = await ensureFrontend(candidate, options.signal); }
               catch (restart) {
                 candidate.frontend = stale;
-                throw new Error(`The build was published, but its dev server could not restart: ${restart instanceof Error ? restart.message : String(restart)}`,
+                throw new Error(`The build was published, but its dev server could not restart: ${errorMessage(restart)}`,
                   { cause: new AggregateError([error, restart]) });
               }
               retired = stale;

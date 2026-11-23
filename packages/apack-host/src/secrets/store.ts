@@ -6,6 +6,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import { _secretRules, _secretProviderLabel, _toSecretMetadata, type ProviderName, type SecretMetadata, type SecretProvider, type SecretsStatus } from '@apackdev/sdk/services';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { registerSecretValue } from './redaction.ts';
 import { writePrivateFile } from '../private-file.ts';
 import { dataKeyAccount, KeyVaultUnavailableError, type KeyVault } from './vault.ts';
@@ -325,7 +326,7 @@ export function createSecretsStore(options: SecretsStoreOptions): SecretsStore {
     clearAll() {
       if (!fs.existsSync(options.filePath)) return;
       const remove = (reason: string, error: unknown) => {
-        console.warn(`[secrets] Deleting ${options.filePath}, which ${reason}:`, error instanceof Error ? error.message : error);
+        console.warn(`[secrets] Deleting ${options.filePath}, which ${reason}:`, errorMessage(error));
         fs.rmSync(options.filePath, { force: true });
         notify();
       };

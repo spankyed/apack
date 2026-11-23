@@ -4,6 +4,7 @@
     "incremental": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/internal-publish-checks.tsbuildinfo",
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
     "target": "ES2024",
