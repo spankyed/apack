@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "packs": [
+    {
+      "id": "default-setup",
+      "version": "0.1.0",
+      "archive": {
+        "url": "https://github.com/spankyed/default-setup/releases/download/v0.1.0/default-setup-0.1.0.tgz",
+        "sha256": "f7092d93b06603445dea81adde4723da94cb388d24b3b13d997cf879c9f02765"
+      },
+      "redistribution": {
+        "url": "https://github.com/spankyed/default-setup/releases/download/v0.1.0/redistribution.json",
+        "sha256": "2eb71fbf5186ff621170273743c1d2bf966964747a8e0c3b813ea49ed8a6c647"
+      }
+    }
+  ]
+}
