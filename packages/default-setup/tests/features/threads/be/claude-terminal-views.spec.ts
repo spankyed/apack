@@ -1259,3 +1259,43 @@ it('recovers two verified teammates after all windows close and keeps each resum
     expect(latest()?.teammateReconnects?.every(target => target.recoveryId && target.recoveryId !== offers.get(target.taskId))).toBe(true)
   } finally { f.views.clear() }
 })
+
+
+it('restores a verified sleeping backend checkpoint only for the saved conversation', async () => {
+  const f = fixture(), sessionId = f.owner.state.sessionId, taskId = 'restored-worker'
+  const target = { ownerId: randomUUID(), sessionId, taskId, name: 'Reviewer' }
+  const input = vi.fn()
+  const close = vi.fn(async () => {})
+  const reopened = {
+    snapshot: { id: randomUUID(), terminalSession: { id: randomUUID(), target: null }, jobId: taskId,
+      sessionId, cwd: '/fixture', clientPid: 234, status: 'live' as const, output: [] },
+    input, resize: vi.fn(), subscribe: vi.fn(() => () => {}), close,
+  }
+  const open = vi.fn(async () => reopened)
+  let saved = sessionId
+  let owner: ClaudeNativeTerminalOwner | undefined
+  const views = createClaudeTerminalViews({ get: () => owner, open: f.open, savedSession: () => saved,
+    loadTeammateRecovery: async () => [{ target, open }] })
+  const latest = () => f.send.mock.lastCall?.[0]
+  try {
+    views.handle(mount, 'restart', f.send)
+    await vi.waitFor(() => expect(latest()?.teammateReconnects).toHaveLength(1))
+    const recoveryId = latest()?.teammateReconnects?.[0]?.recoveryId
+    expect(recoveryId).toBeTruthy()
+    const request = { ...mount, type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ...target, recoveryId, revision: 1 }
+    views.handle(request, 'incorrect-window', f.send)
+    views.handle({ ...request, sessionId: randomUUID() }, 'restart', f.send)
+    expect(open).not.toHaveBeenCalled()
+    views.handle(request, 'restart', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.state?.id).toBe(reopened.snapshot.id))
+    views.handle({ ...mount, type: 'CLAUDE_BACKGROUND_INPUT', attachmentId: reopened.snapshot.id, text: 'worker draft' }, 'restart', f.send)
+    expect(input).toHaveBeenCalledExactlyOnceWith(reopened.snapshot.id, 'worker draft')
+    owner = f.owner
+    views.handle(mount, 'restart', f.send)
+    expect(close).toHaveBeenCalledOnce()
+    expect(latest()?.teammateReconnects?.[0]?.recoveryId).not.toBe(recoveryId)
+    saved = owner.state.sessionId = randomUUID()
+    views.handle(mount, 'restart', f.send)
+    expect(latest()?.teammateReconnects).toBeUndefined()
+  } finally { views.clear() }
+})

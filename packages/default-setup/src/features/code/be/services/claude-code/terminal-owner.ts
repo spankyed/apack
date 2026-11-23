@@ -23,7 +23,8 @@ import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
 import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
-import { lstat, readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
+import { createClaudeTeammateRecovery, identifyClaudeRecoveryPane, saveClaudeTeammateCheckpoint, type ClaudeRecoveryPane } from './teammate-recovery.ts'
 import { resolveClaudeExecutable } from './native-executable.ts'
 import { projectClaudeTerminalImageReferences } from './terminal-image-reference.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
@@ -107,6 +108,7 @@ export interface ClaudePreparedNativeTerminal { start(): Promise<ClaudeNativeTer
 export interface ClaudeNativeTerminalOptions {
   sessionId: string
   cwd: string
+  teammateRecoveryThread?: string
   settings: ClaudeSettings
   permissionMode: PermissionMode
   prePlanMode?: PermissionMode
@@ -158,6 +160,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let exitCode: number | undefined, stopping = false, changingModel = false, changingPermission = false
   let startupPolicyProblem: string | undefined
   let keepAttachedTeammatesAfterCrash = false
+  const verifiedPanes = new Map<string, ClaudeRecoveryPane>()
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
@@ -206,6 +209,12 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       // writes this diagnostic directly to the terminal before exiting.
       const tail = stripVTControlCharacters(output.map(chunk => chunk.text).join(''))
       startupPolicyProblem = tail.match(/^[^\r\n]{1,4096}: Managed settings document could not be parsed as a JSON object; none of its settings are in effect\. Fix or remove it\.\r?$/m)?.[0].trim()
+    }
+    if (keepAttachedTeammatesAfterCrash && options.teammateRecoveryThread && verifiedPanes.size) {
+      const sessionId = bridge.projection.sessionId
+      const panes = [...verifiedPanes.values()].filter(pane => pane.sessionId === sessionId)
+      await saveClaudeTeammateCheckpoint({profile:resolveAppEnvironment().userDataDir, threadId:options.teammateRecoveryThread, sessionId}, panes, env)
+        .catch(error => logger.warn('Claude teammate checkpoint could not be saved', { error: error instanceof Error ? error.message : String(error) }))
     }
     try { await bridge.close() } finally {
       releasing = true
@@ -596,76 +605,26 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (!session || await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], signal) !== 'off'
           || !(await probe(['list-panes', '-s', '-t', session, '-F', '#{pane_id}'], signal)).split('\n').includes(paneId))
           throw Error('The native teammate terminal cannot be safely attached')
-        // The live native task lookup authorizes this exact pane. Remember the socket and
-        // process generations while that authority still exists. A server name or pane number
-        // alone can be reused after a crash. Failed identity reads leave ordinary attach usable.
-        const identify = async (address: string[], abort: AbortSignal) => {
-          // tmux can sanitize control characters in formats. Keep the socket path last
-          // so the printable separator can also appear in a legitimate socket directory.
-          const panes = await probe(['list-panes', '-s', '-t', session, '-F',
-            '#{pane_id}|#{pid}|#{pane_pid}|#{pane_dead}|#{window_active}|#{socket_path}',
-          ], abort, address)
-          const [row, ...otherMatches] = panes.split('\n')
-            .map(line => /^(%[0-9]+)\|([1-9][0-9]*)\|([1-9][0-9]*)\|([01])\|([01])\|(.*)$/.exec(line))
-            .filter(match => match?.[1] === paneId)
-          if (!row || otherMatches.length) throw new Error('The original tmux pane is missing or ambiguous')
-          const [, , serverPid, workerPid, dead, activeWindow, socket] = row
-          if (!socket || !isAbsolute(socket) || !serverPid || !workerPid)
-            throw new Error('The native teammate socket or process identity is unavailable')
-          if (dead !== '0') throw new Error('The original tmux pane has ended')
-          const processStart = async (pid: string) => {
-            const info = await readFile('/proc/' + pid + '/stat', { encoding:'utf8', signal:abort })
-            const fields = info.slice(info.lastIndexOf(') ') + 2).split(' ')
-            if (!fields[19] || fields[0] === 'Z') throw new Error('The native teammate process ended')
-            return fields[19]
-          }
-          const [file, serverStart, workerStart] = await Promise.all([
-            lstat(socket, {bigint:true}), processStart(serverPid), processStart(workerPid),
-          ])
-          if (!file.isSocket() || file.uid !== BigInt(process.getuid!())) throw new Error('The native teammate socket changed')
-          return {socket, activeWindow:activeWindow === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
-        }
-        const verified = process.platform === 'linux' ? await identify(server, signal).catch(error => {
+        // Only the original native task lookup can grant a pane identity.
+        const task = bridge.projection.tasks.find(item => item.id === taskId)
+        const verified = task ? await identifyClaudeRecoveryPane({ownerId, sessionId, taskId, name:task.name,
+          executable, cwd:options.cwd, tmuxSession:session, paneId}, server, env, signal).catch(error => {
           if (!signal.aborted) logger.warn('Claude teammate reconnect identity unavailable', {
             error: error instanceof Error ? error.message : String(error),
           })
           return undefined
         }) : undefined
-        const attach = (args: string[], abort: AbortSignal) => openClaudeTerminalAttachment(
-          executable, args, { id: taskId, sessionId, cwd: options.cwd }, { env, signal:abort })
         ensureCurrent()
-        const client = await attach([...server, 'attach-session', '-f', 'ignore-size', '-t', session], signal)
+        const client = await openClaudeTerminalAttachment(executable, [...server, 'attach-session', '-f', 'ignore-size', '-t', session],
+          { id: taskId, sessionId, cwd: options.cwd }, { env, signal })
         if (!verified) return client
-        const address = ['-S', verified.socket]
-        const verifyTarget = async (abort: AbortSignal) => {
-          if (!keepAttachedTeammatesAfterCrash) return false
-          const current = await identify(address, abort).catch(() => undefined)
-          return !!current?.activeWindow
-            && current.identity.every((value, index) => value === verified.identity[index])
-            && await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], abort, address) === 'off'
-        }
+        verifiedPanes.set(taskId, verified)
+        const recovery = createClaudeTeammateRecovery(verified, env)
         return Object.assign(client, {
-          canReconnect: verifyTarget,
-          async reconnect(abort: AbortSignal) {
-            const ensureTarget = async () => {
-              if (!await verifyTarget(abort)) throw new Error('The original teammate pane is no longer available')
-            }
-            await ensureTarget()
-            const ready = `apack-${randomUUID()}`
-            // Execute select-pane in the attaching client, whose independent active pane
-            // preserves the selection and input routing of other tmux clients.
-            const replacement = await attach([...address, 'attach-session', '-E', '-f', 'ignore-size,active-pane', '-t', session,
-              ';', 'select-pane', '-Z', '-t', `${session}:.${paneId}`, ';', 'wait-for', '-S', ready], abort)
-            try {
-              await probe(['wait-for', ready], abort, address)
-              await ensureTarget()
-              abort.throwIfAborted()
-              if (replacement.snapshot.status !== 'live') throw new Error('The teammate terminal disconnected')
-              return replacement
-            } catch (error) {
-              await replacement.close()
-              throw error
-            }
+          canReconnect: (abort: AbortSignal) => keepAttachedTeammatesAfterCrash ? recovery.canReconnect(abort) : Promise.resolve(false),
+          reconnect(abort: AbortSignal) {
+            if (!keepAttachedTeammatesAfterCrash) throw Error('The original teammate pane is unavailable')
+            return recovery.reconnect(abort)
           },
         })
       },

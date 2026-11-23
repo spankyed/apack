@@ -5,7 +5,10 @@ import { copyClaudeChannelSelection } from '#features/code/common/native-channel
 import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
 import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
-import { createClaudeTerminalViews } from './claude-terminal-views.ts';
+import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { createClaudeTeammateRecovery, readClaudeTeammateCheckpoint } from '#features/code/be/services/claude-code/teammate-recovery.ts';
+import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts';
+import { createClaudeTerminalViews, type TeammateReconnectAuthority } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
 import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews, operateClaudeMemory } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
@@ -97,6 +100,22 @@ const terminalViews = createClaudeTerminalViews({
   accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   savedSession: key => repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.sessionId,
+  async loadTeammateRecovery(key, signal) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    const launch = readSavedClaudeNativeLaunch(state);
+    if (!launch || signal.aborted || state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) return [];
+    const records = await readClaudeTeammateCheckpoint({profile:resolveAppEnvironment().userDataDir, threadId:key, sessionId:launch.sessionId});
+    const env = buildChildEnv(claudeProfileOptions(state).env);
+    const result: TeammateReconnectAuthority[] = [];
+    for (const record of records) {
+      if (signal.aborted) break;
+      if (record.cwd !== launch.cwd) continue;
+      const recovery = createClaudeTeammateRecovery(record, env);
+      if (await recovery.canReconnect(signal)) result.push({target:{ownerId:record.ownerId, sessionId:record.sessionId, taskId:record.taskId, name:record.name},
+        open:recovery.reconnect, available:recovery.canReconnect});
+    }
+    return result;
+  },
   get: key => services.cli.claudeCode.getNativeTerminal(key),
   async open(key, signal) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
