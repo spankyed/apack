@@ -124,12 +124,51 @@ function getPackManifest(): { id: string; surfaceIds: string[] } | null {
 
 const E2E_VIEWPORT = { width: 1400, height: 900 };
 
-/** The pack's recorded install or apply error in the test app's installed packs, if any. */
+/**
+ * Each app's renderer console errors from its launch on. A page fixture listens only once it has found the main window,
+ * and a pack's frontend can fail to load before then: without this the error is never heard, and the fixture waits
+ * for surfaces that are not coming instead of failing with why. What arrives before the first listener is kept and
+ * handed to it; after that, errors go to whoever is listening.
+ */
+const consoleErrors = new WeakMap<ElectronApplication, { early: string[] | undefined; listeners: Set<(text: string) => void> }>();
+
+function recordConsoleErrors(app: ElectronApplication): void {
+  const record = { early: [] as string[] | undefined, listeners: new Set<(text: string) => void>() };
+  consoleErrors.set(app, record);
+  const watch = (page: Page) => page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    if (record.early) record.early.push(message.text());
+    for (const listener of record.listeners) listener(message.text());
+  });
+  app.windows().forEach(watch);
+  app.on('window', watch);
+}
+
+/** Hands `listener` every console error the app's windows log, the ones before any listener first; answers how to stop */
+function hearConsoleErrors(app: ElectronApplication, listener: (text: string) => void): () => void {
+  const record = consoleErrors.get(app);
+  if (!record) return () => {};
+  const early = record.early ?? [];
+  record.early = undefined;
+  for (const text of early) listener(text);
+  record.listeners.add(listener);
+  return () => { record.listeners.delete(listener); };
+}
+
+/**
+ * The pack's recorded install or apply error in the test app's installed packs, if any. A registry that exists and
+ * cannot be read is said in the log, since this is what a failed apply is diagnosed from, but fails nothing: the
+ * registry is the app's to write, and a read beside a write is not the pack's fault.
+ */
 function readPackLastError(packId: string, userDataDir: string): string | undefined {
   try {
     const registry = JSON.parse(fs.readFileSync(resolveAppEnvironment({ env: 'test', userDataDir }).installedPacksFile, 'utf-8'));
     return registry.packs?.find((p: { id: string }) => p.id === packId)?.lastError;
-  } catch {
+  } catch (error) {
+    // A test app that never installed a pack has no registry, which is nothing to report
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(`[e2e] couldn't read the installed packs registry to look for ${packId}'s apply error: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return undefined;
   }
 }
@@ -731,6 +770,7 @@ export function createTest(options: CreateTestOptions = {}) {
         reportLaunchPhase('process-attached', monotonicStart, app.process().pid);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
+        recordConsoleErrors(app);
         // From the launch rather than the close, so a quit the app starts itself is seen too; `closeApp` reads it
         await watchQuitSequence(app);
         if (process.env.DEBUG_E2E) {
@@ -816,19 +856,17 @@ export function createTest(options: CreateTestOptions = {}) {
         console.error('[page error]', error);
         rendererErrors.push(`[page error] ${error.stack ?? error.message}`);
       };
-      const onConsole = (msg: import('@playwright/test').ConsoleMessage) => {
-        if (msg.type() === 'error') {
-          console.error(`[console.error] ${msg.text()}`);
-          rendererErrors.push(`[console.error] ${msg.text()}`);
-          // Only the pack under test fails fast; other installed packs' errors are just reported
-          const packId = getPackManifest()?.id;
-          if (packId && msg.text().includes(`[pack-loader] Failed to load FE entry pack://${packId}/`)) {
-            rejectPackFeFailed(describeFailure('Pack FE failed to load', electronApp, rendererErrors));
-          }
+      const onConsoleError = (text: string) => {
+        console.error(`[console.error] ${text}`);
+        rendererErrors.push(`[console.error] ${text}`);
+        // Only the pack under test fails fast; other installed packs' errors are just reported
+        const packId = getPackManifest()?.id;
+        if (packId && text.includes(`[pack-loader] Failed to load FE entry pack://${packId}/`)) {
+          rejectPackFeFailed(describeFailure('Pack FE failed to load', electronApp, rendererErrors));
         }
       };
       page.on('pageerror', onPageError);
-      page.on('console', onConsole);
+      const stopConsole = hearConsoleErrors(electronApp, onConsoleError);
 
       const waitOrDescribe = async (what: string, wait: Promise<unknown>) => {
         try {
@@ -903,7 +941,7 @@ export function createTest(options: CreateTestOptions = {}) {
       }
 
       page.removeListener('pageerror', onPageError);
-      page.removeListener('console', onConsole);
+      stopConsole();
 
       // Read after the test rather than during it, so a drop fails the test that caused it. A page that
       // navigated away loses the collector, which is a miss rather than a false alarm.

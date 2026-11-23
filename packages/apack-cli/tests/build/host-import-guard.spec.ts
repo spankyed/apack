@@ -54,3 +54,30 @@ describe('apack pack build rejects @apackdev/host imports', () => {
     expect(await bundlePackRuntime(dir, path.join(dir, 'dist'))).toEqual({ success: true });
   });
 });
+
+/**
+ * A package the host shares with pack frontends only is left external, so a backend import of one would build and then
+ * fail as the backend loader, which provides none of them, loads the pack. A component imported by path is not that:
+ * a definition names one for the renderer, and the backend gets an empty module.
+ */
+describe('apack pack build rejects frontend-only packages in backend code', () => {
+  it('fails the backend runtime that imports one, naming it', async () => {
+    const dir = pack({ 'src/__generated__/pack-entry.ts': "import { ref } from 'vue';\nexport const registration = { ref };\n" });
+    const result = await bundlePackRuntime(dir, path.join(dir, 'dist'));
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/vue is only for a pack's frontend; backend code can't import it/);
+  });
+
+  it('fails a subpath of one too', async () => {
+    const dir = pack({ 'src/__generated__/steps-build.ts': "import * as icons from 'lucide-vue-next/dist/esm/icons';\nexport default icons;\n" });
+    expect((await bundlePackStepBuild(dir, path.join(dir, 'dist'))).error).toMatch(/lucide-vue-next\/dist\/esm\/icons is only for a pack's frontend/);
+  });
+
+  it('still stubs a component a definition names by path', async () => {
+    const dir = pack({
+      'src/form.vue': '<template><div /></template>\n',
+      'src/__generated__/pack-entry.ts': "import form from '../form.vue';\nexport const registration = { form };\n",
+    });
+    expect(await bundlePackRuntime(dir, path.join(dir, 'dist'))).toEqual({ success: true });
+  });
+});

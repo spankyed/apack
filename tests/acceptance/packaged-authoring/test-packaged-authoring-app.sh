@@ -82,7 +82,30 @@ node -e '
 
 
 step "No symlinks into the monorepo"
-if find "$PACK/node_modules" "$WORK/tools/node_modules" -maxdepth 2 -type l -lname "$ROOT*" | grep -q .; then
+# Every link at any depth, by where it resolves rather than how it is spelled: a relative link, one reached through a
+# symlinked checkout path, or one nested in a package's own node_modules reaches the monorepo just the same
+linked="$(node -e '
+  const fs = require("node:fs"), path = require("node:path");
+  const [root, ...dirs] = process.argv.slice(1);
+  const checkout = fs.realpathSync(root) + path.sep;
+  const found = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const at = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        let target;
+        try { target = fs.realpathSync(at); } catch { continue; }
+        if ((target + path.sep).startsWith(checkout)) found.push(at + " -> " + target);
+      } else if (entry.isDirectory()) walk(at);
+    }
+  };
+  dirs.forEach(walk);
+  console.log(found.join("\n"));
+' "$ROOT" "$PACK/node_modules" "$WORK/tools/node_modules")" || fail "couldn't look for links into the monorepo"
+if [ -n "$linked" ]; then
+  echo "$linked" >&2
   fail "node_modules links into the monorepo"
 fi
 

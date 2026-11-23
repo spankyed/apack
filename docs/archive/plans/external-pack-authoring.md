@@ -3,7 +3,7 @@
 Status: archived 2026-10-21. Its release and distribution items are owned by the deferred
 [release readiness](../../plans/deferred/external-pack-release-readiness.md) and
 [npm/Homebrew distribution](../../plans/deferred/npm-and-homebrew-distribution.md) plans, and its unverified findings
-by [an issue](../../issues/ISSUE-external-pack-authoring-findings.md). Retained from the
+by [an issue](../issues/ISSUE-external-pack-authoring-findings.md). Retained from the
 [archived review](external-pack-authoring-followups.md).
 
 ## Work with an existing goal
