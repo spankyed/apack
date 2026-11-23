@@ -21,7 +21,89 @@ function nativeFileCompletionToken(box){
 function validNativeMention(value){
  return typeof value==='string'&&value.length>0&&value.length<=4096&&!/["\u0000-\u001f\u007f]/u.test(value);
 }
-function nativeReferenceRows(n,context,files,query){
+const templateRefreshes=new WeakMap(),templateReconnectFailures=new WeakMap();
+async function nativeResourceTemplates(transport,context,current){
+ const mcp=context.getAppState().mcp;
+ const listed=mcp?.resourceTemplates??{};
+ if(!mcp?.clients.some(connection=>connection.type==='connected'&&!Object.hasOwn(listed,connection.name)))return listed;
+ // Let the owning CLI backfill its inventory; concurrent app composers share that read.
+ let pending=templateRefreshes.get(context.session);
+ if(!pending){
+  pending=transport.refreshResourceTemplates(mcp.clients,listed).finally(()=>templateRefreshes.delete(context.session));
+  templateRefreshes.set(context.session,pending);
+ }
+ const refreshed=await pending;
+ if(!current())return {};
+ if(refreshed.length)context.setAppState(state=>{
+  let templates=state.mcp.resourceTemplates;
+  for(const {client,templates:rows} of refreshed){
+   if(Object.hasOwn(templates,client.name)||!state.mcp.clients.some(connection=>
+    connection.type==='connected'&&connection.name===client.name&&connection.client===client.client))continue;
+   templates={...templates,[client.name]:rows};
+  }
+  return templates===state.mcp.resourceTemplates?state:{...state,mcp:{...state.mcp,resourceTemplates:templates}};
+ });
+ return context.getAppState().mcp.resourceTemplates;
+}
+function nativeTemplatePrefix(uri){return uri.split('{',1)[0];}
+function nativeTemplateSlot(template,uri){
+ const parts=template.uriTemplate.split(/\{([^{}]+)\}/u);
+ const args=Object.create(null);
+ let offset=0;
+ for(let i=0;i<parts.length;i+=2){
+  if(!uri.startsWith(parts[i],offset))return;
+  offset+=parts[i].length;
+  if(i+1>=parts.length)return;
+  const arg=parts[i+1].replace(/^[+#./;?&]/u,'').replace(/\*$|:\d+$/u,'').split(',',1)[0];
+  const following=parts[i+2]??'';
+  const next=following?uri.indexOf(following,offset):-1;
+  if(next<0)return {template,args,arg,value:uri.slice(offset),offset,following,partial:!!following&&i+3<parts.length,variables:(parts.length-1)/2};
+  args[arg]=uri.slice(offset,next);
+  offset=next;
+ }
+}
+function nativeTemplateListing(server,template){
+ return {type:'template',displayText:server+':'+nativeTemplatePrefix(template.uriTemplate),
+  server,uriTemplate:template.uriTemplate,name:template.name||template.uriTemplate,description:template.description||template.name||template.uriTemplate,
+  partial:true};
+}
+async function nativeTemplateCompletions(n,context,listed,query,transport,current){
+ const colon=query.indexOf(':');
+ if(colon<0)return;
+ const server=query.slice(0,colon),uri=query.slice(colon+1);
+ if(!Object.hasOwn(listed,server))return;
+ const templates=listed[server];
+ let slot;
+ for(const template of templates){
+  const candidate=nativeTemplateSlot(template,uri);
+  if(!candidate)continue;
+  const args=Object.keys(candidate.args).length,previous=slot&&Object.keys(slot.args).length;
+  if(!slot||args>previous||args===previous&&(candidate.offset>slot.offset||
+   candidate.offset===slot.offset&&candidate.variables>slot.variables))slot=candidate;
+ }
+ if(!slot){
+  const prefixes=uri?templates.filter(template=>template.uriTemplate.length>uri.length&&template.uriTemplate.startsWith(uri)):[];
+  return prefixes.length?prefixes.slice(0,15).map(template=>nativeTemplateListing(server,template)):undefined;
+ }
+ const connection=context.getAppState().mcp.clients.find(client=>client.name===server&&n.referenceSearch.Is(client));
+ if(!connection||!current())return [];
+ if(connection.type==='cached'&&Date.now()<(templateReconnectFailures.get(connection)??0))return [];
+ const connected=await transport.ensureConnectedClient(connection,{context:'MCP template completion'}).catch(()=>{
+  if(connection.type==='cached')templateReconnectFailures.set(connection,Date.now()+5000);
+ });
+ const stillConnected=()=>current()&&context.getAppState().mcp.clients.some(client=>client.name===server&&
+  (client===connection||client.type==='connected'&&client.client===connected?.client))&&
+  context.getAppState().mcp.resourceTemplates?.[server]?.includes(slot.template);
+ if(!connected||!stillConnected())return [];
+ const values=await transport.completeResourceTemplate(connected,slot.template.uriTemplate,slot.arg,slot.value,slot.args);
+ if(!stillConnected())return [];
+ return values.slice(0,15).flatMap(value=>{
+  if(!validNativeMention(value))return [];
+  const suffix=value+slot.following,mention=server+':'+uri.slice(0,slot.offset)+suffix;
+  return [{displayText:suffix,mention,description:slot.template.description||slot.template.name,partial:slot.partial}];
+ });
+}
+function nativeReferenceRows(n,context,files,query,listed){
  if(!n.referenceSearch||n.referenceWorkspace.Ct())return files.slice(0,15);
  const state=context.getAppState();
  const resources=Object.values(state.mcp?.resources??{}).flat().flatMap(resource=>{
@@ -38,7 +120,8 @@ function nativeReferenceRows(n,context,files,query){
    ? [{type:'agent',displayText,agentType,description:agent.whenToUse}]
    : [];
  });
- const references=[...resources,...agents];
+ const templates=Object.entries(listed).flatMap(([server,rows])=>rows.map(template=>nativeTemplateListing(server,template)));
+ const references=[...resources,...templates,...agents];
  if(!query)return [...files,...references].slice(0,15);
  if(!references.length)return files.slice(0,15);
  // Match and rank against the same fields and scorer used in the pinned terminal.
@@ -54,22 +137,40 @@ async function nativeFileCompletions(n,clientId,token,abort){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')return [];
  const context=binding.toolContext(abort),{storageV5}=context;
- const index=n.fileSuggestions.RSe;
- let rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
- const tracked=index.fileListRefreshPromise,untracked=index.untrackedFetchPromise;
- if(tracked||untracked){
-  await tracked;
-  await (index.untrackedFetchPromise??untracked);
-  if(abort.signal.aborted||!clientViewCurrent(n,clientId))return [];
-  rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
+ const current=()=>!abort.signal.aborted&&clientViewCurrent(n,clientId)&&(originalContext??n.runtime.ey())===binding;
+ let listed={},templateRows;
+ if(n.referenceTransport&&!n.referenceWorkspace.Ct()){
+  const transport=n.referenceTransport.mcpClientModule();
+  const inventory=await nativeResourceTemplates(transport,context,current).catch(()=>context.getAppState().mcp?.resourceTemplates??{});
+  if(!current())return [];
+  listed=Object.fromEntries(Object.entries(inventory).flatMap(([server,templates])=>validNativeMention(server)
+   ? [[server,templates.filter(template=>validNativeMention(template.uriTemplate)&&!n.engine.q0t({uri:template.uriTemplate,mimeType:template.mimeType}))]]
+   : []));
+  templateRows=await nativeTemplateCompletions(n,context,listed,token.query,transport,current).catch(()=>[]);
+  if(!current())return [];
  }
- if(abort.signal.aborted||!clientViewCurrent(n,clientId))return [];
- return nativeReferenceRows(n,context,rows,token.query).flatMap(row=>{
-  const value=row?.displayText;
-  if(!validNativeMention(value))return [];
-  const quoted=token.quoted||value.includes(' ');
+ let rows=templateRows;
+ if(!rows){
+  const index=n.fileSuggestions.RSe;
+  rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
+  const tracked=index.fileListRefreshPromise,untracked=index.untrackedFetchPromise;
+  if(tracked||untracked){
+   await tracked;
+   await (index.untrackedFetchPromise??untracked);
+   if(!current())return [];
+   rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
+  }
+  if(!current())return [];
+  rows=nativeReferenceRows(n,context,rows,token.query,listed);
+ }
+ return rows.flatMap(row=>{
+  const label=row?.displayText,value=row?.mention??label;
+  if(!validNativeMention(label)||!validNativeMention(value))return [];
+  const template=row.type==='template'||row.mention!==undefined;
+  const quoted=(!template&&token.quoted)||value.includes(' ');
   const description=typeof row.description==='string'&&row.description?row.description.slice(0,60):undefined;
-  return [{label:value,text:quoted?'@"'+value+'" ':'@'+value+' ',...(description?{description}:{}),
+  const text=(quoted?'@"'+value+(row.partial?'':'"'):'@'+value)+(row.partial?'':' ');
+  return [{label,text,...(description?{description}:{}),
    replacement:{start:token.start,end:token.end}}];
  });
 }

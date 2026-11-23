@@ -108,6 +108,40 @@ it('offers native Agent definitions and visible MCP resources with the native re
   })
 })
 
+it('advances MCP template parameters through the original connected client and retires a replaced connection', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  const template = { uriTemplate:'resource://release/{branch}/{section}', name:'Release sections' }
+  const connection = { type:'connected',name:'docs',client:{} }
+  const state = { mcp:{ clients:[connection], resourceTemplates:{ docs:[template] } } }
+  const originalContext = { surface:'terminal',toolContext:()=>({ getAppState:()=>state, session:{} }) }
+  const autocomplete = vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';autocomplete',{
+    AbortController,originalContext,clientViewCurrent:()=>true,
+  }) as (native: unknown, client: string, box: { text: string; cursor: number }) => Promise<{ suggestions: { text: string }[] }>
+  const completeResourceTemplate = vi.fn(async () => ['main'])
+  const native = {
+    fileSuggestions:{s5t:async()=>[{displayText:'local.md'}],RSe:{}},
+    referenceSearch:{Is:()=>true,ohe:class { search() { return [] } }},
+    referenceWorkspace:{Ct:()=>false},
+    referenceTransport:{mcpClientModule:()=>({ensureConnectedClient:async()=>connection,completeResourceTemplate})},
+    engine:{q0t:()=>false},
+    session:{rwt:()=>undefined},
+  }
+  const query = (text: string) => autocomplete(native,'selected',{text,cursor:text.length})
+  expect((await query('@docs:resource://unrelated')).suggestions[0]?.text).toBe('@local.md ')
+  expect((await query('@docs:resource://re')).suggestions[0]?.text).toBe('@docs:resource://release/')
+  expect((await query('@docs:resource://release/ma')).suggestions[0]?.text).toBe('@docs:resource://release/main/')
+  expect(completeResourceTemplate).toHaveBeenLastCalledWith(connection,template.uriTemplate,'branch','ma',{})
+  completeResourceTemplate.mockResolvedValueOnce(['notes'])
+  expect((await query('@docs:resource://release/main/no')).suggestions[0]?.text).toBe('@docs:resource://release/main/notes ')
+  expect(completeResourceTemplate).toHaveBeenLastCalledWith(connection,template.uriTemplate,'section','no',{branch:'main'})
+  completeResourceTemplate.mockImplementationOnce(async()=>{
+    state.mcp.clients=[{...connection,client:{}}]
+    return ['retired']
+  })
+  expect((await query('@docs:resource://release/main/no')).suggestions).toEqual([])
+})
+
 it('coalesces queued edits, adopts app changes and retires edits on detach', async () => {
   type Box = { text: string; cursor: number; superseded?: boolean }
   type Edit = { before: Box; after: Box; key?: { key: string; name: string } }

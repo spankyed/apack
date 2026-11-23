@@ -12,7 +12,7 @@ export const claudeNativeLinuxBindings: {
   "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10",
   "platform": "linux",
   "modules": {
-    "chunk-jfv2evcj.js": { "module": "chunk-4ss93kw4.js", "exports": { "ohe": "Qge" } },
+    "chunk-jfv2evcj.js": { "module": "chunk-4ss93kw4.js", "exports": { "ohe": "Qge", "Is": "Os" } },
     "chunk-k5k90aj0.js": { "module": "chunk-wr2nfky3.js", "exports": { "RSe": "kbe", "s5t": "X6t" } },
     "chunk-cg8hxhdr.js": { "module": "chunk-q83q6ar0.js", "exports": { "tl": "el" } },
     "chunk-ayzz9bjs.js": { "module": "chunk-rwrye22a.js", "exports": { "Ta": "Ra" } },
