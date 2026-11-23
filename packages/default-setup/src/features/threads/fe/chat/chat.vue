@@ -1413,6 +1413,10 @@ function closeMemory(restoreFocus: boolean) {
   .native-chat-shell[data-native-workspace-owner="agent"] {
     min-height: min(32rem, max(25rem, calc(100vh - 14rem)));
   }
+  /* The expanded Agent tools need one extra row without covering the transcript. */
+  .native-chat-shell[data-native-workspace-owner="agent"]:has(.native-agent-composer--tools:not(.native-agent-composer--background)) {
+    min-height: calc(min(32rem, max(25rem, calc(100vh - 14rem))) + 1.5rem);
+  }
   /* The compact native launcher already provides a top inset above the Agent controls. */
   .native-chat-shell[data-native-workspace-owner="agent"] .native-chat-column--padded {
     padding-top: 0;

@@ -1,7 +1,7 @@
 <template>
-  <form ref="composerRef" :style="[promptThemeStyle, { minHeight: minimumHeight + 'px' }]" :class="{ 'native-agent-composer--tools': toolsExpanded }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" :aria-label="audience === 'background' ? 'Background session message' : 'Agent message'" @submit.prevent="submit" @keydown.capture="leaveEditor">
-    <div class="native-agent-body flex min-h-0 flex-1 flex-col overflow-clip" :class="{ 'native-agent-body--tools': toolsExpanded }">
-    <StatusLine ref="statusLineRef" class="shrink-0" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
+  <form ref="composerRef" :style="[promptThemeStyle, { minHeight: minimumHeight + 'px' }]" :class="{ 'native-agent-composer--tools': toolsExpanded, 'native-agent-composer--background': audience === 'background' }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" :aria-label="audience === 'background' ? 'Background session message' : 'Agent message'" @submit.prevent="submit" @keydown.capture="leaveEditor">
+    <div class="flex min-h-0 flex-1 flex-col overflow-clip" :class="{ 'native-agent-body--background-tools': audience === 'background' && toolsExpanded }">
+    <StatusLine ref="statusLineRef" :class="{ 'shrink-0': audience === 'background' }" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <div class="native-agent-draft-scroll min-h-10 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
     <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <p v-if="(problem || nativeProblem) && !agentDraftTooLong" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
@@ -42,10 +42,16 @@ const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [
 const toolsExpanded = ref(false)
 const composerRef = ref<HTMLElement | null>(null)
 const statusLineRef = ref<InstanceType<typeof StatusLine>>(), actionsRef = ref<HTMLElement>(), minimumHeight = ref(112)
-// Closed status and actions must leave a complete draft line, even in a short split pane.
+// Leave room for the status, the first tool action and a complete draft line in a short split pane.
 watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded, () => props.ui?.status, () => props.statusText], ([strip, actions, expanded], _previous, cleanup) => {
   if (!(actions instanceof HTMLElement)) return
-  const measure = () => { minimumHeight.value = expanded ? 112 : Math.max(112, (strip instanceof HTMLElement ? strip.offsetHeight : 0) + actions.offsetHeight + 40 + 2) }
+  const measure = () => {
+    if (expanded) {
+      minimumHeight.value = props.audience === 'background' ? 112 : Math.max(216, actions.offsetHeight + 168)
+      return
+    }
+    minimumHeight.value = Math.max(112, (strip instanceof HTMLElement ? strip.offsetHeight : 0) + actions.offsetHeight + 42)
+  }
   const observer = new ResizeObserver(measure)
   if (strip instanceof HTMLElement) observer.observe(strip)
   observer.observe(actions); measure()
@@ -202,8 +208,10 @@ onBeforeUnmount(() => {
 .native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 10rem))); }
 .native-agent-composer--tools { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 11rem))); }
 .native-agent-composer :deep([data-testid="composer-session-strip"]) { padding: .5rem 1rem; }
-.native-agent-body--tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
-.native-agent-body--tools .native-agent-draft-scroll { overflow: visible; }
+/* The Session tools surface can scroll independently while the draft keeps its own viewport. */
+.native-agent-composer--tools:not(.native-agent-composer--background) :deep(.native-extension-surface) { padding-block: .25rem; }
+.native-agent-body--background-tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.native-agent-body--background-tools .native-agent-draft-scroll { overflow: visible; }
 /* The draft viewport owns scrolling; inherited input-theme overflow must not add another. */
 .native-agent-composer :deep(.native-agent-editor .ProseMirror) { min-height: 24px; max-height: none; overflow: visible; padding: 0; }
 .native-agent-composer :deep(.native-strip--open) { min-height: 0; }
