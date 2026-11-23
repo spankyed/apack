@@ -55,17 +55,19 @@
         </footer>
       </div>
     </dialog>
-    <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 px-3 py-1.5 text-xs">
-      <button type="button" :disabled="pending" class="mb-1 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
-      <details class="mb-1">
+    <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" class="mt-2 rounded border border-white/10 px-3 py-1.5 text-xs">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button type="button" :disabled="pending" class="text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="refreshShellOutput">Refresh output</button>
+        <p v-if="state.details.shell.truncated" class="text-neutral-400">Showing the latest output · {{ state.details.shell.totalBytes.toLocaleString() }} bytes total.</p>
+      </div>
+      <details class="my-1">
         <summary class="cursor-pointer text-neutral-400">Command details</summary>
-      <p v-if="state.details.shell.cwd" class="mb-2 break-all text-neutral-500">{{ state.details.shell.cwd }}</p>
-      <pre class="mb-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.command }}</pre>
-      <p v-if="state.details.shell.commandTruncated" class="text-neutral-500">Command preview shortened.</p>
+        <p v-if="state.details.shell.cwd" class="mb-2 break-all text-neutral-500">{{ state.details.shell.cwd }}</p>
+        <pre class="max-h-32 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.command }}</pre>
+        <p v-if="state.details.shell.commandTruncated" class="text-neutral-500">Command preview shortened.</p>
       </details>
-      <pre v-if="state.details.shell.output" class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.output }}</pre>
+      <pre v-if="state.details.shell.output" ref="shellLog" tabindex="0" aria-label="Output preview" class="shell-log m-0 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2">{{ state.details.shell.output }}</pre>
       <p v-else class="text-neutral-500">No output yet.</p>
-      <p v-if="state.details.shell.truncated" class="mt-2 text-neutral-500">Showing the latest output · {{ state.details.shell.totalBytes.toLocaleString() }} bytes total.</p>
     </section>
     <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
     <p v-if="state?.status === 'done' && state.operation === 'input' && state.input" role="status" class="mt-2 text-[11px] text-neutral-400">{{ state.input.mode === 'resumed' ? 'Agent resumed with your reply' : 'Reply queued for Agent' }}</p>
@@ -92,11 +94,15 @@ const state = computed(() => sessionState.value?.taskId === props.task.id ? sess
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
 const taskControls = ref<HTMLElement | null>(null)
-let revealShellRevision: number | undefined
+const shellLog = ref<HTMLElement | null>(null)
+let shellRead: { revision: number; reveal: boolean; followTail: boolean } | undefined
 watch(state, value => {
-  if (!value || value.revision !== revealShellRevision || value.status === 'pending') return
-  revealShellRevision = undefined
-  if (value.status === 'done' && value.details?.shell && shown.value && taskControls.value) emit('reveal-shell-output', taskControls.value)
+  const read = shellRead
+  if (!read || value?.revision !== read.revision || value.status === 'pending') return
+  shellRead = undefined
+  if (value.status !== 'done' || !value.details?.shell || !shown.value) return
+  if (read.followTail && shellLog.value) shellLog.value.scrollTop = shellLog.value.scrollHeight
+  if (read.reveal && taskControls.value) emit('reveal-shell-output', taskControls.value)
 }, { flush: 'post' })
 const mcpDialog = ref<HTMLDialogElement | null>(null)
 watch(mcpDialog, (dialog, previous) => {
@@ -106,14 +112,14 @@ watch(mcpDialog, (dialog, previous) => {
 function closeDetails() {
   mcpDialog.value?.close()
   shown.value = false
-  revealShellRevision = undefined
+  shellRead = undefined
   toggle.value?.focus({ preventScroll: true })
 }
 const expanded = computed(() => shown.value && state.value !== undefined)
 let submitted: { revision: number; text: string } | undefined
 watch(taskKey, () => {
   shown.value = false
-  revealShellRevision = undefined
+  shellRead = undefined
   draft.value = ''
   submitted = undefined
 })
@@ -131,6 +137,19 @@ function leaveConversation(event: KeyboardEvent) {
 function showConversation() {
   shown.value = !expanded.value
   const revision = shown.value ? controls?.operate(props.task, 'inspect') : undefined
-  if (shell.value) revealShellRevision = revision
+  if (shell.value) shellRead = revision === undefined ? undefined : { revision, reveal: true, followTail: true }
+}
+function refreshShellOutput() {
+  const log = shellLog.value
+  const followTail = !log || log.scrollHeight - log.clientHeight - log.scrollTop <= 1
+  const revision = controls?.operate(props.task, 'inspect')
+  if (revision !== undefined) shellRead = { revision, reveal: false, followTail }
 }
 </script>
+
+
+<style scoped>
+@media (max-height: 700px) {
+  .shell-log { max-height: 2.75rem; }
+}
+</style>
