@@ -28,26 +28,13 @@ import { execFileSync } from 'node:child_process';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { compare, KNOWN_IRREPRODUCIBLE, partition, reproPaths, snapshot } from './lib/repro.ts';
 
-/**
- * One full build of everything the comparison covers.
- *
- * `generate-entries --force` is here rather than left to `apack pack build`, and that is the point of the
- * function: `apack pack build` calls `generateEntries([])` with no `--force`, which skips on a matching
- * `.apack/generate-entries.json`. Without this line the second round would re-hash codegen output it never regenerated and
- * report it identical — half the population passing for having been looked at, which is the failure this
- * whole check exists to catch. `repro.spec.ts` asserts the flag is still here.
- */
 function buildEverything(round: number): void {
   const run = (command: string, args: string[]): void => {
     process.stdout.write(`\n[check:repro] round ${round}: ${command} ${args.join(' ')}\n`);
     execFileSync(command, args, { cwd: REPO_ROOT, stdio: 'inherit' });
   };
   run('npm', ['run', 'packages:build']);
-  run('npm', ['run', 'generate:entries', '-w', '@app/default-setup', '--', '--force']);
-  run('npm', ['run', 'build', '-w', '@app/default-setup']);
-  // Last, because all four of its legs read `packages/default-setup/src/__generated__`. Run before the pack
-  // build and the api throws `No built-in packs found` while the renderer fails quietly, filtering its
-  // eligible packs to none and emitting an empty pack-loader map.
+  run('npm', ['run', 'packs:stage']);
   run('npm', ['run', 'build:runtime']);
 }
 
@@ -61,7 +48,7 @@ const after = snapshot(paths);
 
 if (before.size === 0) {
   process.stderr.write('\n❌ the first build produced no files under any of the derived output paths, so there '
-    + 'was nothing to compare. Check that `npm run packages:build`, default-setup\'s build and '
+    + 'was nothing to compare. Check that `npm run packages:build`, `npm run packs:stage` and '
     + '`npm run build:runtime` actually ran.\n');
   process.exit(1);
 }

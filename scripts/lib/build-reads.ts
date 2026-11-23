@@ -119,17 +119,9 @@ export function readsOf(packDir: string): BuildReads | undefined {
  * is asked about a directory the caller named, which may hold no pack at all — the spec asks about
  * `packages/server` — so this cannot be the place that requires a manifest to be there.
  */
-/**
- * The packs this repo builds through a script of its own rather than by `apack pack build` in the pack's own
- * directory. A path, because there is one kind of pack: nothing here asks a manifest what kind it is.
- */
-const SCRIPTED_PACK_BUILDS: Record<string, string> = {
-  'packages/default-setup': 'npm run build:default-setup',
-};
-
 export function rebuildCommand(packDir: string): string {
   if (packDir.startsWith('tests/packs/')) return 'npm run test:external-pack:contract';
-  return SCRIPTED_PACK_BUILDS[packDir] ?? 'apack pack build';
+  return 'apack pack build';
 }
 
 /** Every file a pack's build read, across its phases, pack-relative and deduplicated */

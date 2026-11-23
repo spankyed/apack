@@ -218,7 +218,7 @@ const sync = [
   '  echo "$lock" > node_modules/.apack-installed-lock',
   'fi',
   // The platform's own builds, reused when their inputs have not moved
-  'npm run -s chain -- --only packages:ensure,build:default-setup --no-native --cores 2',
+  'npm run -s chain -- --only packages:ensure,packs:stage --no-native --cores 2',
 ].join('\n');
 /**
  * One container at a time per volume, for the whole run rather than the sync alone.

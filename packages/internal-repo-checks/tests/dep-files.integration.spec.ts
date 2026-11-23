@@ -82,7 +82,7 @@ const DEP_FILES = evidenceOrRefuse({
 });
 const BUILD_RECORDS = evidenceOrRefuse({
   what: 'pack with a .apack/reads.json',
-  from: 'npm run build:default-setup',
+  from: 'npm run test:external-pack:contract',
   found: buildReads.packsWithReads().length,
 });
 /** The renderer's leg writes these instead of a dep file, which is the fact its own case is about */
@@ -506,12 +506,12 @@ describe('apack pack build says what it read', () => {
   });
 
   it('reports a read the step does not declare', () => {
-    const compile = CHAIN_STEPS.find((step) => step.name === 'build:default-setup')!;
+    const compile = CHAIN_STEPS.find((step) => step.name === 'test:external-pack:contract')!;
     const elsewhere = 'packages/server/src/server.ts';
     expect(fs.existsSync(path.join(REPO_ROOT, elsewhere)), 'this case needs a real file to be about').toBe(true);
     expect(undeclared([elsewhere], compile)).toEqual([elsewhere]);
     // And the same comparison says nothing about a file the step does declare, so it is not simply failing
-    expect(undeclared(['packages/default-setup/apack.json'], compile)).toEqual([]);
+    expect(undeclared(['tests/packs/external-pack/apack.json'], compile)).toEqual([]);
   });
 });
 
@@ -662,9 +662,8 @@ describe('what has looked at a step at all', () => {
       // (`PACKAGE_BUILD_OUTPUTS`) rather than hand-listed, plus the two trees it compares being declared
       // outright — which is the protection `test:packaged-authoring` relies on for the same reason.
       'api:check',
-      'build:default-setup',
       'build:runtime',
-      'facade:check',
+      'packs:stage',
       'packages:check',
       'test:e2e',
       'test:external-pack:app',

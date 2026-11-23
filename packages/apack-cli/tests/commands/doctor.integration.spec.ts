@@ -93,7 +93,7 @@ it('app sessions never require a pack; pack sessions do', async () => {
 });
 
 it('app drive ignores the shipped pack manifest in its current directory', () => {
-  const pack = path.resolve(import.meta.dirname, '../../../default-setup');
+  const pack = path.resolve(import.meta.dirname, '../../../../tests/packs/external-pack');
   const checkout = path.resolve(import.meta.dirname, '../../../..');
   expect(driveTarget(checkout, 'app').packDir).toBeUndefined();
   expect(() => driveTarget(pack, 'app')).toThrow('checkout root');

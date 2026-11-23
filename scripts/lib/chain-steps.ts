@@ -810,7 +810,7 @@ const TYPECHECK_STEPS: readonly ChainStep[] = TYPECHECK_LEGS
  * steps unlocatable. The table keeps its literals; this is the reverse lookup, and `unit-pool.spec.ts` holds the two to each other so neither can
  * be renamed alone.
  */
-export const poolStepName = (pool: 'host' | 'pack' | 'integration' | 'native'): string =>
+export const poolStepName = (pool: 'host' | 'integration' | 'native'): string =>
   (pool === 'integration' || pool === 'native' ? `test:${pool}` : `test:unit:${pool}`);
 
 const HOST_UNIT_STEP: ChainStep = {
@@ -897,10 +897,10 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-host/src/build/source-resolution.ts',
       'packages/apack-host/src/build/node-options.js', 'packages/apack-host/src/build/node-options.d.ts',
       'packages/apack-host/src/replace-dir.ts'] },
-  { name: 'packs:stage', budget: 'quick', outputs: PACK_OUTPUTS,
-    inputs: [...ROOT, SHIPPED_PACKS_LOCK_FILE, 'package.json', ...workspace('apack-host'), ...PACKAGE_BUILD_READS,
+  { name: 'packs:stage', budget: 'suite', outputs: PACK_OUTPUTS,
+    inputs: [...ROOT, SHIPPED_PACKS_LOCK_FILE, 'package.json', ...workspace('apack-host'), ...workspaceDeps('apack-host').flatMap(dependencySource), ...PACKAGE_BUILD_READS,
       'scripts/with-source.mjs', 'scripts/stage-shipped-starter.ts', 'scripts/lib/shipped-pack-lock.ts', 'build/build-metadata.ts'] },
-  // The fixture packs depend on default-setup, so they need its snapshot from build:default-setup
+  // The fixture packs depend on default-setup, so they need the staged release snapshot
   //
   // The third place in this chain with a cache inside a cached step, and the one that is benign: `apack
   // build` skips `generate-entries` when its generation stamp matches. It takes no `forceArgs` because a skip
@@ -927,7 +927,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   HOST_UNIT_STEP,
   // The CLI specs that run a real build, install or child process. They need the built packages,
   // never the app — which is why they can run before `build` rather than behind it.
-  // Needs `build:default-setup` and not just `packages:ensure`, because `dependency-runtime` builds a pack that depends
+  // Needs `packs:stage` and not just `packages:ensure`, because `dependency-runtime` builds a pack that depends
   // on default-setup and so reads its `dist`. Table order promises nothing (`orderedSteps`), so the edge is declared.
   { name: 'test:integration', budget: 'acceptance', expensive: true,
     // It keeps a cache of its own, like the two unit pools, so `--all` has to reach inside it

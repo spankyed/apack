@@ -3,7 +3,8 @@ import { spawnSync } from 'node:child_process';
 // A full run uses fresh app builds and bypasses the integration pool's cache.
 // Keep suites serial: each runner owns its worker budget and app fixtures.
 const steps = [
-  ['build:default-setup'],
+  ['packages:ensure'],
+  ['packs:stage'],
   ['build:runtime'],
   ['test:unit'],
   ['test:integration', '--', '--all'],

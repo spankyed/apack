@@ -42,7 +42,7 @@ const author = CHAIN_STEPS.find(step => step.name === 'test:packaged-authoring:a
 
 describe('external authoring output ownership', () => {
   it('builds the selected host pack before authoring against its snapshot', () => {
-    expect(dependsOn(author)).toContain('build:default-setup');
+    expect(dependsOn(author)).toContain('packs:stage');
   });
 
   it('keeps one work dir per canonical checkout, replacing it read-only directories and all', async () => {

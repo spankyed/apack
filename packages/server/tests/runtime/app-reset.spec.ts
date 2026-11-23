@@ -1,10 +1,11 @@
 // Resetting the app (services.appData.reset()) leaves it as a fresh boot does: an onboarded app whose settings and
 // flows were changed comes back with default settings, the built-in packs' written flows and the migrations applied
 // (its data at the app version, nothing pending; tests/services/host-runtime.spec.ts in @apackdev/host shows the reset's
-// order). Runs the built-in packs' built runtimes (npm run build:default-setup), as the db scripts do.
+// order). Runs the built-in packs' built runtimes (npm run packs:stage), as the db scripts do.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EARS } from '@elmdb/ears';
 import { createActor } from 'xstate';
@@ -27,7 +28,7 @@ const { untypedQuery, untypedWrite } = await import('@apackdev/sdk/ears');
 const { onIncoming } = await import('@apackdev/sdk/events');
 const { HOST } = await import('@apackdev/host/bus');
 
-const PACKAGES_DIR = path.resolve(__dirname, '..', '..', '..');
+const PACKAGES_DIR = checkoutShippedPacksDir(path.resolve(__dirname, '../../../..'));
 
 /** What the user changed from the defaults — the whole of what a reset has to undo */
 const storedSettings = () => _settingsAdmin().getOverrides();

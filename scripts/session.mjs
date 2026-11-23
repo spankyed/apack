@@ -108,7 +108,8 @@ async function npm(dir, args) {
 /** A cold checkout needs API declarations and pack codegen before typechecks or a built app launch. @param {string} dir */
 async function setup(dir) {
   await npm(dir, ['ci', '--no-audit', '--no-fund']);
-  await npm(dir, ['run', 'build:default-setup']);
+  await npm(dir, ['run', 'packages:ensure']);
+  await npm(dir, ['run', 'packs:stage']);
   await npm(dir, ['run', 'build:runtime']);
 }
 

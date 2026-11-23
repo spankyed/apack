@@ -28,7 +28,6 @@ const HELPER = 'definePackTestConfig';
  * which is a reason to widen the helper at least as often as it is a reason to escape it.
  */
 const DECLARES_ITS_OWN_TEST_BLOCK: Record<string, string> = {
-  'packages/default-setup/vitest.config.ts': 'Separate Node/backend and Vue/jsdom frontend projects, both composed from the helper; it configures one environment per call, not a project matrix.',
 };
 
 const tracked = (pattern: string): string[] =>

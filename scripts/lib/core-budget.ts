@@ -68,23 +68,9 @@ const PACK_BUILD_WIDTH: PoolWidth = { cores: 2 };
  */
 export const POOL_WIDTH: Readonly<Record<string, PoolWidth>> = {
   'test:unit:host': UNCAPPED,
-  'test:unit:pack': UNCAPPED,
   'test:integration': { share: 0.5 },
   // Each native scenario spawns compilers and watchers of its own, so it takes no more than integration
   'test:native': { share: 0.5 },
-  // Cold vue-tsc, 2026-10-18: 24.72s CPU / 14.66s wall and 24.95s / 14.65s.
-  // One compiler uses about 1.7 cores; reserve two without widening its quick deadline.
-  'typecheck:pack': { cores: 2 },
-  // **Measured as CPU time over wall time, 2026-10-02, two runs each**: `build:default-setup` 21.5s of CPU in 13.6s
-  // and 21.2s in 13.1s, so 1.6 cores; `build:runtime` 62.9s in 29.0s and 61.2s in 27.6s, so 2.2. Both round
-  // to two.
-  //
-  // That instrument rather than sampling the machine, and the reason is worth keeping: idle sampling could
-  // not separate the step from a box that would not go below 2.4 cores busy, and subtracting the baseline
-  // gave `build:default-setup` 1.8 cores on one run and 2.7 on the next. A process's own CPU time does not care what
-  // else is running. It does assume the work is awaited — a step that detaches a child would read low,
-  // and neither of these does.
-  'build:default-setup': PACK_BUILD_WIDTH,
   // Preparation builds the same shipped pack with fixture edits, then archives it serially.
   'test:external-pack:fork': PACK_BUILD_WIDTH,
   // Both producers run actual pack builds; authoring also repeats one for release preflight.

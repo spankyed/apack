@@ -20,7 +20,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTEGRATION_SUITES } from './chain-steps.ts';
 import { CONFIG_BY_HALF, HALVES, type Half, halfOfPath } from './spec-halves.ts';
-import { UNIT_SUITES, type UnitSuite } from './unit-suites.ts';
+import { UNIT_SUITES } from './unit-suites.ts';
 import { workspaceDeps } from './workspace-deps.ts';
 
 /** One command to run, and where. A plan is a list of these, in order. */
@@ -208,39 +208,6 @@ export function specsUnder(dir: string): string[] {
 export const packageOf = (rel: string): string | null => /^packages\/([^/]+)\//.exec(rel)?.[1] ?? null;
 
 /**
- * The pack suites a change to these packages can reach, and which no module graph can show you.
- *
- * A pack suite resolves the published `dist` while the host projects resolve source — deliberately, because
- * `dist` is the one layout a pack author ever has. So a pack's specs never import `packages/<dep>/src` at
- * all, no import edge runs from the file you edited to the spec that covers it, and `related` reports
- * nothing. The edge is real and runs through a build: `src` -> tsdown -> `dist` -> the pack's specs.
- *
- * A pack suite is also not among the root projects **and cannot be**: `--conditions` is a Node process flag
- * and vitest shares its worker pool across projects, so one process cannot give some projects the source
- * condition and withhold it from others (`UnitSuite.kind`, measured). Two pools, therefore, and no root run
- * that could include the pack.
- *
- * Which is why this is derived from the *declared* graph (`workspaceDeps`) rather than the import graph, and
- * from the same function the chain keys its cache on. Not every package reaches a pack suite, and the ones
- * that do are not only the ones a pack names: `@apackdev/host` arrives transitively through `@apackdev/testing`,
- * whose bundle inlines it. No count is written here on purpose — `spec-plan.spec.ts` partitions every
- * package under `packages/` into those that reach one and those that do not, which is the only form of that
- * claim that cannot quietly go stale. A hand-written "four of twelve" was wrong the day it was written.
- *
- * Narrow on purpose: a note that fires on every root run, a `@app/renderer` edit included, is one nobody
- * reads.
- */
-export function affectedPackSuites(editedPackages: readonly (string | null)[], root?: string): string[] {
-  const edited = new Set(editedPackages.filter((p): p is string => p !== null));
-  return PACK_SUITES
-    .filter((suite) => workspaceDeps(suite.dir, root).some((dep) => edited.has(dep)))
-    .map((suite) => suite.workspace);
-}
-
-/** Every pack-kind suite: the ones that resolve `dist`, and so the ones no root project can reach */
-const PACK_SUITES = UNIT_SUITES.filter((suite) => suite.kind === 'pack');
-
-/**
  * The integration halves a change could reach: the edited package's own, and any whose package depends on it.
  *
  * **A second seam, and not the same one.** A pack suite is out of reach because it resolves `dist`, so no
@@ -286,123 +253,6 @@ const integrationRun = (root: string): Run => ({
   specs: INTEGRATION_SUITES.flatMap((suite) => specsUnder(path.join(root, 'packages', suite.dir, 'tests'))
     .filter((spec) => halfOfPath(spec) === 'integration')
     .map((spec) => path.relative(root, spec))).sort(),
-});
-
-/**
- * The suite that covers a source file when the root projects cannot — its own package's, for a pack.
- *
- * Measured 2026-09-26: `vitest related` from the root finds nothing for a pack source file, its backend, its
- * frontend and its generated FE entry alike, because no root project imports any of them. So planning a root
- * run for one is not a narrower answer, it is no answer: `npm run spec -- <pack source>` reported
- * "No test files found, exiting with code 0" for the repo's largest suite. Its own suite is what covers it.
- *
- * `related` inside the pack, not its whole suite. That needs the pack's own graph to be walkable, which
- * `definePackTestConfig` made it: a pack's config stubs its `.vue` files, so nothing stops at the first SFC
- * the walk reaches. Measured on `features/brain/be/flow-system.ts`: 3 files where the whole suite is 87.
- *
- * Through `npx vitest` rather than the pack's `test` script, because `npm test -- related <file>` makes
- * vitest read `related` as a *filename filter* (`filter: related, src/…`, exit 1) — so this loses the
- * `pretest` that would have refreshed the packages, and `packages:ensure` goes in front for the same reason
- * a root run needs it.
- */
-const ownSuiteFor = (rel: string): UnitSuite | undefined => {
-  const pkg = packageOf(rel);
-  return PACK_SUITES.find((suite) => suite.dir === pkg);
-};
-
-/** A pack's content sources, and the specs that read what building them produces */
-const CONTENT_SOURCES = 'src/content';
-const CONTENT_SPECS = 'tests/content';
-
-/**
- * The files a pack's build reads, each of which every spec in the pack ends up resolving through.
- *
- * `apack.json` drives codegen into `src/__generated__/`; `package.json` holds the `imports` map those
- * generated specifiers resolve by — 76 of default-setup's 95 specs go through it;
- * `tsconfig.json` is what the build compiles with.
- */
-const BUILD_INPUTS: readonly string[] = ['apack.json', 'package.json', 'tsconfig.json'];
-
-/**
- * Which of a pack's files reach their specs only through a build, and what runs them.
- *
- * Two edges, both of the shape `src` -> `apack pack build` -> build output -> a spec that reads it, and neither
- * visible to any module graph — the spec imports the built output, so a *regenerated* tree is covered while
- * editing the source that generates it reaches nothing.
- *
- * - **`src/content/**`** compiles to `dist/*.content.json`, which `tests/content/` reads against its goldens.
- * - **the pack's build inputs** (`BUILD_INPUTS`) configure what the build emits and how the pack's own
- *   specifiers resolve, which every spec in the pack goes through. So the whole suite covers them, and
- *   nothing narrower is honest.
- *
- * Derived from the pack's own layout rather than named: the suite comes from `UNIT_SUITES`' pack kind and the
- * content half is offered only where the pack has both halves on disk. A third pack arriving with content is routed
- * by existing, and `spec-plan.spec.ts` partitions the packs under `packages/` so one arriving *without* a suite
- * fails a check instead of being silently unroutable.
- */
-export function packBuildEdge(rel: string, root: string): { suite: UnitSuite; specs: readonly string[] } | undefined {
-  const suite = ownSuiteFor(rel);
-  if (suite === undefined) return undefined;
-  const inPack = path.relative(path.join('packages', suite.dir), rel);
-  if (BUILD_INPUTS.includes(inPack)) return { suite, specs: [] };
-  const hasContentSpecs = fs.existsSync(path.join(root, 'packages', suite.dir, CONTENT_SPECS));
-  return inPack.startsWith(`${CONTENT_SOURCES}/`) && hasContentSpecs ? { suite, specs: [CONTENT_SPECS] } : undefined;
-}
-
-/** What covers a build-edge target, in the words the note and the `--full` label both use */
-const edgeCovers = (suite: UnitSuite, specs: readonly string[]): string =>
-  specs.length === 0 ? `${suite.workspace}'s whole suite, which resolves through what its build inputs configure`
-    : `${suite.workspace} ${specs.join(' ')}, which read what building its content produces`;
-
-/** The edge as the command reports it, for one target */
-const beyondOf = (edge: { suite: UnitSuite; specs: readonly string[] }, rel: string): BuildEdge =>
-  ({ target: rel, covers: edgeCovers(edge.suite, edge.specs), how: `npm run spec:full -- ${rel}` });
-
-/** The build that makes the edge traversable: the pack's own, which is what the root `build:default-setup` wraps */
-const packBuildRun = (root: string, suite: UnitSuite): Run => ({
-  label: `${suite.workspace}: build, because the edge to its specs runs through one`,
-  cwd: root,
-  command: 'npm',
-  args: ['run', 'build', '-w', suite.workspace],
-});
-
-/**
- * What a root run says about the pack suites it could not reach — nothing when it could reach none, and
- * nothing under `--full`, where the run below is the answer rather than a thing to go and do next.
- */
-export const packSuiteNote = (affected: readonly string[], full = false): string | undefined =>
-  affected.length === 0 || full ? undefined
-    : `not in this answer: ${affected.join(', ')} reaches this only through a rebuilt dist, so no module `
-      + 'graph connects the two — npm run spec:full, or npm run test:unit:pack';
-
-/** The run that answers it, incremental on its own stamp: unchanged inputs report "up to date" and skip */
-const packSuiteRun = (root: string, affected: readonly string[]): Run => ({
-  label: `${affected.join(', ')}, against a rebuilt dist`,
-  cwd: root,
-  command: 'npm',
-  args: ['run', 'test:unit:pack'],
-  // The pool runs every pack suite, not only the affected ones — equal today, and `spec-plan.spec.ts` fails
-  // when a second pack suite appears, which is when the label and this would start disagreeing
-  covers: PACK_SUITES.map((suite) => suite.workspace),
-});
-
-/**
- * `related` inside a pack, which is the only place its own graph resolves.
- *
- * The label follows the claim, as `rootRun`'s does: a target a spec cannot cover — a doc, a fixture — gets
- * *"if any"*, because saying "every spec covering CLAUDE.md" over a run that finds nothing and exits 0 is
- * the sentence exit 3 exists to stop the command from saying.
- */
-const packRelatedRun = (root: string, suite: UnitSuite, relToPack: string, flags: readonly string[],
-  claimsCoverageOf?: string, beyond?: BuildEdge): Run => ({
-  label: `${suite.workspace}: ${claimsCoverageOf === undefined
-    ? `the specs that import ${relToPack}, if any` : `every spec covering ${relToPack}`}`,
-  cwd: path.join(root, 'packages', suite.dir),
-  command: 'npx',
-  args: ['vitest', 'related', '--run', relToPack, ...flags],
-  claimsCoverageOf,
-  beyond,
-  collects: { related: [relToPack] },
 });
 
 /**
@@ -555,10 +405,8 @@ export function planTargets(targets: readonly string[], flags: readonly string[]
   const runs: Run[] = [];
   const unmatched: string[] = [];
   const ambiguous: { query: string; specs: string[] }[] = [];
-  // Keyed by what a run would be, so two content sources plan one build and one spec run rather than two of each
-  const edges = new Map<string, { suite: UnitSuite; specs: readonly string[] }>();
   const named: string[] = [];          // spec files the targets name, grouped at the end
-  const sourcePackages: (string | null)[] = [];   // whose pack-suite dependents a rebuild would reach
+  const sourcePackages: (string | null)[] = [];   // whose integration suites can cover the changes
   let wantsRoot = false;      // a root run was planned, so the pack suites it cannot reach are worth naming
   let needsEnsure = false;    // a run was planned that npm fires no `pretest` for
 
@@ -577,43 +425,17 @@ export function planTargets(targets: readonly string[], flags: readonly string[]
       if (own !== null && own !== CONFIG_READER) runs.push(packageRun(root, own, [], flags, '(its config changed)'));
       runs.push(packageRun(root, CONFIG_READER, [], flags, 'the checks that read every config'));
     } else if (exists) {
-      const edge = packBuildEdge(rel, root);
-      // A target nothing could import — a doc, a fixture, a shell script — takes this route too, and `related`
-      // correctly finds nothing for it. What it must not do is say it covered the file: that is the claim, and
-      // making it for a `.md` would fail the first entry in the root CLAUDE.md's list of time-wasters.
-      // A build edge *is* that claim, made directly and about a named spec directory, so it carries one
-      // whatever the extension — `apack.json` is not code and is covered all the same.
-      const coverable = couldBeCovered(rel) || edge !== undefined ? rel : undefined;
-      const own = ownSuiteFor(rel);
-      if (edge !== undefined && full) {
-        // The build and its specs are the answer, and they subsume any `related` subset of them
-        edges.set(`${edge.suite.dir}:${edge.specs.join(' ')}`, edge);
-      } else if (own !== undefined) {
-        needsEnsure = true;
-        runs.push(packRelatedRun(root, own, path.relative(path.join('packages', own.dir), rel), flags, coverable,
-          edge === undefined ? undefined : beyondOf(edge, rel)));
-      } else {
-        wantsRoot = true;
-        needsEnsure = true;
-        sourcePackages.push(packageOf(rel));
-        runs.push(rootRun(root, coverable === undefined ? `the specs that import ${rel}, if any` : `every spec covering ${rel}`,
-          ['related', '--run', rel], flags,
-          [packSuiteNote(affectedPackSuites([packageOf(rel)], root), full),
-            integrationNote(affectedIntegrationSuites([packageOf(rel)], root), full)], coverable));
-      }
+      const coverable = couldBeCovered(rel) ? rel : undefined;
+      wantsRoot = true;
+      needsEnsure = true;
+      sourcePackages.push(packageOf(rel));
+      runs.push(rootRun(root, coverable === undefined ? `the specs that import ${rel}, if any` : `every spec covering ${rel}`,
+        ['related', '--run', rel], flags, [integrationNote(affectedIntegrationSuites([packageOf(rel)], root), full)], coverable));
     } else {
       const matches = matchByName(arg, root);
       if (matches.length === 0) unmatched.push(arg);
       else if (tooBroad(matches, root)) ambiguous.push({ query: arg, specs: matches });
       else named.push(...matches);
-    }
-  }
-
-  if (full) {
-    for (const { suite, specs } of edges.values()) {
-      needsEnsure = true;
-      runs.push(packBuildRun(root, suite),
-        packageRun(root, suite.dir, specs, flags, edgeCovers(suite, specs)));
     }
   }
 
@@ -629,17 +451,9 @@ export function planTargets(targets: readonly string[], flags: readonly string[]
     }
   }
 
-  const affected = notYetCovered(wantsRoot ? affectedPackSuites(sourcePackages, root) : [], runs);
-  if (full && affected.length > 0) runs.push(packSuiteRun(root, affected));
   if (full && wantsRoot && affectedIntegrationSuites(sourcePackages, root).length > 0) runs.push(integrationRun(root));
   return { runs: needsEnsure ? [ensurePackages(root), ...runs] : runs, unmatched, ambiguous };
 }
-
-/** What a plan does not already run in full, so a dependency and its pack changing together plan it once */
-const notYetCovered = (affected: readonly string[], runs: readonly Run[]): string[] => {
-  const already = new Set(runs.flatMap((run) => run.covers ?? []));
-  return affected.filter((workspace) => !already.has(workspace));
-};
 
 /**
  * With no target: the specs your uncommitted changes affect.
@@ -658,17 +472,9 @@ export function planChanged(changedPaths: readonly string[], flags: readonly str
   // The claim is over the part of the change set a spec could cover. A doc-only change set has none — which
   // is also why this takes the paths: a package name cannot say whether what changed inside it was code.
   const coverable = changedPaths.filter(couldBeCovered);
-  // And a pack's build edges are covered without being coverable: `apack.json` is a `.json` and a content source
-  // may be a `.md`, and both have specs that read what building them produces. Naming one as a *target* says
-  // so, so a change set holding one must not answer "nothing a spec could cover" — the two routes would
-  // contradict each other about the same file, which is how this was found
-  const overEdges = changedPaths.filter((rel) => packBuildEdge(rel, root) !== undefined);
-  // With neither, the answer is known before anything runs — spawning `packages:ensure` and a root vitest to
-  // be told "No test files found" would cost seconds after a doc edit, which should cost nothing
-  if (coverable.length === 0 && overEdges.length === 0) return { runs: [], unmatched: [], ambiguous: [] };
+  if (coverable.length === 0) return { runs: [], unmatched: [], ambiguous: [] };
 
   const changedPackages = [...new Set(changedPaths.map(packageOf))].filter((pkg) => pkg !== null);
-  const affected = affectedPackSuites(changedPackages, root);
   const affectedIntegration = affectedIntegrationSuites(changedPackages, root);
   // No root run when nothing in the change set is in its graph: a pack's manifest and its content sources are
   // covered by that pack's own suite below, and asking the root for them is the empty vitest this route
@@ -676,17 +482,13 @@ export function planChanged(changedPaths: readonly string[], flags: readonly str
   const runs: Run[] = [ensurePackages(root)];
   if (coverable.length > 0) {
     runs.push(rootRun(root, 'the specs your changes affect', ['--changed', '--run'], flags,
-      [packSuiteNote(affected, full), integrationNote(affectedIntegration, full)],
+      [integrationNote(affectedIntegration, full)],
       `${coverable.length} changed file${coverable.length === 1 ? '' : 's'} a spec could cover`));
   }
   const pack = rootProjects(root);
   for (const pkg of changedPackages) {
     if (!pack.includes(pkg)) runs.push(packageRun(root, pkg, [], flags, '(changed)'));
   }
-  // What the runs above do not already cover: changing `@apackdev/sdk` *and* the pack code that uses it is one
-  // edit under this repo's no-backward-compatibility rule, and planned the pack's 87 specs twice
-  const toRun = notYetCovered(affected, runs);
-  if (full && toRun.length > 0) runs.push(packSuiteRun(root, toRun));
   if (full && affectedIntegration.length > 0) runs.push(integrationRun(root));
   return { runs, unmatched: [], ambiguous: [] };
 }

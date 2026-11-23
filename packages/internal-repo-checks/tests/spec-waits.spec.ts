@@ -36,11 +36,6 @@ import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
  * allowed to pass; a poll of something with no event to offer; and a race whose timer *is* the answer.
  */
 const BARE_WAIT_BY_DESIGN: Record<string, string> = {
-  // Examined: both of this file's sleeps prove a *negative* — that a schedule stopped with its app does not tick
-  // into the next test — and a negative cannot be polled for, there being no condition to await. The elapsed time
-  // is the subject, which its header says too. Its one clocked wait was on a positive condition and is now a poll
-  'packages/default-setup/tests/harness-app-stop.spec.ts > wait':
-    'the wait is the assertion: it proves a stopped schedule does not tick, so shortening it removes the check',
   'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
     'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':

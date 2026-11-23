@@ -472,10 +472,5 @@ describe('a spec is collected by some config', () => {
     expect(uncollected([`packages/${dir!}/tests/collected.spec.ts`]), 'one under tests/ is left alone').toEqual([]);
   });
 
-  // And the other way a directory goes unlooked-at: inside an included root but excluded again
-  it('reports a spec under a subtree its own config excludes', () => {
-    const pack = packageDirs().find((d) => configsOf(d).some((c) => rootsOf(c, 'exclude').includes('tests/_support')));
-    expect(pack, 'no config excludes tests/_support, so this case has nothing to build on').toBeDefined();
-    expect(uncollected([`packages/${pack!}/tests/_support/helper.spec.ts`])).toHaveLength(1);
-  });
+
 });

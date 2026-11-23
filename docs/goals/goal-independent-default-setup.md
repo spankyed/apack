@@ -1,66 +1,43 @@
 # Goal: ship default-setup from its own repository
 
-**Status — planned.** Phase 0 landed in `spankyed/default-setup` at `bb6ebb3`. The official app still builds its starter from the monorepo. The first implementation PR is **`spankyed/apack:session/starter-release-layout` → `master`**. The owner controls every merge.
+**Status — active.** The standalone pack is published. The app cutover has merged into
+`separate-default-setup`, and the workspace removal is the final feature-branch change.
 
 ## Prompt
 
 ```text
-# Goal: an interchangeable starter, independently built and released
-
-Implement docs/goals/goal-independent-default-setup.md. Read Current handoff, Branches and review,
-Decisions, and the phase you are taking. Follow CLAUDE.md and docs/AGENTS.md.
-
-Start Phase 1 in a separate apack worktree on session/starter-release-layout from the goal commit on the updated local master.
-Pack implementation belongs on session/production-starter from default-setup's origin/main. The
-rename-server-workspace branch was a survey checkout. Leave it out of the migration.
-
-Once the owner says to start, implement and test one independently testable change per feature
-branch. Push that branch and open its PR ready for review. The owner reviews and merges. The agent
-may execute a merge only when the owner explicitly names that PR and asks for the merge.
-Keep auto-merge off. Tags, publication and releases require a separate instruction.
-
-Finish when the official app ships the verified external release, a user's replacement survives an
-upgrade, an alternate or empty distribution builds from the same entry point, and both repositories
-pass their closing checks. Record evidence on the tested commits and the owner's merge disposition.
+Finish the default-setup migration in docs/goals/goal-independent-default-setup.md.
+Follow CLAUDE.md and docs/AGENTS.md. Use the current handoff and feature-branch worktrees.
+Ship a verified external starter, preserve profile choices, and support an alternate or empty
+distribution. Run focused checks while working and the strict chain after cleanup. Leave
+separate-default-setup ready for the owner’s final PR to master.
 ```
 
 ## Current handoff
 
-- **Source.** The initial survey used apack `19adecce0d` on `rename-server-workspace`. Phase 1 branches from this goal commit on top of `origin/master` at `3d9e9a4c78`. Boot lives in `packages/server` on this base. [Server boot](../../packages/server/src/runtime/index.ts)
-- **Proven.** The Phase 0 scaffold passed a clean local install, validation, typecheck, registration test, facade check, build and archive creation. The archive digest and all seven receipt entries verified. It has zero features and the production ID. Use disposable profiles for experiments. Its toolchain still comes from a prepared app checkout. [Scaffold and bootstrap instructions at bb6ebb3](https://github.com/spankyed/default-setup/blob/bb6ebb3/README.md)
-- **Next.** Review the shared starter packaging for preview, beta, and production in [PR #610](https://github.com/spankyed/apack/pull/610). The [Phase 1 evidence](../references/evidence/starter-release-layout.md) records the local builds, offline first launches, and earlier authoring round trip. The app PRs remain open for owner review. The external archive pin still requires a published pack release.
+- The standalone [default-setup v0.1.0 release](https://github.com/spankyed/default-setup/releases/tag/v0.1.0)
+  came from [default-setup #1](https://github.com/spankyed/default-setup/pull/1) and used the
+  [authoring toolchain from apack #622](https://github.com/spankyed/apack/releases/tag/toolchain-4d3ad7b9a43355cda3c0d6d33b859048895d7cca).
+- [apack #624](https://github.com/spankyed/apack/pull/624) pins the release. The pinned payload
+  passed macOS beta, Linux production, and Windows production packaging checks. The macOS preview
+  loaded the starter offline. The preceding pack-aware build supplied the disposable upgrade profiles.
+- The cleanup branch removes the old workspace and its build steps. Its closing check is the strict
+  chain on the app-only tree. Keep release pins and the workspace removal separately reviewable.
 
 ## Branches and review
 
-The owner approved one branch and one ready-for-review PR per independently testable change. The table gives the planned split. If a phase yields two independently testable changes, give each its own branch and PR. The instruction to start implementation covers testing, pushing those feature branches and opening their PRs in both repositories.
-
-| Work | Repository and head branch | PR base |
+| Work | Repository | PR base |
 |---|---|---|
-| 1. Consume the release layout | `spankyed/apack` · `session/starter-release-layout` | `master` |
-| 2. Move CLI provider settings to Code | `spankyed/apack` · `session/starter-code-settings` | `master` |
-| 2. Preserve replacement choices | `spankyed/apack` · `session/starter-replacement` | `master` |
-| 2. Address drive queries to an explicit feature | `spankyed/apack` · `session/starter-drive-database-target` | `master` |
-| 3a. Supply retrievable authoring packages, if producer-side changes are needed | `spankyed/apack` · `session/starter-toolchain` | `master` |
-| 3a. Make pack release uploads retryable | `spankyed/apack` · `session/starter-release-upload` | `master` |
-| 3b. Transfer the production pack | `spankyed/default-setup` · `session/production-starter` | `main` |
-| 4. Pin the first external release | `spankyed/apack` · `session/starter-release-pin` | `master` |
-| 5. Remove the workspace | `spankyed/apack` · `session/starter-remove-workspace` | `master` |
+| App packaging and host changes | [apack #610–617](https://github.com/spankyed/apack/pulls?q=is%3Apr+base%3Aseparate-default-setup) | `separate-default-setup` |
+| Standalone release toolchain | [apack #622](https://github.com/spankyed/apack/pull/622) | `separate-default-setup` |
+| Production pack transfer | [default-setup #1](https://github.com/spankyed/default-setup/pull/1) | `main` |
+| Published release pin | [apack #624](https://github.com/spankyed/apack/pull/624) | `separate-default-setup` |
+| Workspace removal | apack · `session/starter-remove-workspace` | `separate-default-setup` |
+| Integrated migration | apack · `separate-default-setup` | `master` |
 
-For Phase 1, run the following from the apack checkout **when implementation starts**. The second argument matters because the helper otherwise branches from the current HEAD. Resume an existing phase worktree if one already exists. [Session helper](../../scripts/session.mjs)
-
-```sh
-git fetch origin
-npm run session:new -- starter-release-layout master
-```
-
-For Phase 3b, run these commands from the `default-setup` checkout. Keep its dependencies and generated files in its own worktree.
-
-```sh
-git fetch origin
-git worktree add -b session/production-starter ../default-setup-production-starter origin/main
-```
-
-Cut dependent branches from the updated base after the prerequisite lands. Independent producer work can proceed during app review. Each handoff names the repository, PR, base and head commits, checks run, and any remaining release dependency. Leave the PR open for the owner to review and merge. If review changes the head, validate the changed result and return it for review.
+The owner authorized merging #622, default-setup #1, the cutover and the cleanup after their
+checks pass, and authorized publishing the toolchain and first standalone release. The owner
+controls the final PR to `master`.
 
 ## Decisions
 
@@ -80,7 +57,7 @@ Package the in-tree starter as an ordinary archive for preview, beta, and produc
 
 ### Phase 2. Prove a replacement survives an app upgrade
 
-Use the Phase 1 build with a differently named starter and with no starter. The Code feature owns CLI path settings and their test action. Give generic testing helpers an explicit feature target. Packs and Settings are host-owned and must remain reachable. [Code settings](../../packages/default-setup/src/features/code/fe/components/CliProviders.vue) · [Code test action](../../packages/default-setup/src/features/code/be/system.ts) · [Testing helper](../../packages/apack-testing/src/engine/session.ts) · [Host surfaces](../../packages/apack-host/src/features/declaration.ts)
+Use the Phase 1 build with a differently named starter and with no starter. The Code feature owns CLI path settings and their test action. Give generic testing helpers an explicit feature target. Packs and Settings are host-owned and must remain reachable. [Code settings](https://github.com/spankyed/default-setup/blob/a8ed8103f5c6b6143b37cf827f5b7838b9c7ea8a/src/features/code/fe/components/CliProviders.vue) · [Code test action](https://github.com/spankyed/default-setup/blob/a8ed8103f5c6b6143b37cf827f5b7838b9c7ea8a/src/features/code/be/system.ts) · [Testing helper](../../packages/apack-testing/src/engine/session.ts) · [Host surfaces](../../packages/apack-host/src/features/declaration.ts)
 
 **Done when** two packaged app versions establish the following on disposable profiles:
 
@@ -95,7 +72,7 @@ The packaged baseline reproduced both the empty-profile onboarding trap and sile
 
 ### Phase 3. Make the external repository the production pack's authoring home
 
-Establish locked, retrievable build inputs on a clean runner. Choose a monorepo source commit and record who owns edits during the transfer so intervening fixes land in the external pack. Transfer the manifest, features, step types, content, tests, facade report, content goldens and redistribution credits. The survey counted 11 features and 13 step types; inventory the actual transfer commit. Keep official-product integration tests in the app repo. [Production manifest](../../packages/default-setup/apack.json) · [Packaged authoring acceptance](../../tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh)
+Establish locked, retrievable build inputs on a clean runner. Choose a monorepo source commit and record who owns edits during the transfer so intervening fixes land in the external pack. Transfer the manifest, features, step types, content, tests, facade report, content goldens and redistribution credits. The survey counted 11 features and 13 step types; inventory the actual transfer commit. Keep official-product integration tests in the app repo. [Production manifest](https://github.com/spankyed/default-setup/blob/a8ed8103f5c6b6143b37cf827f5b7838b9c7ea8a/apack.json) · [Packaged authoring acceptance](../../tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh)
 
 **Done when** the pack builds and tests outside the workspace without a global CLI, prepared sibling or accidental installed host. Compare declarations, facade, content and representative runtime behavior to the transfer baseline. Run the exact archive against the named host. Verify the notice inventory against the producer's lock and bundled components. Prove an interrupted release upload can be retried before a complete release becomes visible. Prepare the release candidate for the owner's publication decision. [Existing release upload sequence](../../packages/apack-cli/src/commands/release.ts)
 

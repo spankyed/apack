@@ -221,12 +221,7 @@ describe("the packaged app's file list", () => {
     expect(population('the pack working directories', found).filter(ships)).toEqual([]);
   });
 
-  it('ships the starter only through the staged layout', () => {
-    const workspace = population('the starter workspace', filesUnder('packages/default-setup'));
-    expect(workspace.filter(ships)).toEqual([]);
-    const stripped = without('!packages/default-setup/**');
-    expect(workspace.filter((file) => shipsUnder(stripped, file))).toContain('packages/default-setup/apack.json');
-  });
+
 
   /**
    * Every license and notice file of every installed dependency ships, which the dependencies' licenses ask a

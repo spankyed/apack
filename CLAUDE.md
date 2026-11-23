@@ -183,23 +183,14 @@ runtime or watcher code, or anything native; the strict gate always runs it.
 
 **Use `npm run spec` while working and the chain when done.** With no arguments it runs the specs your
 uncommitted changes affect; with a source file, the specs that import it. A change to `scripts/` or a vitest
-config routes to `@app/internal-repo-checks`. It names the specs the module graph cannot reach — a pack suite, which
-resolves the published `dist`, an integration half behind a second config, and a pack's content sources and
-build inputs, which reach their specs only through `apack pack build` — and `npm run spec:full` runs them.
+config routes to `@app/internal-repo-checks`. It names the specs the module graph cannot reach — an integration half behind a second config — and `npm run spec:full` runs them.
 The routes are data (`scripts/lib/spec-plan.ts`).
 
-Three things the chain cannot work out for you, because they rewrite files you commit. **Read the
+The API update command rewrites files you commit. **Read the
 regenerated diff before committing it**: every line should be the edit you just made.
 
 - **A public export of `@apackdev/sdk` or `/ui`** — `npm run api:update`, and commit `etc/`.
-- **default-setup's facade** — `npm run facade:update -w @app/default-setup`, and commit
-  `etc/pack-types.api.md`. The chain's `facade:check` replays the verified build (`--from-build`); the
-  pack-local command derives from source.
-- **A pack's content source (`src/content/`)** — when only `contentHash`/`rowSha256` moved, re-record with
-  `npm run content-parity:update -w @app/default-setup`; never edit a hash by hand.
-  `packages/default-setup/tests/content/CLAUDE.md` has the rule for what a golden records.
-
-`npm run typecheck` fails on a stale API report, facade report, exports map or schema
+`npm run typecheck` fails on a stale API report, exports map or schema
 (`RECORDED_FILE_CHECKS`, `scripts/lib/typecheck-jobs.ts`).
 
 **A recorded file is a derivation: it re-takes its answer on every run and compares.** Re-taking means
@@ -429,7 +420,6 @@ npm run typecheck:host           # @apackdev/host only
 npm run typecheck:ui             # @apackdev/ui only
 npm run typecheck:cli            # @apackdev/cli + @apackdev/testing
 npm run typecheck:scripts        # scripts/, tests/ and the repo/publish check packages
-npm run typecheck:pack           # @app/default-setup only
 npm run exports:check -w @apackdev/ui  # A stale exports map or a component without an entry
 
 npm run spec                     # The specs your uncommitted changes affect. Exit 1 failed, 2 too wide (listed),
@@ -463,8 +453,6 @@ npm run api:check                # Fails if a public entry's API changed without
 npm run api:update               # Regenerate etc/<entry>.api.md and .component.md (packages:build first)
 npm run schema:update            # -w @apackdev/sdk: regenerate apack.schema.json
 npm run schema:check             # -w @apackdev/sdk: fails if apack.schema.json is stale
-npm run content-parity:check     # -w @app/default-setup: written entities against tests/content/__golden__
-npm run content-parity:update    # -w @app/default-setup: re-record them, deliberately
 
 npm run measure -- "<cmd>"       # The work a command does (instructions, CPU) on any box, and its wall time,
                                  # labelled when the box was busy; a citable median with conditions. --latency

@@ -652,13 +652,13 @@ working directory; directory order makes the first entry primary. There is no Pr
 project ID, project relation or independent lifecycle in the audited declarations and consumers.
 
 - [Projects.vue](../../../packages/renderer/src/views/settings/canvas/components/GeneralSettings/Projects.vue)
-  and Code's [useProjectActions.ts](../../../packages/default-setup/src/features/code/fe/features/explorer/composables/useProjectActions.ts)
+  and Code's [useProjectActions.ts](https://github.com/spankyed/apack/blob/18d8a47b19495498f5a4bf52b41dae684c6efc12/packages/default-setup/src/features/code/fe/features/explorer/composables/useProjectActions.ts)
   create, rename, reorder and remove entries and write
   the complete array. Code sometimes removes an entry when its final directory is removed.
-- [Code startup](../../../packages/default-setup/src/features/code/be/system.ts) picks the first configured
+- [Code startup](https://github.com/spankyed/apack/blob/18d8a47b19495498f5a4bf52b41dae684c6efc12/packages/default-setup/src/features/code/be/system.ts) picks the first configured
   directory when no explicit/current directory wins.
 - Threads menus, project-select blocks and Claude Code/Codex actions select directory paths. The
-  [project-select block](../../../packages/default-setup/src/extensions/blocks/input/ProjectSelectInput.vue)
+  [project-select block](https://github.com/spankyed/apack/blob/18d8a47b19495498f5a4bf52b41dae684c6efc12/packages/default-setup/src/extensions/blocks/input/ProjectSelectInput.vue)
   submits a path, not a project reference.
 - Onboarding writes the configured list and sets Code's default directory separately. Its import actions
   use the directories to find sessions; project artifacts display the same configuration.

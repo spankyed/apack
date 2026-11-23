@@ -36,7 +36,7 @@ Anything that builds the pack rebuilds them, because they are part of `apack pac
 | Trigger | Rebuilds `dist/defs/` |
 |---|---|
 | `npm run dev` (dev launcher → `apack pack build --skip-fe`) | Yes |
-| `npm run build:default-setup` | Yes |
+| `apack pack build` in the default-setup checkout | Yes |
 | `npm run build:server` | No — builds only the API |
 | `npm run build:production` (`build/build.sh`) | Yes |
 | Branch switch on its own | No — `dist/` is gitignored; the next build refreshes it |

@@ -139,7 +139,7 @@ not the person looks.
 
 - Broker: no change. View (`view/`): no change.
 - `apack.json` (`features.code.settings`): `bellFlash` (default `true`) and `bellNotification` (default `false`) in the
-  schema, the required list and the defaults. `npm run generate:entries -w @app/default-setup` ran; the facade report
+  schema, the required list and the defaults. `npm run generate:entries` in the default-setup checkout ran; the facade report
   gained the two fields and nothing else changed (`etc/pack-types.api.md`).
 - `fe/features/terminal/state.ts`: `ringBell`, `endBellFlash`, `endBellWindow`, `showBellNotification`; context
   `bells`. `fe/canvas/TerminalView.vue`: `bellFlashing` selector and the container class. `fe/settings.vue`: two checkboxes.
@@ -611,7 +611,7 @@ the pool makes each view with. No Electron window was run, so nothing below is c
 - `packages/default-setup/apack.json`: `cursorStyle`, `cursorInactiveStyle`, `cursorBlink`, `linkPreview` in the code
   schema and defaults (`bar`, `hollow`, `default`, `osc8`); none added to `required`, as only the defaults are needed.
 - `packages/default-setup/src/features/code/fe/settings.vue`: four selects after the copy-on-selection setting.
-  `npm run generate:entries -w @app/default-setup` changed only the generated settings (gitignored); `facade:update` moved
+  `npm run generate:entries` in the default-setup checkout changed only the generated settings (gitignored); `facade:update` moved
   only `etc/pack-types.api.md`, by four optional keys.
 - `packages/apack-sdk/src/services/terminal.ts`, `index.ts`, `etc/services.api.md` (`api:update`: 1 of 31 reports, the
   diff is the new type and method): `TerminalCursorStyle`, `TerminalCursorBlink`, `TerminalSession.setCursorDefaults`.

@@ -89,7 +89,7 @@ describe('what check:repro compares', () => {
     for (const { name, consumed } of producers) population(`${name}'s outputs that another step reads`, consumed);
     expect(producers.map(({ name }) => name),
       'a build step arrived or stopped being found; the rule below is only as wide as this list')
-      .toEqual(['packages:ensure', 'build:default-setup', 'build:runtime']);
+      .toEqual(['packages:ensure', 'packs:stage', 'build:runtime']);
     expect(uncovered(CHAIN_STEPS, reproPaths()),
       'a build output the chain caches on is compared by nothing, so a second build could change it unnoticed')
       .toEqual([]);
@@ -198,27 +198,5 @@ describe('the recorded irreproducible outputs', () => {
     const { failing, known } = partition([{ path: 'packages/apack-sdk/dist/index.js', kind: 'changed' }]);
     expect(known).toEqual([]);
     expect(failing.map((d) => d.path)).toEqual(['packages/apack-sdk/dist/index.js']);
-  });
-});
-
-/**
- * The trap this check would otherwise walk into, and the reason `scripts/repro.ts` runs codegen itself.
- *
- * `apack pack build` calls `generateEntries([])` with no `--force`, and `generate-entries` returns early when
- * `.apack/generate-entries.json` matches. So a round that leaves codegen to `apack pack build` re-hashes `src/__generated__`
- * without having regenerated it, and reports it identical — half of `PACK_OUTPUTS` passing for having been
- * looked at rather than checked.
- *
- * Asserted against the script's text because the alternative is running two real builds. It is a weaker check
- * than executing it, and it is the one that is affordable; what it pins is that the flag is not quietly
- * dropped.
- */
-describe('the codegen the second build would otherwise skip', () => {
-  it('is forced by the script, not left to apack pack build', () => {
-    const script = fs.readFileSync(path.join(REPO_ROOT, 'scripts/repro.ts'), 'utf-8');
-    const call = /'generate:entries'[^\n]*\n?[^\n]*/.exec(script)?.[0];
-    expect(call, 'scripts/repro.ts no longer runs generate:entries at all').toBeDefined();
-    expect(call, "generate:entries runs without --force, so the second build reuses src/__generated__ and the "
-      + 'check compares codegen output it never regenerated').toContain('--force');
   });
 });
