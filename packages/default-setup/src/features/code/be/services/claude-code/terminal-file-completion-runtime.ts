@@ -37,6 +37,43 @@ function nativeTeamAddress(n,context,text){
 function sameNativeTeamAddress(left,right){
  return !!left&&!!right&&left.id===right.id&&left.team===right.team&&left.name===right.name;
 }
+const nativePeerRosters=new WeakMap();
+async function nativeAddressCompletions(n,context,token,current){
+ if(token.quoted||!/^[\p{L}\p{N}\p{M}\u200C\u200D_-]*$/u.test(token.query))return [];
+ const normalize=n.addressNormalization?.lo??(value=>value.toLowerCase());
+ const query=normalize(token.query);
+ const names=new Set(),rows=[];
+ const add=(label,description)=>{
+  if(label.length>4096||!/^(?:@[\w-]+|@"[^"\u0000-\u001f\u007f]+")$/u.test(label))return;
+  rows.push({label,text:label+' ',description,replacement:{start:token.start,end:token.end}});
+ };
+ for(const {name} of nativeTeamMembers(n,context)){
+  if(!normalize(name).startsWith(query))continue;
+  names.add(name);
+  add('@'+name,'Send message');
+ }
+ const state=context.getAppState?.();
+ for(const [name,id] of state?.agentNameRegistry??[]){
+  if(names.has(name)||!normalize(name).startsWith(query))continue;
+  const status=state.tasks?.[id]?.status;
+  add('@'+name,status?'Send message · '+status:'Send message');
+ }
+ const allowPeers=()=>n.addressAdmission?.Yi()===true&&!n.referenceWorkspace.Ct();
+ if(query&&allowPeers()){
+  const {session,storageV5}=context;
+  let entry=nativePeerRosters.get(session);
+  if(!entry||!entry.pending&&Date.now()-entry.lastRead>=5000){
+   entry={lastRead:0,pending:n.runtime.igr(session,state,{storageV5})};
+   nativePeerRosters.set(session,entry);
+   const held=entry;
+   void held.pending.then(roster=>{held.roster=roster;},()=>{}).then(()=>{held.pending=undefined;held.lastRead=Date.now();});
+  }
+  const roster=entry.pending?await entry.pending.catch(()=>undefined):entry.roster;
+  if(!current())return [];
+  if(roster&&allowPeers())for(const row of n.runtime.Xps(roster,query))add(row.displayText,row.description);
+ }
+ return rows.slice(0,20);
+}
 const templateRefreshes=new WeakMap(),templateReconnectFailures=new WeakMap();
 async function nativeResourceTemplates(transport,context,current){
  const mcp=context.getAppState().mcp;
@@ -154,12 +191,8 @@ async function nativeFileCompletions(n,clientId,token,abort){
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')return [];
  const context=binding.toolContext(abort),{storageV5}=context;
  const current=()=>!abort.signal.aborted&&clientViewCurrent(n,clientId)&&(originalContext??n.runtime.ey())===binding;
- if(!token.quoted&&/^[\p{L}\p{N}\p{M}\u200C\u200D_-]*$/u.test(token.query)){
-  const query=token.query.toLowerCase();
-  const teammates=nativeTeamMembers(n,context).filter(member=>member.name.toLowerCase().startsWith(query)).slice(0,15);
-  if(teammates.length)return teammates.map(({name})=>({label:'@'+name,text:'@'+name+' ',description:'Send message',
-   replacement:{start:token.start,end:token.end}}));
- }
+ const addresses=await nativeAddressCompletions(n,context,token,current);
+ if(!current()||addresses.length)return current()?addresses:[];
  let listed={},templateRows;
  if(n.referenceTransport&&!n.referenceWorkspace.Ct()){
   const transport=n.referenceTransport.mcpClientModule();

@@ -170,6 +170,41 @@ it('uses the native team roster for addressed completion and refuses changed rec
   expect((await autocomplete(native,'main',{text:'@rele',cursor:5})).suggestions).toEqual([])
 })
 
+it('shows named native Agents and only exposes peer suggestions while the native policy admits them', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  const state = { agentNameRegistry:new Map([['review-worker','worker-id']]),tasks:{'worker-id':{status:'running'}} }
+  const session = {}, context = { session,getAppState:()=>state }
+  const originalContext = { surface:'terminal',toolContext:()=>context }
+  const api = vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';autocomplete',{
+    AbortController,originalContext,clientViewCurrent:()=>true,
+  })
+  let allowed = true
+  let finishRoster!: (value: object) => void
+  const read = vi.fn(() => new Promise<object>(resolve=>{finishRoster=resolve}))
+  const roster = {}
+  const match = vi.fn((_roster,query)=>query==='release'?[{displayText:'@"release notes"',description:'message session'}]:[])
+  const n = {
+    runtime:{igr:read,Xps:match},addressAdmission:{Yi:()=>allowed},referenceWorkspace:{Ct:()=>false},
+    fileSuggestions:{s5t:async()=>[],RSe:{}},session:{rwt:()=>undefined},
+  }
+  const query = (text: string) => api(n,'client',{text,cursor:text.length})
+  const first = query('@release')
+  allowed = false
+  finishRoster(roster)
+  expect((await first).suggestions).toEqual([])
+  expect(match).not.toHaveBeenCalled()
+  allowed = true
+  expect((await query('@release')).suggestions).toEqual([
+    {label:'@"release notes"',text:'@"release notes" ',description:'message session',replacement:{start:0,end:8}},
+  ])
+  expect(read).toHaveBeenCalledOnce()
+  allowed = false
+  expect((await query('@review')).suggestions).toEqual([
+    {label:'@review-worker',text:'@review-worker ',description:'Send message · running',replacement:{start:0,end:7}},
+  ])
+})
+
 it('coalesces queued edits, adopts app changes and retires edits on detach', async () => {
   type Box = { text: string; cursor: number; superseded?: boolean }
   type Edit = { before: Box; after: Box; key?: { key: string; name: string } }
