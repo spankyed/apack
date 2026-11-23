@@ -121,7 +121,7 @@
         <section v-if="!nativeTerminalActive && shellTasks.length" aria-label="Background commands" class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in shellTasks" :key="task.id" class="py-1" :data-native-shell-id="task.id">
             <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
-            <NativeTaskControls :task="task" />
+            <NativeTaskControls :task="task" @reveal-shell-output="revealNativeShellOutput" />
           </div>
         </section>
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
@@ -1339,6 +1339,16 @@ const nativeViewport = useNativeTranscriptViewport({
     if (!following) pendingScrollOnSend.value = false
   },
 })
+function revealNativeShellOutput(element: HTMLElement) {
+  const viewport = messagesContainer.value
+  if (!viewport?.contains(element) || !nativeTranscriptVisible.value) return
+  // Give the explicit output action priority over scheduled native transcript following.
+  nativeViewport.pauseFollowing()
+  scrollPositioning.position(() => {
+    if (viewport === messagesContainer.value && viewport.contains(element) && nativeTranscriptVisible.value)
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' })
+  })
+}
 const showMemory = ref(false)
 const memoryTarget = computed(() => {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value

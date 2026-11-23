@@ -126,35 +126,28 @@ it('reveals a shell output panel only for the inspection that opened it', async 
   }
   let revision = 1
   const operate = vi.fn(() => ++revision)
+  const reveal = vi.fn()
   const root = document.createElement('div')
   document.body.append(root)
   app = createApp({
     setup() {
       provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate })
-      return () => h(NativeTaskControls, { task })
+      return () => h(NativeTaskControls, { task, onRevealShellOutput: reveal })
     },
   })
-  const scroll = vi.fn()
-  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
-  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: scroll, configurable: true })
-  try {
-    app.mount(root)
-    const button = (text: string) => [...root.querySelectorAll('button')].find(node => node.textContent === text)!
-    button('View output').click()
-    state.value = { ...reply, taskId: 'other-shell' }
-    await nextTick()
-    expect(scroll).not.toHaveBeenCalled()
-    state.value = reply
-    await nextTick()
-    expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest' })
-    button('Refresh output').click()
-    state.value = { ...reply, revision: 3 }
-    await nextTick()
-    expect(scroll).toHaveBeenCalledTimes(1)
-  } finally {
-    if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original)
-    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
-  }
+  app.mount(root)
+  const button = (text: string) => [...root.querySelectorAll('button')].find(node => node.textContent === text)!
+  button('View output').click()
+  state.value = { ...reply, taskId: 'other-shell' }
+  await nextTick()
+  expect(reveal).not.toHaveBeenCalled()
+  state.value = reply
+  await nextTick()
+  expect(reveal).toHaveBeenCalledExactlyOnceWith(root.querySelector('[aria-label="Background command output"]'))
+  button('Refresh output').click()
+  state.value = { ...reply, revision: 3 }
+  await nextTick()
+  expect(reveal).toHaveBeenCalledTimes(1)
 })
 
 it('shows MCP task details and native refusal without offering Agent controls', async () => {

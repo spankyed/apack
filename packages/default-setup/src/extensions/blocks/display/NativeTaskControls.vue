@@ -55,7 +55,7 @@
         </footer>
       </div>
     </dialog>
-    <section v-if="shell && shown && state?.details?.shell" ref="shellOutput" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
+    <section v-if="shell && shown && state?.details?.shell" ref="shellOutput" aria-label="Background command output" tabindex="0" class="mt-2 scroll-my-4 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
       <button type="button" :disabled="pending" class="mb-2 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
       <details class="mb-3">
         <summary class="cursor-pointer text-neutral-400">Command details</summary>
@@ -78,6 +78,7 @@ import NativeWorkflowDetails from './NativeWorkflowDetails.vue'
 import { computed, inject, ref, watch } from 'vue'
 import { claudeTaskControls, type ClaudeTaskIdentity } from './native-task-controls.ts'
 const props = defineProps<{ task: ClaudeTaskIdentity & { status: string } }>()
+const emit = defineEmits<{ 'reveal-shell-output': [element: HTMLElement] }>()
 const workflow = computed(() => props.task.kind === 'workflow')
 const shell = computed(() => props.task.kind === 'shell')
 const mcp = computed(() => props.task.kind === 'mcp')
@@ -95,7 +96,7 @@ let revealShellRevision: number | undefined
 watch(state, value => {
   if (!value || value.revision !== revealShellRevision || value.status === 'pending') return
   revealShellRevision = undefined
-  if (value.status === 'done' && shown.value) shellOutput.value?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  if (value.status === 'done' && shown.value && shellOutput.value) emit('reveal-shell-output', shellOutput.value)
 }, { flush: 'post' })
 const mcpDialog = ref<HTMLDialogElement | null>(null)
 watch(mcpDialog, (dialog, previous) => {
