@@ -24,7 +24,7 @@ import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from '
 import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
 import { stat } from 'node:fs/promises'
-import { createClaudeTeammateRecovery, identifyClaudeRecoveryPane, saveClaudeTeammateCheckpoint, type ClaudeRecoveryPane } from './teammate-recovery.ts'
+import { clearClaudeTeammateCheckpoint, createClaudeTeammateRecovery, identifyClaudeRecoveryPane, saveClaudeTeammateCheckpoint, type ClaudeRecoveryPane } from './teammate-recovery.ts'
 import { resolveClaudeExecutable } from './native-executable.ts'
 import { projectClaudeTerminalImageReferences } from './terminal-image-reference.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
@@ -160,6 +160,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let startupPolicyProblem: string | undefined
   let keepAttachedTeammatesAfterCrash = false
   const verifiedPanes = new Map<string, ClaudeRecoveryPane>()
+  const teammateCheckpointSessions = new Set<string>()
+  const teammateCheckpoint = teammateRecoveryThread ? (sessionId: string) => ({
+    profile: resolveAppEnvironment().userDataDir, threadId: teammateRecoveryThread, sessionId,
+  }) : undefined
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
@@ -209,11 +213,11 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       const tail = stripVTControlCharacters(output.map(chunk => chunk.text).join(''))
       startupPolicyProblem = tail.match(/^[^\r\n]{1,4096}: Managed settings document could not be parsed as a JSON object; none of its settings are in effect\. Fix or remove it\.\r?$/m)?.[0].trim()
     }
-    if (keepAttachedTeammatesAfterCrash && teammateRecoveryThread && verifiedPanes.size) {
-      const sessionId = bridge.projection.sessionId
-      const panes = [...verifiedPanes.values()].filter(pane => pane.sessionId === sessionId)
-      await saveClaudeTeammateCheckpoint({profile:resolveAppEnvironment().userDataDir, threadId:teammateRecoveryThread, sessionId}, panes, env)
-        .catch(error => logger.warn('Claude teammate checkpoint could not be saved', { error: error instanceof Error ? error.message : String(error) }))
+    if (!keepAttachedTeammatesAfterCrash && teammateCheckpoint) {
+      for (const sessionId of teammateCheckpointSessions) {
+        await clearClaudeTeammateCheckpoint(teammateCheckpoint(sessionId), ownerId)
+          .catch(error => logger.warn('Claude teammate checkpoint could not be cleared', { error: error instanceof Error ? error.message : String(error) }))
+      }
     }
     try { await bridge.close() } finally {
       releasing = true
@@ -607,7 +611,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         // Only the original native task lookup can grant a pane identity.
         const task = bridge.projection.tasks.find(item => item.id === taskId)
         const verified = task ? await identifyClaudeRecoveryPane({ownerId, sessionId, taskId, name:task.name,
-          executable, cwd:options.cwd, tmuxSession:session, paneId}, server, env, signal).catch(error => {
+          executable, cwd:options.cwd, tmuxSession:session, paneId}, nativePid, server, env, signal).catch(error => {
           if (!signal.aborted) logger.warn('Claude teammate reconnect identity unavailable', {
             error: error instanceof Error ? error.message : String(error),
           })
@@ -617,7 +621,14 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const client = await openClaudeTerminalAttachment(executable, [...server, 'attach-session', '-f', 'ignore-size', '-t', session],
           { id: taskId, sessionId, cwd: options.cwd }, { env, signal })
         if (!verified) return client
+        try { ensureCurrent() } catch (error) { await client.close(); throw error }
         verifiedPanes.set(taskId, verified)
+        if (teammateCheckpoint) {
+          teammateCheckpointSessions.add(sessionId)
+          const panes = [...verifiedPanes.values()].filter(pane => pane.sessionId === sessionId)
+          await saveClaudeTeammateCheckpoint(teammateCheckpoint(sessionId), panes, env)
+            .catch(error => logger.warn('Claude teammate checkpoint could not be saved', { error: error instanceof Error ? error.message : String(error) }))
+        }
         const recovery = createClaudeTeammateRecovery(verified, env)
         return Object.assign(client, {
           canReconnect: (abort: AbortSignal) => keepAttachedTeammatesAfterCrash ? recovery.canReconnect(abort) : Promise.resolve(false),

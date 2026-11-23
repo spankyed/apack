@@ -20,6 +20,7 @@ const recoveryPane = z.object({
   socket: absolute, socketIdentity: z.tuple([decimal, decimal]), bootId: uuid,
   tmuxSession: z.string().regex(/^\$\d+$/), paneId: z.string().regex(/^%\d+$/),
   server: z.tuple([positivePid, decimal]), worker: z.tuple([positivePid, decimal]),
+  writer: z.tuple([positivePid, decimal]).optional(),
 }).strict()
 const savedPanes = z.array(recoveryPane).max(maxPanes)
 export type ClaudeRecoveryPane = z.infer<typeof recoveryPane>
@@ -36,11 +37,23 @@ async function executableIdentity(executable: string) {
   return [...fileIdentity(file), String(file.ctimeNs)] as [string, string, string]
 }
 
+async function readProcessStart(pid: string, signal: AbortSignal) {
+  try {
+    const source = await readFile(`/proc/${pid}/stat`, { encoding: 'utf8', signal })
+    const fields = source.slice(source.lastIndexOf(') ') + 2).split(' ')
+    if (fields[0] === 'Z') return
+    if (!fields[19] || !/^\d{1,24}$/.test(fields[19])) throw Error('Could not verify the native teammate process')
+    return fields[19]
+  } catch (error) {
+    if (['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) return
+    throw error
+  }
+}
+
 async function processStart(pid: string, signal: AbortSignal) {
-  const source = await readFile(`/proc/${pid}/stat`, { encoding: 'utf8', signal })
-  const fields = source.slice(source.lastIndexOf(') ') + 2).split(' ')
-  if (fields[0] === 'Z' || !fields[19] || !/^\d{1,24}$/.test(fields[19])) throw Error('The native teammate process ended')
-  return fields[19]
+  const start = await readProcessStart(pid, signal)
+  if (!start) throw Error('The native teammate process ended')
+  return start
 }
 
 async function inspectPane(target: PaneTarget, address: string[], env: NodeJS.ProcessEnv, signal: AbortSignal) {
@@ -61,11 +74,13 @@ async function inspectPane(target: PaneTarget, address: string[], env: NodeJS.Pr
 
 async function bootId() { return (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim() }
 
-export async function identifyClaudeRecoveryPane(target: PaneTarget, address: string[], env: NodeJS.ProcessEnv, signal: AbortSignal): Promise<ClaudeRecoveryPane | undefined> {
+export async function identifyClaudeRecoveryPane(target: PaneTarget, writerPid: number, address: string[], env: NodeJS.ProcessEnv, signal: AbortSignal): Promise<ClaudeRecoveryPane | undefined> {
   if (process.platform !== 'linux') return
+  const writer = String(writerPid)
+  const writerStart = await processStart(writer, signal)
   const identity = await executableIdentity(target.executable)
   const { socket, socketIdentity, server, worker } = await inspectPane(target, address, env, signal)
-  return recoveryPane.parse({ ...target, socket, socketIdentity, server, worker, executableIdentity: identity, bootId: await bootId() })
+  return recoveryPane.parse({ ...target, socket, socketIdentity, server, worker, executableIdentity: identity, bootId: await bootId(), writer: [writer, writerStart] })
 }
 
 export function createClaudeTeammateRecovery(pane: ClaudeRecoveryPane, env: NodeJS.ProcessEnv) {
@@ -75,6 +90,7 @@ export function createClaudeTeammateRecovery(pane: ClaudeRecoveryPane, env: Node
     // Check the filesystem and process generations before contacting a persisted socket.
     if (process.platform !== 'linux' || await bootId() !== pane.bootId
       || !same(await executableIdentity(pane.executable), pane.executableIdentity)) throw Error('The teammate recovery host changed')
+    if (pane.writer && await readProcessStart(pane.writer[0], signal) === pane.writer[1]) throw Error('The original Claude writer is still active')
     const file = await lstat(pane.socket, { bigint: true })
     if (!file.isSocket() || file.uid !== BigInt(process.getuid!()) || !same(fileIdentity(file), pane.socketIdentity)
       || await processStart(pane.server[0], signal) !== pane.server[1] || await processStart(pane.worker[0], signal) !== pane.worker[1]) throw Error('The original teammate pane is unavailable')
@@ -131,20 +147,48 @@ export async function readClaudeTeammateCheckpoint(scope: RecoveryScope): Promis
   }
 }
 
+const checkpointUpdates = new Map<string, Promise<void>>()
+
+function updateCheckpoint(scope: RecoveryScope, update: (records: ClaudeRecoveryPane[]) => Promise<ClaudeRecoveryPane[] | undefined>) {
+  const key = JSON.stringify([scope.profile, scope.threadId, scope.sessionId])
+  const pending = (checkpointUpdates.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    const records = await update(await readClaudeTeammateCheckpoint(scope))
+    if (!records) return
+    const path = await checkpoint(scope, records.length > 0)
+    if (!records.length) {
+      await rm(path, { force: true })
+      return
+    }
+    const staged = `${path}.${randomUUID()}.tmp`
+    try {
+      await writeFile(staged, JSON.stringify(savedPanes.parse(records)), { flag: 'wx', mode: 0o600 })
+      await rename(staged, path)
+    } finally { await rm(staged, { force: true }) }
+  })
+  checkpointUpdates.set(key, pending)
+  return pending.finally(() => {
+    if (checkpointUpdates.get(key) === pending) checkpointUpdates.delete(key)
+  })
+}
+
 export async function saveClaudeTeammateCheckpoint(scope: RecoveryScope, panes: ClaudeRecoveryPane[], env: NodeJS.ProcessEnv) {
   if (process.platform !== 'linux' || !panes.length) return
-  const previous = await readClaudeTeammateCheckpoint(scope)
-  const signal = AbortSignal.timeout(10_000)
-  const kept: ClaudeRecoveryPane[] = []
-  for (const pane of previous) {
-    if (signal.aborted) break
-    if (await createClaudeTeammateRecovery(pane, env).canReconnect(signal)) kept.push(pane)
-  }
-  const current = new Map([...kept, ...panes].map(pane => [pane.taskId, pane]))
-  const records = savedPanes.parse([...current.values()].slice(-maxPanes))
-  const path = await checkpoint(scope, true), staged = `${path}.${randomUUID()}.tmp`
-  try {
-    await writeFile(staged, JSON.stringify(records), { flag: 'wx', mode: 0o600 })
-    await rename(staged, path)
-  } finally { await rm(staged, { force: true }) }
+  await updateCheckpoint(scope, async previous => {
+    const signal = AbortSignal.timeout(10_000)
+    const current = new Map(panes.map(pane => [pane.taskId, pane]))
+    const kept: ClaudeRecoveryPane[] = []
+    for (const pane of previous) {
+      if (signal.aborted) break
+      if (!current.has(pane.taskId) && await createClaudeTeammateRecovery(pane, env).canReconnect(signal)) kept.push(pane)
+    }
+    return [...kept, ...current.values()].slice(-maxPanes)
+  })
+}
+
+export async function clearClaudeTeammateCheckpoint(scope: RecoveryScope, ownerId: string) {
+  if (process.platform !== 'linux') return
+  await updateCheckpoint(scope, async previous => {
+    const remaining = previous.filter(pane => pane.ownerId !== ownerId)
+    return remaining.length === previous.length ? undefined : remaining
+  })
 }
