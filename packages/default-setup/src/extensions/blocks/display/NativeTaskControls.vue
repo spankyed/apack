@@ -1,5 +1,5 @@
 <template>
-  <div v-if="task.kind !== 'managed' && controls && controls.ownerId.value === task.ownerId" :key="taskKey" @keydown.esc="leaveConversation" class="mt-2 min-w-0">
+  <div v-if="task.kind !== 'managed' && controls && controls.ownerId.value === task.ownerId" :key="taskKey" ref="taskControls" @keydown.esc="leaveConversation" class="mt-2 min-w-0 scroll-my-1">
     <div class="flex flex-wrap items-center gap-2">
       <button v-if="!workflow && !shell && !mcp && controls.foregroundAvailable.value" type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'foreground')">Open Agent</button>
       <NativeWorkflowDetails v-if="workflow" :details="state?.details" :pending="pending" :status="task.status" :problem="state?.status === 'error' ? state.problem : undefined" @inspect="controls.operate(task, 'inspect')" @worker="(operation, target) => controls?.operate(task, operation, undefined, target)" />
@@ -55,9 +55,9 @@
         </footer>
       </div>
     </dialog>
-    <section v-if="shell && shown && state?.details?.shell" ref="shellOutput" aria-label="Background command output" tabindex="0" class="mt-2 scroll-my-4 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
-      <button type="button" :disabled="pending" class="mb-2 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
-      <details class="mb-3">
+    <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 px-3 py-1.5 text-xs">
+      <button type="button" :disabled="pending" class="mb-1 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
+      <details class="mb-1">
         <summary class="cursor-pointer text-neutral-400">Command details</summary>
       <p v-if="state.details.shell.cwd" class="mb-2 break-all text-neutral-500">{{ state.details.shell.cwd }}</p>
       <pre class="mb-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.command }}</pre>
@@ -91,12 +91,12 @@ const sessionState = computed(() => {
 const state = computed(() => sessionState.value?.taskId === props.task.id ? sessionState.value : undefined)
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
-const shellOutput = ref<HTMLElement | null>(null)
+const taskControls = ref<HTMLElement | null>(null)
 let revealShellRevision: number | undefined
 watch(state, value => {
   if (!value || value.revision !== revealShellRevision || value.status === 'pending') return
   revealShellRevision = undefined
-  if (value.status === 'done' && shown.value && shellOutput.value) emit('reveal-shell-output', shellOutput.value)
+  if (value.status === 'done' && value.details?.shell && shown.value && taskControls.value) emit('reveal-shell-output', taskControls.value)
 }, { flush: 'post' })
 const mcpDialog = ref<HTMLDialogElement | null>(null)
 watch(mcpDialog, (dialog, previous) => {

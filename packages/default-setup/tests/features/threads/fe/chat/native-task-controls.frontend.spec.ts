@@ -143,7 +143,7 @@ it('reveals a shell output panel only for the inspection that opened it', async 
   expect(reveal).not.toHaveBeenCalled()
   state.value = reply
   await nextTick()
-  expect(reveal).toHaveBeenCalledExactlyOnceWith(root.querySelector('[aria-label="Background command output"]'))
+  expect(reveal).toHaveBeenCalledExactlyOnceWith(root.firstElementChild)
   button('Refresh output').click()
   state.value = { ...reply, revision: 3 }
   await nextTick()
