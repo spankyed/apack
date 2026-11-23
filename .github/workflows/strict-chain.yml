@@ -150,7 +150,7 @@ jobs:
       - name: ${{ matrix.name }}
         env:
           # The app shard rebuilds a fork with the standalone pack's GitHub release toolchain.
-          GH_TOKEN: ${{ matrix.job == 'app,rest' && github.token || '' }}
+          APACK_FORK_GH_TOKEN: ${{ matrix.job == 'app,rest' && github.token || '' }}
           APACK_STRICT_JOB: ${{ matrix.job }}
           APACK_STRICT_SHARD: ${{ matrix.shard }}
           SPEC_DURATIONS_PROGRESS_FILE: ${{ runner.temp }}/strict-spec-progress

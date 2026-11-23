@@ -211,7 +211,7 @@ jobs:
 
       - name: External pack E2E
         env:
-          GH_TOKEN: ${{ github.token }}
+          APACK_FORK_GH_TOKEN: ${{ github.token }}
         run: npm run test:external-pack
 
       # Outside-author end state: packed @apackdev/* tarballs only, in a temp dir outside the repo

@@ -54,14 +54,16 @@ async function prepare(): Promise<void> {
     }
     const npmCli = process.env.npm_execpath;
     if (!npmCli) throw new Error('Run the fork scenario through npm');
-    const acquire = async (command: string, args: string[], cwd: string, stream = true) => {
-      const result = await boundedSpawn(command, args, DEFAULT_FORK_BUDGET_MS.acquire, { cwd, stream });
+    const { APACK_FORK_GH_TOKEN: toolchainToken, ...forkEnv } = process.env;
+    const toolchainEnv = toolchainToken ? { ...forkEnv, GH_TOKEN: toolchainToken } : forkEnv;
+    const acquire = async (command: string, args: string[], cwd: string, { stream = true, env = forkEnv } = {}) => {
+      const result = await boundedSpawn(command, args, DEFAULT_FORK_BUDGET_MS.acquire, { cwd, stream, env });
       if (result.code !== 0) throw new Error(`Default fork preparation failed: ${command} ${args.join(' ')}`);
       return result.output.trim();
     };
     await acquire('git', ['clone', '--depth', '1', '--branch', `v${integrity.version}`, repo, fork], temporary);
-    if (await acquire('git', ['rev-parse', 'HEAD'], fork, false) !== commit) throw new Error('The pack release tag moved');
-    await acquire(process.execPath, [npmCli, 'run', 'toolchain'], fork);
+    if (await acquire('git', ['rev-parse', 'HEAD'], fork, { stream: false }) !== commit) throw new Error('The pack release tag moved');
+    await acquire(process.execPath, [npmCli, 'run', 'toolchain'], fork, { env: toolchainEnv });
     await acquire(process.execPath, [npmCli, 'ci'], fork);
     const manifest = JSON.parse(fs.readFileSync(path.join(fork, 'apack.json'), 'utf8'));
     manifest.name = 'Acceptance fork';
@@ -74,7 +76,7 @@ async function prepare(): Promise<void> {
     for (const [phase, args] of [['build', ['run', 'build']], ['export', ['run', 'export', '--', '--out', staged]]] as const) {
       console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
       const result = await boundedSpawn(process.execPath, [npmCli, ...args], DEFAULT_FORK_BUDGET_MS[phase],
-        { cwd: fork, env: { ...process.env, APACK_HOST: root }, stream: true });
+        { cwd: fork, env: { ...forkEnv, APACK_HOST: root }, stream: true });
       if (result.code !== 0) throw new Error(`Default fork ${phase} ${result.timedOut ? 'timed out' : `failed (exit ${result.code})`}`);
       console.log(`Default fork ${phase}: completed in ${(result.ms / 1000).toFixed(1)}s`);
     }
