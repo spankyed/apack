@@ -18,7 +18,7 @@ import type { ClaudeNativeTranscript } from './terminal-journal.ts'
 import { createClaudeTerminalSession, parseClaudeTerminalMetadata, type ClaudeNativeSubmissionReceipt, type ClaudeNativeImage } from './terminal-session.ts'
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdtemp, mkdir, writeFile, rename, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createClaudeTerminalStatus } from './terminal-status.ts'
@@ -29,6 +29,22 @@ import { PermissionModeSchema } from './types.ts'
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'"
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 const command = (value: unknown): string | undefined => { const entry = object(value); return entry?.type === 'command' && typeof entry.command === 'string' && entry.command ? entry.command : undefined }
+
+async function installPluginMetadata(path: string, document: object) {
+  const contents = JSON.stringify(document)
+  try {
+    if (await readFile(path, 'utf8') === contents) return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  const temporary = path + '.' + randomUUID() + '.tmp'
+  try {
+    await writeFile(temporary, contents, {mode: 0o600, flag: 'wx'})
+    await rename(temporary, path)
+  } finally {
+    await rm(temporary, {force: true})
+  }
+}
 
 /** Native plugin and native-invoked command helpers share one private, session-scoped broker. */
 export async function createClaudeTerminalBridge(options: {
@@ -625,8 +641,10 @@ export async function createClaudeTerminalBridge(options: {
     const bunOptions = (options.bunOptions ? options.bunOptions + ' ' : '') + '--preload=' + nativeQuote(runtime)
     const pluginRoot = join(backgroundObserver.directory, 'plugin')
     await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'), { recursive: true })
-    await writeFile(join(pluginRoot, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'apack-native-terminal', version: '0.0.1' }), { mode: 0o600 })
-    await writeFile(join(pluginRoot, 'hooks/hooks.json'), JSON.stringify({ modules: ['./register.ts'] }), { mode: 0o600 })
+    // A surviving teammate watches these declarations. Leave their timestamps alone
+    // on parent resume while refreshing the parent socket and token in the module.
+    await installPluginMetadata(join(pluginRoot, '.claude-plugin/plugin.json'), {name: 'apack-native-terminal', version: '0.0.1'})
+    await installPluginMetadata(join(pluginRoot, 'hooks/hooks.json'), {modules: ['./register.ts']})
     const plugin = createClaudeTerminalPlugin(socketPath, token, { parentSessionId: options.sessionId, socketPath: backgroundObserver.socketPath, token: backgroundObserver.token })
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
