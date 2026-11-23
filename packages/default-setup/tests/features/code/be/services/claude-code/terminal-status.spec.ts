@@ -44,6 +44,31 @@ it('projects Workflows separately and refuses Agent status decoration for them',
  expect(status.updateWorkflows('foreign',[])).toBe(false)
 })
 
+it('keeps an Agent caption off activity rows with the same identifier and status', () => {
+  const state = createClaudeTerminalStatus(session)
+  const id = 'native-task', status = 'running'
+  const activity = { id, status, name: 'Review release notes', canStop: false }
+  expect(state.updateActivityTasks(session,
+    [{ ...activity, settled: false, canPause: true, canResume: false }],
+    [activity],
+    [{ ...activity, mcp: { serverTaskId: 'server-task', status, startTime: 1000, protocol: 'sep2663', truncated: false } }],
+    [{ ...activity, nativeTaskType: 'remote_agent' }],
+  )).toBe(true)
+  expect(state.updateSession(session, [{ id, status, type: 'reviewer' }])).toBe(true)
+  expect(state.accept({
+    ...main(JSON.stringify({ id, content: 'Reviewing linked notes' })),
+    kind: 'subagent',
+    tasks: [{ id, status }],
+  })).toBe(true)
+  expect(state.tasks.map(task => [task.kind, task.statusText])).toEqual([
+    [undefined, 'Reviewing linked notes'],
+    ['workflow', undefined],
+    ['shell', undefined],
+    ['mcp', undefined],
+    ['managed', undefined],
+  ])
+})
+
 it('projects MCP activity atomically and retires it on session replacement', () => {
   const session='12345678-1234-1234-1234-123456789abc',status=createClaudeTerminalStatus(session)
   const task={id:'registry-mcp',name:'Review workspace',status:'running',canStop:true,mcp:{serverTaskId:'server-task-42',status:'input_required',startTime:1000,protocol:'sep2663',truncated:false}}

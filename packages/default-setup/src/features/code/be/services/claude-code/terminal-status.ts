@@ -16,7 +16,12 @@ export function createClaudeTerminalStatus(sessionId: string) {
   return {
     get sessionId() { return currentSession },
     get mainStatus() { return mainStatus },
-    get tasks(): ClaudeNativeTerminalTask[] { return [...agents, ...workflows, ...shells, ...mcpTasks, ...managedTasks].map(agent => ({ ...agent, ...(decorations.get(agent.id)?.status === agent.status ? { statusText: decorations.get(agent.id)!.text } : {}) })) },
+    get tasks(): ClaudeNativeTerminalTask[] {
+      return [...agents, ...workflows, ...shells, ...mcpTasks, ...managedTasks].map(task => {
+        const caption = task.kind === undefined ? decorations.get(task.id) : undefined
+        return caption?.status === task.status ? { ...task, statusText: caption.text } : { ...task }
+      })
+    },
     updateActivityTasks(id: string, workflowValues: unknown, shellValues: unknown, mcpValues: unknown, managedValues: unknown): boolean {
       const previousWorkflows = workflows, previousShells = shells, previousMcp = mcpTasks, previousManaged = managedTasks
       if (workflowValues !== undefined && !this.updateWorkflows(id, workflowValues) || shellValues !== undefined && !this.updateShells(id, shellValues) || mcpValues !== undefined && !this.updateMcpTasks(id, mcpValues) || managedValues !== undefined && !this.updateManagedTasks(id, managedValues)) {
