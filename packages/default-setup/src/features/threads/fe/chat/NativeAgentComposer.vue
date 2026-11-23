@@ -208,8 +208,12 @@ onBeforeUnmount(() => {
 .native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 10rem))); }
 .native-agent-composer--tools { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 11rem))); }
 .native-agent-composer :deep([data-testid="composer-session-strip"]) { padding: .5rem 1rem; }
-/* The Session tools surface can scroll independently while the draft keeps its own viewport. */
-.native-agent-composer--tools:not(.native-agent-composer--background) :deep(.native-extension-surface) { padding-block: .25rem; }
+/* Give a fitted field's label and editor room inside the separate Session tools viewport. */
+.native-agent-composer--tools:not(.native-agent-composer--background) :deep([data-testid="composer-session-strip"]) { padding-block: .25rem; }
+.native-agent-composer--tools:not(.native-agent-composer--background) :deep(.native-extension-surface) {
+  padding-block: .25rem;
+  scroll-padding-block: 2px;
+}
 .native-agent-body--background-tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
 .native-agent-body--background-tools .native-agent-draft-scroll { overflow: visible; }
 /* The draft viewport owns scrolling; inherited input-theme overflow must not add another. */
