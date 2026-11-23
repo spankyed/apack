@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 /** Encoded queries/results cross thread boundaries without functions, prototypes or shared mutation. */
 export interface CompilerInputObservations {
@@ -37,5 +37,5 @@ export function createCompilerInputObservations(root: string, sources: readonly 
 }
 
 export function hashCompilerInputObservations(observations: CompilerInputObservations): string {
-  return createHash('sha256').update(JSON.stringify(observations.entries)).digest('hex');
+  return hash('sha256', JSON.stringify(observations.entries), 'hex');
 }

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { inspect } from 'node:util';
@@ -34,7 +34,7 @@ const TIME_FIELDS: ReadonlySet<PropertyKey> = new Set(['atime', 'mtime', 'ctime'
   .flatMap(field => [field, `${field}Ms`, `${field}Ns`]));
 
 const contentDigest = (file: string): string | undefined => {
-  try { return createHash('sha256').update(nativeReadFile(file)).digest('hex'); }
+  try { return hash('sha256', nativeReadFile(file), 'hex'); }
   catch { return undefined; }
 };
 

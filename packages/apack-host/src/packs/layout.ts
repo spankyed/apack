@@ -43,7 +43,7 @@ export interface PackBuild {
 }
 
 function sha256(content: string | Buffer): string {
-  return crypto.createHash('sha256').update(content).digest('hex');
+  return crypto.hash('sha256', content, 'hex');
 }
 
 export function isPackLayout(dir: string): boolean {
@@ -151,9 +151,9 @@ export function readBuiltPackSource(packRoot: string): { snapshot: PackSnapshot;
 
 /** Identity of published source files/layout; distinct from an installed receipt or runtime nonce. */
 export function shippedPackRevision(files: Readonly<Record<string, string>>): string {
-  return crypto.createHash('sha256').update(JSON.stringify({ layout: PACK_LAYOUT_VERSION,
+  return crypto.hash('sha256', JSON.stringify({ layout: PACK_LAYOUT_VERSION,
     files: Object.keys(files).sort().map(file => [file, files[file]]),
-  })).digest('hex');
+  }), 'hex');
 }
 
 function builtPackDirectory(packRoot: string): string {

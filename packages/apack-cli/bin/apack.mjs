@@ -2,7 +2,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 // A global, Homebrew or app-bundled `apack` defers to the @apackdev/cli the current project
 // pins, so every pack builds with the CLI version it was written against.
@@ -10,7 +10,7 @@ function projectCli() {
   try {
     const projectPkg = createRequire(path.join(process.cwd(), 'noop.js')).resolve('@apackdev/cli/package.json');
     const projectDir = realpathSync(path.dirname(projectPkg));
-    const ownDir = realpathSync(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+    const ownDir = realpathSync(path.dirname(import.meta.dirname));
     return projectDir === ownDir ? null : path.join(projectDir, 'bin', 'apack.mjs');
   } catch {
     return null;

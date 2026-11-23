@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { formatNodeOptions, parseNodeOptions } from '../packages/apack-host/src/build/node-options.js';
 import { realpathSync } from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 export const SOURCE_CONDITION = '--conditions=@apackdev/source';
 
@@ -20,7 +20,7 @@ export const SOURCE_CONDITION = '--conditions=@apackdev/source';
  * `spawn playwright ENOENT` when it is copied into a terminal, which is where it is read from. Prepended
  * rather than appended, as npm does, so a locally installed tool wins over a global one of another version.
  */
-export function withLocalBin(currentPath = '', root = path.dirname(fileURLToPath(import.meta.url))) {
+export function withLocalBin(currentPath = '', root = import.meta.dirname) {
   const bin = path.join(path.dirname(root), 'node_modules', '.bin');
   const entries = currentPath.split(path.delimiter).filter(Boolean);
   return entries[0] === bin ? currentPath : [bin, ...entries].join(path.delimiter);

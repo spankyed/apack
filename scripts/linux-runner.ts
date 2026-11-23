@@ -10,7 +10,7 @@
 // later runs copy what changed. The packages the lockfile takes from our other repositories' releases install there as
 // on any Linux machine, each holding its Linux build. The command's exit code and output pass straight through.
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes, hash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
@@ -18,7 +18,7 @@ import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
-const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
+const short = (text: string | Buffer): string => hash('sha256', text, 'hex').slice(0, 12);
 /** Keyed by the Dockerfile's bytes, so changing it builds a new image */
 const IMAGE = `apack-linux-test:${short(fs.readFileSync(DOCKERFILE, 'utf8'))}`;
 /** One working copy per checkout, so two worktrees never share a container `node_modules` */

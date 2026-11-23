@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import path from 'node:path';
 import { compilerSourcePath, type CompilerPathMapping } from '@apackdev/host/build/compiler-inputs';
 import type { CompilerLibraryEnvironment } from './compiler-native-libraries.ts';
@@ -17,7 +17,7 @@ export function compilerEnvironmentIdentity(env: NodeJS.ProcessEnv = process.env
     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
     .map(([key, value]) => [key, paths.reduce((value, { captured, source }) => value === captured ? source
       : value.split(captured + path.sep).join(path.join(source, path.sep)), value!)]);
-  return createHash('sha256').update(JSON.stringify(entries)).digest('hex');
+  return hash('sha256', JSON.stringify(entries), 'hex');
 }
 
 
@@ -39,5 +39,5 @@ export function compilerLibraryEnvironmentIdentity(environment: CompilerLibraryE
       redirections: [...pe.applicationContext.redirections].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     },
   } });
-  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+  return hash('sha256', JSON.stringify(normalized), 'hex');
 }

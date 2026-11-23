@@ -43,7 +43,7 @@
  * for esbuild's and ripgrep and PCRE2 for the `rg` @vscode/ripgrep's install downloads. The Rust standard library and
  * the crates compiled into Rollup's, keyring's and Linux's lzma's binaries carry no notice here.
  */
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -636,7 +636,7 @@ export function downloadedBinaries(packages: readonly NoticePackage[]): SbomComp
       const purl = `pkg:github/${binary.repository}@${release}`;
       found.set(purl, {
         type: 'application', name: binary.name, version: binary.version, purl, license: binary.license,
-        ...(file ? { sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex') } : {}),
+        ...(file ? { sha256: hash('sha256', fs.readFileSync(file), 'hex') } : {}),
       });
     }
   }
@@ -656,7 +656,7 @@ export function brokerSbomComponent(repoRoot: string, appDir: string, platform: 
   if (dir === undefined) return undefined;
   const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { resolved?: string }> };
   const commit = releaseCommit(lock.packages[`node_modules/${BROKER_PACKAGE_PREFIX}${platform}`]?.resolved);
-  const sha256 = (file: string) => createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest('hex');
+  const sha256 = (file: string) => hash('sha256', fs.readFileSync(path.join(dir, file)), 'hex');
   const files = fs.readdirSync(dir).filter((name) => fs.statSync(path.join(dir, name)).isFile() && name !== 'package.json').sort();
   const binary = files.find((name) => name === 'apack-terminal' || name === 'apack-terminal.exe');
   return {

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { primaryWorktree } from './worktrees.mjs';
 import { tsImport } from 'tsx/esm/api';
@@ -8,7 +8,7 @@ import { tsImport } from 'tsx/esm/api';
 export function checkoutProfile(root) {
   const canonical = realpathSync(root);
   if (canonical === primaryWorktree(canonical)) return 'development';
-  return `worktree-${createHash('sha256').update(canonical).digest('hex').slice(0, 16)}`;
+  return `worktree-${hash('sha256', canonical, 'hex').slice(0, 16)}`;
 }
 
 /** Explicit profiles, fresh runs and storage overrides still take precedence. */

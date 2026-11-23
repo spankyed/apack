@@ -3,24 +3,19 @@ import { mergeAttributes } from '@tiptap/core'
 
 export function getWidthFromSrc(src: string | null | undefined): number | null {
   if (!src) return null
-  try {
-    const url = new URL(src)
-    const w = url.searchParams.get('w')
-    if (w) {
-      const n = Number(w)
-      return Number.isFinite(n) && n > 0 && n <= 100 ? n : null
-    }
-    return null
-  } catch { return null }
+  const url = URL.parse(src)
+  const w = url?.searchParams.get('w')
+  if (!w) return null
+  const n = Number(w)
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null
 }
 
 export function setSrcWidth(src: string, pct: number): string {
-  try {
-    const url = new URL(src)
-    if (pct >= 100) url.searchParams.delete('w')
-    else url.searchParams.set('w', String(pct))
-    return url.toString()
-  } catch { return src }
+  const url = URL.parse(src)
+  if (!url) return src
+  if (pct >= 100) url.searchParams.delete('w')
+  else url.searchParams.set('w', String(pct))
+  return url.toString()
 }
 
 export const ResizableImage = Image.extend({

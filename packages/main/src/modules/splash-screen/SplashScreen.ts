@@ -2,8 +2,6 @@ import { BrowserWindow, app } from 'electron';
 import { AppModule } from '../../AppModule.ts';
 import { MainModuleScope } from '../../MainModuleScope.ts';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 import { SPLASH_CONFIG } from './constants.ts';
 
 export class SplashScreen implements AppModule {
@@ -18,7 +16,7 @@ export class SplashScreen implements AppModule {
   }
 
   private createSplashWindow(): void {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const __dirname = import.meta.dirname;
     
     this.splashWindow = new BrowserWindow({
       width: SPLASH_CONFIG.WIDTH,

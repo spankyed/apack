@@ -15,7 +15,7 @@
  * what this builds.
  */
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -479,7 +479,7 @@ export const readTree: TreeReader = {
 
 /** A file's content digest, with one word for "not there" so a digest map distinguishes it from empty */
 const digestOf = (contents: Buffer | null): string =>
-  contents === null ? ABSENT : createHash('sha256').update(contents).digest('hex');
+  contents === null ? ABSENT : cryptoHash('sha256', contents, 'hex');
 
 /**
  * A content fingerprint of `inputs`: every file's repo-relative path and its bytes, sorted.
@@ -1451,17 +1451,25 @@ export const PACKAGES_PREBUILT_ENV = 'APACK_PACKAGES_PREBUILT';
  * because the alternative is two of them rebuilding one `dist` at once.
  */
 export class PackagesWentStale extends Error {
-  constructor(readonly stale: readonly StaleUnit[], readonly writer: string) {
+  readonly stale: readonly StaleUnit[];
+  readonly writer: string;
+  constructor(stale: readonly StaleUnit[], writer: string) {
     super(`the published packages went stale during a run that had already built them:\n${staleMessage(stale)}\n`
       + `Who rebuilt them: ${writer}.\n`
       + 'Nothing was rebuilt here, because that would race the writer.');
+    this.stale = stale;
+    this.writer = writer;
   }
 }
 
 /** Thrown when the build itself failed, so the caller doesn't report a check error as one */
 export class PackagesBuildFailed extends Error {
-  constructor(readonly status: number, readonly workspace?: string) {
+  readonly status: number;
+  readonly workspace?: string;
+  constructor(status: number, workspace?: string) {
     super(workspace ? `building ${workspace} failed` : 'npm run packages:build failed');
+    this.status = status;
+    this.workspace = workspace;
   }
 }
 

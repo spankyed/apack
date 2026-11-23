@@ -16,24 +16,20 @@ const LOAD_CPU_MS = 60_000;
  */
 const HARNESS_PEERS = ['typescript', 'esbuild'];
 
-// Resolve hook for the check: @apackdev/sdk's optional peers aren't installed for every dependent
-const BLOCK_OPTIONAL_PEERS_HOOK = `
-let blocked = [];
-export function initialize(data) { blocked = data.blocked; }
-export async function resolve(specifier, context, next) {
-  const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
-  if (blocked.includes(name)) {
-    throw new Error(\`\${context.parentURL} imports "\${specifier}", an optional peer of @apackdev/sdk that packs depending on this one may not have installed\`);
-  }
-  return next(specifier, context);
-}
-`;
-
-// What a dependent's unit tests do with the bundle (@apackdev/testing/harness setupPackTests)
+// What a dependent's unit tests do with the bundle (@apackdev/testing/harness setupPackTests).
+// Synchronous registerHooks blocks @apackdev/sdk's optional peers without spawning an async loader thread.
 const LOAD_SCRIPT = `
-import { register } from 'node:module';
-const [hook, bundle, blocked] = JSON.parse(process.env.APACK_CONTENT_RUNTIME_CHECK);
-register(hook, { data: { blocked } });
+import { registerHooks } from 'node:module';
+const [bundle, blocked] = JSON.parse(process.env.APACK_CONTENT_RUNTIME_CHECK);
+registerHooks({
+  resolve(specifier, context, next) {
+    const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+    if (blocked.includes(name)) {
+      throw new Error(\`\${context.parentURL} imports "\${specifier}", an optional peer of @apackdev/sdk that packs depending on this one may not have installed\`);
+    }
+    return next(specifier, context);
+  },
+});
 const { registerContentRuntime, startTestRuntime } = await import('@apackdev/sdk/testing');
 startTestRuntime();
 const { contentRuntime } = await import(bundle);
@@ -63,57 +59,55 @@ export async function checkContentRuntimeLoads(
   { tmpDir = os.tmpdir() }: { tmpDir?: string } = {},
 ): Promise<{ success: boolean; error?: string }> {
   // The load's user data dir, removed after
+  using cleanup = new DisposableStack();
   const dataDir = fs.mkdtempSync(path.join(tmpDir, 'apack-content-runtime-check-'));
+  cleanup.defer(() => fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 5 }));
+  const args = [
+    // The bundle loads the packages' published dist, as a dependent's tests do
+    '--input-type=module',
+    '--eval',
+    LOAD_SCRIPT,
+  ];
+  let blocked: string[];
   try {
-    const args = [
-      // The bundle loads the packages' published dist, as a dependent's tests do
-      '--input-type=module',
-      '--eval',
-      LOAD_SCRIPT,
-    ];
-    let blocked: string[];
-    try {
-      blocked = missingSdkPeers(packDir);
-    } catch (err) {
-      return {
-        success: false,
-        error: `${path.relative(packDir, bundleFile)} can't be checked: @apackdev/sdk doesn't resolve from ${packDir} (install the pack's dependencies).\n${errorMessage(err)}`,
-      };
-    }
-    const check = JSON.stringify([`data:text/javascript,${encodeURIComponent(BLOCK_OPTIONAL_PEERS_HOOK)}`, pathToFileURL(bundleFile).href, blocked]);
-
-    const { code, output, ended } = await new Promise<{ code: number | null; output: string; ended?: string }>((resolve, reject) => {
-      const child = spawn(process.execPath, args, {
-        cwd: packDir,
-        // Test the published runtime independently of compiler initialization. Replaying compiler
-        // hooks can supply globals or loaders a dependent does not have and falsely accept the bundle.
-        env: {
-          ...process.env,
-          NODE_OPTIONS: undefined,
-          APACK_ENV: 'test',
-          APACK_USER_DATA_DIR: dataDir,
-          APACK_CONTENT_RUNTIME_CHECK: check,
-        },
-        stdio: ['ignore', 'ignore', 'pipe'],
-      });
-      // Bounded by its progress: ended when it stalls or spins, never because the machine is busy
-      let ended: string | undefined;
-      const watch = child.pid === undefined ? undefined : watchWork({
-        work: processWork(child.pid), ceilingMs: LOAD_CPU_MS, fallbackMs: LOAD_CPU_MS,
-        onRefused: (refusal) => { ended = describeRefusal(refusal); child.kill('SIGKILL'); },
-      });
-      let output = '';
-      child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString(); });
-      child.on('error', (error) => { watch?.stop(); reject(error); });
-      child.on('close', (exitCode) => { watch?.stop(); resolve({ code: exitCode, output, ended }); });
-    });
-    if (code === 0) return { success: true };
-    const reason = output.trim() || (ended === undefined ? `the load exited with code ${code}` : `the load was ended: it ${ended}`);
+    blocked = missingSdkPeers(packDir);
+  } catch (err) {
     return {
       success: false,
-      error: `${path.relative(packDir, bundleFile)} doesn't load outside the app. Packs depending on this one load it in their unit tests with only @apackdev/sdk installed, so repositories and content writers can't use native modules or @apackdev/sdk's optional peers (${blocked.join(', ')}).\n${reason}`,
+      error: `${path.relative(packDir, bundleFile)} can't be checked: @apackdev/sdk doesn't resolve from ${packDir} (install the pack's dependencies).\n${errorMessage(err)}`,
     };
-  } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 5 });
   }
+  const check = JSON.stringify([pathToFileURL(bundleFile).href, blocked]);
+
+  const { code, output, ended } = await new Promise<{ code: number | null; output: string; ended?: string }>((resolve, reject) => {
+    const child = spawn(process.execPath, args, {
+      cwd: packDir,
+      // Test the published runtime independently of compiler initialization. Replaying compiler
+      // hooks can supply globals or loaders a dependent does not have and falsely accept the bundle.
+      env: {
+        ...process.env,
+        NODE_OPTIONS: undefined,
+        APACK_ENV: 'test',
+        APACK_USER_DATA_DIR: dataDir,
+        APACK_CONTENT_RUNTIME_CHECK: check,
+      },
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    // Bounded by its progress: ended when it stalls or spins, never because the machine is busy
+    let ended: string | undefined;
+    const watch = child.pid === undefined ? undefined : watchWork({
+      work: processWork(child.pid), ceilingMs: LOAD_CPU_MS, fallbackMs: LOAD_CPU_MS,
+      onRefused: (refusal) => { ended = describeRefusal(refusal); child.kill('SIGKILL'); },
+    });
+    let output = '';
+    child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+    child.on('error', (error) => { watch?.stop(); reject(error); });
+    child.on('close', (exitCode) => { watch?.stop(); resolve({ code: exitCode, output, ended }); });
+  });
+  if (code === 0) return { success: true };
+  const reason = output.trim() || (ended === undefined ? `the load exited with code ${code}` : `the load was ended: it ${ended}`);
+  return {
+    success: false,
+    error: `${path.relative(packDir, bundleFile)} doesn't load outside the app. Packs depending on this one load it in their unit tests with only @apackdev/sdk installed, so repositories and content writers can't use native modules or @apackdev/sdk's optional peers (${blocked.join(', ')}).\n${reason}`,
+  };
 }

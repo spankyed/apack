@@ -1,6 +1,7 @@
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import { json } from 'node:stream/consumers';
 import { WebSocketServer } from 'ws';
 import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { appRouter } from './index.ts';
@@ -50,16 +51,8 @@ function answer(res: http.ServerResponse, status: number, body: object): void {
 }
 
 /** The request's JSON body, once it has all arrived */
-function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => {
-      try { resolve(JSON.parse(body)); }
-      catch (err) { reject(err); }
-    });
-  });
-}
+const readJsonBody = (req: http.IncomingMessage): Promise<Record<string, unknown>> =>
+  json(req) as Promise<Record<string, unknown>>;
 
 /**
  * The development endpoints `apack pack dev` and `apack pack build --watch` call. `POST /dev/reload { packId }`

@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash as cryptoHash } from 'node:crypto';
 
 export type RecordBuildOutput = (file: string, bytes: string | Uint8Array) => void;
-const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+const hash = (bytes: string | Uint8Array) => cryptoHash('sha256', bytes, 'hex');
 
 /** Final writer results live only until the candidate is sealed by its existing receipt. */
 export function createBuildOutputs(directory: string) {

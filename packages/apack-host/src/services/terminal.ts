@@ -15,7 +15,7 @@
 // against. One broker per data dir is the start lock's (`ensureListening`), not this file's.
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes, hash } from 'node:crypto';
 import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
@@ -48,7 +48,7 @@ const SOCKET_PATH_MAX = 100;
  * broker's `bind`.
  */
 export function socketPath(platform: NodeJS.Platform = process.platform, dataDir = resolveAppEnvironment().userDataDir): string {
-  const name = createHash('sha256').update(dataDir).digest('hex').slice(0, 12);
+  const name = hash('sha256', dataDir, 'hex').slice(0, 12);
   // **Windows has no Unix socket here, it has a named pipe**, and the transport refuses a filesystem path
   // outright — *expected a named pipe path*, which is what the broker's own suite got on its first Windows
   // run, in place of a broker. A pipe name is one flat namespace for the machine, so the data dir's hash is

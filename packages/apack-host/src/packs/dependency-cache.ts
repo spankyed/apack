@@ -55,7 +55,7 @@ function readSnapshot(directory: string): { snapshot: PackDependencySnapshot; by
 }
 
 function snapshotRevision(bytes: Buffer): string {
-  return crypto.createHash('sha256').update(bytes).digest('hex');
+  return crypto.hash('sha256', bytes, 'hex');
 }
 
 /** An absent receipt permits type inspection only; a present receipt must match captured declarations. */

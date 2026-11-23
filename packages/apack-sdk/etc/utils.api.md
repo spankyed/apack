@@ -81,32 +81,23 @@ export type ArrayChanges = Record<string, DiffResult<DiffItem>>;
 export function asArr<T>(v: MaybeArr<T>): readonly T[];
 
 // @public (undocumented)
-export enum BinaryOperator {
-    // (undocumented)
-    CONTAINS = "contains",
-    // (undocumented)
-    ENDS_WITH = "ends_with",
-    // (undocumented)
-    EQUALS = "equals",
-    // (undocumented)
-    GREATER_THAN = "greater_than",
-    // (undocumented)
-    GREATER_THAN_OR_EQUALS = "greater_than_or_equals",
-    // (undocumented)
-    IS_EMPTY = "is_empty",
-    // (undocumented)
-    IS_NULL = "is_null",
-    // (undocumented)
-    LESS_THAN = "less_than",
-    // (undocumented)
-    LESS_THAN_OR_EQUALS = "less_than_or_equals",
-    // (undocumented)
-    MATCHES = "matches",
-    // (undocumented)
-    NOT_EQUALS = "not_equals",
-    // (undocumented)
-    STARTS_WITH = "starts_with"
-}
+export const BinaryOperator: {
+    readonly EQUALS: "equals";
+    readonly NOT_EQUALS: "not_equals";
+    readonly GREATER_THAN: "greater_than";
+    readonly LESS_THAN: "less_than";
+    readonly GREATER_THAN_OR_EQUALS: "greater_than_or_equals";
+    readonly LESS_THAN_OR_EQUALS: "less_than_or_equals";
+    readonly CONTAINS: "contains";
+    readonly STARTS_WITH: "starts_with";
+    readonly ENDS_WITH: "ends_with";
+    readonly MATCHES: "matches";
+    readonly IS_EMPTY: "is_empty";
+    readonly IS_NULL: "is_null";
+};
+
+// @public (undocumented)
+export type BinaryOperator = (typeof BinaryOperator)[keyof typeof BinaryOperator];
 
 // @public (undocumented)
 export type ChangeBlock<T = unknown> = {

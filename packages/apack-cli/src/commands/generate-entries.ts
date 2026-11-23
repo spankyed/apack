@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { PackManifest } from '@apackdev/sdk/build';
 import { _depTypesFile, _depTypesVersion, generatePackFiles } from '@apackdev/sdk/build';
@@ -42,7 +42,7 @@ export function warnStaleDepTypes(root: string, runtimeVersions: Map<string, str
 
 /** Inputs and exact output bytes from a successful generation. */
 interface InputsStamp { hash: string; files: Record<string, string> }
-const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex');
+const digest = (content: string | Buffer): string => cryptoHash('sha256', content, 'hex');
 
 function readStamp(hashPath: string): InputsStamp | null {
   try {

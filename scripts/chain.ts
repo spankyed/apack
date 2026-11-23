@@ -273,7 +273,11 @@ const envFor = (step: ChainStep, budget: number): NodeJS.ProcessEnv => ({
 
 /** Thrown to leave `stampedRun` without a stamp: a failed step must read as never run */
 class StepFailed extends Error {
-  constructor(readonly result: Result) { super(result.step); }
+  readonly result: Result;
+  constructor(result: Result) {
+    super(result.step);
+    this.result = result;
+  }
 }
 
 /**

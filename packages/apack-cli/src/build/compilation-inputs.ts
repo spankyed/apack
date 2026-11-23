@@ -1,5 +1,5 @@
 import type { PackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { buildToolHash, cliPackageDirectory } from './tool-identity.ts';
 import { readPackageInputs, type PackageInputOwner } from '@apackdev/host/build/package-inputs';
@@ -256,7 +256,7 @@ export function captureCompilationInputs(packRoot: string, view?: PackCompilerIn
         compilerSourcePath(directory, compiler?.paths ?? [])).split(path.sep).join('/');
       return {
         compiler: compilerIdentity,
-        execution: createHash('sha256').update(executionIdentity).digest('hex'),
+        execution: cryptoHash('sha256', executionIdentity, 'hex'),
         options: [...new Set(options)].sort(),
         packages: { hash: packages.hash, owners: owners.map(owner => ({ ...owner,
           directory: relative(owner.directory),

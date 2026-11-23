@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createBuildSession, readBuildManifest } from '../build/build-metadata.ts';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
 import { previewEnvironment, previewVersion } from './lib/preview-build.ts';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.resolve(import.meta.dirname, '..');
 if (process.argv.includes('--help')) {
   console.log('Usage: npm run build:preview -- --version <x.y.z>\nBuilds unsigned apack Preview locally in dist/preview, without publishing or changing release metadata.');
 } else {
