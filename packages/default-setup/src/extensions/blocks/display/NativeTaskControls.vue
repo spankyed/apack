@@ -8,7 +8,7 @@
       <button v-if="shell" ref="toggle" type="button" :aria-expanded="expanded" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ expanded ? 'Hide output' : 'View output' }}</button>
       <button v-if="workflow && task.canPause" type="button" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'pause_workflow')">Pause Workflow</button>
       <button v-if="workflow && task.canResume && controls.foregroundAvailable.value" type="button" :disabled="pending || !!state?.resume?.requested" class="rounded border border-white/10 px-2 py-1 text-[11px] text-blue-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'resume_workflow')">{{ state?.resume?.requested ? 'Resume requested' : 'Resume Workflow' }}</button>
-      <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || (workflow || shell || mcp ? task.canStop !== true : task.status !== 'running')" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : mcp ? 'Stop task' : 'Stop Agent' }}</button>
+      <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || !canStop" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : mcp ? 'Stop task' : 'Stop Agent' }}</button>
     </div>
     <p v-if="state?.status === 'error' && !mcpDialog" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
     <section v-if="!workflow && !shell && !mcp && shown && state?.details" :aria-label="workflow ? 'Workflow details' : 'Agent conversation'" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-2 text-xs">
@@ -84,6 +84,8 @@ const emit = defineEmits<{ 'reveal-shell-output': [element: HTMLElement] }>()
 const workflow = computed(() => props.task.kind === 'workflow')
 const shell = computed(() => props.task.kind === 'shell')
 const mcp = computed(() => props.task.kind === 'mcp')
+const canStop = computed(() => workflow.value || shell.value || mcp.value
+  ? props.task.canStop === true : props.task.canStop ?? props.task.status === 'running')
 const controls = inject(claudeTaskControls, undefined)
 const taskKey = computed(() => JSON.stringify([props.task.ownerId, props.task.sessionId, props.task.id]))
 const sessionState = computed(() => {

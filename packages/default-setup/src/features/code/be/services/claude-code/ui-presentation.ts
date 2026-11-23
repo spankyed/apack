@@ -137,7 +137,7 @@ interface ClaudeUiTranscriptRowSource {
 export interface ClaudeUiGroupedTool {
   id: string; tool: string; summary: string; status: 'running' | 'ok' | 'denied' | 'error'
   durationMs?: number; outputSummary?: string
-  nativeAgent?: { id: string; ownerId?: string; sessionId?: string; name: string; status: string; statusText?: string }
+  nativeAgent?: { id: string; ownerId?: string; sessionId?: string; name: string; status: string; statusText?: string; canStop?: boolean }
   nativeResult?: { uuid: string; sessionId: string }
   details?: { input?: unknown; output?: string; error?: string }
 }

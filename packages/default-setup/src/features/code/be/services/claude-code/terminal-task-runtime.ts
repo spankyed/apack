@@ -3,6 +3,19 @@ import { ClaudeNativeManagedTaskTypeSchema } from '../../../common/native-manage
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
 function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
+function nativeTeammateName(task){
+ return task.type==='in_process_teammate'&&typeof task.identity?.agentName==='string'?task.identity.agentName.trim().slice(0,256):'';
+}
+function nativeTeammateTasks(n,registry){
+ const observations=new Map();
+ for(const task of Object.values(registry.all())){
+  if(task.type!=='in_process_teammate')continue;
+  const id=n.runtime.flt(task)?.id,name=nativeTeammateName(task);
+  if(typeof id!=='string'||!id||id.length>256)continue;
+  observations.set(id,observations.has(id)||!name?null:{id,name,canStop:task.status==='running'});
+ }
+ return [...observations.values()].filter(Boolean).slice(0,256);
+}
 function nativeManagedTaskCanStop(task){return ['dream','auto_mode_scan','local_memory_import','monitor_mcp','monitor_ws'].includes(task.type)&&task.status==='running'&&!(task.isBackgrounded===false);}
 function nativeManagedTasks(registry){
  const kinds=new Set(${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)});
@@ -227,6 +240,6 @@ async function nativeTaskControl(n,binding,request,abort,current){
   tokenCount:numeric(task.result?.totalTokens??task.progress?.tokenCount),toolUseCount:numeric(task.result?.totalToolUseCount??task.progress?.toolUseCount),
   error:error?.slice(0,16384),errorTruncated:(error?.length??0)>16384};
  const handback=task.type==='local_agent'&&typeof task.handbackReport?.text==='string'?{taskId:request.task_id,text:task.handbackReport.text,...(typeof task.handbackReport.warning==='string'?{warning:task.handbackReport.warning}:{})}:undefined;
- const teammateName=task.type==='in_process_teammate'&&typeof task.identity?.agentName==='string'?task.identity.agentName.trim().slice(0,256):'';
+ const teammateName=nativeTeammateName(task);
  return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput,metadata,messages,truncated}};
 }`

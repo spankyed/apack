@@ -374,18 +374,25 @@ it('does not let a late plugin poll roll back policy after native owner handoff'
 
 it('fences native pending activity by owner/session/sequence without blocking background submission', async () => {
   await create()
-  const body = { sessionId: session, pid: process.pid, sequence: 1, activity: { pendingAgents: 0, pendingWorkflows: 1 } }
+  const teammate = { id: 'teammate', name: 'release-reviewer', canStop: true }
+  await request('/poll', { sessionId: session, agents: [{ id: teammate.id, type: 'teammate', status: 'idle' }] })
+  const body = { sessionId: session, pid: process.pid, sequence: 1, activity: { pendingAgents: 0, pendingWorkflows: 1 }, teammates: [teammate] }
   expect((await request('/native-activity', { ...body, pid: process.pid + 1 })).status).toBe(409)
   expect((await request('/native-activity', body)).status).toBe(200)
   expect(bridge!.activity).toEqual(body.activity); expect(bridge!.busy).toBe(false)
+  expect(bridge!.projection.tasks).toEqual([{ ...teammate, status: 'idle' }])
+  expect((await request('/native-activity', { ...body, teammates: [{ ...teammate, canStop: false }] })).status).toBe(409)
+  expect((await request('/native-activity', { ...body, sequence: 2, teammates: [teammate, teammate] })).status).toBe(400)
+  expect(bridge!.projection.tasks[0].canStop).toBe(true)
   expect((await request('/native-activity', body)).status).toBe(200)
   expect((await request('/native-activity', { ...body, activity: { pendingAgents: 0, pendingWorkflows: 0 } })).status).toBe(409)
   for (const pendingWorkflows of [-1, 1.5, '1']) expect((await request('/native-activity', { ...body, sequence: 2, activity: { pendingAgents: 0, pendingWorkflows } })).status).toBe(400)
   expect(bridge!.activity).toEqual(body.activity)
-  const next = { ...body, sequence: 2, activity: { pendingAgents: 0, pendingWorkflows: 0 } }
+  const next = { ...body, sequence: 2, activity: { pendingAgents: 0, pendingWorkflows: 0 }, teammates: [{ ...teammate, canStop: false }] }
   expect((await request('/native-activity', next)).status).toBe(200)
   expect((await request('/native-activity', body)).status).toBe(409)
   expect(bridge!.activity).toEqual(next.activity)
+  expect(bridge!.projection.tasks[0]?.canStop).toBe(false)
   await request('/poll', { sessionId: '22222222-2222-2222-2222-222222222222', agents: [] })
   expect(bridge!.activity).toEqual(next.activity)
   await request('/poll', { sessionId: '22222222-2222-2222-2222-222222222222', agents: [], directOwner: true, busy: false, turn: null })

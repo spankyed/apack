@@ -97,3 +97,15 @@ it('atomically projects manager-owned tasks and refuses unknown types and stale 
   state.updateSession('22222222-2222-2222-2222-222222222222',[])
   expect(state.tasks).toEqual([])
 })
+
+it('enriches only an exact Agent roster id and retires teammate capabilities on reset', () => {
+  const state = createClaudeTerminalStatus(session)
+  const agent = { id: 'one', type: 'teammate', status: 'idle' }
+  expect(state.updateSession(session, [agent])).toBe(true)
+  expect(state.updateTeammates(session, [{ id: 'one', name: 'release-reviewer', canStop: true },
+    { id: 'other', name: 'unpublished', canStop: true }])).toBe(true)
+  expect(state.tasks).toEqual([{ id: 'one', name: 'release-reviewer', status: 'idle', canStop: true }])
+  expect(state.updateSession('22222222-2222-2222-2222-222222222222', [agent])).toBe(true)
+  expect(state.tasks).toEqual([{ id: 'one', name: 'teammate', status: 'idle' }])
+  expect(state.updateTeammates(session, [])).toBe(false)
+})

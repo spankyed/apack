@@ -3852,6 +3852,7 @@ interface ClaudeUiGroupedTool {
         name: string;
         status: string;
         statusText?: string;
+        canStop?: boolean;
     };
     nativeResult?: {
         uuid: string;
@@ -10247,6 +10248,7 @@ interface ToolActivityEntry {
         name: string;
         status: string;
         statusText?: string;
+        canStop?: boolean;
     };
     /** Exact original result row; structured output remains owned by the native process. */
     nativeResult?: {

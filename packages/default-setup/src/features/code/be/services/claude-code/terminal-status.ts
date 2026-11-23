@@ -11,6 +11,7 @@ export function createClaudeTerminalStatus(sessionId: string) {
   let currentSession = sessionId
   let mainStatus: string | undefined
   let agents: ClaudeNativeTerminalTask[] = [], workflows: ClaudeNativeTerminalTask[] = [], shells: ClaudeNativeTerminalTask[] = [], mcpTasks: ClaudeNativeTerminalTask[] = [], managedTasks: ClaudeNativeTerminalTask[] = []
+  let teammates = new Map<string, Pick<ClaudeNativeTerminalTask, 'name' | 'canStop'>>()
   const decorations = new Map<string, { status: string; text: string }>()
   const epochs = new Map<string, bigint>()
   return {
@@ -18,15 +19,29 @@ export function createClaudeTerminalStatus(sessionId: string) {
     get mainStatus() { return mainStatus },
     get tasks(): ClaudeNativeTerminalTask[] {
       return [...agents, ...workflows, ...shells, ...mcpTasks, ...managedTasks].map(task => {
-        const caption = task.kind === undefined ? decorations.get(task.id) : undefined
-        return caption?.status === task.status ? { ...task, statusText: caption.text } : { ...task }
+        const agent = task.kind === undefined
+        const caption = agent ? decorations.get(task.id) : undefined
+        return { ...task, ...(agent ? teammates.get(task.id) : undefined),
+          ...(caption?.status === task.status ? { statusText: caption.text } : {}) }
       })
     },
-    updateActivityTasks(id: string, workflowValues: unknown, shellValues: unknown, mcpValues: unknown, managedValues: unknown): boolean {
+    updateActivityTasks(id: string, workflowValues: unknown, shellValues: unknown, mcpValues: unknown, managedValues: unknown, teammateValues?: unknown): boolean {
       const previousWorkflows = workflows, previousShells = shells, previousMcp = mcpTasks, previousManaged = managedTasks
-      if (workflowValues !== undefined && !this.updateWorkflows(id, workflowValues) || shellValues !== undefined && !this.updateShells(id, shellValues) || mcpValues !== undefined && !this.updateMcpTasks(id, mcpValues) || managedValues !== undefined && !this.updateManagedTasks(id, managedValues)) {
+      if (workflowValues !== undefined && !this.updateWorkflows(id, workflowValues) || shellValues !== undefined && !this.updateShells(id, shellValues) || mcpValues !== undefined && !this.updateMcpTasks(id, mcpValues) || managedValues !== undefined && !this.updateManagedTasks(id, managedValues) || teammateValues !== undefined && !this.updateTeammates(id, teammateValues)) {
         workflows = previousWorkflows; shells = previousShells; mcpTasks = previousMcp; managedTasks = previousManaged; return false
       }
+      return true
+    },
+    updateTeammates(id: string, values: unknown): boolean {
+      if (id !== currentSession || !Array.isArray(values) || values.length > 256) return false
+      const next = new Map<string, Pick<ClaudeNativeTerminalTask, 'name' | 'canStop'>>()
+      for (const value of values) {
+        const task = record(value)
+        if (!task || !validId(task.id) || next.has(task.id) || typeof task.name !== 'string'
+          || !task.name || task.name.length > 256 || typeof task.canStop !== 'boolean') return false
+        next.set(task.id, { name: task.name, canStop: task.canStop })
+      }
+      teammates = next
       return true
     },
     updateManagedTasks(id: string, values: unknown): boolean {
@@ -67,7 +82,7 @@ export function createClaudeTerminalStatus(sessionId: string) {
     },
     updateSession(id: string, values: unknown): boolean {
       if (!/^[0-9a-f-]{36}$/i.test(id) || !Array.isArray(values)) return false
-      if (id !== currentSession) { currentSession = id; workflows = []; shells = []; mcpTasks = []; managedTasks = []; mainStatus = undefined; decorations.clear(); epochs.clear() }
+      if (id !== currentSession) { currentSession = id; workflows = []; shells = []; mcpTasks = []; managedTasks = []; teammates.clear(); mainStatus = undefined; decorations.clear(); epochs.clear() }
       const next: ClaudeNativeTerminalTask[] = []
       const seen = new Set<string>()
       for (const value of values.slice(0, 256)) {
@@ -109,6 +124,6 @@ export function createClaudeTerminalStatus(sessionId: string) {
     clearOutput() { mainStatus = undefined; decorations.clear() },
     clearDecorations() { decorations.clear() },
     clearMain() { mainStatus = undefined },
-    clear() { mainStatus = undefined; agents = []; workflows = []; shells = []; mcpTasks = []; managedTasks = []; decorations.clear(); epochs.clear() },
+    clear() { mainStatus = undefined; agents = []; workflows = []; shells = []; mcpTasks = []; managedTasks = []; teammates.clear(); decorations.clear(); epochs.clear() },
   }
 }

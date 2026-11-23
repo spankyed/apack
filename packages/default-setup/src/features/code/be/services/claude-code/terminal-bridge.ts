@@ -329,9 +329,9 @@ export async function createClaudeTerminalBridge(options: {
         const active = value.activeTurnId, ending = value.endingTurnId
         if ([active, ending].some(id => id !== undefined && id !== null && (typeof id !== 'string' || !id || id.length > 256))
           || (active && ending)) return reply(400, {})
-        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? [], value.managedTasks ?? [], active ?? null, ending ?? null])
+        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? [], value.managedTasks ?? [], value.teammates ?? [], active ?? null, ending ?? null])
         if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && activityRecord !== encoded) return reply(409, {})
-        if (!projection.updateActivityTasks(value.sessionId, value.workflows, value.shells, value.mcpTasks, value.managedTasks)) return reply(400, {})
+        if (!projection.updateActivityTasks(value.sessionId, value.workflows, value.shells, value.mcpTasks, value.managedTasks, value.teammates)) return reply(400, {})
         const changed = activityRecord !== encoded
         activitySequence = value.sequence as number; activityRecord = encoded; activity = next
         activeTurnId = typeof active === 'string' && active !== lastTurn?.id ? active : undefined

@@ -6,8 +6,8 @@ import type { ClaudeNativeMcpTaskInfo } from '#features/code/common/native-mcp-t
 import type { ClaudeTerminalTaskState } from '#features/threads/be/claude-terminal-views.ts'
 let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren() })
-async function fixture() {
-  const task = { id: 'agent', ownerId: 'owner', sessionId: 'session', status: 'running' }
+async function fixture(options: { status?: string; canStop?: boolean } = {}) {
+  const task = { id: 'agent', ownerId: 'owner', sessionId: 'session', status: 'running', ...options }
   const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, canInput: false, messages: [], truncated: false } })
   let revision = 1
   const operate = vi.fn(() => ++revision), root = document.createElement('div'); document.body.append(root)
@@ -75,6 +75,18 @@ it('uses human replies when supported and clears only their exact queued receipt
   f.state.value = { ...f.state.value, operation: 'input', revision: 3, status: 'done', input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }; await nextTick()
   expect(f.input.value).toBe(''); expect(f.root.textContent).toContain('Agent resumed with your reply')
 })
+
+it.each([{ status: 'idle', canStop: true }, { status: 'running', canStop: false }])(
+  'uses the native Stop capability over the activity label: %j', async options => {
+    const f = await fixture(options)
+    const stop = [...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Stop Agent')!
+    expect(stop.disabled).toBe(!options.canStop)
+    if (options.canStop) {
+      stop.click()
+      expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent', ownerId: 'owner' }), 'stop')
+    }
+  },
+)
 
 it('opens the bound native Agent through the app control', async () => {
   const f = await fixture()
