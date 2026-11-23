@@ -41,7 +41,7 @@ function fixture(withFeedback = false) {
   }
   const memoRow = Array.from({ length: 35 }, (_, index) => index === 34 ? feedback : null)
   const command = { kind: 'full', text: 'Write-Output "Local fixture"', marker: '' }
-  const body = [false, 'Original reason', null, 'Do you want to proceed?', control]
+  const body: unknown[] = [false, 'Original reason', null, 'Do you want to proceed?', control]
   const panel = { title: 'PowerShell command', children: [null, { props: { commandDisplay: command } }, { props: { children: body } }, null] }
   const wrapper = { fitted: { description: 'Original description', body: { isStandingHeld: false } }, children: { props: panel } }
   const fiber = { type: jat, memoizedProps: { payload, wouldTakeAnswer: () => true }, child: { memoizedProps: wrapper }, updateQueue: { memoCache: { data: withFeedback ? [memoRow] : [] } } }

@@ -12,7 +12,7 @@
     </header>
     <div role="region" aria-label="Command result" tabindex="0" class="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
       <NativeTranscriptMessage v-if="frame" :frame="frame" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
-        <template v-if="feedbackIssue" #engine><pre class="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed" :class="frame.isErrored ? 'text-red-300' : 'text-neutral-300'"><FeedbackIssueText /></pre></template>
+        <template v-if="feedbackIssue" #engine><pre class="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed" :class="frame.component === 'CommandOutput' && frame.isErrored ? 'text-red-300' : 'text-neutral-300'"><FeedbackIssueText /></pre></template>
       </NativeTranscriptMessage>
       <pre v-else :class="state.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300"><FeedbackIssueText v-if="feedbackIssue" /><template v-else>{{ state.output.text }}</template></pre>
     </div>
