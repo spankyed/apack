@@ -193,8 +193,8 @@
             :is-disabled="!!message.responseTimestamp" :response="message.blockResponse" />
         </template>
 
-        <p v-if="message.context?.claudeNativeQuestion && message.responseTimestamp && message.blockResponse?.cancelled === true"
-          class="mb-1 text-xs text-neutral-400">Question closed without an answer</p>
+        <p v-if="nativeQuestionClosed"
+          class="mb-1 text-xs text-neutral-400">Question closed</p>
 
         <!-- Message content -->
         <div data-chat-message-content class="min-w-0 leading-relaxed text-[15px]">
@@ -308,6 +308,12 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
   isTyping: false,
   isTail: false,
   isClaudeCodeThread: false,
+})
+
+const nativeQuestionClosed = computed(() => {
+  const { context, responseTimestamp, blockResponse } = props.message
+  return !!context?.claudeNativeQuestion && !!responseTimestamp && typeof blockResponse === 'object'
+    && blockResponse !== null && 'cancelled' in blockResponse && blockResponse.cancelled === true
 })
 
 const emit = defineEmits<ChatMessageEmits>()
