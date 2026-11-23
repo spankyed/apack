@@ -203,9 +203,9 @@ describe('preflight', () => {
 
 describe('publishRelease', () => {
   const sourceCommit = 'a'.repeat(40);
-  async function archiveForPublish(root: string, releaseDir: string) {
+  async function archiveForPublish(root: string, releaseDir: string, releaseLockSha256?: string) {
     const stage = path.join(tmp, 'publish-stage');
-    stagePack(root, stage, { provenance: { commit: sourceCommit } });
+    stagePack(root, stage, { provenance: { commit: sourceCommit }, releaseLockSha256 });
     return createPackArchive(stage, releaseDir);
   }
 
@@ -251,20 +251,30 @@ describe('publishRelease', () => {
   it('holds a pack release in draft until the verified redistribution files are uploaded', async () => {
     const root = builtPack('1.0.0');
     const releaseDir = path.join(tmp, 'release');
-    const archive = await archiveForPublish(root, releaseDir);
+    const pkgFile = path.join(root, 'package.json');
+    fs.writeFileSync(pkgFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(pkgFile, 'utf8')),
+      apackRelease: { requireRedistribution: true } }));
+    const producerLockSha256 = 'a'.repeat(64);
+    const archive = await archiveForPublish(root, releaseDir, producerLockSha256);
     const api = mockOctokit();
-    const options = { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' }, requireRedistribution: true };
+    const options = { octokit: api.octokit, env: { GITHUB_REPOSITORY: 'acme/demo-pack' } };
+    await expect(publishRelease(root, releaseDir, options)).rejects.toThrow(/redistribution.json/);
+    expect(api.createRelease).not.toHaveBeenCalled();
     const files = ['LICENSE', 'THIRD-PARTY-NOTICES.txt', 'demo-pack-1.0.0.cdx.json'].map(file => {
       fs.writeFileSync(path.join(releaseDir, file), file);
       return { file, sha256: createHash('sha256').update(file).digest('hex') };
     });
-    fs.writeFileSync(path.join(releaseDir, 'redistribution.json'), JSON.stringify({
+    const descriptor = path.join(releaseDir, 'redistribution.json');
+    const data = {
       format: 1,
       pack: { id: 'demo-pack', version: '1.0.0' },
       archive: { file: path.basename(archive.file), sha256: archive.sha256 },
-      producerLockSha256: 'a'.repeat(64),
-      files,
-    }));
+      producerLockSha256, files,
+    };
+    fs.writeFileSync(descriptor, JSON.stringify({ ...data, producerLockSha256: 'b'.repeat(64) }));
+    await expect(publishRelease(root, releaseDir, options)).rejects.toThrow(/evidence does not match/);
+    expect(api.createRelease).not.toHaveBeenCalled();
+    fs.writeFileSync(descriptor, JSON.stringify(data));
     const notices = path.join(releaseDir, 'THIRD-PARTY-NOTICES.txt');
     fs.writeFileSync(notices, 'wrong');
     await expect(publishRelease(root, releaseDir, options)).rejects.toThrow(/checksum mismatch/);
@@ -472,12 +482,13 @@ describe('defaultRunner', () => {
 });
 
 describe('releaseStateReport', () => {
-  it('tells a part-way release to rerun, and a pushed one to publish', () => {
+  it('tells a part-way release to rerun and a pushed one how to finish', () => {
     expect(releaseStateReport('1.2.4', { committed: true, tagged: true, pushed: false }))
       .toMatch(/resumes this version/);
     // Past the push the release exists for everyone: a rerun cuts the next version, so say the other thing
-    expect(releaseStateReport('1.2.4', { committed: true, tagged: true, pushed: true }))
-      .toMatch(/apack pack release publish/);
+    const pushed = { committed: true, tagged: true, pushed: true };
+    expect(releaseStateReport('1.2.4', pushed)).toMatch(/rerun the release workflow/);
+    expect(releaseStateReport('1.2.4', pushed, true)).toMatch(/apack pack release publish/);
   });
 });
 

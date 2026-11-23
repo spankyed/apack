@@ -291,6 +291,8 @@ async function buildIntoStaging(args: string[], root: string) {
       fs.writeFileSync(snapshotPath, snapshotBytes);
       outputs.record(snapshotPath, snapshotBytes);
       writeStamps(outputDir, nextStamps, outputs.record);
+      // Record the producer lock even when none of the build phases read it directly.
+      compilation.readFile(path.join(root, 'package-lock.json'));
       const inputBytes = writePackBuildInputs(outputDir, await compilation.finish(args));
       outputs.record(path.join(outputDir, PACK_BUILD_INPUTS_FILE), inputBytes);
       outputs.assertCurrent();

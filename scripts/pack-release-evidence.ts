@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { extractPackArchive, packArchiveName, stagedFileHashes } from '@apackdev/host/packs/archive-files';
-import { sha256File, verifyPack } from '@apackdev/host/packs/assets';
-import { readPackBundledPackages } from '@apackdev/host/build/bundled-packages';
+import { packBuildRevision, sha256File, verifyPack } from '@apackdev/host/packs/assets';
+import { PACK_STYLES_INPUTS, readPackBundledPackages } from '@apackdev/host/build/bundled-packages';
 import { appSbom, downloadedBinaries, noticeOf, noticePackages, renderNotices, sbomIdentity, staleExtras, type NoticePackage } from './lib/third-party-notices.ts';
 
 // stage-authoring-toolchain embeds the release's license overrides in this independently runnable tool.
@@ -24,8 +24,18 @@ if (declared !== sha256) throw new Error('The archive checksum does not match');
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pack-evidence-'));
 try {
   const layout = await extractPackArchive(archive, path.join(scratch, 'archive'), sha256);
-  if (!isDeepStrictEqual(verifyPack(layout).files, stagedFileHashes(integrity))) {
+  const exported = verifyPack(layout);
+  if (!isDeepStrictEqual(exported.files, stagedFileHashes(integrity))
+    || exported.releaseEvidence?.buildRevision !== packBuildRevision(integrity)) {
     throw new Error('The archive and the producer build differ');
+  }
+  const lock = path.join(root, 'package-lock.json');
+  const producerLockSha256 = sha256File(lock);
+  if (exported.releaseEvidence?.lockSha256 !== producerLockSha256) {
+    throw new Error('The producer lockfile differs from the lock captured by the exported build');
+  }
+  if (Object.hasOwn(integrity.files, 'runtime/fe.js') && !Object.hasOwn(integrity.files, PACK_STYLES_INPUTS)) {
+    throw new Error('The exported frontend build has no sealed stylesheet record; rebuild the complete pack');
   }
   const licenses = path.join(scratch, 'licenses');
   fs.mkdirSync(licenses);
@@ -49,6 +59,11 @@ try {
   });
   if (problems.length) throw new Error(`Incomplete pack notices:\n${problems.join('\n')}`);
 
+  if (packBuildRevision(verifyPack(path.join(root, 'dist'))) !== exported.releaseEvidence.buildRevision
+    || sha256File(lock) !== producerLockSha256) {
+    throw new Error('The producer build or lockfile changed while generating notices');
+  }
+
   const noticeFile = 'THIRD-PARTY-NOTICES.txt';
   const sbomFile = `${id}-${version}.cdx.json`;
   const sourceCredits = ['NOTICE', ...(fs.existsSync(path.join(root, 'licenses'))
@@ -57,14 +72,14 @@ try {
     : [])].filter(file => fs.existsSync(path.join(root, file)))
     .map(file => `\n${file}\n${fs.readFileSync(path.join(root, file), 'utf8').trim()}\n`);
   fs.copyFileSync(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
-  fs.writeFileSync(path.join(out, noticeFile), renderNotices(notices, [], [], id) + sourceCredits.join(''));
+  fs.writeFileSync(path.join(out, noticeFile), renderNotices(notices, [], [], `the ${id} pack`) + sourceCredits.join(''));
   const writeJson = (name: string, data: object) => fs.writeFileSync(path.join(out, name), JSON.stringify(data, null, 2) + '\n');
   writeJson(sbomFile, appSbom({ name: id, version }, packages, identity, downloadedBinaries(packages)));
   writeJson('redistribution.json', {
     format: 1,
     pack: { id, version },
     archive: { file: archiveFile, sha256 },
-    producerLockSha256: sha256File(path.join(root, 'package-lock.json')),
+    producerLockSha256,
     files: ['LICENSE', noticeFile, sbomFile].map(file => ({ file, sha256: sha256File(path.join(out, file)) })),
   });
   console.log(`Verified redistribution evidence for ${id}@${version} (${packages.length} components)`);

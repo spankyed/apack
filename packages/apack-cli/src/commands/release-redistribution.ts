@@ -10,15 +10,20 @@ interface ReleaseAsset {
   contentType: string;
 }
 
+export function requiresRedistribution(root: string): boolean {
+  const file = path.join(root, 'package.json');
+  return fs.existsSync(file) && JSON.parse(fs.readFileSync(file, 'utf8')).apackRelease?.requireRedistribution === true;
+}
+
 export function readRedistributionAssets(directory: string, pack: { id: string; version: string },
-  archive: { file: string; sha256: string },
+  archive: { file: string; sha256: string; lockSha256?: string },
 ): ReleaseAsset[] {
   const name = 'redistribution.json';
   const bytes = fs.readFileSync(path.join(directory, name));
   const manifest = JSON.parse(bytes.toString('utf8'));
   if (manifest.format !== 1 || manifest.pack?.id !== pack.id || manifest.pack?.version !== pack.version
     || manifest.archive?.file !== archive.file || manifest.archive?.sha256 !== archive.sha256
-    || !digestPattern.test(manifest.producerLockSha256)
+    || !archive.lockSha256 || manifest.producerLockSha256 !== archive.lockSha256
     || !Array.isArray(manifest.files)) {
     throw new Error('Redistribution evidence does not match the verified pack archive');
   }

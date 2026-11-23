@@ -129,8 +129,6 @@ export function sealPackBuild(dir: string, manifest: PackManifest, sdkVersion?: 
   return verifyPack(dir);
 }
 
-/** The installation variant excludes build source maps and carries the same manifest bytes. */
-
 /** Capture a verified source declaration and its published files without executing or staging it. */
 export function readBuiltPackSource(packRoot: string): { snapshot: PackSnapshot; files: Record<string, string>; sourceRevision: string } {
   if (isPackLayout(packRoot)) {
@@ -187,12 +185,19 @@ function readBuiltPackIntegrity(packRoot: string, packFormat?: number): PackInte
 export function stagePack(
   packRoot: string,
   stageDir: string,
-  options: { sdkVersion?: string; provenance?: PackIntegrity['provenance']; packFormat?: number } = {},
+  options: { sdkVersion?: string; provenance?: PackIntegrity['provenance']; packFormat?: number; releaseLockSha256?: string; requireRedistribution?: boolean } = {},
 ): PackIntegrity {
   const built = readBuiltPackIntegrity(packRoot, options.packFormat);
   const integrity: PackIntegrity = {
     ...built, sdkVersion: options.sdkVersion ?? built.sdkVersion,
-    provenance: options.provenance ?? built.provenance, files: stagedFileHashes(built),
+    provenance: Object.hasOwn(options, 'provenance') ? options.provenance : built.provenance,
+    ...(options.releaseLockSha256 && {
+      releaseEvidence: {
+        buildRevision: packBuildRevision(built), lockSha256: options.releaseLockSha256,
+        ...(options.requireRedistribution && { required: true as const }),
+      },
+    }),
+    files: stagedFileHashes(built),
   };
   fs.mkdirSync(path.dirname(stageDir), { recursive: true });
   const incoming = fs.mkdtempSync(path.join(path.dirname(stageDir), '.apack-stage-'));
@@ -320,7 +325,6 @@ export function packBuildProblem(dir: string, appFormat: number = PACK_SNAPSHOT_
   }
   catch (error) { return { kind: 'unreadable', message: (error as Error).message }; }
 }
-
 
 
 /** A pack's compiled content files, relative to the content directory holding them */
