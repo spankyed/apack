@@ -1,9 +1,10 @@
 import type { ElectronApplication, Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { availableParallelism, cpus, hostname, release, totalmem } from 'node:os';
 import path from 'node:path';
+import { CHECKOUT_DISTRIBUTION_DIRECTORY, SHIPPED_PACKS_LOCK_FILE } from '@apackdev/host/packs/assets';
 import { manifestSchema, type PerformanceManifest, type PerformanceTrial } from './report.ts';
 
 /** Only untracked records declared by the execution owner may be excluded; tracked edits always count. */
@@ -43,7 +44,9 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
   const cpuLimit = limit('cpu.max')?.split(' ');
   const cpuCount = cpuLimit && cpuLimit[0] !== 'max' ? Math.min(availableParallelism(), Number(cpuLimit[0]) / Number(cpuLimit[1])) : availableParallelism();
   const memoryLimit = Number(limit('memory.max'));
-  const builds = ['packages/server/dist', 'packages/main/dist', 'packages/preload/dist', 'packages/renderer/dist', 'packages/default-setup/dist']
+  const distribution = existsSync(path.join(root, SHIPPED_PACKS_LOCK_FILE))
+    ? CHECKOUT_DISTRIBUTION_DIRECTORY : 'packages/default-setup/dist';
+  const builds = ['packages/server/dist', 'packages/main/dist', 'packages/preload/dist', 'packages/renderer/dist', distribution]
     .map(directory => ({ ...treeIdentity(path.join(root, directory)), path: directory }));
   // The native package as the install put it: the lockfile's source and integrity for it, and the bytes of every binding
   // it and its platform packages hold

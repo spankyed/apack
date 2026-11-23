@@ -6,7 +6,8 @@ import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { Component } from 'vue';
 import type { Editor } from '@tiptap/core';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
-import { PACK_LAYOUT, sealPackBuild, stagePack } from '@apackdev/host/packs';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
+import { PACK_LAYOUT, sealPackBuild, installPackFromLocal } from '@apackdev/host/packs';
 import { test as base, expect } from '@apackdev/testing';
 
 // A separate worker boots with a real disabled-pack record. No runtime facade, form or setting is mocked.
@@ -17,8 +18,8 @@ const test = base.extend<{}, { hostOnlyData: string }>({
     const previous = process.env.E2E_DATA_DIR;
     try {
       const { installedPacksFile, packsDir } = resolveAppEnvironment({ env: 'test', userDataDir: directory });
-      const starterRoot = fileURLToPath(new URL('../../../packages/default-setup', import.meta.url));
-      stagePack(starterRoot, path.join(packsDir, 'default-setup'));
+      const shipped = checkoutShippedPacksDir(fileURLToPath(new URL('../../..', import.meta.url)));
+      await installPackFromLocal(path.join(shipped, 'default-setup'), packsDir);
       fs.writeFileSync(installedPacksFile, JSON.stringify({ packs: [{ id: 'default-setup', enabled: false }] }));
       process.env.E2E_DATA_DIR = directory;
       await use(directory);

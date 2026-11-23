@@ -124,6 +124,9 @@ jobs:
       - name: Facade types report (default-setup)
         run: npm run facade:check --workspace @app/default-setup
 
+      - name: Stage the pinned distribution
+        run: npm run packs:stage
+
       - name: Unit tests (server)
         run: npm test --workspace @app/server -- --reporter=verbose
 
@@ -216,7 +219,7 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build:default-setup && npm run build:runtime
+        run: npm run build:default-setup && npm run packs:stage && npm run build:runtime
 
       - name: External pack E2E
         run: npm run test:external-pack

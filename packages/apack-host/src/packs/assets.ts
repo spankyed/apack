@@ -4,6 +4,15 @@ import * as path from 'node:path';
 import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
 
 export const SHIPPED_PACKS_DIRECTORY = 'shipped-packs';
+export const SHIPPED_PACKS_LOCK_FILE = 'build/shipped-packs.lock.json';
+export const CHECKOUT_DISTRIBUTION_DIRECTORY = '.temp/shipped-distribution';
+
+export function checkoutShippedPacksDir(root: string): string {
+  // The CLI can launch or build against another checkout that predates the distribution lock.
+  return fs.existsSync(path.join(root, SHIPPED_PACKS_LOCK_FILE))
+    ? path.join(root, CHECKOUT_DISTRIBUTION_DIRECTORY, SHIPPED_PACKS_DIRECTORY)
+    : path.join(root, 'packages');
+}
 
 /** Older packaged hosts put their starter among the app workspaces. */
 export function packagedShippedPacksDir(appDir: string): string {

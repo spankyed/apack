@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractPackArchive, isHostCompatible, readPackBuild } from '@apackdev/host/packs';
-import { SHIPPED_PACKS_DIRECTORY } from '@apackdev/host/packs/assets';
-import { PACK_REDISTRIBUTION_DIRECTORY, readBuildManifest } from '../build/build-metadata.ts';
+import { CHECKOUT_DISTRIBUTION_DIRECTORY, SHIPPED_PACKS_DIRECTORY, SHIPPED_PACKS_LOCK_FILE, sha256File } from '@apackdev/host/packs/assets';
+import { replaceDir } from '@apackdev/host/replace-dir';
+import { PACK_REDISTRIBUTION_DIRECTORY, readBuildManifest, resolveBuildMetadata } from '../build/build-metadata.ts';
 import { preparePinnedAsset, readShippedPackLock, type ShippedPackPin } from './lib/shipped-pack-lock.ts';
 
 export async function stageShippedPack(archive: string, sha256: string, dest: string, hostVersion: string, pin?: Pick<ShippedPackPin, 'id' | 'version'>): Promise<string> {
@@ -48,7 +49,7 @@ export async function stagePinnedShippedPacks(
         preparePinnedAsset(pin.redistribution, cache, request),
       ]);
       await stageShippedPack(archive, pin.archive.sha256, layouts, hostVersion, pin);
-      const pack = readPackBuild(path.join(layouts, pin.id)).snapshot.manifest;
+      const { snapshot: { manifest: pack }, integrity } = readPackBuild(path.join(layouts, pin.id));
       for (const [id, range] of Object.entries(pack.dependencies ?? {})) {
         const version = versions.get(id);
         if (!version || !isHostCompatible(range, version)) {
@@ -58,7 +59,8 @@ export async function stagePinnedShippedPacks(
       const data = JSON.parse(fs.readFileSync(manifest, 'utf8'));
       if (data?.format !== 1 || data.pack?.id !== pin.id || data.pack?.version !== pin.version
         || data.archive?.file !== `${pin.id}-${pin.version}.tgz` || data.archive?.sha256 !== pin.archive.sha256
-        || !digestPattern.test(data.producerLockSha256) || !Array.isArray(data.files)) {
+        || !digestPattern.test(data.producerLockSha256) || data.producerLockSha256 !== integrity.releaseEvidence?.lockSha256
+        || !Array.isArray(data.files)) {
         throw new Error(`Redistribution evidence does not match the archive for ${pin.id}`);
       }
       const dir = path.join(evidence, pin.id);
@@ -83,16 +85,47 @@ export async function stagePinnedShippedPacks(
   }
 }
 
+const repo = fileURLToPath(new URL('..', import.meta.url));
+const cache = path.join(repo, '.temp', 'shipped-pack-cache');
+
+function selectedLock(): string {
+  const override = process.env.APACK_SHIPPED_PACKS_LOCK;
+  return override ? path.resolve(override) : path.join(repo, SHIPPED_PACKS_LOCK_FILE);
+}
+
+/** Prepare the same distribution for local launches and pack dependency resolution. */
+async function stageCheckoutShippedPacks(): Promise<void> {
+  const dest = path.join(repo, CHECKOUT_DISTRIBUTION_DIRECTORY);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const staging = fs.mkdtempSync(path.join(path.dirname(dest), '.shipped-distribution-'));
+  try {
+    const metadata = resolveBuildMetadata({});
+    const lock = selectedLock();
+    const lockSha256 = sha256File(lock);
+    const shippedPackIds = await stagePinnedShippedPacks(staging, metadata.version, readShippedPackLock(lock), cache);
+    if (sha256File(lock) !== lockSha256) throw new Error('The distribution lock changed during staging');
+    fs.writeFileSync(path.join(staging, 'build-manifest.json'), JSON.stringify({ version: metadata.version, shippedPackIds, lockSha256 }, null, 2) + '\n');
+    replaceDir(staging, dest);
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
+  const checkout = process.argv.slice(2);
+  if (checkout.length === 1 && checkout[0] === '--checkout') {
+    await stageCheckoutShippedPacks();
+  } else if (!checkout.length) await stagePackagedShippedPacks();
+  else throw new Error('Usage: tsx scripts/stage-shipped-starter.ts [--checkout]');
+}
+
+async function stagePackagedShippedPacks(): Promise<void> {
   const root = process.env.APACK_BUILD_ROOT;
   if (!root) throw new Error('Starter staging requires an app build session');
   const metadata = readBuildManifest(root);
-  const repo = fileURLToPath(new URL('..', import.meta.url));
-  const override = process.env.APACK_SHIPPED_PACKS_LOCK;
-  const lock = override ? path.resolve(override) : path.join(repo, 'build', 'shipped-packs.lock.json');
-  if (override || fs.existsSync(lock)) {
-    const shippedPackIds = await stagePinnedShippedPacks(root, metadata.version, readShippedPackLock(lock),
-      path.join(repo, '.temp', 'shipped-pack-cache'));
+  const lock = selectedLock();
+  if (process.env.APACK_SHIPPED_PACKS_LOCK || fs.existsSync(lock)) {
+    const shippedPackIds = await stagePinnedShippedPacks(root, metadata.version, readShippedPackLock(lock), cache);
     fs.writeFileSync(path.join(root, 'build-manifest.json'), JSON.stringify({ ...metadata, shippedPackIds }, null, 2) + '\n');
   } else {
     if (!process.env.SKIP_DEFAULT_SETUP_BUILD) {

@@ -489,6 +489,35 @@ function sbomLicenses(declared: string): object[] {
   return plain ? [{ license: { id: declared } }] : [{ expression: declared }];
 }
 
+interface SbomEntry {
+  'bom-ref': string;
+  name: string;
+  version?: string;
+  type: string;
+  components?: SbomEntry[];
+}
+
+/** Read the audit record carried alongside the exact pinned archive. */
+export function shippedPackSbom(file: string, id: string, version: string): SbomEntry {
+  const bom = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const pack = bom?.metadata?.component;
+  if (bom?.bomFormat !== 'CycloneDX' || bom.specVersion !== '1.5' || pack?.name !== id
+    || pack.version !== version || !Array.isArray(bom.components)) {
+    throw new Error(`Invalid CycloneDX SBOM for shipped pack ${id}@${version}`);
+  }
+  const root = `pack:${id}@${version}`;
+  const used = new Set<string>();
+  const namespace = (component: SbomEntry): SbomEntry => {
+    if (!component?.name || !component.type || typeof component['bom-ref'] !== 'string' || used.has(component['bom-ref'])) {
+      throw new Error(`Invalid or duplicate SBOM component in shipped pack ${id}@${version}`);
+    }
+    used.add(component['bom-ref']);
+    return { ...component, 'bom-ref': `${root}#${component['bom-ref']}`,
+      ...(component.components && { components: component.components.map(namespace) }) };
+  };
+  return { type: 'application', name: id, version, 'bom-ref': root, components: bom.components.map(namespace) };
+}
+
 /**
  * The app's CycloneDX 1.5 SBOM: the app, every third-party package it carries with the license it is judged under, how
  * it is carried and its hash, and the other components given, each with what is shipped inside it. Every package
@@ -498,6 +527,7 @@ function sbomLicenses(declared: string): object[] {
 export function appSbom(
   app: { name: string; version: string }, packages: readonly NoticePackage[], identity: SbomIdentity, others: readonly SbomComponent[],
   overrides: Readonly<Record<string, Override>> = OVERRIDES,
+  shippedPacks: readonly SbomEntry[] = [],
 ): object {
   const libraries = packages.map((pkg) => {
     const purl = identity.purls[pkg.name] ?? npmPurl(pkg.name, pkg.version);
@@ -536,7 +566,7 @@ export function appSbom(
     specVersion: '1.5',
     version: 1,
     metadata: { component: { type: 'application', 'bom-ref': appRef, name: app.name, version: app.version } },
-    components: [...libraries, ...others.map((component) => other(component, appRef))].sort(byRef),
+    components: [...libraries, ...others.map((component) => other(component, appRef)), ...shippedPacks].sort(byRef),
   };
 }
 
@@ -678,7 +708,7 @@ export function writeAppNotices(options: {
   /** What the packages' own files don't say: `OVERRIDES`, unless given */
   overrides?: Readonly<Record<string, Override>>;
   /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages and the binaries their installs downloaded */
-  sbom?: { file: string; app: { name: string; version: string }; identity: SbomIdentity; others: readonly SbomComponent[] };
+  sbom?: { file: string; app: { name: string; version: string }; identity: SbomIdentity; others: readonly SbomComponent[]; shippedPacks?: readonly SbomEntry[] };
 }): string[] {
   const problems: string[] = [];
   const overrides = options.overrides ?? OVERRIDES;
@@ -724,7 +754,7 @@ export function writeAppNotices(options: {
   }));
   fs.writeFileSync(path.join(options.appDir, 'THIRD-PARTY-NOTICES.txt'), renderNotices(notices, options.native.map(({ pointer }) => pointer), adapted));
   if (options.sbom) {
-    fs.writeFileSync(options.sbom.file, `${JSON.stringify(appSbom(options.sbom.app, packages, options.sbom.identity, [...options.sbom.others, ...downloadedBinaries(packages)], overrides), null, 2)}\n`);
+    fs.writeFileSync(options.sbom.file, `${JSON.stringify(appSbom(options.sbom.app, packages, options.sbom.identity, [...options.sbom.others, ...downloadedBinaries(packages)], overrides, options.sbom.shippedPacks), null, 2)}\n`);
   }
   if (problems.length && options.channel !== 'preview') {
     throw new Error(`The app's third-party notices are incomplete:\n  ${problems.join('\n  ')}`);

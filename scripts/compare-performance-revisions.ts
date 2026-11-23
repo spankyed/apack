@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { SHIPPED_PACKS_LOCK_FILE } from '@apackdev/host/packs/assets';
 import { packagesBuiltOrRefuse } from '@apackdev/host/build/packages-built';
 import { boundedSpawn, type BoundedResult } from './lib/bounded-spawn.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
@@ -22,7 +23,8 @@ if (options.roots.A !== options.roots.B && realpathSync(path.join(options.roots.
 mkdirSync(path.dirname(options.output), { recursive: true }); mkdirSync(options.output);
 const preparation: Array<{ root: string; code: number; timedOut: boolean }> = [];
 for (const own of new Set(Object.values(options.roots))) {
-  const result = await boundedSpawn(process.execPath, ['scripts/with-source.mjs', 'tsx', 'scripts/chain.ts', '--only', 'packages:ensure,build:default-setup,build:runtime', '--no-native', '--cores', '1'], BUDGET_MS.suite.ms, { cwd: own, stream: true });
+  const distributionStep = existsSync(path.join(own, SHIPPED_PACKS_LOCK_FILE)) ? 'packs:stage' : 'build:default-setup';
+  const result = await boundedSpawn(process.execPath, ['scripts/with-source.mjs', 'tsx', 'scripts/chain.ts', '--only', `packages:ensure,${distributionStep},build:runtime`, '--no-native', '--cores', '1'], BUDGET_MS.suite.ms, { cwd: own, stream: true });
   preparation.push({ root: own, code: result.code, timedOut: result.timedOut ?? false });
   writeFileSync(path.join(options.output, 'preparation.json'), JSON.stringify(preparation, null, 2));
   if (result.code !== 0) throw Error(`Revision preparation failed; evidence: ${options.output}`);

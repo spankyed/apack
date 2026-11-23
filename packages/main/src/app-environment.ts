@@ -1,7 +1,7 @@
 import {app} from 'electron';
 import * as path from 'node:path';
-import {readFileSync} from 'node:fs';
-import {packagedShippedPacksDir} from '@apackdev/host/packs/assets';
+import {existsSync, readFileSync} from 'node:fs';
+import {checkoutShippedPacksDir, packagedShippedPacksDir} from '@apackdev/host/packs/assets';
 import {_inferElectronAppEnv, resolveAppEnvironment, type AppEnvironment} from '@apackdev/sdk/env';
 
 /** The app's environment and paths, plus the log directory only this process can resolve. */
@@ -57,7 +57,13 @@ function initialise(): MainAppEnvironment {
 /** The server installs offered packs from here before it starts their runtimes. */
 export function shippedPacksDir(): string {
   const appDir = app.getAppPath();
-  return app.isPackaged ? packagedShippedPacksDir(appDir) : path.join(appDir, 'packages');
+  return app.isPackaged ? packagedShippedPacksDir(appDir) : checkoutShippedPacksDir(appDir);
+}
+
+export function distributionManifest(): string | undefined {
+  if (app.isPackaged) return path.join(app.getAppPath(), 'build-manifest.json');
+  const file = path.join(path.dirname(shippedPacksDir()), 'build-manifest.json');
+  return existsSync(file) ? file : undefined;
 }
 
 /** Decides the app environment if it hasn't been decided yet. Idempotent; `getAppEnvironment()` does the same. */

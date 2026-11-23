@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import envPaths from 'env-paths';
 import semver from 'semver';
-import { packagedShippedPacksDir } from '@apackdev/host/packs/assets';
+import { checkoutShippedPacksDir, packagedShippedPacksDir } from '@apackdev/host/packs/assets';
 import { parseAppEnv, type AppChannel } from '@apackdev/sdk/env';
 import { cachedBetaBuilds, ensureBetaApp, type PackagedApp } from './beta-app';
 import { checkoutFor } from '../build/checkout-packages';
@@ -37,8 +37,10 @@ export function sourceAppProblems(root: string): string[] {
   const problems: string[] = [];
   if (!fs.existsSync(path.join(root, 'packages', 'entry-point.mjs'))) return ['not an apack checkout (no packages/entry-point.mjs)'];
   if (!fs.existsSync(path.join(root, 'node_modules', 'electron'))) problems.push('node_modules/electron is missing (run npm install)');
+  const shipped = checkoutShippedPacksDir(root);
+  if (!fs.existsSync(shipped)) problems.push(`${path.relative(root, shipped)} is missing (run npm run packs:stage)`);
   for (const pkg of ['main', 'renderer']) {
-    if (!fs.existsSync(path.join(root, 'packages', pkg, 'dist'))) problems.push(`packages/${pkg}/dist is missing (run npm run build:default-setup && npm run build:runtime)`);
+    if (!fs.existsSync(path.join(root, 'packages', pkg, 'dist'))) problems.push(`packages/${pkg}/dist is missing (run npm run packs:stage && npm run build:runtime)`);
   }
   return problems;
 }
@@ -146,21 +148,21 @@ export async function configuredHostPackagesDir(options: HostPackagesOptions = {
     ({ dir: packagedAppPackagesDir(app.executable), label: `apack Beta ${app.version}` });
 
   if (env.APACK_HOST_ROOT && env.APACK_HOST_EXECUTABLE) throw new Error('Choose one resolved host identity.');
-  if (env.APACK_HOST_ROOT) return { dir: path.join(env.APACK_HOST_ROOT, 'packages'), label: `apack checkout ${env.APACK_HOST_ROOT}` };
+  if (env.APACK_HOST_ROOT) return { dir: checkoutShippedPacksDir(env.APACK_HOST_ROOT), label: `apack checkout ${env.APACK_HOST_ROOT}` };
   if (env.APACK_HOST_EXECUTABLE) return { dir: packagedAppPackagesDir(env.APACK_HOST_EXECUTABLE), label: `apack bundle ${env.APACK_HOST_EXECUTABLE}` };
   const named = namedHost(undefined, env);
   if (!named) {
     const found = from === undefined ? undefined : checkout(from);
     if (found === undefined) return null;
-    return { dir: path.join(found, 'packages'), label: `apack checkout ${found}` };
+    return { dir: checkoutShippedPacksDir(found), label: `apack checkout ${found}` };
   }
 
   if ('path' in named.choice) {
-    // Dependency builds only need packages/, not the Electron and runtime outputs a launch requires.
+    // Dependency builds only need the shipped layouts. A launch also requires Electron and runtime outputs.
     const root = path.resolve(expandHome(named.choice.path));
     return root.endsWith('.app')
       ? { dir: packagedShippedPacksDir(path.join(root, 'Contents', 'Resources', 'app')), label: `apack bundle ${root}` }
-      : { dir: path.join(root, 'packages'), label: `apack checkout ${root}` };
+      : { dir: checkoutShippedPacksDir(root), label: `apack checkout ${root}` };
   }
 
   // Build/test are not upgrade commands: reuse a compatible cached beta before consulting the network.

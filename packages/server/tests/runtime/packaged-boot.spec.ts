@@ -14,6 +14,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-packaged-boot-'));
@@ -26,7 +27,7 @@ const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
 const { unbindHost } = await import('@apackdev/sdk/runtime/internals');
 const { getDesignated } = await import('@apackdev/sdk/designations');
 
-const PACKAGES_DIR = path.resolve(__dirname, '..', '..', '..');
+const SHIPPED_DIR = checkoutShippedPacksDir(path.resolve(__dirname, '../../../..'));
 
 afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 beforeEach(() => fs.rmSync(resolveAppEnvironment().packsDir, { recursive: true, force: true }));
@@ -54,7 +55,7 @@ if (module.exports.registration) module.exports.registration.declarationRevision
  * loaded through the same admission path, without advertisement-based registration priority
  */
 async function bootPacks(app: ReturnType<typeof openAppStore>) {
-  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { seedMissing: 'all', installedPacksFile: resolveAppEnvironment().installedPacksFile });
+  await installShippedPacks(SHIPPED_DIR, resolveAppEnvironment().packsDir, { seedMissing: 'all', installedPacksFile: resolveAppEnvironment().installedPacksFile });
   return loadAppPacks(app.packs);
 }
 

@@ -18,12 +18,12 @@ export interface DevPackFrontend {
  * the only thing a dev server can act on.
  */
 export function discoverDevPackFrontends(
-  packagesRoot: string,
+  packagesRoot: string | undefined,
   extraDirs: string | undefined,
   cwd: string,
   warn: (message: string) => void = (message) => console.warn(message),
 ): DevPackFrontend[] {
-  const scanned = fs.existsSync(packagesRoot)
+  const scanned = packagesRoot && fs.existsSync(packagesRoot)
     ? fs.readdirSync(packagesRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.resolve(packagesRoot, entry.name))

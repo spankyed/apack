@@ -10,7 +10,6 @@ import { sharedFeModules } from '@apackdev/host/build/shared-deps'
 import { devPackFrontendsModule, discoverDevPackFrontends } from '@apackdev/host/build/discover'
 
 const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
-const packagesRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const rendererSrcDir = fileURLToPath(new URL('./src/', import.meta.url));
 
 /**
@@ -29,7 +28,7 @@ const rendererSrcDir = fileURLToPath(new URL('./src/', import.meta.url));
 function devPackFrontendsPlugin(serving: boolean): Plugin {
   const VIRTUAL_ID = 'virtual:dev-pack-frontends';
   const RESOLVED_VIRTUAL = '\0' + VIRTUAL_ID;
-  const packs = serving ? discoverDevPackFrontends(packagesRoot, process.env.APACK_DEV_PACK_DIRS, process.cwd()) : [];
+  const packs = serving ? discoverDevPackFrontends(undefined, process.env.APACK_DEV_PACK_DIRS, process.cwd()) : [];
   const virtualContent = devPackFrontendsModule(packs);
   // Those packs' components are in this window's CSS too, and `tailwind.config.ts` is loaded by PostCSS
   // rather than from here, so this is how it is told. **A declaration, not an inference**: it must not read
