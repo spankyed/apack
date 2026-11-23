@@ -1,7 +1,7 @@
 # apack-terminal: marks, recording and path links on remote targets (deferred)
 
 Status: deferred by decision, 2026-11-12. Nothing here is started or scheduled. Not in v1
-(`docs/plans/apack-terminal-v1.md`).
+(`docs/archive/plans/apack-terminal-v1.md`).
 
 Why deferred: the owner does not need it for v1. Whether anyone uses remote targets in practice is not yet known
 (see "When to revisit").

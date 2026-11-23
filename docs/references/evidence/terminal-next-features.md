@@ -1,6 +1,6 @@
 # Evidence: the next terminal features
 
-Checkpoint log for [the next-features goal](../../goals/goal-terminal-next-features.md). Each phase appends a section
+Checkpoint log for [the next-features goal](../../archive/goals/goal-terminal-next-features.md). Each phase appends a section
 with its date, the commands run and their results, and what was not verified.
 
 ## Phase 0 — the seams at the pin (2026-11-12)

@@ -114,7 +114,7 @@ it('leaves the asker with one entry and one open', async () => {
 /**
  * **Two creates in flight, each opened the way it asked — the issue doc's repro.**
  *
- * `docs/issues/ISSUE-terminal-integration-review.md` (T4) is the repro: run "build" then "test" before the
+ * `docs/archive/issues/ISSUE-terminal-integration-review.md` (T4) is the repro: run "build" then "test" before the
  * first answer. A single slot holds the second create's intent, so the *first* answer reads the second's
  * command and the second answer finds nothing. Keyed by ask, each answer finds its own intent whatever
  * order the two arrive in — asserted here in the awkward order, the first ask answered second, since that

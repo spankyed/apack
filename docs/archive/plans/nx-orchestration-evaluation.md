@@ -9,7 +9,7 @@ Determine whether Nx can replace enough generic validation infrastructure to red
 without weakening apack's dependency, build-integrity or process-lifetime guarantees.
 
 This evaluation precedes further orchestration development in the
-[fast-validation plan](../archive/plans/validation-feedback-budget.md). That plan retains the workflow, runtime and
+[fast-validation plan](validation-feedback-budget.md). That plan retains the workflow, runtime and
 coverage goals; this plan decides who implements generic orchestration. The
 [Nx assessment](../references/nx-validation-assessment.md) records the supporting discussion.
 

@@ -212,7 +212,7 @@ on Windows at all, and `submitFor` answering `\r\n` for PowerShell, which meant 
 
 **Outcome:** a terminal session has one owner. Processes, PTY/ConPTY, VT state and bounded I/O belong to a
 single authority; a window observes a session rather than hosting it; the pack feature keeps application
-behaviour. Every finding in the [terminal integration review](../../issues/ISSUE-terminal-integration-review.md)
+behaviour. Every finding in the [terminal integration review](../issues/ISSUE-terminal-integration-review.md)
 closes with a test in the resulting structure, or is recorded as dissolved by construction with its reason.
 
 **Why one goal rather than three plans.** The review's fixes, the
@@ -1157,7 +1157,7 @@ Phase B is where those stop being answered twice. The target shape is a non-bloc
 **Where it runs and what it is coupled to, not its quality.** It is current (1.1.0), Microsoft-maintained,
 the binding VS Code ships, and sound on POSIX. An addon in the API process cannot outlive the API, and it is
 the only module here needing an Electron ABI rebuild. Its Windows weaknesses are the X findings' subject in
-[the review](../../issues/ISSUE-terminal-integration-review.md); what replaces them is an owned process tree.
+[the review](../issues/ISSUE-terminal-integration-review.md); what replaces them is an owned process tree.
 
 ### Phase H — the host service owns sessions
 
