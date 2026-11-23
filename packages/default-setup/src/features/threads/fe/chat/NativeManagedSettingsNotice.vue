@@ -1,15 +1,20 @@
 <template>
   <details ref="notice" data-native-managed-settings class="mx-4 my-2 min-h-0 shrink-0 rounded-lg border border-amber-500/25 bg-amber-500/5 text-xs text-amber-100">
     <summary ref="summary" class="cursor-pointer px-3 py-2">Claude Code reported settings warnings</summary>
-    <div class="max-h-40 overflow-y-auto px-3 pb-3">
-      <div v-for="(diagnostic,index) in diagnostics" :key="index" class="mt-2 whitespace-pre-wrap break-words">
+    <div role="region" aria-label="Settings warning details" tabindex="0"
+      class="managed-settings-details max-h-40 space-y-2 overflow-y-auto overscroll-contain px-3 pb-2 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2">
+      <div v-for="(diagnostic, index) in diagnostics" :key="index" class="whitespace-pre-wrap break-words">
         <p class="font-mono text-amber-200">{{ diagnostic.file }}</p>
         <p>{{ diagnostic.message }}</p>
         <p v-if="diagnostic.path" class="mt-1 font-mono text-amber-200/70">{{ diagnostic.path }}</p>
       </div>
-      <button v-if="canRecheck" ref="recheckButton" type="button" class="mt-3 rounded px-1 py-1 underline hover:text-white focus-visible:outline focus-visible:outline-2 aria-disabled:opacity-50"
+    </div>
+    <div v-if="canRecheck || recheck?.status === 'error'" class="flex min-w-0 items-start gap-x-2 border-t border-amber-500/15 px-3 py-1">
+      <button v-if="canRecheck" ref="recheckButton" type="button"
+        class="shrink-0 rounded px-1 py-0.5 underline hover:text-white focus-visible:outline focus-visible:outline-2 aria-disabled:opacity-50"
         :aria-disabled="recheck?.status === 'pending'" @click="requestRecheck">{{ recheck?.status === 'pending' ? 'Rechecking…' : 'Recheck settings' }}</button>
-      <p v-if="recheck?.status === 'error'" role="alert" class="mt-1">{{ recheck.problem }}</p>
+      <p v-if="recheck?.status === 'error'" role="alert" tabindex="0" class="managed-settings-problem min-w-0 break-words py-0.5"
+        :title="recheck.problem">{{ recheck.problem }}</p>
     </div>
   </details>
 </template>
@@ -38,3 +43,11 @@ onBeforeUnmount(() => {
   if (notice.value?.contains(document.activeElement)) emit('return-focus')
 })
 </script>
+
+
+<style scoped>
+@media (max-height: 700px) {
+  .managed-settings-details { max-height: 2.5rem; }
+  .managed-settings-problem { max-height: 2rem; overflow-y: auto; }
+}
+</style>
