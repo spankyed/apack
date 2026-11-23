@@ -246,10 +246,7 @@ export interface Work {
 
 /** `/usr/bin/time -l`'s rusage block: it opens with `<real> real <user> user <sys> sys` and runs to the end */
 function fromRusage(lines: readonly string[]): { readonly work: Work; readonly rest: string } | undefined {
-  let opens = -1;
-  for (let at = lines.length - 1; at >= 0 && opens === -1; at--) {
-    if (/^\s*[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys\s*$/.test(lines[at]!)) opens = at;
-  }
+  const opens = lines.findLastIndex((line) => /^\s*[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys\s*$/.test(line));
   if (opens === -1) return undefined;
   const [, user, sys] = /([\d.]+) user\s+([\d.]+) sys/.exec(lines[opens]!)!;
   const instructions = lines.slice(opens).map((line) => /^\s*(\d+)\s+instructions retired\s*$/.exec(line)?.[1]).find(Boolean);

@@ -70,7 +70,7 @@ function readPath(file: fs.PathOrFileDescriptor): fs.PathOrFileDescriptor {
 }
 
 function sourceError(error: unknown): unknown {
-  if (!(error instanceof Error)) return error;
+  if (!Error.isError(error)) return error;
   const scope = currentScope();
   if (!scope) return error;
   error.message = scope.compilation.diagnostic(error.message);

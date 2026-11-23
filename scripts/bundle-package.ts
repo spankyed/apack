@@ -291,7 +291,8 @@ async function main(): Promise<void> {
     const entryFiles = [...Object.values(config.entries), ...Object.values(config.sharedExternalEntries ?? {})].map((src) => path.join(pkgDir, src));
     execFileSync(process.execPath, [
       tsc, ...entryFiles, '--declaration', '--emitDeclarationOnly', '--outDir', path.join(stagedDir, 'dist'),
-      '--module', 'esnext', '--moduleResolution', 'bundler', '--customConditions', '@apackdev/source', '--allowImportingTsExtensions', '--target', 'es2022',
+      '--module', 'esnext', '--moduleResolution', 'bundler', '--customConditions', '@apackdev/source', '--allowImportingTsExtensions',
+      '--target', 'es2024', '--lib', 'es2024,esnext.collection,esnext.iterator,esnext.promise,esnext.error,esnext.disposable,dom,dom.iterable',
       '--strict', '--esModuleInterop', '--skipLibCheck', '--types', 'node',
     ], { stdio: 'inherit' });
   }

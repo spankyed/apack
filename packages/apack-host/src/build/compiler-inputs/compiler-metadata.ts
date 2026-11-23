@@ -44,7 +44,7 @@ export function copyCompilerValue<T>(value: T): T {
   if (value instanceof Date) return new Date(value.getTime()) as T;
   const descriptors = Object.getOwnPropertyDescriptors(value);
   for (const descriptor of Object.values(descriptors)) if ('value' in descriptor) descriptor.value = copyCompilerValue(descriptor.value);
-  const copy = value instanceof Error
+  const copy = Error.isError(value)
     ? value instanceof TypeError ? new TypeError(value.message) : value instanceof RangeError ? new RangeError(value.message) : new Error(value.message)
     : Object.create(Object.getPrototypeOf(value));
   Object.setPrototypeOf(copy, Object.getPrototypeOf(value));
@@ -52,7 +52,7 @@ export function copyCompilerValue<T>(value: T): T {
 }
 
 export function compilerErrorValue(error: unknown, project: (file: string) => string = file => file): unknown {
-  if (!(error instanceof Error)) return copyCompilerValue(error);
+  if (!Error.isError(error)) return copyCompilerValue(error);
   const value = Object.fromEntries(Object.getOwnPropertyNames(error)
     .filter(key => key !== 'stack').map(key => [key, copyCompilerValue(Reflect.get(error, key))]));
   for (const key of ['path', 'dest']) {

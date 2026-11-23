@@ -141,7 +141,10 @@ export async function serveRelay(socket: string, command: readonly string[], env
   return {
     socket,
     // A run still going that has answered nothing is the failure being asked about, before it has ended
-    lastFailure: () => [...running.values()].filter(run => !run.answered).map(silence)[0] ?? failure,
+    lastFailure: () => {
+      const unanswered = running.values().find(run => !run.answered);
+      return unanswered ? silence(unanswered) : failure;
+    },
     async close() {
       for (const child of running.keys()) child.kill();
       await new Promise<void>((resolve) => server.close(() => resolve()));
