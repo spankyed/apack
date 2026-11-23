@@ -109,7 +109,8 @@
         </div>
       </header>
       <p v-if="returnProblem" role="alert" class="native-problem">{{ returnProblem }}</p>
-      <div class="native-console">
+      <p v-if="view?.state?.startupPolicyProblem" role="alert" class="native-startup-problem">{{ view.state.startupPolicyProblem }}</p>
+      <div v-else class="native-console">
         <div ref="viewport" class="native-viewport" aria-label="Claude terminal" />
       </div>
       <p v-if="view?.state?.status === 'live'" role="status" aria-label="Claude billing status" class="px-4 py-2 text-xs text-neutral-400">{{ claudeBillingText(view.state.billing) }}</p>
@@ -218,10 +219,11 @@ function selectAutoRule(panel: (typeof noticePanels.value)[number], value: strin
   answerNotice(panel, 'auto_rules_select', [...selected])
 }
 const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
-const launchProblem = computed(() => managedPolicyDeclined.value ? 'Claude Code closed because you declined the managed settings.' : view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
+const launchProblem = computed(() => managedPolicyDeclined.value ? 'Claude Code closed because you declined the managed settings.' : view.value?.state?.startupPolicyProblem || view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
 const stateLabel = computed(() => {
   const state = view.value?.state
   if (managedPolicyDeclined.value) return 'Session ended'
+  if (state?.startupPolicyProblem) return 'Managed settings error'
   if (state?.status === 'live') return state.busy ? 'Working' : 'Connected'
   return state?.status === 'starting' ? 'Connecting' : state?.status === 'error' ? 'Connection error' : 'Session ended'
 })
@@ -340,7 +342,7 @@ function stop() {
 function detach() { terminal?.detach(); terminal = undefined; attachedOwner = undefined; attachedSession = undefined }
 watch(displayActive, value => emit('active', value), { immediate: true })
 watch([view, active], async ([value, showing]) => {
-  if (!showing) { detach(); return }
+  if (!showing || value?.state?.startupPolicyProblem) { detach(); return }
   const ownerId = value?.state?.ownerId
   const session=value?.state?.terminalSession
   if (!ownerId||!session) { detach(); return }
@@ -424,6 +426,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); send({ type: 'CLAUDE
 .native-stop-icon { width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
 .native-button--return { border-color: #b68e7333; color: #d3aa8e; }
 .native-console { display: flex; flex: 1; min-height: 144px; min-width: 0; overflow: hidden; border: 1px solid #ffffff12; border-radius: 12px; background: var(--console-bg); box-shadow: 0 8px 30px #00000020; }
+.native-startup-problem { min-width: 0; margin: 0; padding: 12px 16px; border: 1px solid #e9a3a040; border-radius: 8px; color: #e9a3a0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .native-viewport { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 20px; }
 .native-activity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); flex-shrink: 0; gap: 16px 28px; max-height: 180px; overflow: auto; padding: 16px 4px 2px; }
 .native-section-label { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; color: #797773; font-size: 10px; font-weight: 500; letter-spacing: .04em; }

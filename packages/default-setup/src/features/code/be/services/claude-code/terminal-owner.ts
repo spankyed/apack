@@ -144,6 +144,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let handoffPending = false
   let continuation: ClaudeNativeContinuation | undefined
   let exitCode: number | undefined, stopping = false, changingModel = false, changingPermission = false
+  let startupPolicyProblem: string | undefined
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
@@ -186,6 +187,12 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     // carries that case, and the signal itself reaches the window on the session's own exit
     trace('exit', {outcome:stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code: code ?? undefined});
     closed = true; clearTimeout(hardStop); status = stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code ?? undefined
+    if (status === 'error' && !bridge.ready) {
+      // A managed document can prevent the bridge from connecting. The pinned CLI
+      // writes this diagnostic directly to the terminal before exiting.
+      const tail = stripVTControlCharacters(output.map(chunk => chunk.text).join(''))
+      startupPolicyProblem = tail.match(/^[^\r\n]{1,4096}: Managed settings document could not be parsed as a JSON object; none of its settings are in effect\. Fix or remove it\.\r?$/m)?.[0].trim()
+    }
     try { await bridge.close() } finally {
       releasing = true
       try { for (const observer of exitObservers) await observer() } finally { changed(); resolveDone() }
@@ -318,7 +325,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     let backgroundState: ClaudeNativeTerminalState | undefined
-    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, promptQueue: bridge.promptQueue, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, terminalSession: terminal ? {id: terminal.id, target: terminal.target} : undefined, inputBlocked:closed||changingView||preparingParent, pid: terminal?.pid ?? undefined, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, activeTurnId: bridge.activeTurnId, endingTurnId: closed ? undefined : bridge.endingTurnId, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks })
+    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, promptQueue: bridge.promptQueue, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, terminalSession: terminal ? {id: terminal.id, target: terminal.target} : undefined, inputBlocked:closed||changingView||preparingParent, pid: terminal?.pid ?? undefined, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, activeTurnId: bridge.activeTurnId, endingTurnId: closed ? undefined : bridge.endingTurnId, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, startupPolicyProblem, tasks: bridge.projection.tasks })
     const readState = (): ClaudeNativeTerminalState => backgroundState
       ? { ...backgroundState, status: closed ? status : backgroundState.status, exitCode }
       : currentState()

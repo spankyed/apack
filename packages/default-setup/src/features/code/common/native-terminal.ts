@@ -102,6 +102,7 @@ export interface ClaudeNativeTerminalState {
   mainStatus?: string
   tasks: ClaudeNativeTerminalTask[]
   problem?: string
+  startupPolicyProblem?: string
 }
 
 export interface ClaudeNativeTaskDetails {

@@ -13,10 +13,10 @@
 import {tmpdir} from 'node:os'
 import {prepareClaudeNativeTerminal} from '#features/code/be/services/claude-code/terminal-owner.ts'
 import {nativeSession} from '../../_support/native-terminal.ts'
-const f=vi.hoisted(()=>{vi.resetModules();return{open:vi.fn(),captureOwnership:vi.fn(),nativePid:2202 as number|undefined}})
+const f=vi.hoisted(()=>{vi.resetModules();return{open:vi.fn(),captureOwnership:vi.fn(),ready:true,nativePid:2202 as number|undefined}})
 vi.mock('#generated/services.ts',()=>({services:{terminal:{open:f.open}}}))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts',()=>({createClaudeTerminalBridge:async(options:{ownsProcess:(pid:number)=>Promise<boolean>})=>{f.captureOwnership(options.ownsProcess);return{
- pluginRoot:'/private/fixture-plugin',bunOptions:'fixture-preload',close:async()=>{},ready:true,get nativePid(){return f.nativePid},
+ pluginRoot:'/private/fixture-plugin',bunOptions:'fixture-preload',close:async()=>{},get ready(){return f.ready},get nativePid(){return f.nativePid},
  projection:{sessionId:'11111111-1111-1111-1111-111111111111',tasks:[]},session:{metadata:{}},uiTransport:{},
 }}}))
 /**
@@ -25,13 +25,14 @@ vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts',()=>({create
  */
 async function fixture(){
  let onExit!:(code:number|null,signal:string|null)=>void
+ let onOutput!:(text:string)=>void
  const signal=vi.fn(async()=>{})
- f.open.mockImplementation(async(_options,listeners)=>{onExit=listeners.onExit;return nativeSession(listeners,{pid:2201,signal})})
+ f.open.mockImplementation(async(_options,listeners)=>{onExit=listeners.onExit;onOutput=listeners.onOutput;return nativeSession(listeners,{pid:2201,signal})})
  const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})
  const owner=await prepared.start()
- return{owner,signal,exit:()=>onExit(0,null)}
+ return{owner,signal,output:onOutput,exit:(code=0)=>onExit(code,null)}
 }
-beforeEach(()=>{vi.clearAllMocks();f.nativePid=2202})
+beforeEach(()=>{vi.clearAllMocks();f.ready=true;f.nativePid=2202})
 afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers()})
 it('signals the original CLI by its own pid first, leaving its owned servers alive for shutdown',async()=>{
  const x=await fixture()
@@ -87,4 +88,21 @@ it('checks early preload registration once the broker returns the terminal handl
  await expect(owned).resolves.toBe(true)
  await expect(foreign).resolves.toBe(false)
  expect(owns.mock.calls).toEqual([[2202], [9999]])
+})
+
+
+it.each([
+  {ready: false, code: 1, expected: true},
+  {ready: true, code: 1, expected: false},
+  {ready: false, code: 0, expected: false},
+])('retains the original malformed policy diagnostic only on failed startup ($ready, $code)', async ({ready, code, expected}) => {
+  f.ready = ready
+  const {owner, output, exit} = await fixture()
+  const message = '/etc/claude-code/managed-settings.d/20-team.json: Managed settings document could not be parsed as a JSON object; none of its settings are in effect. Fix or remove it.'
+  output('Unrelated output\r\n\x1b[31m' + message.slice(0, 72))
+  output(message.slice(72) + '\x1b[0m\r\n')
+  expect(owner.state.startupPolicyProblem).toBeUndefined()
+  exit(code)
+  await owner.done
+  expect(owner.state.startupPolicyProblem).toBe(expected ? message : undefined)
 })
