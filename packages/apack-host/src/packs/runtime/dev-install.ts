@@ -23,32 +23,29 @@ export async function installDevPack(
   backendActor: import('xstate').AnyActorRef,
 ): Promise<{ id: string; dir: string }> {
   const { packsDir, installedPacksFile } = resolveAppEnvironment();
-  let claimedId: string | undefined;
+  using claims = new DisposableStack();
   let start: (() => boolean) | undefined;
-  try {
-    const result = await installPackFromLocal(packRoot, packsDir, {
-      installedPacksFile,
-      hostVersion: getAppVersion(),
-      packFormat: PACK_SNAPSHOT_FORMAT,
-      beforePlace: manifest => {
-        if (manifest.id === HOST_PACK_ID) throw new Error('The host is not an installable pack');
-        registry.catalog.assertPackSettings(manifest);
-        if (!registry.claimPackOperation(manifest.id)) throw new Error(`Operation already in progress for ${manifest.id}`);
-        claimedId = manifest.id;
-      },
-      accept: candidate => {
-        if (recordUserInstall(installedPacksFile, candidate.id)) start = acceptInstalledPack(registry, candidate.id, backendActor);
-      },
-    });
-    if (start) {
-      if (!start()) throw new Error(`Installed ${result.id}, but ${registry.loadProblem(result.id) ?? 'it failed to start'}`);
-    } else {
-      registry.refreshCatalog(packsDir);
-      backendActor.send({ type: 'PACK_CHANGED', packId: result.id });
-      logger.info(`Installed ${result.id}, which is disabled, so it was not started`);
-    }
-    return { id: result.id, dir: result.dir };
-  } finally {
-    if (claimedId) registry.releasePackOperation(claimedId);
+  const result = await installPackFromLocal(packRoot, packsDir, {
+    installedPacksFile,
+    hostVersion: getAppVersion(),
+    packFormat: PACK_SNAPSHOT_FORMAT,
+    beforePlace: manifest => {
+      if (manifest.id === HOST_PACK_ID) throw new Error('The host is not an installable pack');
+      registry.catalog.assertPackSettings(manifest);
+      const claim = registry.claimPackOperation(manifest.id);
+      if (!claim) throw new Error(`Operation already in progress for ${manifest.id}`);
+      claims.use(claim);
+    },
+    accept: candidate => {
+      if (recordUserInstall(installedPacksFile, candidate.id)) start = acceptInstalledPack(registry, candidate.id, backendActor);
+    },
+  });
+  if (start) {
+    if (!start()) throw new Error(`Installed ${result.id}, but ${registry.loadProblem(result.id) ?? 'it failed to start'}`);
+  } else {
+    registry.refreshCatalog(packsDir);
+    backendActor.send({ type: 'PACK_CHANGED', packId: result.id });
+    logger.info(`Installed ${result.id}, which is disabled, so it was not started`);
   }
+  return { id: result.id, dir: result.dir };
 }

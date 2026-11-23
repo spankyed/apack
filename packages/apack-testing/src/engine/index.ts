@@ -165,7 +165,14 @@ export async function _claimDrive(api: Pick<ApiClient, 'claim'>, windowMs = CLAI
 
 export async function attachedSession(options: AttachedSessionOptions): Promise<AttachedSession> {
   const { attachToApp } = await import('./cdp-page.ts');
+  await using unwind = new AsyncDisposableStack();
+  const safeClose = (close: () => Promise<void> | void) => async () => {
+    try { await close(); }
+    catch { /* the handle is gone, which is what closing wanted; keep the primary failure */ }
+  };
+
   const { page, detach } = await attachToApp({ debugPort: options.debugPort });
+  unwind.defer(safeClose(detach));
   await waitForAppReady(page);
 
   const errors: string[] = [];
@@ -176,9 +183,9 @@ export async function attachedSession(options: AttachedSessionOptions): Promise<
 
   const sessionPage = asSessionPage(page, createAppDriver(page, options.screenshotDir));
 
-  // Everything opened after the attach is closed again if a later step throws — see `_closingOnFailure`
-  const api = await _closingOnFailure(detach, async () => connectApiClient(await apiAddressFromWindow(sessionPage)));
-  await _closingOnFailure(async () => { api.close(); await detach(); }, () => _claimDrive(api));
+  const api = await connectApiClient(await apiAddressFromWindow(sessionPage));
+  unwind.defer(safeClose(() => api.close()));
+  await _claimDrive(api);
 
   const session = createSession({
     page: sessionPage,
@@ -189,7 +196,8 @@ export async function attachedSession(options: AttachedSessionOptions): Promise<
   });
   // `ready` is what listens on the session's connection, where every addressed answer arrives. The serving
   // session runs it before its first verb; a one-off question gets its session from here, so it runs here too
-  await _closingOnFailure(async () => { api.close(); await detach(); }, () => session.ready());
+  await session.ready();
+  unwind.move();
 
   return {
     session,

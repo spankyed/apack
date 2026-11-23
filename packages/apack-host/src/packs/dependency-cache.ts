@@ -126,29 +126,25 @@ export function cacheDependency(root: string, id: string, source: string,
   const directory = cacheDirectory(root, id);
   const builds = path.join(directory, 'builds');
   fs.mkdirSync(builds, { recursive: true });
+  using cleanup = new DisposableStack();
   const staged = fs.mkdtempSync(path.join(builds, '.incoming-'));
+  cleanup.defer(() => fs.rmSync(staged, { recursive: true, force: true }));
   const temporaryRecord = path.join(directory, `.resolution-${crypto.randomBytes(8).toString('hex')}.json`);
-  try {
-    if (integrity) fs.cpSync(source, staged, { recursive: true, dereference: false });
-    else {
-      fs.mkdirSync(path.join(staged, PACK_LAYOUT.typesDir));
-      fs.writeFileSync(path.join(staged, PACK_LAYOUT.snapshot), bytes);
-    }
-    checkBuild(staged, resolution);
-    const lock = holdExclusiveLock({ file: path.join(directory, 'publish.lock'),
-      what: `Publishing dependency ${id}`, refuse: holder => new Error(`Dependency ${id} cache is held by ${holder}; retry resolution`) });
-    try {
-      const destination = path.join(builds, resolution.revision);
-      if (fs.existsSync(destination)) {
-        try { checkBuild(destination, resolution); }
-        catch { replaceDir(staged, destination); }
-      } else fs.renameSync(staged, destination);
-      fs.writeFileSync(temporaryRecord, JSON.stringify(resolution, null, 2) + '\n', { flag: 'wx' });
-      fs.renameSync(temporaryRecord, path.join(directory, 'resolution.json'));
-      return { directory: destination, snapshot, resolution };
-    } finally { lock.release(); }
-  } finally {
-    fs.rmSync(staged, { recursive: true, force: true });
-    fs.rmSync(temporaryRecord, { force: true });
+  cleanup.defer(() => fs.rmSync(temporaryRecord, { force: true }));
+  if (integrity) fs.cpSync(source, staged, { recursive: true, dereference: false });
+  else {
+    fs.mkdirSync(path.join(staged, PACK_LAYOUT.typesDir));
+    fs.writeFileSync(path.join(staged, PACK_LAYOUT.snapshot), bytes);
   }
+  checkBuild(staged, resolution);
+  using _lock = holdExclusiveLock({ file: path.join(directory, 'publish.lock'),
+    what: `Publishing dependency ${id}`, refuse: holder => new Error(`Dependency ${id} cache is held by ${holder}; retry resolution`) });
+  const destination = path.join(builds, resolution.revision);
+  if (fs.existsSync(destination)) {
+    try { checkBuild(destination, resolution); }
+    catch { replaceDir(staged, destination); }
+  } else fs.renameSync(staged, destination);
+  fs.writeFileSync(temporaryRecord, JSON.stringify(resolution, null, 2) + '\n', { flag: 'wx' });
+  fs.renameSync(temporaryRecord, path.join(directory, 'resolution.json'));
+  return { directory: destination, snapshot, resolution };
 }

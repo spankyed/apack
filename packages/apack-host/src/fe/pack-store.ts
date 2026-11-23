@@ -82,7 +82,7 @@ function addressed(registration: PackFERegistration): AddressedRegistration {
 }
 
 /** A staged frontend cannot change the published view until its commit. */
-export interface PreparedFrontend {
+export interface PreparedFrontend extends Disposable {
   surfaces: Surface[];
   /** Commit other prepared host resources after revision checks, before publishing the lookup view. */
   commit(beforePublish?: () => void): Surface[];
@@ -274,6 +274,7 @@ export function createFePackRegistry(): FePackRegistry {
         }); } catch (error) { dispose(); throw error; }
       },
       dispose,
+      [Symbol.dispose]: dispose,
     };
   }
   function prepareUnregisterPackFE(id: string): PreparedFrontend {
@@ -285,37 +286,36 @@ export function createFePackRegistry(): FePackRegistry {
     });
   }
   function preparePackFE(authority: FrontendAdmission, registration: PackFERegistration, settings?: FrontendSettingsBinding, replacing = false): PreparedFrontend {
+    using unwind = new DisposableStack();
     const binding = createFrontendSettingsBinding(settings);
-    try {
-      return mutate(() => {
-        const admission = captureFrontendAdmission(authority);
-        registration = captureFrontendBindings(registration, admission.declarations);
-        const problem = frontendIdentityProblem(admission, registration) ?? frontendBindingProblem(admission.declarations, registration);
-        if (problem) throw new Error(problem);
-        const { id, ...definition } = registration;
-        if (accepted.has(id) !== replacing) throw new Error(replacing
-          ? `Pack "${id}" frontend is not registered` : `Pack "${id}" frontend is already registered`);
-        const candidate = capture({ ...definition, id }, admission);
-        const next = new Map(accepted);
-        next.set(id, candidate);
-        const projected = buildTables(next.values());
-        binding.bind(candidate.bindSettings);
-        return prepareChange(id, next, projected, binding, candidate.addressed.map(({ surface }) => surface));
-      });
-    } catch (error) {
-      if (changing) retire(binding); else mutate(() => retire(binding));
-      throw error;
-    }
+    unwind.defer(() => { if (changing) retire(binding); else mutate(() => retire(binding)); });
+    const prepared = mutate(() => {
+      const admission = captureFrontendAdmission(authority);
+      registration = captureFrontendBindings(registration, admission.declarations);
+      const problem = frontendIdentityProblem(admission, registration) ?? frontendBindingProblem(admission.declarations, registration);
+      if (problem) throw new Error(problem);
+      const { id, ...definition } = registration;
+      if (accepted.has(id) !== replacing) throw new Error(replacing
+        ? `Pack "${id}" frontend is not registered` : `Pack "${id}" frontend is already registered`);
+      const candidate = capture({ ...definition, id }, admission);
+      const next = new Map(accepted);
+      next.set(id, candidate);
+      const projected = buildTables(next.values());
+      binding.bind(candidate.bindSettings);
+      return prepareChange(id, next, projected, binding, candidate.addressed.map(({ surface }) => surface));
+    });
+    unwind.move();
+    return prepared;
   }
   const accept = (admission: FrontendAdmission, registration: PackFERegistration, settings: FrontendSettingsBinding | undefined, replacing: boolean) => {
-    const prepared = preparePackFE(admission, registration, settings, replacing);
-    try { return prepared.commit(); } finally { prepared.dispose(); }
+    using prepared = preparePackFE(admission, registration, settings, replacing);
+    return prepared.commit();
   };
   function unregisterPackFE(id: string): Surface[] {
     const previous = accepted.get(id);
     if (!previous) return [];
-    const prepared = prepareUnregisterPackFE(id);
-    try { prepared.commit(); } finally { prepared.dispose(); }
+    using prepared = prepareUnregisterPackFE(id);
+    prepared.commit();
     return previous.addressed.map(({ surface }) => surface);
   }
 

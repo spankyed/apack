@@ -75,9 +75,9 @@ async function handleDevRequest(url: string, req: http.IncomingMessage, res: htt
     if (url === '/dev/reload') {
       const { packId } = body;
       if (!packId || typeof packId !== 'string') return answer(res, 400, { error: 'packId required' });
-      if (!appPacks.claimPackOperation(packId)) return answer(res, 409, { error: 'another operation on this pack is in progress' });
-      try { await reloadPackById(appPacks, packId, backendActor); }
-      finally { appPacks.releasePackOperation(packId); }
+      using claim = appPacks.claimPackOperation(packId);
+      if (!claim) return answer(res, 409, { error: 'another operation on this pack is in progress' });
+      await reloadPackById(appPacks, packId, backendActor);
       return answer(res, 200, { ok: true });
     }
     const { root } = body;

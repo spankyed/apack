@@ -12,7 +12,7 @@ import { openRunHistory, type RunsDatabase } from '../../src/database/open.ts';
 import { createRunHistory, RUN_HISTORY_RETENTION_MS } from '../../src/services/run-history.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'run-history-'));
-const open: RunsDatabase[] = [];
+const open: Array<Pick<RunsDatabase, 'database'>> = [];
 afterEach(() => { for (const runs of open.splice(0)) runs.database.close(); });
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 

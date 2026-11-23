@@ -121,68 +121,70 @@ export function createPackFrontends(io: PackFrontendIO, packs: FePackRegistry): 
         prepared?.dispose();
         style?.dispose();
       };
+      using listener = new DisposableStack();
       signal?.addEventListener('abort', cancel, { once: true });
-      try {
-        checkCurrent();
-        if (pack.manifest) {
-          if (_settingsJsonProblems(pack.manifest).length) throw new Error(`Pack "${pack.id}" declarations must contain JSON data properties`);
-          pack.manifest = structuredClone(pack.manifest);
+      listener.defer(() => signal?.removeEventListener('abort', cancel));
+      using unwind = new DisposableStack();
+      unwind.defer(cancel);
+      checkCurrent();
+      if (pack.manifest) {
+        if (_settingsJsonProblems(pack.manifest).length) throw new Error(`Pack "${pack.id}" declarations must contain JSON data properties`);
+        pack.manifest = structuredClone(pack.manifest);
+      }
+      // Served from source, the pack's styles come through its own module graph with the rest of it
+      const source = io.devFrontends?.[pack.id];
+      const fromSource = !!source || !!pack.developmentBaseUrl;
+      if (!fromSource && (pack.feEntry || pack.feStyles) && !/^[a-f0-9]{64}$/.test(pack.buildRevision ?? '')) {
+        throw new Error(`Pack "${pack.id}" frontend has no accepted build identity`);
+      }
+      const packBaseUrl = pack.developmentBaseUrl ?? `pack://${pack.id}/builds/${pack.buildRevision}`;
+      const loadStyles = async () => {
+        if (pack.feStyles && !fromSource) {
+          style = io.styles.prepare(pack.id, packFileUrl(packBaseUrl, pack.feStyles));
+          await style.ready;
         }
-        // Served from source, the pack's styles come through its own module graph with the rest of it
-        const source = io.devFrontends?.[pack.id];
-        const fromSource = !!source || !!pack.developmentBaseUrl;
-        if (!fromSource && (pack.feEntry || pack.feStyles) && !/^[a-f0-9]{64}$/.test(pack.buildRevision ?? '')) {
-          throw new Error(`Pack "${pack.id}" frontend has no accepted build identity`);
-        }
-        const packBaseUrl = pack.developmentBaseUrl ?? `pack://${pack.id}/builds/${pack.buildRevision}`;
-        const loadStyles = async () => {
-          if (pack.feStyles && !fromSource) {
-            style = io.styles.prepare(pack.id, packFileUrl(packBaseUrl, pack.feStyles));
-            await style.ready;
-          }
-        };
-        const commitStyles = () => {
-          style?.commit();
-          const previous = acceptedStyles.get(pack.id);
-          if (style) acceptedStyles.set(pack.id, style);
-          else acceptedStyles.delete(pack.id);
-          previous?.dispose();
-        };
-        // A pack served from source has a frontend whatever its built manifest says, since the map holds only
-        // packs whose codegen wrote one
-        if (!pack.feEntry && !source) {
-          await loadStyles();
-          checkCurrent();
-          if (packs.hasPackFE(pack.id)) {
-            prepared = packs.prepareUnregisterPackFE(pack.id);
-            prepared.commit(() => { checkCurrent(); commitStyles(); });
-          } else commitStyles();
-          return null;
-        }
-
-        if (!pack.manifest || pack.manifest.id !== pack.id) throw new Error(`Pack "${pack.id}" frontend has no matching accepted declarations`);
-        const entry = await loadPackFEEntry(io, pack.feEntry ?? '', packBaseUrl, source);
-        checkCurrent();
-        if (!entry) throw new Error(`Pack "${pack.id}" has no frontend registration`);
-        const registration = captureFrontendBindings(entry, pack.manifest);
-        const problem = _packDeclarationProblem(pack, registration) ?? frontendBindingProblem(pack.manifest, registration);
-        if (problem) throw new Error(problem);
-        if (registration.bindSettings && !io.settingsForPack) throw new Error(`Pack "${pack.id}" frontend requires host-bound settings access`);
+      };
+      const commitStyles = () => {
+        style?.commit();
+        const previous = acceptedStyles.get(pack.id);
+        if (style) acceptedStyles.set(pack.id, style);
+        else acceptedStyles.delete(pack.id);
+        previous?.dispose();
+      };
+      // A pack served from source has a frontend whatever its built manifest says, since the map holds only
+      // packs whose codegen wrote one
+      if (!pack.feEntry && !source) {
         await loadStyles();
         checkCurrent();
-        const settings = registration.bindSettings ? await io.settingsForPack!(pack) : undefined;
-        try { checkCurrent(); }
-        catch (error) { settings?.dispose(); throw error; }
-        // The prepared registry owns provisional authority; publication and CSS share one host commit.
-        prepared = packs.preparePackFE({ kind: 'loaded', pack }, registration, settings, packs.hasPackFE(pack.id));
-        checkCurrent();
-        return prepared.commit(() => { checkCurrent(); commitStyles(); });
-      } catch (error) {
-        cancel();
-        throw error;
-      } finally {
-        signal?.removeEventListener('abort', cancel);
+        if (packs.hasPackFE(pack.id)) {
+          prepared = packs.prepareUnregisterPackFE(pack.id);
+          prepared.commit(() => { checkCurrent(); commitStyles(); });
+        } else commitStyles();
+        unwind.move();
+        return null;
       }
+
+      if (!pack.manifest || pack.manifest.id !== pack.id) throw new Error(`Pack "${pack.id}" frontend has no matching accepted declarations`);
+      const entry = await loadPackFEEntry(io, pack.feEntry ?? '', packBaseUrl, source);
+      checkCurrent();
+      if (!entry) throw new Error(`Pack "${pack.id}" has no frontend registration`);
+      const registration = captureFrontendBindings(entry, pack.manifest);
+      const problem = _packDeclarationProblem(pack, registration) ?? frontendBindingProblem(pack.manifest, registration);
+      if (problem) throw new Error(problem);
+      if (registration.bindSettings && !io.settingsForPack) throw new Error(`Pack "${pack.id}" frontend requires host-bound settings access`);
+      await loadStyles();
+      checkCurrent();
+      using pendingSettings = new DisposableStack();
+      const settings = registration.bindSettings ? await io.settingsForPack!(pack) : undefined;
+      if (settings) pendingSettings.defer(() => settings.dispose());
+      checkCurrent();
+      // The prepared registry owns provisional authority; publication and CSS share one host commit.
+      prepared = packs.preparePackFE({ kind: 'loaded', pack }, registration, settings, packs.hasPackFE(pack.id));
+      pendingSettings.move();
+      checkCurrent();
+      const surfaces = prepared.commit(() => { checkCurrent(); commitStyles(); });
+      unwind.move();
+      return surfaces;
     },
 
     unload(packId: string): void {

@@ -68,22 +68,18 @@ export async function build(args: string[], root = findPackRoot(process.cwd())) 
   // One build of this pack at a time: two share the staging directory above and each clears it first, so the
   // second would wipe the first's half-written tree and both would rename something over `dist`. A build
   // already running is waited for rather than refused — see `build/build-lock.ts`
-  const lock = await holdPackBuildLock(root, {
+  using _lock = await holdPackBuildLock(root, {
     packId: readValidManifest(root).id,
     what: ['apack pack build', ...args].join(' '),
     onWait: (holder) => console.log(`Waiting for ${holder} to finish...`),
   });
-  try {
-    publishPackBuild(root, await preparePackBuild(args, root));
-  } catch (err) {
-    // Whatever failed and wherever, the pack is left with the build it had. Out here rather than beside each
-    // `throw` because a phase that fails before the gates are even reached — an invalid manifest, a feature's
-    // missing settings file — is the half that would be forgotten
-    fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 });
-    throw err;
-  } finally {
-    lock.release();
-  }
+  using stagedGuard = new DisposableStack();
+  // Whatever failed and wherever, the pack is left with the build it had. Out here rather than beside each
+  // `throw` because a phase that fails before the gates are even reached — an invalid manifest, a feature's
+  // missing settings file — is the half that would be forgotten
+  stagedGuard.defer(() => fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 }));
+  publishPackBuild(root, await preparePackBuild(args, root));
+  stagedGuard.move();
 }
 
 /** Prepare only; the worker's parent owns the lock and publication through process termination. */

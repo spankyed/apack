@@ -65,11 +65,9 @@ function takeLock(file: string, mine: LockFile): boolean {
     if ((err as NodeJS.ErrnoException).code === 'EEXIST') return false;
     throw err;
   }
-  try {
-    fs.writeFileSync(fd, JSON.stringify(mine));
-  } finally {
-    fs.closeSync(fd);
-  }
+  using cleanup = new DisposableStack();
+  cleanup.defer(() => fs.closeSync(fd));
+  fs.writeFileSync(fd, JSON.stringify(mine));
   return true;
 }
 
@@ -89,8 +87,8 @@ export function findLockHolder(file: string): string | null {
   return lockIsHeld(held.pid) ? `${held.what} (pid ${held.pid})` : null;
 }
 
-/** A lock held; `release()` is safe to call more than once */
-export interface ExclusiveLock {
+/** A lock held; `release()` and `[Symbol.dispose]()` are safe to call more than once */
+export interface ExclusiveLock extends Disposable {
   release(): void;
 }
 
@@ -128,34 +126,27 @@ export function holdExclusiveLock(options: {
     release();
     process.kill(process.pid, signal);
   }
+  using unwind = new DisposableStack();
+  unwind.defer(release);
   // Before the lock exists, not after: a process descheduled between writing the file and getting here would be
   // killed by the default disposition and leave the lock behind — the very thing these handlers are for.
   process.once('exit', release);
   for (const signal of INTERRUPTS) process.once(signal, onInterrupt);
 
-  const fail = (holder: string): never => {
-    release();
-    throw refuse(holder);
-  };
-
-  try {
+  acquired = takeLock(file, mine);
+  if (!acquired) {
+    const leftover = readLock(file);
+    const holder = findLockHolder(file);
+    if (holder) throw refuse(holder);
+    // A lock a killed process left behind. Removing it and creating ours are two steps, so a racer that also
+    // judged it stale can take it between them — narrow, and the one window `wx` cannot close, because a file's
+    // existence carries no liveness. Re-read first, so this removes the leftover it judged.
+    if (sameWriter(readLock(file), leftover)) fs.rmSync(file, { force: true });
     acquired = takeLock(file, mine);
-    if (!acquired) {
-      const leftover = readLock(file);
-      const holder = findLockHolder(file);
-      if (holder) fail(holder);
-      // A lock a killed process left behind. Removing it and creating ours are two steps, so a racer that also
-      // judged it stale can take it between them — narrow, and the one window `wx` cannot close, because a file's
-      // existence carries no liveness. Re-read first, so this removes the leftover it judged.
-      if (sameWriter(readLock(file), leftover)) fs.rmSync(file, { force: true });
-      acquired = takeLock(file, mine);
-      if (!acquired) fail(findLockHolder(file) ?? 'another tool that took it first');
-    }
-  } catch (err) {
-    if (!released) release();
-    throw err;
+    if (!acquired) throw refuse(findLockHolder(file) ?? 'another tool that took it first');
   }
-  return { release };
+  unwind.move();
+  return { release, [Symbol.dispose]: release };
 }
 
 /** How often a waiter tries again. The take is the test, so this is only how long a loser sleeps */
