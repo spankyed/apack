@@ -21,7 +21,8 @@
 </template>
 <script setup lang="ts">
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
-import type { ClaudeNativeAgentInputReview } from '#features/code/common/native-terminal.ts'
+import type { ClaudeAgentComposerSubmitResult } from './native-submit.ts'
+import { trackNativeSubmittedDraft } from './native-submitted-draft.ts'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Settings2 } from 'lucide-vue-next'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
@@ -37,7 +38,7 @@ import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { holdEditorCommandSuggestions } from '@apackdev/sdk/fe'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
-const props = defineProps<{ audience?: 'background'; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void>; openSettings?: () => Promise<void> }>()
+const props = defineProps<{ audience?: 'background'; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeAgentComposerSubmitResult>; openSettings?: () => Promise<void> }>()
 const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const toolsExpanded = ref(false)
 const composerRef = ref<HTMLElement | null>(null)
@@ -179,22 +180,37 @@ async function submit() {
   if (props.disabled || submitting.value || agentDraftTooLong.value || !bridge) return
   const editor = editorRef.value?.editor, active = bridge
   if (!editor) return
+  const { mountId, attachmentId } = props
+  const current = () => alive && bridge === active && !editor.isDestroyed && editorRef.value?.editor === editor
+    && props.mountId === mountId && props.attachmentId === attachmentId
+  let submittedDraft: ReturnType<typeof trackNativeSubmittedDraft> | undefined
   submitting.value = true; emit('pending', true); problem.value = undefined
   try {
-    if (!await active.settle() || bridge !== active || props.disabled || !alive) throw Error(props.audience === 'background' ? 'Background input changed. Send again.' : 'Agent input changed. Send again.')
+    if (!await active.settle() || !current() || props.disabled) throw Error(props.audience === 'background' ? 'Background input changed. Send again.' : 'Agent input changed. Send again.')
     const text = active.readDraft()?.text ?? ''
     if (!text.trim()) return
     const doc = editor.state.doc
-    const review = await props.send(text)
-    if (review && 'commandPending' in review) return
-    if (review) {
-      const applied = alive && !editor.isDestroyed && editor.state.doc === doc && bridge === active && active.fillDraft({ mode: 'replace', text: review.text }, active.revision)
-      if (alive) problem.value = applied ? `Removed ${review.removed} invisible character${review.removed === 1 ? '' : 's'}. Review the message before sending.` : 'The earlier message contained invisible characters. Your newer draft was kept; review it before sending.'
+    if (!props.audience) submittedDraft = trackNativeSubmittedDraft(editor, doc)
+    const result = await props.send(text)
+    if (!current() || result && 'commandPending' in result) return
+    if (result && 'text' in result) {
+      const applied = editor.state.doc === doc && active.fillDraft({ mode: 'replace', text: result.text }, active.revision)
+      problem.value = applied ? `Removed ${result.removed} invisible character${result.removed === 1 ? '' : 's'}. Review the message before sending.` : 'The earlier message contained invisible characters. Your newer draft was kept; review it before sending.'
       return
     }
-    if (alive && !editor.isDestroyed && editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run(); emit('draft', '') }
-  } catch (error) { if (alive) problem.value = error instanceof Error ? error.message : (props.audience === 'background' ? 'Background message could not be sent' : 'Agent message could not be sent') }
-  finally { submitting.value = false; emit('pending', false) }
+    if (editor.state.doc === doc) {
+      editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
+      emit('draft', '')
+    } else if (result && 'accepted' in result) {
+      submittedDraft?.removeAcceptedPrefix()
+    }
+  } catch (error) {
+    if (current()) problem.value = error instanceof Error ? error.message : (props.audience === 'background' ? 'Background message could not be sent' : 'Agent message could not be sent')
+  } finally {
+    submittedDraft?.dispose()
+    submitting.value = false
+    emit('pending', false)
+  }
 }
 defineExpose({ focus: () => editorRef.value?.editor?.commands.focus() })
 onBeforeUnmount(() => {

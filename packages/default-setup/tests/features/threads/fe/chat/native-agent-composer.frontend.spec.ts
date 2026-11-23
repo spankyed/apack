@@ -2,6 +2,7 @@ import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import NativeAgentComposer from '#features/threads/fe/chat/NativeAgentComposer.vue'
 import type { ClaudePromptReply, ClaudePromptEdit } from '#generated/types.ts'
+import type { ClaudeAgentComposerSubmitResult } from '#features/threads/fe/chat/native-submit.ts'
 import type { ClaudeNativeAgentInputReview } from '#features/code/common/native-terminal.ts'
 import type { Editor } from '@tiptap/core'
 import type { ClaudeAgentDraftSnapshot } from '#features/threads/fe/chat/native-agent-draft.ts'
@@ -24,7 +25,7 @@ let resizeCallbacks: (() => void)[] = []
 const disconnectResize = vi.fn()
 beforeEach(() => { resizeCallbacks = []; disconnectResize.mockClear(); vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeCallbacks.push(callback) } observe() {} disconnect() { disconnectResize() } }); resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
-async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>, audience?: 'background') {
+async function mount(send: (text: string) => Promise<ClaudeAgentComposerSubmitResult> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>, audience?: 'background') {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const state = reactive({ statusText: 'Ready' as string | undefined, draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
   const edit = vi.fn((value: ClaudePromptEdit) => { state.promptRevision = value.revision; state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } })
@@ -62,6 +63,36 @@ it('preserves newer typing when native admission returns a cleaned older draft',
   finish({ text: 'Older clean message', removed: 1 })
   await vi.waitFor(() => expect(f.root.textContent).toContain('Your newer draft was kept'))
   expect(editor.state.doc.textContent).toContain('newer text'); expect(send).toHaveBeenCalledOnce()
+})
+
+it('keeps only the formatted next draft when the selected Agent acknowledges Send', async () => {
+  const { promise, resolve } = Promise.withResolvers<{ accepted: true }>()
+  const send = vi.fn(() => promise)
+  const f = await mount(send, true)
+  f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await vi.waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith('Unsent Agent draft'))
+
+  editor.commands.insertContentAt(editor.state.doc.content.size - 1, '<strong>Next Agent message</strong>')
+  resolve({ accepted: true })
+  await nextTick()
+  expect(editor.getHTML()).toBe('<p><strong>Next Agent message</strong></p>')
+  expect(f.state.draft).toBe('**Next Agent message**')
+  expect(editor.state.selection.$head.parentOffset).toBe('Next Agent message'.length)
+})
+
+it('ignores an acknowledgement after the attachment changes', async () => {
+  const { promise, resolve } = Promise.withResolvers<void>()
+  const send = vi.fn(() => promise)
+  const f = await mount(send, true)
+  f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+
+  f.state.attachmentId = 'native-two'
+  await nextTick()
+  resolve()
+  await nextTick()
+  expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
+  expect(f.state.draft).toBe('Unsent Agent draft')
 })
 
 it('retains the exact draft when native submission opens a command confirmation', async () => {

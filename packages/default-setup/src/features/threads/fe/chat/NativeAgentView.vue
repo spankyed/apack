@@ -82,6 +82,7 @@ import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-a
 import NativeAgentHandback from '#extensions/blocks/display/NativeAgentHandback.vue'
 import NativeAgentDetails from '#extensions/blocks/display/NativeAgentDetails.vue'
 import NativeAgentComposer from './NativeAgentComposer.vue'
+import type { ClaudeAgentComposerSubmitResult } from './native-submit.ts'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import NativeCommandPanel from './NativeCommandPanel.vue'
 import NativeSettingsPanel from './NativeSettingsPanel.vue'
@@ -91,7 +92,7 @@ import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import type { ThreadsState } from '../state.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
-import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
+import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
 const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; active: boolean; approvalPending?: boolean; panelDecisionPending?: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
 const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; 'draft-snapshot': [target: ClaudeNativeAgentUiTarget, snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; returning: [value: boolean]; returned: []; scrollPosition: [target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition] }>()
@@ -188,7 +189,7 @@ let commandFocusOwned = false
 let commandDraft: { revision: number; text: string } | undefined
 const pending = ref(false), returning = ref(false), stopping = ref(false), problem = ref<string>()
 let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0, stopRevision = 0
-let submission: { revision: number; text: string; preserveDraft: boolean; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview | { commandPending: true }): void; reject(error: Error): void } | undefined
+let submission: { revision: number; text: string; preserveDraft: boolean; scrollIntent: number; resolve(result?: ClaudeAgentComposerSubmitResult): void; reject(error: Error): void } | undefined
 const nativeActionKey = createClaudeActionKeyHandler(() => ({
   scope: props.active && uiMount.value && snapshot.value?.attachmentId ? `${uiMount.value}:${snapshot.value.attachmentId}` : undefined,
   keys: state.value?.actionKeys, result: snapshot.value?.actionKeyResult,
@@ -209,7 +210,7 @@ function detach() {
 }
 watch(() => props.active, active => { detach(); if (active) { uiMount.value = crypto.randomUUID(); renew(); heartbeat = setInterval(renew, 10000) } }, { immediate: true })
 function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value || stopping.value || commandActive.value) }
-function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> {
+function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<ClaudeAgentComposerSubmitResult> {
   if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
   if (!uiMount.value || props.approvalPending || props.panelDecisionPending || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim()) return Promise.reject(Error('Agent input is unavailable. Your draft was kept.'))
   problem.value = undefined
@@ -235,7 +236,7 @@ watch(() => state.value?.agentInput, value => {
   }
   if (!submission || value?.revision !== submission.revision || value.status === 'pending') return
   const request = submission; submission = undefined
-  if (value.status === 'done' && value.receipt) { if (!request.preserveDraft && props.draft === request.text) emit('draft', props.target, ''); transcriptScroll.latest(request.scrollIntent); request.resolve() }
+  if (value.status === 'done' && value.receipt) { transcriptScroll.latest(request.scrollIntent); request.resolve({ accepted: true }) }
   else if (value.status === 'panel' && value.panel) { if (!request.preserveDraft && props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
   else if (value.status === 'command_output' && value.output) { if (!request.preserveDraft && props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
   else if (value.status === 'confirmation' && value.command) { if (!request.preserveDraft) commandDraft = { revision: request.revision, text: request.text }; request.resolve({ commandPending: true }); void nextTick(() => cancelCommand.value?.focus({ preventScroll: true })) }
