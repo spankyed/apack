@@ -101,12 +101,17 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
  const notices=()=>{const state=context.getAppState();return [state.notifications?.current,...(state.notifications?.queue??[])].filter(Boolean);};
  const priorNotices=new Set(notices());
  const parentBefore=new Set((binding.messages?.()??[]).map(row=>row.uuid));
- const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await composer.write(original.text,'replace');}catch{} };
+ // Preparing and restoring the hidden terminal draft are composer operations. The desktop fill already reported its change.
+ const writeDraft=value=>{
+  const write=()=>composer.write(value,'replace');
+  return composer.attribute?composer.attribute({kind:'composer'},write):write();
+ };
+ const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await writeDraft(original.text);}catch{} };
  if(parentTicket&&command.type==='local')observeNativeParentCommand(command);
  const operation={native:n,parentTicket,commandDefinition:command,clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
  try{
-  await composer.write(text,'replace');current();
+  await writeDraft(text);current();
   if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
   current();await ownerPost('/view-enter',{pid:process.pid,kind:facts.view.kind,taskId:facts.view.taskId,revision:facts.sequence});
   const deadline=Date.now()+4000;

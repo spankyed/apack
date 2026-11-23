@@ -1,6 +1,7 @@
 import { claudeTerminalParentCommandRuntime } from '#features/code/be/services/claude-code/terminal-parent-command-runtime.ts'
 import { randomUUID } from 'node:crypto'
 import { claudeTerminalAgentInputRuntime } from '#features/code/be/services/claude-code/terminal-agent-input-runtime.ts'
+import { CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/be/services/claude-code/ui-text-limits.ts'
 
 function fixture(main = false) {
   let draft = '', sequence = 1, sessionId = 'session', panelShown = false, finish!: () => void
@@ -10,7 +11,11 @@ function fixture(main = false) {
   const dismissPanel = vi.fn((_id: string) => finish()), stdin = { unshift: vi.fn(), emit: vi.fn() }
   const task = { id: 'registry', type: 'local_agent', status: 'completed' }
   const context = { dialogStore: { dismiss: dismissPanel, getState: () => ({ open: panelShown ? [{ id: 'native-dialog', kind: 'local_jsx', payload: { nodeId: 'native-node' } }] : [] }) }, localJsx, getAppState: () => ({ notifications: notices }), taskRegistry: { all: () => ({ registry: task }), getTranscript: () => ({ messages: rows }) } }
-  const composer = { read: vi.fn(async () => ({ text: draft })), write: vi.fn(async (text: string) => { draft = text }) }
+  const composer = {
+    read: vi.fn(async () => ({ text: draft })),
+    write: vi.fn(async (text: string, _mode: 'replace') => { draft = text }),
+    attribute: vi.fn((_origin: { kind: string }, write: () => Promise<void>) => write()),
+  }
   const module = { call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ type: 'text', value: '' })) }, commands = new Map<string, { name: string; type: string; load(): Promise<typeof module> }>()
   const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: name === 'context' ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
   const binding = { messages: () => parentRows, commands: () => [...commands.values()], composer, toolContext: () => context, savedAgentMessages: async () => [] }
@@ -24,8 +29,8 @@ function fixture(main = false) {
     else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
     return { entered: true }
   })
-  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', claudeTerminalAgentInputRuntime + claudeTerminalParentCommandRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parentOperation:nativeParentCommand };')
-  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId, sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }) as {
+  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', 'nativeUiTextMaxLength', claudeTerminalAgentInputRuntime + claudeTerminalParentCommandRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parentOperation:nativeParentCommand };')
+  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId, sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }, CLAUDE_UI_TEXT_MAX_LENGTH) as {
     dispatch(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<{ kind: string; id: string; messageId: string; message: string }>
     parentOperation(n: unknown, request: { client_id: string; operation: string; text?: string; command_id?: string }): Promise<{ kind: string; id: string; result?: Record<string, unknown> }>
     answer(n: unknown, request: { client_id: string; command_id: string; decision: string }): Promise<unknown>
@@ -39,6 +44,8 @@ it('correlates the original human UUID and leaves native blocking policy in the 
   expect(await f.controller.dispatch(f.native, { client_id: 'client', text: 'Human input' }, new AbortController())).toMatchObject({ kind: 'input', messageId: f.messageId })
   expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/model haiku' }, new AbortController())).toMatchObject({ kind: 'blocked', message: 'Original block notice' })
   expect(f.draft()).toBe('')
+  expect(f.composer.write.mock.calls).toEqual([['Human input', 'replace'], ['/model haiku', 'replace'], ['', 'replace']])
+  expect(f.composer.attribute.mock.calls).toEqual(Array.from({ length: 3 }, () => [{ kind: 'composer' }, expect.any(Function)]))
 })
 it('keeps confirmation alive after the initial HTTP request completes and refuses replay/foreign clients', async () => {
   const f = fixture(), abort = new AbortController()
