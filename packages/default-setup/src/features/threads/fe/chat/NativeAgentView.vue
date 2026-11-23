@@ -1,19 +1,19 @@
 <template>
   <section ref="selectionRoot" v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape" @keydown.capture="nativeActionKey($event, selectionRoot)" @focusout="nativeActionKey.leave($event, selectionRoot)">
-    <header v-show="!panelActive || questionPending" class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
+    <header v-show="!panelActive || panelDecisionPending" class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
       <div class="min-w-0"><p class="native-agent-eyebrow mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
       <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner || selectedTask?.status !== 'running'" @click="stopAgent">{{ stopping ? 'Stopping…' : 'Stop Agent' }}</button>
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
-    <details v-show="!panelActive && !questionPending" v-if="state?.agent?.metadata" class="native-agent-details mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
-    <p v-show="!questionPending" v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
-    <NativeIdePanel v-show="!questionPending" v-if="panelActive && state?.agentInput?.panel?.commandName === 'ide'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
-    <NativeHelpPanel v-show="!questionPending" v-else-if="panelActive && state?.agentInput?.panel?.commandName === 'help'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
-    <NativeSettingsPanel v-show="!questionPending" v-else-if="panelActive && state?.agentInput?.panel && ['config','model','status','usage','theme'].includes(state.agentInput.panel.commandName)" :key="state.agentInput.panel.id" :subject="state.agentInput.panel.commandName === 'model' ? 'model' : state.agentInput.panel.commandName === 'theme' ? 'theme' : 'settings'" :owner-label="`Agent · ${name}`" :state="state.agentInput.settings" @operate="settings" @close="panelInput()" />
-    <NativeCommandPanel v-show="!questionPending" v-else-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :terminal-session="terminal?.state?.terminalSession" :input-blocked="terminal?.state?.inputBlocked" @input="panelInput" @close="panelInput()" @resize="panelResize" />
-    <div v-show="!panelActive && !outputActive && !questionPending" class="native-agent-messages flex min-h-[6.5rem] flex-1">
+    <details v-show="!panelActive && !panelDecisionPending" v-if="state?.agent?.metadata" class="native-agent-details mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
+    <p v-show="!panelDecisionPending" v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
+    <NativeIdePanel v-show="!panelDecisionPending" v-if="panelActive && state?.agentInput?.panel?.commandName === 'ide'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
+    <NativeHelpPanel v-show="!panelDecisionPending" v-else-if="panelActive && state?.agentInput?.panel?.commandName === 'help'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
+    <NativeSettingsPanel v-show="!panelDecisionPending" v-else-if="panelActive && state?.agentInput?.panel && ['config','model','status','usage','theme'].includes(state.agentInput.panel.commandName)" :key="state.agentInput.panel.id" :subject="state.agentInput.panel.commandName === 'model' ? 'model' : state.agentInput.panel.commandName === 'theme' ? 'theme' : 'settings'" :owner-label="`Agent · ${name}`" :state="state.agentInput.settings" @operate="settings" @close="panelInput()" />
+    <NativeCommandPanel v-show="!panelDecisionPending" v-else-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :terminal-session="terminal?.state?.terminalSession" :input-blocked="terminal?.state?.inputBlocked" @input="panelInput" @close="panelInput()" @resize="panelResize" />
+    <div v-show="!panelActive && !outputActive && !panelDecisionPending" class="native-agent-messages flex min-h-[6.5rem] flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full min-w-0 flex-1 overflow-y-auto overscroll-contain py-3 pl-4 pr-1" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
@@ -41,7 +41,7 @@
       <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="jumpToLatest" />
     </div>
     </div>
-    <section v-show="!questionPending" v-if="outputActive && state?.agentInput?.output" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
+    <section v-show="!panelDecisionPending" v-if="outputActive && state?.agentInput?.output" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
       <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
         <span class="text-xs text-neutral-400">/{{ state.agentInput.output.commandName }}</span>
         <button type="button" class="shrink-0 rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200" @click="dismissOutput">Back to messages</button>
@@ -50,17 +50,17 @@
         <pre :class="state.agentInput.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.agentInput.output.text }}</pre>
       </div>
     </section>
-    <p v-show="!questionPending" v-if="state?.agentInput?.status === 'blocked'" role="status" class="mx-4 mb-2 text-xs text-amber-200">{{ state.agentInput.problem }}</p>
-    <section v-show="!questionPending" v-if="commandActive && state?.agentInput?.command" ref="commandPanel" aria-label="Native command confirmation" class="mx-4 mb-3 shrink-0 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3">
+    <p v-show="!panelDecisionPending" v-if="state?.agentInput?.status === 'blocked'" role="status" class="mx-4 mb-2 text-xs text-amber-200">{{ state.agentInput.problem }}</p>
+    <section v-show="!panelDecisionPending" v-if="commandActive && state?.agentInput?.command" ref="commandPanel" aria-label="Native command confirmation" class="mx-4 mb-3 shrink-0 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3">
       <p class="text-sm text-neutral-200 [overflow-wrap:anywhere]">{{ state.agentInput.command.title }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button ref="cancelCommand" type="button" :disabled="commandSending" class="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="decideCommand('cancel')">Cancel</button>
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
-    <NativeAgentComposer v-show="!panelActive && !approvalPending && !questionPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || questionPending || !selectedOwner || returning || stopping || panelActive || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
+    <NativeAgentComposer v-show="!panelActive && !approvalPending && !panelDecisionPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || panelDecisionPending || !selectedOwner || returning || stopping || panelActive || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
-    <slot name="question" />
+    <slot name="decision" />
   </section>
 </template>
 <script setup lang="ts">
@@ -87,7 +87,7 @@ import type { ThreadsState } from '../state.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
-const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; active: boolean; approvalPending?: boolean; questionPending?: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
+const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; active: boolean; approvalPending?: boolean; panelDecisionPending?: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
 const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; 'draft-snapshot': [target: ClaudeNativeAgentUiTarget, snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; returning: [value: boolean]; returned: []; scrollPosition: [target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition] }>()
 const transcriptViewport = ref<HTMLElement>(), transcriptContent = ref<HTMLElement>()
 const scrollTarget = props.target
@@ -156,7 +156,7 @@ watch(() => props.active, active => { detach(); if (active) { uiMount.value = cr
 function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value || stopping.value || commandActive.value) }
 function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> {
   if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
-  if (!uiMount.value || props.approvalPending || props.questionPending || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim()) return Promise.reject(Error('Agent input is unavailable. Your draft was kept.'))
+  if (!uiMount.value || props.approvalPending || props.panelDecisionPending || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim()) return Promise.reject(Error('Agent input is unavailable. Your draft was kept.'))
   problem.value = undefined
   const request = ++revision
   return new Promise((resolve, reject) => { submission = { revision: request, text, preserveDraft: options.preserveDraft === true, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; sendToThreads({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
@@ -233,7 +233,7 @@ function panelResize(size: import('#features/code/common/native-terminal.ts').Cl
   if (panelActive.value && ownerId) sendToThreads({ type: 'CLAUDE_TERMINAL_RESIZE', ...terminalIdentity(), ownerId, ...size })
 }
 watch(commandActive, value => emit('pending', value || pending.value || returning.value || stopping.value))
-function escape(event: KeyboardEvent) { if (!props.questionPending && !event.isComposing && !event.defaultPrevented && !pending.value) { event.preventDefault(); event.stopPropagation(); if (commandActive.value) decideCommand('cancel'); else returnToParent() } }
+function escape(event: KeyboardEvent) { if (!props.panelDecisionPending && !event.isComposing && !event.defaultPrevented && !pending.value) { event.preventDefault(); event.stopPropagation(); if (commandActive.value) decideCommand('cancel'); else returnToParent() } }
 function press(actionId: string, href?: string) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? { href } : {}) }) }
 provide(claudeTranscriptLayout, event => { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...identity(), ...event }) })
 function field(value: ClaudeUiFieldEvent) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_FIELD', ...identity(), ...value }) }

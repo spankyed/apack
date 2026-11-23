@@ -52,10 +52,15 @@
           </div>
         </section>
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
-        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :question-pending="!!pendingNativeQuestion" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent">
-          <template #question>
-            <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-              <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeQuestionMount" :can-clarify="!!nativeQuestionMount"
+        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :panel-decision-pending="!!pendingNativePlan || !!pendingNativeQuestion" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent">
+          <template #decision>
+            <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+              <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
+                @respond="respondNativePlan"
+                @pause="pauseNativeDecision" />
+            </div>
+            <div v-else-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+              <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeDecisionMount" :can-clarify="!!nativeDecisionMount"
                 @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
                 @respond="answerNativeQuestion"
                 @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
@@ -145,15 +150,15 @@
             <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
               @respond="respondNativeApproval"
               @edit-workflow="nativeSession?.open()"
-              @pause="pauseNativeApproval" />
+              @pause="pauseNativeDecision" />
           </div>
-          <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+          <div v-if="pendingNativePlan && !focusedAgent" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
-              @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
+              @respond="respondNativePlan"
               @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativeQuestion && !focusedAgent" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeQuestionMount" :can-clarify="!!nativeQuestionMount"
+            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeDecisionMount" :can-clarify="!!nativeDecisionMount"
               @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
               @respond="answerNativeQuestion"
               @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
@@ -217,7 +222,7 @@
           <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
             @respond="respondNativeApproval"
             @edit-workflow="nativeSession?.open()"
-            @pause="pauseNativeApproval" />
+            @pause="pauseNativeDecision" />
         </div>
         <!-- Thread bar — stays within chat column (hidden during onboarding) -->
         <div v-if="!isOnboarding" class="flex-shrink-0 w-full" data-testid="thread-navigation">
@@ -817,8 +822,8 @@ watch(() => mainCommand.value?.status, (status, before) => {
   if (status !== 'command_output') mainOutputExpanded.value = false
 })
 
-// A native permission belongs to the terminal session, including when its Agent view is selected.
-const nativeApprovalOwner = computed(() => {
+// Native decisions belong to the terminal session even while the Agent view is selected.
+const nativeDecisionOwner = computed(() => {
   const target = focusedAgent.value?.target
   if (!target) return nativeComposerOwner.value
   const owner = taskView.value?.[1].state, view = owner?.view
@@ -830,7 +835,7 @@ const pendingNativeApproval = computed(() => {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown; notebook_path?: unknown; command?: unknown };
     nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; genericTool?: unknown; tool?: unknown; review?: unknown; file?: unknown; workflow?: unknown; bash?: unknown; cwd?: unknown; question?: unknown; reason?: unknown };
   } | undefined
-  const native = pending?.nativeTerminal, owner = nativeApprovalOwner.value
+  const native = pending?.nativeTerminal, owner = nativeDecisionOwner.value
   const generic = ClaudeGenericToolPermissionApprovalSchema.safeParse(native?.genericTool).data
   if (native?.genericTool !== undefined && !generic) return undefined
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || typeof pending?.toolName !== 'string' || !generic && !['Read', 'Bash', 'Write', 'Edit', 'NotebookEdit', 'Workflow', 'WebFetch', 'Skill'].includes(pending.toolName) || typeof pending.approvalMessageId !== 'string' || (!generic && (pending?.toolName === 'WebFetch' || pending?.toolName === 'Skill' ? !ClaudeToolPermissionApprovalSchema.safeParse(native.tool).success : pending?.toolName === 'Workflow' ? !ClaudeWorkflowApprovalSchema.safeParse(native.workflow).success : pending?.toolName === 'Bash' ? typeof pending.originalInput?.command !== 'string' : pending?.toolName === 'NotebookEdit' ? typeof pending.originalInput?.notebook_path !== 'string' : typeof pending.originalInput?.file_path !== 'string'))) return undefined
@@ -845,7 +850,7 @@ const pendingNativeApproval = computed(() => {
 
 const pendingNativePlan = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as { approvalMessageId?: unknown; toolName?: unknown; nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; plan?: unknown; reason?: unknown } } | undefined
-  const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
+  const native = pending?.nativeTerminal, owner = nativeDecisionOwner.value
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || !['EnterPlanMode', 'ExitPlanMode'].includes(String(pending?.toolName)) || typeof pending.approvalMessageId !== 'string') return undefined
   const presentation = ClaudePlanPresentationSchema.safeParse(native.plan), message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   if (!presentation.success || !message) return undefined
@@ -854,7 +859,7 @@ const pendingNativePlan = computed(() => {
 
 const focusedAgentUiMount = computed(() => {
   const target = focusedAgent.value?.target, threadId = currentThread.value?.id
-  if (!target || !threadId || !nativeApprovalOwner.value) return
+  if (!target || !threadId || !nativeDecisionOwner.value) return
   const mountId = Object.entries(nativeUiViews.value).find(([, view]) => {
     const selected = view.mountRequest?.nativeView
     return view.threadId === threadId && selected?.ownerId === target.ownerId && selected.sessionId === target.sessionId
@@ -862,27 +867,27 @@ const focusedAgentUiMount = computed(() => {
   })?.[0]
   if (mountId) return { threadId, mountId }
 })
-const nativeQuestionMount = computed(() => focusedAgent.value ? focusedAgentUiMount.value : nativeUiMount.value)
+const nativeDecisionMount = computed(() => focusedAgent.value ? focusedAgentUiMount.value : nativeUiMount.value)
 const pendingNativeQuestion = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: Record<string, unknown>;
     nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; problem?: unknown; presentation?: unknown };
   } | undefined
-  const native = pending?.nativeTerminal, owner = nativeApprovalOwner.value
+  const native = pending?.nativeTerminal, owner = nativeDecisionOwner.value
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'AskUserQuestion' || typeof pending.approvalMessageId !== 'string' || !pending.originalInput) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   const presentation = ClaudeQuestionPresentationSchema.safeParse(native.presentation)
-  const mount = nativeQuestionMount.value
+  const mount = nativeDecisionMount.value
   const frame = mount && nativeUiViews.value[mount.mountId]?.state.question
   return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, pending: !!message.responseTimestamp && typeof native.problem !== 'string', error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
 
 function pressNativeQuestion(actionId: string, href?: string) {
-  const mount = nativeQuestionMount.value
+  const mount = nativeDecisionMount.value
   if (mount) send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 function editNativeQuestion(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
-  const mount = nativeQuestionMount.value
+  const mount = nativeDecisionMount.value
   if (mount) send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })
 }
 const nativeQuestionDraft = ref<{ actionId: string; token: string }>()
@@ -903,7 +908,7 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
 }
 
 function rejectNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
-  const question = pendingNativeQuestion.value, mount = nativeQuestionMount.value
+  const question = pendingNativeQuestion.value, mount = nativeDecisionMount.value
   if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return
   send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
@@ -912,16 +917,16 @@ function respondNativeApproval(response: { approved: boolean; reason?: string })
   const approval = pendingNativeApproval.value
   if (approval) send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: approval.messageId, response })
 }
-function pauseNativeApproval(scope?: ClaudeDecisionPauseScope) {
-  const mount = focusedAgent.value ? focusedAgentUiMount.value : nativeUiMount.value
-  if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', ...mount, scope })
+function respondNativePlan(response: { approved: boolean; choice?: string; reason?: string; plan?: string }) {
+  const plan = pendingNativePlan.value
+  if (plan) send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: plan.messageId, response })
 }
 function pauseNativeDecision(scope?: ClaudeDecisionPauseScope) {
-  const mount = nativeUiMount.value;
-  if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, scope });
+  const mount = nativeDecisionMount.value
+  if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', ...mount, scope })
 }
 function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
-  const question = pendingNativeQuestion.value, mount = nativeQuestionMount.value;
+  const question = pendingNativeQuestion.value, mount = nativeDecisionMount.value;
   if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return;
   send({ type: 'CLAUDE_UI_QUESTION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token });
 }
