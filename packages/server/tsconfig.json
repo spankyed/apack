@@ -11,6 +11,7 @@
     // Their sources import .ts files by name; this config emits, which requires rewriteRelativeImportExtensions too
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true,
     "target": "ES2024",
     "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "strict": true,

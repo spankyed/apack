@@ -10,6 +10,7 @@
     "customConditions": ["@apackdev/source"],
     // Their relative imports name .ts sources
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "allowSyntheticDefaultImports": true,
     "module": "NodeNext",
     "target": "ESNext",

@@ -10,7 +10,7 @@ import { frontendCatalogEntries } from '../packs/catalog-frontend.ts';
 import { artifactCatalogEntries } from '../packs/catalog-artifacts.ts';
 import { blockCatalogEntries } from '../packs/catalog-blocks.ts';
 import { _nativePackDeclarationProblem, _settingsJsonProblems } from '@apackdev/sdk/framework';
-import { isPlainObject } from '@apackdev/sdk/utils/pure';
+import { errorMessage, isPlainObject } from '@apackdev/sdk/utils/pure';
 import { createLogger } from '@apackdev/sdk/logger';
 import { isEqual } from '../features/settings/document.ts';
 
@@ -119,7 +119,7 @@ export function createWindowPackCatalog(io: WindowPackCatalogIO, native: readonl
         if (accepted !== generation) return;
         close();
         status = 'error';
-        problem = error instanceof Error ? error.message : String(error);
+        problem = errorMessage(error);
         tell();
       };
       try {

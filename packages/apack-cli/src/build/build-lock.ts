@@ -37,12 +37,14 @@ export const packBuildLock = (packRoot: string): string => path.join(packRoot, '
 
 /** Thrown when another build of this pack holds the lock and stopped working while it did */
 export class PackBuildLockHeld extends Error {
-  constructor(readonly holder: string, packId: string, file: string) {
+  readonly holder: string;
+  constructor(holder: string, packId: string, file: string) {
     const where = path.relative(process.cwd(), file);
     super(`another build of ${packId} holds ${where}:\n  ${holder}\n\n`
       + 'Two builds of one pack stage into the same directory and each clears it first, so they would\n'
       + 'overwrite each other and leave `dist` as half of either.\n'
       + `If no build is running, delete ${where} and try again.`);
+    this.holder = holder;
   }
 }
 

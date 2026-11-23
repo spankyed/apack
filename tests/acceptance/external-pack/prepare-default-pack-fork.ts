@@ -47,49 +47,44 @@ export function verifyDefaultPackFork(): void {
 
 async function prepare(): Promise<void> {
   const shippedBuildRevision = shippedRevision();
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-fork-preparation-'));
+  using temporary = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'apack-fork-preparation-'));
   fs.mkdirSync(path.dirname(output), { recursive: true });
-  const staged = fs.mkdtempSync(path.join(path.dirname(output), '.default-fork-'));
-  try {
-    const fork = path.join(temporary, 'fork');
-    fs.cpSync(source, fork, { recursive: true,
-      filter: file => !['node_modules', 'dist', '.apack', '.git'].includes(path.basename(file)) && !file.endsWith('.tsbuildinfo'),
-    });
-    fs.symlinkSync(path.join(root, 'node_modules'), path.join(fork, 'node_modules'), 'dir');
-    const manifest = JSON.parse(fs.readFileSync(path.join(fork, 'apack.json'), 'utf8'));
-    manifest.name = 'Acceptance fork';
-    manifest.features.notes.surface.label = 'Fork Notes';
-    fs.writeFileSync(path.join(fork, 'apack.json'), JSON.stringify(manifest, null, 2));
-    const canvas = path.join(fork, 'src/features/notes/fe/canvas.vue');
-    const original = fs.readFileSync(canvas, 'utf8');
-    if (!original.includes('<template>')) throw new Error('Notes canvas has no template for the fork fixture');
-    fs.writeFileSync(canvas, original.replace('<template>', '<template>\n  <div data-testid="fork-component">Fork component</div>'));
-    const config = path.join(fork, 'tsconfig.json');
-    fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(
-      '../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
-    for (const [phase, args] of [['build', ['build']], ['export', ['export', '--out', staged]]] as const) {
-      console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
-      const result = await boundedSpawn(process.execPath, [path.join(root, 'node_modules/.bin/apack'), 'pack', ...args], DEFAULT_FORK_BUDGET_MS[phase],
-        { cwd: fork, env: { ...process.env, APACK_HOST: root }, stream: true });
-      if (result.code !== 0) throw new Error(`Default fork ${phase} ${result.timedOut ? 'timed out' : `failed (exit ${result.code})`}`);
-      console.log(`Default fork ${phase}: completed in ${(result.ms / 1000).toFixed(1)}s`);
-    }
-    if (shippedRevision() !== shippedBuildRevision) throw new Error('The shipped pack changed during fork preparation');
-    const archive = `${manifest.id}-${manifest.version}.tgz`;
-    if (!fs.existsSync(path.join(staged, archive)) || !fs.existsSync(path.join(staged, `${archive}.sha256`))) throw new Error('Fork archive or checksum is missing');
-    const archiveSha256 = sha256File(path.join(staged, archive));
-    fs.writeFileSync(path.join(staged, 'fork.json'), JSON.stringify({ shippedBuildRevision, archive, archiveSha256 }, null, 2) + '\n');
-    fs.rmSync(output, { recursive: true, force: true });
-    fs.renameSync(staged, output);
-  } finally {
-    fs.rmSync(temporary, { recursive: true, force: true });
-    fs.rmSync(staged, { recursive: true, force: true });
+  using staged = fs.mkdtempDisposableSync(path.join(path.dirname(output), '.default-fork-'));
+  const fork = path.join(temporary.path, 'fork');
+  fs.cpSync(source, fork, { recursive: true,
+    filter: file => !['node_modules', 'dist', '.apack', '.git'].includes(path.basename(file)) && !file.endsWith('.tsbuildinfo'),
+  });
+  fs.symlinkSync(path.join(root, 'node_modules'), path.join(fork, 'node_modules'), 'dir');
+  const manifest = JSON.parse(fs.readFileSync(path.join(fork, 'apack.json'), 'utf8'));
+  manifest.name = 'Acceptance fork';
+  manifest.features.notes.surface.label = 'Fork Notes';
+  fs.writeFileSync(path.join(fork, 'apack.json'), JSON.stringify(manifest, null, 2));
+  const canvas = path.join(fork, 'src/features/notes/fe/canvas.vue');
+  const original = fs.readFileSync(canvas, 'utf8');
+  if (!original.includes('<template>')) throw new Error('Notes canvas has no template for the fork fixture');
+  fs.writeFileSync(canvas, original.replace('<template>', '<template>\n  <div data-testid="fork-component">Fork component</div>'));
+  const config = path.join(fork, 'tsconfig.json');
+  fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(
+    '../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
+  for (const [phase, args] of [['build', ['build']], ['export', ['export', '--out', staged.path]]] as const) {
+    console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
+    const result = await boundedSpawn(process.execPath, [path.join(root, 'node_modules/.bin/apack'), 'pack', ...args], DEFAULT_FORK_BUDGET_MS[phase],
+      { cwd: fork, env: { ...process.env, APACK_HOST: root }, stream: true });
+    if (result.code !== 0) throw new Error(`Default fork ${phase} ${result.timedOut ? 'timed out' : `failed (exit ${result.code})`}`);
+    console.log(`Default fork ${phase}: completed in ${(result.ms / 1000).toFixed(1)}s`);
   }
+  if (shippedRevision() !== shippedBuildRevision) throw new Error('The shipped pack changed during fork preparation');
+  const archive = `${manifest.id}-${manifest.version}.tgz`;
+  if (!fs.existsSync(path.join(staged.path, archive)) || !fs.existsSync(path.join(staged.path, `${archive}.sha256`))) throw new Error('Fork archive or checksum is missing');
+  const archiveSha256 = sha256File(path.join(staged.path, archive));
+  fs.writeFileSync(path.join(staged.path, 'fork.json'), JSON.stringify({ shippedBuildRevision, archive, archiveSha256 }, null, 2) + '\n');
+  fs.rmSync(output, { recursive: true, force: true });
+  fs.renameSync(staged.path, output);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const args = process.argv.slice(2);
   if (args.length === 0) await prepare();
   else if (args.length === 1 && args[0] === '--check') verifyDefaultPackFork();
-  else throw new Error('Usage: tsx tests/acceptance/external-pack/prepare-default-pack-fork.ts [--check]');
+  else throw new Error('Usage: node tests/acceptance/external-pack/prepare-default-pack-fork.ts [--check]');
 }

@@ -104,7 +104,7 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
   'packages/internal-repo-checks/tests/component-contracts.integration.spec.ts': { calls: 1,
     why: 'vue-tsc again, and it emits declarations for the component reports rather than only checking them' },
   'packages/internal-repo-checks/tests/import-specifiers-script.integration.spec.ts': { calls: 2,
-    why: 'check-import-specifiers run through tsx as a process, which is the thing the spec is about' },
+    why: 'check-import-specifiers run as a process, which is the thing the spec is about' },
 };
 
 describe('a subprocess in the integration pool is one that has to be', () => {

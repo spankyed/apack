@@ -14,6 +14,7 @@ import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { parseManifest } from '@apackdev/sdk/build';
 import { createLogger } from '@apackdev/sdk/logger';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import type { PackManifest } from '@apackdev/sdk/build';
 import {
   PACK_LAYOUT,
@@ -76,7 +77,7 @@ export interface InstallOptions {
 /** Reports a download's failure with its URL: a timeout, a refused connection, a body that stopped mid-way. */
 function downloadFailed(url: string) {
   return (err: unknown): never => {
-    throw new Error(`Downloading ${url} failed: ${err instanceof Error ? err.message : err}`);
+    throw new Error(`Downloading ${url} failed: ${errorMessage(err)}`);
   };
 }
 

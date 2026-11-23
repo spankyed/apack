@@ -1,4 +1,5 @@
 import type { PackManifest } from '@apackdev/sdk/build';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { appSettingsDefinition } from '../features/settings/be/app-definition.ts';
 import { compileSettingsCatalog } from '../features/settings/validation.ts';
 import { settingsForDeclarations } from './catalog-settings.ts';
@@ -10,5 +11,5 @@ export function assertPackSettings(manifest: Readonly<PackManifest>, overrides: 
     settings: manifest.extensions?.settings, features: manifest.features,
   }]);
   try { compileSettingsCatalog(declarations).validate(overrides); }
-  catch (error) { throw new Error(`Pack "${manifest.id}" settings were refused: ${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) { throw new Error(`Pack "${manifest.id}" settings were refused: ${errorMessage(error)}`); }
 }

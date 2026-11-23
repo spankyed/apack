@@ -25,7 +25,7 @@ describe('check-import-specifiers as a script', () => {
   it('runs as a script through a symlinked path', async () => {
     const link = path.join(root, 'check.ts');
     fs.symlinkSync(path.join(REPO_ROOT, 'scripts', 'check-import-specifiers.ts'), link);
-    const { stdout: output } = await execFileAsync(path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx'), [link],
+    const { stdout: output } = await execFileAsync(process.execPath, [link],
       { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
     expect(output).toMatch(/Import specifiers and pack rules pass/);
     // It checks the whole repo, parsing every file
@@ -38,7 +38,7 @@ describe('check-import-specifiers as a script', () => {
    * so a table rendered one row out reads as correct from here.
    */
   it('prints the rule table over every rule', async () => {
-    const { stdout: list } = await execFileAsync(path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx'),
+    const { stdout: list } = await execFileAsync(process.execPath,
       [path.join(REPO_ROOT, 'scripts', 'check-import-specifiers.ts'), '--list'],
       { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
 

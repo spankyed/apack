@@ -61,7 +61,10 @@ export async function callCli(dir: string, command: keyof typeof COMMANDS, args:
   const console_ = { log: console.log, error: console.error, warn: console.warn, info: console.info };
   const exit = process.exit;
   const capture = (...parts: unknown[]) => { chunks.push(`${parts.map(String).join(' ')}\n`); };
-  class Exited extends Error { constructor(readonly code: number) { super(`process.exit(${code})`); } }
+  class Exited extends Error {
+    readonly code: number;
+    constructor(code: number) { super(`process.exit(${code})`); this.code = code; }
+  }
   try {
     process.chdir(dir);
     Object.assign(console, { log: capture, error: capture, warn: capture, info: capture });

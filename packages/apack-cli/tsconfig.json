@@ -8,6 +8,7 @@
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/apack-cli.tsbuildinfo",
     // Workspace @apackdev/* sources import .ts files by name
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
     "target": "ES2024",

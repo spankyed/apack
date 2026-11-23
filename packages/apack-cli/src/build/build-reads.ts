@@ -30,6 +30,7 @@ import * as path from 'node:path';
 import { PACK_READS_FILE } from '@apackdev/host/build/pack-workdir';
 import { compilerSourcePath } from '@apackdev/host/build/compiler-inputs';
 import { readCompilerInstallationInputs } from './compiler-installation-inputs.ts';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 /**
  * The one way to turn the record off, and it is environmental: a read-only filesystem, or a sandbox that
@@ -198,7 +199,7 @@ export function buildReads(packDir: string, sourcePath?: (file: string) => strin
       try {
         record();
       } catch (err) {
-        console.warn(`Could not record what this build read (${err instanceof Error ? err.message : String(err)}). `
+        console.warn(`Could not record what this build read (${errorMessage(err)}). `
           + `The build itself is unaffected; set ${OPT_OUT}=1 to skip it.`);
       }
     },

@@ -4,6 +4,7 @@ import { getDesignated, hasDesignation } from '../designations/index.ts';
 // Import directly — not from '../utils' barrel which pulls in Node-only modules (fs, child_process)
 import { randomId } from '../utils/random-id.ts';
 import { RepositoryError, RepositoryErrorCode } from '../repositories/repository-error.ts';
+import { isError } from '../utils/is-error.ts';
 import { redactSecrets, redactSecretText } from '../utils/redact.ts';
 import { errorMessage } from '../utils/shared.ts';
 import { boundHost } from '../runtime/host-runtime.ts';
@@ -93,9 +94,6 @@ export function reportError({ step, ...input }: ReportErrorInput): StepRuntimeEr
   }
   return reportStepError(input, step);
 }
-
-const isError = (value: unknown): value is Error =>
-  (Error as ErrorConstructor & { isError(v: unknown): v is Error }).isError(value);
 
 /** The error's name, message and stack, with key-shaped strings redacted (provider errors can quote the key) */
 function normalizeError(error: unknown): { message: string; stack?: string; name?: string } {

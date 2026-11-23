@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { runCommand } from './command-tree.ts';
 
 const pkg = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'package.json'), 'utf-8'));
@@ -45,7 +46,7 @@ async function main() {
   try {
     await runCommand(args);
   } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
+    console.error(errorMessage(err));
     process.exit(1);
   }
 }

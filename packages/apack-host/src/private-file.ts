@@ -3,6 +3,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const isWindows = () => process.platform === 'win32';
 
@@ -79,8 +80,7 @@ function installPrivateFile(filePath: string, contents: string, durable: boolean
   if (!durable) return;
   try { syncDirectory(dir); }
   catch (cause) {
-    const message = cause instanceof Error ? cause.message : String(cause);
-    throw Object.assign(new Error(`File was installed but its directory sync failed: ${message}`, { cause }),
+    throw Object.assign(new Error(`File was installed but its directory sync failed: ${errorMessage(cause)}`, { cause }),
       { code: 'NOT_DURABLE', publishedPath: filePath });
   }
 }

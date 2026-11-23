@@ -6,6 +6,7 @@
     // The renderer targets Electron's Chromium (152+), supporting ES2024 and ES2025 APIs.
     "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "noUnusedLocals": true,
+    "erasableSyntaxOnly": true,
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",

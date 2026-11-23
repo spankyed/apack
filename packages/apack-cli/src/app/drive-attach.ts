@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import type { AttachedSession, AttachedSessionOptions } from '@apackdev/testing';
 import { readSession, touchSession, waitForSession, STARTED_BY_ENV, type DevSession } from '@apackdev/host/dev-session';
 import { processWork, type WorkReading } from '@apackdev/sdk/progress';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { holdExclusiveLock, readLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { dataDirInUse } from './profiles';
 import { sourceTarget } from './pack-host';
@@ -121,7 +122,7 @@ export async function spawnDevApp(
     return { session, logPath: session.logPath ?? logPath };
   } catch (error) {
     const tail = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf-8').trimEnd().split('\n').slice(-6).join('\n') : '';
-    throw new Error(`${error instanceof Error ? error.message : String(error)}${tail ? `\n${tail}` : ''}`);
+    throw new Error(`${errorMessage(error)}${tail ? `\n${tail}` : ''}`);
   }
 }
 
