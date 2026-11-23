@@ -182,7 +182,9 @@ async function nativeTaskControl(n,binding,request,abort,current){
   current();return {stopped:true};
  }
  const live=registry.getTranscript(task.id)?.messages??[];
- const saved=typeof binding.savedAgentMessages==='function'?await binding.savedAgentMessages(request.task_id):[];
+ // The running teammate publishes its own display rows. Its journal records the same inputs with different UUIDs.
+ const hasLiveTeammateTranscript=task.type==='in_process_teammate'&&task.status==='running'&&live.length>0;
+ const saved=!hasLiveTeammateTranscript&&typeof binding.savedAgentMessages==='function'?await binding.savedAgentMessages(request.task_id):[];
  current();
  const liveIds=new Set(live.map(row=>row?.uuid));
  const unique=new Map();for(const row of [...(saved??[]).filter(row=>!liveIds.has(row?.uuid)),...live])if(row?.uuid)unique.set(row.uuid,row);

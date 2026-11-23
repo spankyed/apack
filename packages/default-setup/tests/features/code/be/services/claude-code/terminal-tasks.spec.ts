@@ -111,6 +111,18 @@ it('advertises focused input for a running teammate without using the local Agen
   expect((await f.request('inspect')).details.canInput).toBe(false)
 })
 
+it('uses the live running-teammate display rows without duplicating the journal echoes', async () => {
+  const f = fixture()
+  Object.assign(f.tasks[0], { type: 'in_process_teammate', status: 'running' })
+  const input = { type: 'user', origin: { kind: 'human' }, message: { content: 'Same instruction twice' } }
+  f.saved.mockResolvedValue([{ ...input, uuid: 'journal-input' }])
+  f.registry.getTranscript.mockReturnValue({ messages: [{ ...input, uuid: 'live-one' }, { ...input, uuid: 'live-two' }] } as any)
+  expect((await f.request('inspect')).details.messages.map((row: { uuid: string }) => row.uuid)).toEqual(['live-one', 'live-two'])
+  expect(f.saved).not.toHaveBeenCalled()
+  f.registry.getTranscript.mockReturnValue({ messages: [] })
+  expect((await f.request('inspect')).details.messages.map((row: { uuid: string }) => row.uuid)).toEqual(['journal-input'])
+})
+
 it('refuses an ended teammate address so a reused name cannot receive the old task message', async () => {
   const f = fixture(); Object.assign(f.tasks[0], { type: 'in_process_teammate', agentId: 'worker@team', status: 'completed', identity: { agentName: 'worker' } })
   expect((await f.request('inspect', 'worker@team')).details.canMessage).toBe(false)
