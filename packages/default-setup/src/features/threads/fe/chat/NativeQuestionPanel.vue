@@ -1,10 +1,15 @@
 <template>
   <section class="native-question-panel" aria-label="Claude Code questions" data-testid="native-question-panel">
-    <header><span>Question {{ step + 1 }} of {{ parsed?.questions.length ?? '?' }}</span><strong>{{ parsed?.title || current?.header || 'Claude Code' }}</strong></header>
+    <header class="question-context">
+      <div class="question-meta">
+        <span>Question {{ step + 1 }} of {{ parsed?.questions.length ?? '?' }}</span>
+        <strong>{{ parsed?.title || current?.header || 'Claude Code' }}</strong>
+      </div>
+      <h2 v-if="current">{{ current.question }}</h2>
+    </header>
     <div v-if="!parsed || !current" class="body">This question format needs the native interface. Use “Use native interface” above to continue.</div>
     <div v-else class="body" :key="step" tabindex="0" role="group" aria-label="Question details" :aria-busy="pending || readingImages || undefined" @paste="pasteImages">
       <p v-if="displayError" role="alert" class="problem">{{ displayError }}</p>
-      <h2>{{ current.question }}</h2>
       <p v-if="current.description" class="muted">{{ current.description }}</p>
       <template v-if="isChoice">
         <label v-for="option in current.options" :key="option.label" class="option" :class="{ selected: state.selected.includes(option.label) }">
@@ -206,11 +211,12 @@ function skip() {
 
 <style scoped>
 .native-question-panel { flex:1; display:flex; flex-direction:column; min-height:0; height:100%; overflow:hidden; border:1px solid rgb(255 255 255 / .1); border-radius:12px; background:#232323; color:#e5e5e5; }
-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:none; padding:10px 16px; font-size:12px; }
+.question-context { flex:none; padding:10px 16px 8px; background:#232323; }
+.question-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; }
 header span { color:#b8a887; font-size:10px; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
 header strong { overflow-wrap:anywhere; max-height:3em; overflow-y:auto; }
 .body { flex:1; min-height:0; overflow-y:auto; padding:0 16px 12px; font-size:12px; line-height:1.5; }
-h2 { font-size:14px; margin:0 0 12px; font-weight:500; overflow-wrap:anywhere; }
+h2 { font-size:14px; line-height:1.4; margin:6px 0 0; font-weight:500; overflow-wrap:anywhere; max-height:4.2em; overflow-y:auto; }
 .muted, .answer span, summary { color:#aaa; font-size:11px; }
 .option { display:flex; gap:10px; align-items:flex-start; padding:9px 10px; margin:6px 0; border:1px solid #444; border-radius:7px; cursor:pointer; }
 .option.selected { border-color:#aaa; background:#303030; }

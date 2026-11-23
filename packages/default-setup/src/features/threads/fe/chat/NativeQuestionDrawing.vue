@@ -42,9 +42,10 @@ onBeforeUnmount(() => hover.dispose())
 
 /* A native extension can be taller than the question viewport. Keep the
    entire drawing in one scroll area and let the original form size itself. */
-.question-drawing.with-extension { overflow-y:auto; }
+.question-drawing.with-extension { overflow-y:auto; scroll-padding-block-start:6rem; }
 .question-drawing.with-extension:focus-visible { outline:2px solid currentColor; outline-offset:-2px; }
 .question-drawing.with-extension > :deep(.native-box) { flex:none; height:auto; min-height:100%; }
 .question-drawing.with-extension :deep(.native-question-panel) { flex:1 0 auto; height:auto; overflow:visible; }
 .question-drawing.with-extension :deep(.native-question-panel > .body) { overflow:visible; }
+.question-drawing.with-extension :deep(.native-question-panel > .question-context) { position:sticky; top:0; z-index:1; }
 </style>
