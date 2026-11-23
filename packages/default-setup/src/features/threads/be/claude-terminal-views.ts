@@ -101,7 +101,9 @@ export interface ClaudeBackgroundAttachmentView {
   state?: ClaudeBackgroundAttachmentSnapshot
   problem?: string
 }
+type ClaudeTeammateReconnect = {ownerId: string; sessionId: string; taskId: string; name: string}
 export type ClaudeTerminalViewSnapshot = {
+  teammateReconnect?: ClaudeTeammateReconnect
   backgroundInfo?: import('#features/code/common/native-background.ts').ClaudeBackgroundStatus
   canReplyBackground?: boolean
   attachment?: ClaudeBackgroundAttachmentView
@@ -135,6 +137,7 @@ interface View {
   send(reply: ClaudeTerminalViewReply): void
   attachment?: ClaudeBackgroundAttachmentView
   attachmentRevision?: number
+  teammateReconnect?: {target: ClaudeTeammateReconnect; open(signal: AbortSignal): Promise<ClaudeBackgroundAttachment>}
   attachmentOwner?: ClaudeBackgroundAttachment
   attachmentAbort?: AbortController
   attachmentUnsubscribe?: () => void
@@ -194,6 +197,11 @@ export function createClaudeTerminalViews(dependencies: {
     void view.attachmentOwner?.close().catch(() => {})
     view.attachmentOwner = undefined; view.attachment = undefined
   }
+  function teammateCrashCurrent(view: View, ownerId: string, sessionId: string) {
+    const owner = view.owner, state = owner?.state, current = dependencies.get(view.threadId)
+    return state?.ownerId === ownerId && state.sessionId === sessionId && state.status === 'error'
+      && owner?.keepAttachedTeammatesAfterCrash === true && (!current || current === owner)
+  }
   function attachmentCurrent(view: View) {
     const target = view.attachment?.teammate
     if (target) {
@@ -204,18 +212,18 @@ export function createClaudeTerminalViews(dependencies: {
       if (state.status === 'live') {
         return owner === currentOwner && state.tasks.some(task => task.id === target.taskId && task.canStop)
       }
-      // This does not grant a new attachment. Only the already-verified broker client can
-      // survive this owner's crash, while its window and the original native session still match.
-      if (state.status !== 'error' || !owner?.keepAttachedTeammatesAfterCrash || currentOwner && currentOwner !== owner
-        || view.attachment?.status !== 'ready') return false
+      if (!teammateCrashCurrent(view, target.ownerId, state.sessionId)) return false
+      if (view.attachment?.status !== 'ready')
+        return view.teammateReconnect?.target.taskId === target.taskId
       const client = view.attachmentOwner?.snapshot
       return client?.status === 'live' && client.inputBlocked !== true && client.jobId === target.taskId && client.sessionId === state.sessionId
     }
     const continuation = dependencies.continuation?.(view.threadId)
     return !!view.attachment && continuation?.sessionId === view.attachment.sessionId && continuation.continuedInSessionId === view.attachment.continuedInSessionId
   }
-  function openAttachment(key: string, view: View, operation: ClaudeBackgroundAttachmentView,
-    open: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>, fallback: string) {
+  function openAttachment<Client extends ClaudeBackgroundAttachment>(key: string, view: View, operation: ClaudeBackgroundAttachmentView,
+    open: (signal: AbortSignal) => Promise<Client>, fallback: string,
+    connected?: (client: Client) => void) {
     const abort = new AbortController()
     view.attachmentAbort = abort
     view.attachment = operation
@@ -225,6 +233,7 @@ export function createClaudeTerminalViews(dependencies: {
       if (!client) return
       if (!current()) { void client.close().catch(() => {}); return }
       view.attachmentOwner = client
+      connected?.(client)
       operation.status = 'ready'
       view.attachmentUnsubscribe = client.subscribe(() => {
         if (views.get(key) === view && view.attachment === operation) publish(key, view)
@@ -272,12 +281,16 @@ export function createClaudeTerminalViews(dependencies: {
       view.background.question = view.background.desktop ? dependencies.backgroundQuestion?.(view.threadId, view.background.desktop) : undefined
       if (priorQuestion && !view.background.question || priorApproval && !view.background.approval) refreshSettledControl(key, view)
     }
+    const reconnect = view.teammateReconnect?.target
+    if (reconnect && (reconnect.ownerId !== state?.ownerId || reconnect.sessionId !== state.sessionId
+      || (state.status === 'live' ? !state.tasks.some(task => task.id === reconnect.taskId && task.canStop)
+        : !teammateCrashCurrent(view, reconnect.ownerId, reconnect.sessionId)))) view.teammateReconnect = undefined
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, teammateReconnect: state?.status === 'error' ? view.teammateReconnect?.target : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -335,6 +348,7 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
+    view.teammateReconnect = undefined
     view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined; view.policyRecheck = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
@@ -343,7 +357,7 @@ export function createClaudeTerminalViews(dependencies: {
     })
     // A reopened owner replaces the terminal authority for the entire thread.
     for (const [id, candidate] of views) {
-      if (candidate !== view && candidate.threadId === view.threadId && candidate.owner !== owner && candidate.attachment?.teammate) publish(id, candidate)
+      if (candidate !== view && candidate.threadId === view.threadId && candidate.owner !== owner && (candidate.attachment?.teammate || candidate.teammateReconnect)) publish(id, candidate)
     }
   }
   return {
@@ -381,14 +395,31 @@ export function createClaudeTerminalViews(dependencies: {
       const target = view
       if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN') {
         const owner = target.owner, state = owner?.state
-        if (!owner?.openTeammateTerminal || owner !== dependencies.get(event.threadId) || state?.status !== 'live'
-          || state.ownerId !== event.ownerId || state.sessionId !== event.sessionId
-          || !state.tasks.some(task => task.id === event.taskId && task.canStop)
-          || !Number.isSafeInteger(event.revision) || event.revision <= (target.attachmentRevision ?? 0) || target.attachment) return
+        if (!state || state.ownerId !== event.ownerId || state.sessionId !== event.sessionId || target.attachment || target.opening
+          || !Number.isSafeInteger(event.revision) || event.revision <= (target.attachmentRevision ?? 0)) return
+        const task = state.status === 'live' && owner === dependencies.get(event.threadId)
+          ? state.tasks.find(task => task.id === event.taskId && task.canStop) : undefined
+        const reconnect = target.teammateReconnect
+        const resume = reconnect?.target.taskId === event.taskId && teammateCrashCurrent(target, event.ownerId, event.sessionId) ? reconnect : undefined
+        const open = owner?.openTeammateTerminal?.bind(owner)
+        if (!resume && (!task || !open)) return
         target.attachmentRevision = event.revision
         const operation: ClaudeBackgroundAttachmentView = { requestId:randomUUID(), revision:event.revision, status:'opening',
           sessionId:event.sessionId, continuedInSessionId:event.sessionId, teammate:{ownerId:event.ownerId, taskId:event.taskId} }
-        openAttachment(key, target, operation, signal => owner.openTeammateTerminal!(event.taskId, signal), 'Teammate terminal attachment failed')
+        if (resume) {
+          openAttachment(key, target, operation, resume.open, 'Teammate terminal reconnect failed')
+        } else if (open && task) {
+          target.teammateReconnect = undefined
+          openAttachment<Awaited<ReturnType<typeof open>>>(key, target, operation, signal => open(event.taskId, signal),
+            'Teammate terminal attachment failed', client => {
+              if (client.reconnect && client.snapshot.status === 'live') {
+                target.teammateReconnect = {
+                  target: {ownerId:event.ownerId, sessionId:event.sessionId, taskId:event.taskId, name:task.name},
+                  open:client.reconnect,
+                }
+              }
+            })
+        }
         return
       }
       if (event.type === 'CLAUDE_BACKGROUND_OPEN') {

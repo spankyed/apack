@@ -22,7 +22,7 @@ import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
 import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
-import { stat } from 'node:fs/promises'
+import { lstat, readFile, stat } from 'node:fs/promises'
 import { resolveClaudeExecutable } from './native-executable.ts'
 import { projectClaudeTerminalImageReferences } from './terminal-image-reference.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
@@ -84,7 +84,9 @@ export interface ClaudeNativeTerminalOwner {
   operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
   /** A separately attached tmux client can outlive a parent killed outside the app. */
   readonly keepAttachedTeammatesAfterCrash?: boolean
-  openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
+  openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment & {
+    reconnect?: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>
+  }>
   getMcpStatus(): Promise<ClaudeMcpStatus>
   getMemoryDialog(): Promise<ClaudeMemoryDialog>
   setAutoMemory(enabled: boolean): Promise<void>
@@ -583,16 +585,66 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (typeof executable !== 'string' || !isAbsolute(executable) || typeof paneId !== 'string' || !/^%[0-9]+$/.test(paneId))
           throw Error('The native teammate terminal target is invalid')
         const server = ['-L', `claude-swarm-${nativePid}`]
-        const probe = (args: string[]) => promisify(execFile)(executable, [...server, ...args],
-          { env, signal, cwd: options.cwd, timeout: 2000, maxBuffer: 8192 }).then(value => value.stdout.trim())
-        const sessions = await probe(['list-sessions', '-F', '#{session_id} #{session_name}'])
+        const probe = (args: string[], abort: AbortSignal, address = server) => promisify(execFile)(executable, [...address, ...args],
+          { env, signal: abort, cwd: options.cwd, timeout: 2000, maxBuffer: 8192 }).then(value => value.stdout.trim())
+        const sessions = await probe(['list-sessions', '-F', '#{session_id} #{session_name}'], signal)
         const session = /^([$][0-9]+) claude-swarm$/m.exec(sessions)?.[1]
-        if (!session || await probe(['show-options', '-Av', '-t', session, 'destroy-unattached']) !== 'off'
-          || !(await probe(['list-panes', '-s', '-t', session, '-F', '#{pane_id}'])).split('\n').includes(paneId))
+        if (!session || await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], signal) !== 'off'
+          || !(await probe(['list-panes', '-s', '-t', session, '-F', '#{pane_id}'], signal)).split('\n').includes(paneId))
           throw Error('The native teammate terminal cannot be safely attached')
+        // The live native task lookup authorizes this exact pane. Remember the socket and
+        // process generations while that authority still exists. A server name or pane number
+        // alone can be reused after a crash. Failed identity reads leave ordinary attach usable.
+        const identify = async (address: string[], abort: AbortSignal) => {
+          const [socket, serverPid, workerPid, targetSession, targetPane, dead, active] = (await probe([
+            'display-message', '-p', '-t', paneId,
+            '#{socket_path}\t#{pid}\t#{pane_pid}\t#{session_id}\t#{pane_id}\t#{pane_dead}\t#{pane_active}',
+          ], abort, address)).split('\t')
+          if (!socket || !isAbsolute(socket) || !serverPid || !workerPid || !/^[1-9][0-9]*$/.test(serverPid)
+            || !/^[1-9][0-9]*$/.test(workerPid) || targetSession !== session || targetPane !== paneId || dead !== '0')
+            throw new Error('The native teammate terminal target changed')
+          const processStart = async (pid: string) => {
+            const info = await readFile('/proc/' + pid + '/stat', { encoding:'utf8', signal:abort })
+            const fields = info.slice(info.lastIndexOf(') ') + 2).split(' ')
+            if (!fields[19] || fields[0] === 'Z') throw new Error('The native teammate process ended')
+            return fields[19]
+          }
+          const [file, serverStart, workerStart] = await Promise.all([
+            lstat(socket, {bigint:true}), processStart(serverPid), processStart(workerPid),
+          ])
+          if (!file.isSocket() || file.uid !== BigInt(process.getuid!())) throw new Error('The native teammate socket changed')
+          return {socket, active:active === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
+        }
+        const verified = process.platform === 'linux' ? await identify(server, signal).catch(() => undefined) : undefined
+        const attach = (address: string[], abort: AbortSignal) => openClaudeTerminalAttachment(
+          executable, [...address, 'attach-session', '-f', 'ignore-size', '-t', session],
+          { id: taskId, sessionId, cwd: options.cwd }, { env, signal:abort })
         ensureCurrent()
-        return openClaudeTerminalAttachment(executable, [...server, 'attach-session', '-f', 'ignore-size', '-t', session],
-          { id: taskId, sessionId, cwd: options.cwd }, { env, signal })
+        const client = await attach(server, signal)
+        if (!verified) return client
+        return Object.assign(client, {
+          async reconnect(abort: AbortSignal) {
+            if (!keepAttachedTeammatesAfterCrash) throw new Error('The original Claude session did not disconnect unexpectedly')
+            const address = ['-S', verified.socket]
+            const ensureTarget = async () => {
+              const current = await identify(address, abort).catch(() => undefined)
+              if (!current || !current.active || !current.identity.every((value, index) => value === verified.identity[index])
+                || await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], abort, address) !== 'off')
+                throw new Error('The original teammate pane is no longer available')
+            }
+            await ensureTarget()
+            const replacement = await attach(address, abort)
+            try {
+              await ensureTarget()
+              abort.throwIfAborted()
+              if (replacement.snapshot.status !== 'live') throw new Error('The teammate terminal disconnected')
+              return replacement
+            } catch (error) {
+              await replacement.close()
+              throw error
+            }
+          },
+        })
       },
       async operateTask(taskId, operation, text, worker) {
         if (closed || operation !== 'background' && !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')

@@ -900,8 +900,9 @@ it('releases only the disconnected window’s teammate attachments, including an
     input: vi.fn(), resize: vi.fn(), subscribe: vi.fn(() => () => {}), close: vi.fn(async () => {}),
   })
   const active = client(), other = client(), late = client()
-  const pending = Promise.withResolvers<typeof late>()
-  const open = vi.fn().mockResolvedValueOnce(active).mockResolvedValueOnce(other).mockReturnValueOnce(pending.promise)
+  let resolvePending!: (client: typeof late) => void
+  const pending = new Promise<typeof late>(resolve => { resolvePending = resolve })
+  const open = vi.fn().mockResolvedValueOnce(active).mockResolvedValueOnce(other).mockReturnValueOnce(pending)
   f.owner.openTeammateTerminal = open
   f.owner.state.tasks = [{ id: 'agent', name: 'Reviewer', status: 'idle', canStop: true }]
   const request = { ...mount, type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId: 'agent', revision: 1 }
@@ -929,7 +930,7 @@ it('releases only the disconnected window’s teammate attachments, including an
     f.views.disconnect('closed')
     expect(signal.aborted).toBe(true)
     expect(active.close).toHaveBeenCalledOnce()
-    pending.resolve(late)
+    resolvePending(late)
     await vi.waitFor(() => expect(late.close).toHaveBeenCalledOnce())
 
     expect(f.send).toHaveBeenCalledTimes(closedUpdates)
@@ -991,5 +992,59 @@ it.each(['crash', 'clean stop', 'session reset'] as const)('scopes an attached t
     f.views.handle({ ...mount, type: 'CLAUDE_BACKGROUND_INPUT', attachmentId: child.snapshot.id, text: 'stale' }, 'teammate-window', f.send)
     expect(child.input).not.toHaveBeenCalledWith(child.snapshot.id, 'stale')
     expect(parent.close).not.toHaveBeenCalled()
+  } finally { f.views.clear() }
+})
+
+it('reconnects only the verified teammate after its parent crashes and the original client closes', async () => {
+  const f = fixture(), {ownerId, sessionId} = f.owner.state
+  const parent = {...f.owner, keepAttachedTeammatesAfterCrash: false}
+  f.setCurrent(parent)
+  parent.state.tasks = [{id:'agent', name:'Reviewer', status:'idle', canStop:true}]
+  const client = () => ({
+    snapshot: {id:randomUUID(), terminalSession:{id:randomUUID(), target:null}, jobId:'agent',
+      sessionId, cwd:'/fixture', clientPid:234, status:'live' as const, output:[]},
+    input:vi.fn(), resize:vi.fn(), subscribe:vi.fn(() => () => {}), close:vi.fn(async () => {}),
+  })
+  const original = client(), replacement = client()
+  const reconnect = vi.fn(async (_signal: AbortSignal) => replacement)
+  const open = vi.fn(async () => ({...original, reconnect}))
+  parent.openTeammateTerminal = open
+  const request = {...mount, type:'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId:'agent', revision:1}
+  const latest = () => f.send.mock.calls.at(-1)![0]
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle(mount, 'another', vi.fn())
+    f.views.handle(request, 'one', f.send)
+    await vi.waitFor(() => expect(latest().attachment?.status).toBe('ready'))
+    expect(latest().teammateReconnect).toBeUndefined()
+    parent.keepAttachedTeammatesAfterCrash = true
+    parent.state.status = 'error'
+    parent.state.tasks = []
+    f.setCurrent()
+    for (const notify of f.listeners) notify()
+    await vi.waitFor(() => expect(latest().teammateReconnect).toEqual({ownerId, sessionId, taskId:'agent', name:'Reviewer'}))
+
+    f.views.handle({...mount, type:'CLAUDE_BACKGROUND_CLOSE', requestId:latest().attachment!.requestId}, 'one', f.send)
+    expect(original.close).toHaveBeenCalledOnce()
+    f.views.handle({...request, revision:2}, 'another', vi.fn())
+    f.views.handle({...request, revision:2, taskId:'unverified'}, 'one', f.send)
+    f.views.handle(request, 'one', f.send)
+    await Promise.resolve()
+    expect(reconnect).not.toHaveBeenCalled()
+
+    f.views.handle({...request, revision:2}, 'one', f.send)
+    await vi.waitFor(() => expect(latest().attachment?.state?.id).toBe(replacement.snapshot.id))
+    expect(open).toHaveBeenCalledOnce()
+    expect(reconnect).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal))
+    f.views.handle({...mount, type:'CLAUDE_BACKGROUND_INPUT', attachmentId:original.snapshot.id, text:'old'}, 'one', f.send)
+    f.views.handle({...mount, type:'CLAUDE_BACKGROUND_INPUT', attachmentId:replacement.snapshot.id, text:'fresh'}, 'one', f.send)
+    expect(original.input).not.toHaveBeenCalled()
+    expect(replacement.input).toHaveBeenCalledExactlyOnceWith(replacement.snapshot.id, 'fresh')
+
+    f.setCurrent({...f.owner, state:{...f.owner.state, status:'live', ownerId:randomUUID()}})
+    f.views.handle(mount, 'another', vi.fn())
+    expect(latest().teammateReconnect).toBeUndefined()
+    expect(latest().attachment).toBeUndefined()
+    expect(replacement.close).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
