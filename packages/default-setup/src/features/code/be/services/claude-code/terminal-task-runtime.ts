@@ -178,6 +178,7 @@ async function nativeTaskControl(n,binding,request,abort,current){
   return {sent:true};
  }
  if(request.operation==='stop'){
+  if(task.status!=='running')throw Error('This Agent is no longer running');
   await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});
   current();return {stopped:true};
  }

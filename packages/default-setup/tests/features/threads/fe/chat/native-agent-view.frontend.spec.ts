@@ -39,8 +39,12 @@ it('keeps the Agent editor mounted while a native approval owns input', async ()
   expect(f.draftChange).not.toHaveBeenCalled()
 })
 
-it('stops only the selected worker, rejects unrelated acknowledgments and retains parent navigation', async () => {
-  const f = await mount(); f.button('Stop Agent').click(); await nextTick()
+it.each(['idle', 'waiting'])('stops a %s, still-running teammate and retains parent navigation', async status => {
+  const f = await mount()
+  context.nativeTerminalViews[f.terminal].state!.tasks[0].status = status
+  await nextTick()
+  expect(f.button('Stop Agent').disabled).toBe(false)
+  f.button('Stop Agent').click(); await nextTick()
   const request = send.mock.calls.map(([value]) => value).find(value => value.type === 'CLAUDE_TERMINAL_TASK')
   expect(request).toMatchObject({ ownerId: 'owner', taskId: 'agent', operation: 'stop', revision: 1, mountId: f.terminal })
   expect(f.button('Stopping…').disabled).toBe(true); expect(f.button('Back to conversation').disabled).toBe(true)
@@ -53,6 +57,15 @@ it('stops only the selected worker, rejects unrelated acknowledgments and retain
   expect(f.pending).toHaveBeenLastCalledWith(false); expect(f.returned).not.toHaveBeenCalled()
   expect(send.mock.calls.some(([value]) => value.type === 'CLAUDE_TERMINAL_CLOSE')).toBe(false)
   expect(f.root.textContent).toContain('native-model'); expect(f.root.textContent).toContain('high')
+})
+it('does not offer Stop for a completed waiting task or mismatched inspection', async () => {
+  const f = await mount()
+  context.nativeTerminalViews[f.terminal].state!.tasks[0].status = 'waiting'
+  const details = context.nativeUiViews[f.ui].state.agent
+  details.status = 'completed'; await nextTick()
+  expect(f.button('Stop Agent').disabled).toBe(true)
+  details.status = 'running'; details.taskId = 'foreign'; await nextTick()
+  expect(f.button('Stop Agent').disabled).toBe(true)
 })
 it('refuses stale selection/session and exposes native stop refusal without leaving the Agent', async () => {
   const f = await mount()

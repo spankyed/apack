@@ -3,7 +3,7 @@
     <header v-show="!panelActive || panelDecisionPending" class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
       <div class="min-w-0"><p class="native-agent-eyebrow mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
-      <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner || selectedTask?.status !== 'running'" @click="stopAgent">{{ stopping ? 'Stopping…' : 'Stop Agent' }}</button>
+      <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !canStopAgent" @click="stopAgent">{{ stopping ? 'Stopping…' : 'Stop Agent' }}</button>
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
@@ -137,7 +137,13 @@ const selectedOwner = computed(() => {
 })
 provideClaudeHoverGroups(() => props.active && selectedOwner.value && snapshot.value && ['live', 'rendering'].includes(snapshot.value.state.status) && snapshot.value.attachmentId
   ? JSON.stringify([props.threadId, uiMount.value, snapshot.value.attachmentId, props.target.ownerId, props.target.sessionId, props.target.taskId, props.target.revision]) : undefined)
-const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task.id === props.target.taskId))
+const canStopAgent = computed(() => {
+  const status = selectedOwner.value?.tasks.find(task => task.id === props.target.taskId)?.status
+  const details = state.value?.agent
+  // Native roster labels describe activity. A quiet teammate may still have a running task.
+  if (status !== 'running' && status !== 'waiting' && status !== 'idle') return false
+  return details?.taskId === props.target.taskId && details.status === 'running'
+})
 const agentComposer = ref<InstanceType<typeof NativeAgentComposer>>(), commandPanel = ref<HTMLElement>(), cancelCommand = ref<HTMLButtonElement>(), commandSending = ref(false)
 const managedSettingsDiagnostics = computed(() => selectedOwner.value ? state.value?.managedSettingsDiagnostics : undefined)
 const canRecheckManagedSettings = computed(() => props.active && !!selectedOwner.value && !selectedOwner.value.inputBlocked
@@ -236,7 +242,7 @@ function returnToParent() {
 }
 function stopAgent() {
   const owner = selectedOwner.value
-  if (!owner || selectedTask.value?.status !== 'running' || pending.value || returning.value || stopping.value || commandActive.value) return
+  if (!owner || !canStopAgent.value || pending.value || returning.value || stopping.value || commandActive.value) return
   stopping.value = true; emit('pending', true); problem.value = undefined
   stopRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
   sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })

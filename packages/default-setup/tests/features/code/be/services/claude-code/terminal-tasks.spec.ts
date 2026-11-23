@@ -29,6 +29,12 @@ it('stops the exact native registry task through the original user-stop callback
   const f = fixture(); expect(await f.request('stop')).toEqual({ stopped: true })
   expect(f.stop).toHaveBeenCalledExactlyOnceWith('registry-a', { taskRegistry: f.registry, session: f.context.session, storageV5: f.context.storageV5, getAppState: f.context.getAppState, setAppState: f.context.setAppState, source: 'user' })
 })
+it('refuses Stop if the addressed Agent finished after the desktop observed it', async () => {
+  const f = fixture()
+  f.tasks[0].status = 'completed'
+  await expect(f.request('stop')).rejects.toThrow('no longer running')
+  expect(f.stop).not.toHaveBeenCalled()
+})
 it('rejects foreign and ambiguous task identities before any native operation', async () => {
   const f = fixture(); await expect(f.request('stop', 'foreign')).rejects.toThrow('no longer owned')
   f.tasks.push({ ...f.tasks[0], id: 'registry-b' }); await expect(f.request('stop')).rejects.toThrow('no longer owned')
