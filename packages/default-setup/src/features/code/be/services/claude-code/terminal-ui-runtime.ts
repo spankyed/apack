@@ -449,7 +449,7 @@ function retireDesktopPromptChanges(clientId){
 function reportDesktopPromptChange(n,clientId,box,origin){
  if(!clientViewCurrent(n,clientId))return;
  let state=desktopPromptChanges.get(clientId);
- if(!state){state={count:0,abort:new AbortController()};desktopPromptChanges.set(clientId,state)}
+ if(!state){state={plugins:[],warned:false,abort:new AbortController()};desktopPromptChanges.set(clientId,state)}
  state.pending={...box,origin};
  if(state.running)return;
  state.running=true;
@@ -457,11 +457,18 @@ function reportDesktopPromptChange(n,clientId,box,origin){
   try{
    while(state.pending&&!state.abort.signal.aborted&&clientViewCurrent(n,clientId)){
     const change=state.pending;state.pending=undefined;
-    // Bound feedback from plugins filling in response to the original hook, like the REPL.
-    if(state.count>=8)break;
     try{
      if(!n.hookPresence.tl('prompt.change'))break;
-     state.count++;
+     // Match the native REPL's feedback limit and emit its session-scoped hook notice.
+     if(state.plugins.length>=8){
+      if(!state.warned){
+       state.warned=true;
+       const names=[...new Set(state.plugins)].sort().join(', ');
+       n.engine.vG({key:'prompt.change stalled '+names,lead:'hooks',text:'prompt.change: '+state.plugins.length+' dispatches in a row for fills by '+names+'; not raised again until the box changes another way'});
+      }
+      break;
+     }
+     state.plugins.push(change.origin.name);
      await n.runtime.$i('prompt.change',{signal:state.abort.signal})(change);
     }catch{if(!state.abort.signal.aborted)process.stderr.write('apack: native desktop prompt.change failed\n')}
    }
@@ -759,7 +766,7 @@ function editPrompt(n,clientId,box,key,by){
   state.waiting=[];state.box=box;state.offered=undefined;state.stale=!!state.active;return box;
  }
  const change=desktopPromptChanges.get(clientId);
- if(change&&state.box.text!==box.text){change.count=0;change.pending=undefined}
+ if(change&&state.box.text!==box.text){change.plugins=[];change.warned=false;change.pending=undefined}
  return new Promise(answer=>{state.waiting.push({box,key,answer});drainEdit(n,clientId,state);});
 }
 function drainEdit(n,clientId,state){

@@ -219,6 +219,7 @@ export const claudeNativeLinuxBindings: {
         "r5": "Y6",
         "Rs": "As",
         "tut": "Kct",
+        "vG": "pG",
         "vfe": "_fe",
         "yCr": "XEr",
         "Yen": "Den"
