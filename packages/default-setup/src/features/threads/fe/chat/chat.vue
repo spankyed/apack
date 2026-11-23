@@ -52,7 +52,16 @@
           </div>
         </section>
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
-        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
+        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :question-pending="!!pendingNativeQuestion" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent">
+          <template #question>
+            <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+              <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeQuestionMount" :can-clarify="!!nativeQuestionMount"
+                @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
+                @respond="answerNativeQuestion"
+                @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
+            </div>
+          </template>
+        </NativeAgentView>
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" :class="{ 'chat-composer-area--background': nativeSessionBackgrounded, 'chat-composer-area--background-reply': nativeBackgroundReplyActive }" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
           <p v-if="nativeUiDrawing?.gestureProblem" role="alert" class="px-4 py-2 text-sm text-amber-200">{{ nativeUiDrawing.gestureProblem }}</p>
@@ -143,9 +152,9 @@
               @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
               @pause="pauseNativeDecision" />
           </div>
-          <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'" :can-clarify="nativeComposerOwner?.view?.kind === 'main'"
-              @press="pressNativeUi" @field="editNativeUi" @started="startNativeQuestionDraft"
+          <div v-if="pendingNativeQuestion && !focusedAgent" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeQuestionMount" :can-clarify="!!nativeQuestionMount"
+              @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
               @respond="answerNativeQuestion"
               @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
           </div>
@@ -843,25 +852,47 @@ const pendingNativePlan = computed(() => {
   return { messageId: pending.approvalMessageId, pauseScope: readClaudeDecisionPauseScope(pending), entering: pending.toolName === 'EnterPlanMode', presentation: presentation.data, reason: typeof native.reason === 'string' ? native.reason : undefined, disabled: !!message.responseTimestamp }
 })
 
+const focusedAgentUiMount = computed(() => {
+  const target = focusedAgent.value?.target, threadId = currentThread.value?.id
+  if (!target || !threadId || !nativeApprovalOwner.value) return
+  const mountId = Object.entries(nativeUiViews.value).find(([, view]) => {
+    const selected = view.mountRequest?.nativeView
+    return view.threadId === threadId && selected?.ownerId === target.ownerId && selected.sessionId === target.sessionId
+      && selected.taskId === target.taskId && selected.revision === target.revision
+  })?.[0]
+  if (mountId) return { threadId, mountId }
+})
+const nativeQuestionMount = computed(() => focusedAgent.value ? focusedAgentUiMount.value : nativeUiMount.value)
 const pendingNativeQuestion = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: Record<string, unknown>;
     nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; problem?: unknown; presentation?: unknown };
   } | undefined
-  const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
+  const native = pending?.nativeTerminal, owner = nativeApprovalOwner.value
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'AskUserQuestion' || typeof pending.approvalMessageId !== 'string' || !pending.originalInput) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   const presentation = ClaudeQuestionPresentationSchema.safeParse(native.presentation)
-  const frame = nativeUiDrawing.value?.question
+  const mount = nativeQuestionMount.value
+  const frame = mount && nativeUiViews.value[mount.mountId]?.state.question
   return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, pending: !!message.responseTimestamp && typeof native.problem !== 'string', error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
 
-const nativeQuestionDraft = ref<{ messageId: string; token: string }>()
+function pressNativeQuestion(actionId: string, href?: string) {
+  const mount = nativeQuestionMount.value
+  if (mount) send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
+}
+function editNativeQuestion(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
+  const mount = nativeQuestionMount.value
+  if (mount) send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })
+}
+const nativeQuestionDraft = ref<{ actionId: string; token: string }>()
 function startNativeQuestionDraft(token: string, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
   const question = pendingNativeQuestion.value
-  if (!question?.frame || question.messageId !== identity.messageId || !token || nativeQuestionDraft.value?.messageId === question.messageId && nativeQuestionDraft.value.token === token) return
-  nativeQuestionDraft.value = { messageId: question.messageId, token }
-  editNativeUi({ actionId: question.frame.draftActionId, revision: 1, kind: 'change', value: token })
+  if (!question?.frame || question.messageId !== identity.messageId || !token) return
+  const actionId = question.frame.draftActionId
+  if (nativeQuestionDraft.value?.actionId === actionId && nativeQuestionDraft.value.token === token) return
+  nativeQuestionDraft.value = { actionId, token }
+  editNativeQuestion({ actionId, revision: 1, kind: 'change', value: token })
 }
 function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: import('#features/code/common/native-question.ts').ClaudeQuestionImage[]) {
   const question = pendingNativeQuestion.value
@@ -872,8 +903,8 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
 }
 
 function rejectNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
-  const question = pendingNativeQuestion.value, mount = nativeUiMount.value
-  if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token || nativeComposerOwner.value?.view?.kind !== 'main') return
+  const question = pendingNativeQuestion.value, mount = nativeQuestionMount.value
+  if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return
   send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
@@ -882,23 +913,15 @@ function respondNativeApproval(response: { approved: boolean; reason?: string })
   if (approval) send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: approval.messageId, response })
 }
 function pauseNativeApproval(scope?: ClaudeDecisionPauseScope) {
-  const target = focusedAgent.value?.target
-  if (!target) { pauseNativeDecision(scope); return }
-  if (!scope || !nativeApprovalOwner.value) return
-  const threadId = currentThread.value?.id
-  const mountId = Object.entries(nativeUiViews.value).find(([, view]) => {
-    const selected = view.mountRequest?.nativeView
-    return view.threadId === threadId && selected?.ownerId === target.ownerId && selected.sessionId === target.sessionId
-      && selected.taskId === target.taskId && selected.revision === target.revision
-  })?.[0]
-  if (threadId && mountId) send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId, mountId, scope })
+  const mount = focusedAgent.value ? focusedAgentUiMount.value : nativeUiMount.value
+  if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', ...mount, scope })
 }
 function pauseNativeDecision(scope?: ClaudeDecisionPauseScope) {
   const mount = nativeUiMount.value;
   if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, scope });
 }
 function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
-  const question = pendingNativeQuestion.value, mount = nativeUiMount.value;
+  const question = pendingNativeQuestion.value, mount = nativeQuestionMount.value;
   if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return;
   send({ type: 'CLAUDE_UI_QUESTION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token });
 }

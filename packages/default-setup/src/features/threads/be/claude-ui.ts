@@ -154,8 +154,8 @@ function bind(view: ClaudeUiView): void {
       const signal = AbortSignal.any([lifetime, AbortSignal.timeout(timeout)])
       return ask({ kind: 'suggest', text }, signal, Date.now() + timeout, revision)
     } : undefined,
-    pauseQuestion: !view.nativeView && !view.backgroundView ? async (row, ownerId) => {
-      if (!viewCurrent(view) || view.owner !== owner || getClaudeUiOwner(view.threadId) !== owner || owner.question?.ownerId !== ownerId) throw Error('Native question owner changed');
+    pauseQuestion: !view.backgroundView ? async (row, ownerId) => {
+      if (!viewCurrent(view) || view.owner !== owner || getClaudeUiOwner(view.threadId, view.nativeView) !== owner || owner.question?.ownerId !== ownerId) throw Error('Native question owner changed');
       const result = await services.action.executeIfFound('CC: Pause Turn', { threadId: view.threadId, nativeDecision: { ...row, ownerId, toolName: 'AskUserQuestion' } });
       if (result?.success !== true) throw Error(typeof result?.reason === 'string' ? result.reason : 'Native question cancellation was not acknowledged');
     } : undefined,
@@ -422,7 +422,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     return;
   }
   if(event.type==='CLAUDE_UI_QUESTION_PAUSE') {
-    if(!view||view.nativeView||view.backgroundView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return;
+    if(!view||view.backgroundView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return;
     bind(view);
     const identity = { threadId: event.threadId, mountId: event.mountId, messageId: event.messageId, ownerId: view.owner?.question?.ownerId, tokenDigest: createHash('sha256').update(event.token).digest('hex') };
     logger.info('Native question Pause received', identity);
@@ -432,7 +432,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     return;
   }
   if(event.type==='CLAUDE_UI_QUESTION_REJECT') {
-    if(!view||view.nativeView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return
+    if(!view||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return
     bind(view);void view.mount?.rejectQuestion(event.messageId,event.token);return
   }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {
