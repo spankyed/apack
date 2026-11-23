@@ -1011,6 +1011,28 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when t
 })
 
 
+it('applies a native file replacement past the caret and preserves following text', () => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const before = 'Review @docs/old-file.txt next'
+  const cursor = 'Review @docs/old'.length
+  editor.commands.setContent(before)
+  editor.commands.setTextSelection(cursor + 1)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    bridge.receiveCompletions({
+      revision: request.mock.lastCall![0].revision,
+      status: 'ready',
+      result: { start: 7, suggestions: [{ text: '@"docs/new notes.md"', replacement: { start: 7, end: before.indexOf(' next') } }] },
+    })
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('Review @"docs/new notes.md" next')
+    expect(bridge.readDraft()?.cursor).toBe('Review @"docs/new notes.md"'.length)
+  } finally { bridge.dispose(); focused.mockRestore() }
+})
+
 it('reads a whole rich-document selection without losing its text or collapsing the range on acknowledgement', () => {
   editor.commands.setContent('# Release review\n\n```ts\nconst ready = true\n```\n\nReview changes.\n\n- Verify behavior\n- Document migration')
   editor.commands.selectAll()

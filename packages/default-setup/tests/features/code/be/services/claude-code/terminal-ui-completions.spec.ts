@@ -2,7 +2,7 @@ import vm from 'node:vm'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 
 it('keeps only the latest native completion and cancels detached drafts', async () => {
-  const start = claudeTerminalUiRuntime.indexOf('const completions=new Map();')
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
   const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({autocomplete,clearCompletion})`, { AbortController, Promise, Map }) as {
     autocomplete(native: unknown, client: string, box: { text: string }): Promise<{ suggestions: string[]; start?: number; superseded?: boolean }>
@@ -31,6 +31,41 @@ it('keeps only the latest native completion and cancels detached drafts', async 
   expect(await api.autocomplete(native, 'b', { text: '' })).toEqual({ suggestions: [] })
 })
 
+it('keeps original indexed file rows distinct from plugin replacement ranges', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  let current = true
+  const storageV5 = Symbol('native-session-storage')
+  const originalContext = { surface: 'terminal', toolContext: () => ({ storageV5 }) }
+  const api = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';({autocomplete,nativeFileCompletionToken})', {
+    AbortController, originalContext, clientViewCurrent: () => current,
+  }) as {
+    autocomplete(native: unknown, client: string, box: { text: string; cursor: number }): Promise<unknown>
+    nativeFileCompletionToken(box: { text: string; cursor: number }): unknown
+  }
+  const index = {}
+  const files = vi.fn(async () => [{ displayText: 'docs/release notes.md' }, { displayText: 'bad\npath' }])
+  const native = { fileSuggestions: { s5t: files, RSe: index }, session: {
+    rwt: () => ({ start: 12, token: 'relea' }),
+    r_n: async () => ({ suggestions: [{ text: 'plugin-row' }] }),
+    n_n: (items: unknown[]) => items,
+  } }
+  const text = 'Open @"docs/release notes.md" again'
+  const cursor = 'Open @"docs/relea'.length
+  const endOfPath = 'Open @"docs/release notes.md"'.length
+  expect(await api.autocomplete(native, 'current', { text, cursor })).toEqual({
+    start: 12, suggestions: [
+      { text: '@"docs/release notes.md" ', label: 'docs/release notes.md', replacement: { start: 5, end: endOfPath } },
+      { text: 'plugin-row' },
+    ],
+  })
+  expect(files.mock.calls[0]).toEqual([index, 'docs/release notes.md', true, storageV5])
+  expect(api.nativeFileCompletionToken({ text: 'user@example', cursor: 12 })).toBeUndefined()
+  current = false
+  expect(await api.autocomplete(native, 'old', { text, cursor })).toEqual({ start: 12, suggestions: [{ text: 'plugin-row' }] })
+  expect(files).toHaveBeenCalledOnce()
+})
+
 it('coalesces queued edits, adopts app changes and retires edits on detach', async () => {
   type Box = { text: string; cursor: number; superseded?: boolean }
   type Edit = { before: Box; after: Box; key?: { key: string; name: string } }
@@ -38,7 +73,9 @@ it('coalesces queued edits, adopts app changes and retires edits on detach', asy
   const end = claudeTerminalUiRuntime.indexOf('// Each attached composer')
   const themeStart = claudeTerminalUiRuntime.indexOf('function nativeThemeProvider(')
   const themeEnd = claudeTerminalUiRuntime.indexOf('function nativeThemeTree(')
-  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(themeStart, themeEnd)}${claudeTerminalUiRuntime.slice(start, end)};({editPrompt,clearEdit})`, { AbortController, Promise, Map }) as {
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(themeStart, themeEnd)}${claudeTerminalUiRuntime.slice(start, end)};({editPrompt,clearEdit})`, {
+    AbortController, Promise, Map, desktopPromptChanges: new Map(), retireDesktopPromptChanges: () => {},
+  }) as {
     editPrompt(native: unknown, client: string, box: Box, key?: { key: string }, by?: string): Promise<Box> | Box
     clearEdit(client: string): void
   }

@@ -13108,6 +13108,10 @@ declare const promptCompletions: z.ZodObject<{
         text: z.ZodString;
         label: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
+        replacement: z.ZodOptional<z.ZodObject<{
+            start: z.ZodNumber;
+            end: z.ZodNumber;
+        }, z.core.$strict>>;
     }, z.core.$loose>>;
     start: z.ZodOptional<z.ZodNumber>;
     superseded: z.ZodOptional<z.ZodLiteral<true>>;

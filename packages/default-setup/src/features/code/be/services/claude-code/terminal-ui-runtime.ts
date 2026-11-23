@@ -49,6 +49,7 @@ import { claudeTerminalDiagnosticRuntime } from './terminal-diagnostic-runtime.t
 import { claudeTerminalToolOutputRuntime } from './terminal-tool-output-runtime.ts'
 import { claudeTerminalInstanceRuntime } from './terminal-instance-runtime.ts'
 import { claudeTerminalParentCommandRuntime } from './terminal-parent-command-runtime.ts'
+import { claudeTerminalFileCompletionRuntime } from './terminal-file-completion-runtime.ts'
 import { claudeTerminalAgentInputRuntime } from './terminal-agent-input-runtime.ts'
 import { claudeTerminalTaskRuntime } from './terminal-task-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
@@ -346,6 +347,7 @@ async function initialize(){
   const gate=await import('/$bunfs/root/chunk-wn0572jb.js');
   const engine=await import('/$bunfs/root/chunk-c7wcn77x.js'),nativeHost=await import('/$bunfs/root/chunk-sbny5rjh.js');
   const session=await import('/$bunfs/root/chunk-a32bd1ts.js');
+  const fileSuggestions=await import('/$bunfs/root/chunk-k5k90aj0.js');
   const roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
@@ -402,7 +404,7 @@ async function initialize(){
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   observeNativeManagedSettings(settingsDetector.Ta);
-  return native={hookPresence,mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,fileSuggestions,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -791,6 +793,7 @@ function drainEdit(n,clientId,state){
  });
 }
 // Each attached composer has one native completion chain and at most one queued draft.
+${claudeTerminalFileCompletionRuntime}
 const completions=new Map();
 function clearCompletion(clientId){
  const state=completions.get(clientId);if(!state)return;
@@ -810,12 +813,15 @@ function drainCompletion(n,clientId,state){
  const next=state.waiting;
  if(!next){if(completions.get(clientId)===state)completions.delete(clientId);return;}
  state.waiting=undefined;
- const args=n.session.rwt(next.box);
- if(!args){next.answer({suggestions:[]});drainCompletion(n,clientId,state);return;}
+ const token=nativeFileCompletionToken(next.box),args=n.session.rwt(next.box);
+ if(!args&&!token){next.answer({suggestions:[]});drainCompletion(n,clientId,state);return;}
  const abort=new AbortController();state.active=abort;
- Promise.resolve().then(()=>n.session.r_n(args,abort.signal)).then(result=>n.session.n_n(result.suggestions),()=>[]).then(suggestions=>{
+ const original=nativeFileCompletions(n,clientId,token,abort).catch(()=>[]);
+ const plugin=Promise.resolve().then(()=>args?n.session.r_n(args,abort.signal):undefined)
+  .then(result=>result?n.session.n_n(result.suggestions):[]).catch(()=>[]);
+ Promise.all([original,plugin]).then(([files,rows])=>{
   state.active=undefined;
-  next.answer(abort.signal.aborted||completions.get(clientId)!==state?{suggestions:[],superseded:true}:{suggestions,start:args.start});
+  next.answer(abort.signal.aborted||completions.get(clientId)!==state?{suggestions:[],superseded:true}:{suggestions:[...files,...rows],start:args?.start??token?.start});
   if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
  });
 }

@@ -329,8 +329,9 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     selectCompletion(index: number, offerId: string): boolean {
       const offer = completionOffer, row = offer?.result.suggestions[index]
       if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
-      const { snapshot, result } = offer, start = result.start!
-      const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(snapshot.cursor), cursor: start + row.text.length }, serialize, parse)
+      const { snapshot, result } = offer
+      const { start, end } = row.replacement ?? { start: result.start!, end: snapshot.cursor }
+      const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(end), cursor: start + row.text.length }, serialize, parse)
       retireCompletions()
       if (!next) { onProblem('Claude completion cannot replace this token without changing editor structure'); return false }
       const tr = rewriteTransaction(next)
