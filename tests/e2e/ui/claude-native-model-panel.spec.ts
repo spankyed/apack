@@ -135,16 +135,45 @@ test('chooses models through original hooks, decisions and same-session recovery
       if(stage==='picker')await reading().scrollIntoViewIfNeeded()
       await expect(reading()).toBeInViewport({ratio:1})
       for(const control of controls())await expect(control).toBeInViewport({ratio:1})
-      if(stage==='recovered'){
-        await expect(send).toBeEnabled()
-        const paint=await send.evaluate(async element=>{await Promise.all(element.getAnimations().map(animation=>animation.finished.catch(()=>undefined)));return getComputedStyle(element).backgroundColor})
-        expect(paint).toMatch(/^rgb\((37, 99, 235|29, 78, 216)\)$/)
-      }
+      const sendSample = stage === 'recovered' ? await recoveredSendSample() : undefined
       const file=`native-model-panel-${stage}-${width}-${height}.png`
       const image=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
       await writeFile(testInfo.outputPath(file),Buffer.from(image,'base64'))
+      if (sendSample) {
+        const pixels = await appPage.evaluate(async ({ image, width, height, sample }) => {
+          const png = Uint8Array.from(atob(image), character => character.charCodeAt(0))
+          const screenshot = await createImageBitmap(new Blob([png], { type: 'image/png' }))
+          const x = Math.floor(sample.x * screenshot.width / width)
+          const y = Math.floor(sample.y * screenshot.height / height)
+          const canvas = document.createElement('canvas')
+          canvas.width = canvas.height = 3
+          const context = canvas.getContext('2d')
+          if (!context) throw new Error('Could not sample the desktop capture')
+          context.drawImage(screenshot, x - 1, y - 1, 3, 3, 0, 0, 3, 3)
+          const rgba = context.getImageData(0, 0, 3, 3).data
+          return Array.from({ length: 9 }, (_, index) => Array.from(rgba.slice(index * 4, index * 4 + 3)))
+        }, { image, width, height, sample: sendSample })
+        const enabledColors = [[37, 99, 235], [29, 78, 216]]
+        const bluePixels = pixels.filter(pixel => enabledColors.some(color =>
+          color.every((channel, index) => Math.abs(channel - pixel[index]!) <= 3)
+        ))
+        expect(bluePixels.length, `${file} Send fill near (${sendSample.x}, ${sendSample.y}): ${JSON.stringify(pixels)}`).toBeGreaterThanOrEqual(5)
+      }
       captures.push({stage,width,height,file,readable:true,controlsReachable:true})
     }
+  }
+  async function recoveredSendSample() {
+    await expect(send).toBeEnabled()
+    const sample = await send.evaluate(async element => {
+      await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => undefined)))
+      const bounds = element.getBoundingClientRect()
+      // Sample the left padding away from the rounded corners, label and icon.
+      const x = bounds.left + 6
+      const y = bounds.top + bounds.height / 2
+      return { x, y, hit: element.contains(document.elementFromPoint(x, y)) }
+    })
+    expect(sample.hit, 'Recovered Send is the hit target at the sampled pixel').toBe(true)
+    return sample
   }
   const choice=(family:string)=>panel.locator('[data-native-settings-option]').filter({hasText:new RegExp(family,'i')}).first()
   const nativeNotice=(text:string)=>expect.poll(async()=>(await context()).messages.some((row:any)=>row.sender==='assistant'&&row.text.includes(text)))
