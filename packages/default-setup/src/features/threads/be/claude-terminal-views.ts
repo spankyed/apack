@@ -246,10 +246,23 @@ export function createClaudeTerminalViews(dependencies: {
       publish(key, view)
     })
   }
-  function drop(key: string) {
+  function drop(key: string, transferTeammate = true) {
     const view = views.get(key); if (view) retireAttachment(view)
     views.get(key)?.launch?.abort.abort()
     views.get(key)?.unsubscribe?.(); views.get(key)?.backgroundUnsubscribe?.(); views.delete(key)
+    const reconnect = transferTeammate ? view?.teammateReconnect : undefined
+    if (view && reconnect && teammateCrashCurrent(view, reconnect.target.ownerId, reconnect.target.sessionId)) {
+      // The window owns its terminal client. After it closes, another window already
+      // viewing the same crashed owner can take over the previously verified reconnect.
+      const continued = [...views].find(([, candidate]) => candidate.client !== view.client
+        && candidate.threadId === view.threadId && candidate.owner === view.owner && candidate.expires > Date.now()
+        && !candidate.queueComposer && !candidate.opening && !candidate.attachment && !candidate.teammateReconnect)
+      if (continued) {
+        const [id, candidate] = continued
+        candidate.teammateReconnect = reconnect
+        publish(id, candidate)
+      }
+    }
     const owner = view?.owner, recovered = owner && queueDrafts.get(owner)
     if (recovered && recovered.view === view) {
       recovered.view = undefined
@@ -716,6 +729,6 @@ export function createClaudeTerminalViews(dependencies: {
     disconnect(client: string) {
       for (const [key, view] of views) if (view.client === client) drop(key)
     },
-    clear(threadId?: string) { for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key) },
+    clear(threadId?: string) { for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key, false) },
   }
 }

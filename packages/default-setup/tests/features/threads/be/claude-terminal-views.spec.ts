@@ -1048,3 +1048,49 @@ it('reconnects only the verified teammate after its parent crashes and the origi
     expect(replacement.close).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
+
+
+it('hands off a verified teammate reconnect when its detached window closes', async () => {
+  const f = fixture(), {ownerId, sessionId} = f.owner.state
+  const parent = {...f.owner, keepAttachedTeammatesAfterCrash:false}
+  f.setCurrent(parent)
+  parent.state.tasks = [{id:'agent', name:'Reviewer', status:'idle', canStop:true}]
+  const child = () => ({
+    snapshot: {id:randomUUID(), terminalSession:{id:randomUUID(), target:null}, jobId:'agent',
+      sessionId, cwd:'/fixture', clientPid:234, status:'live' as const, output:[]},
+    input:vi.fn(), resize:vi.fn(), subscribe:vi.fn(() => () => {}), close:vi.fn(async () => {}),
+  })
+  const original = child(), renewed = child()
+  const reconnect = vi.fn(async (_signal: AbortSignal) => renewed)
+  parent.openTeammateTerminal = vi.fn(async () => ({...original, reconnect}))
+  const request = {...mount, type:'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId:'agent', revision:1}
+  const main = vi.fn<(state: ClaudeTerminalViewReply) => void>(), other = vi.fn()
+  try {
+    f.views.handle(mount, 'popout', f.send)
+    f.views.handle({...mount, threadId:'unrelated'}, 'foreign', other)
+    f.views.handle(mount, 'main', main)
+    f.views.handle(request, 'popout', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)?.[0].attachment?.status).toBe('ready'))
+    parent.keepAttachedTeammatesAfterCrash = true
+    parent.state.status = 'error'
+    parent.state.tasks = []
+    f.setCurrent()
+    for (const notify of f.listeners) notify()
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)?.[0].teammateReconnect?.taskId).toBe('agent'))
+    expect(main.mock.calls.at(-1)?.[0].teammateReconnect).toBeUndefined()
+    f.views.disconnect('popout')
+    expect(original.close).toHaveBeenCalledOnce()
+    expect(main.mock.calls.at(-1)?.[0].teammateReconnect?.taskId).toBe('agent')
+    expect(other.mock.calls.at(-1)?.[0].teammateReconnect).toBeUndefined()
+
+    f.views.handle({...request, revision:2}, 'popout', f.send)
+    f.views.handle(request, 'main', main)
+    await vi.waitFor(() => expect(main.mock.calls.at(-1)?.[0].attachment?.state?.id).toBe(renewed.snapshot.id))
+    expect(reconnect).toHaveBeenCalledOnce()
+
+    f.views.clear(mount.threadId)
+    expect(renewed.close).toHaveBeenCalledOnce()
+    f.views.handle(mount, 'new-window', main)
+    expect(main.mock.calls.at(-1)?.[0].teammateReconnect).toBeUndefined()
+  } finally { f.views.clear() }
+})
