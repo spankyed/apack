@@ -505,20 +505,24 @@ it.each([
   bridge.dispose()
 })
 
-it('preserves exact decoration boundaries through a long list rewrite', () => {
+it.each([
+  { kind: 'unordered', prefix: '*   ', marker: () => '- ' },
+  { kind: 'ordered', prefix: '1.   ', marker: (index: number) => `${String(index + 1).padStart(4)}. ` },
+])('preserves exact decoration boundaries through a long $kind list rewrite', ({ prefix, marker }) => {
   editor.commands.setContent('seed')
   const send = vi.fn(), problem = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, problem)
   const items = Array.from({ length: 2000 }, (_, index) => `Review release item ${Math.floor(index / 2) + 1}`)
-  const text = items.map(item => `*   ${item}`).join('\n')
-  const canonical = items.map(item => `- ${item}`).join('\n')
+  const text = items.map(item => prefix + item).join('\n')
+  const canonical = items.map((item, index) => marker(index) + item).join('\n')
   const last = text.lastIndexOf('\n') + 1
+  const end = prefix.length + 'Review'.length
   bridge.receive({
     revision: bridge.revision,
     status: 'applied',
     frame: { text, cursor: text.length, decorations: [
-      { start: 0, end: 10, color: 'red' },
-      { start: last + 1, end: last + 10, underline: true },
+      { start: 0, end, color: 'red' },
+      { start: last + 1, end: last + end, underline: true },
     ] },
   })
   const draft = bridge.readDraft()

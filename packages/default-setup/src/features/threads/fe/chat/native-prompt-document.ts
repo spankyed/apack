@@ -158,7 +158,7 @@ function normalizedClaudePromptOffsets(source: string, canonical: string, offset
   return mapped.size === requested.length ? mapped : undefined
 }
 
-/** Expose visible boundaries in lists whose serialization only normalizes bullet prefixes. */
+/** Expose visible boundaries when list serialization changes only the markers. */
 function listPaintBoundaries(source: string, canonical: string, offsets: readonly number[]): Map<number, number> | undefined {
   const rawLines = source.split('\n'), canonicalLines = canonical.split('\n')
   if (rawLines.length !== canonicalLines.length) return
@@ -168,8 +168,13 @@ function listPaintBoundaries(source: string, canonical: string, offsets: readonl
     const normalized = canonicalLines[lineIndex]!
     let visibleStart = start
     if (raw !== normalized) {
-      const before = /^( *)(?:[*+-])[ \t]+(?=\S)/.exec(raw), after = /^( *)(?:[*+-])[ \t]+(?=\S)/.exec(normalized)
-      if (!before || !after || before[1] !== after[1] || raw.slice(before[0].length) !== normalized.slice(after[0].length)) return
+      const marker = /^( *)([*+-]|[0-9]{1,9}[.)])[ \t]+(?=\S)/
+      const before = marker.exec(raw), after = marker.exec(normalized)
+      if (!before || !after || raw.slice(before[0].length) !== normalized.slice(after[0].length)) return
+      const ordered = before[2]!.length > 1
+      if (ordered !== (after[2]!.length > 1)) return
+      // The ordered-list serializer right-aligns the numbers. The marked parse below verifies nesting.
+      if (!ordered && before[1] !== after[1]) return
       visibleStart += before[0].length
     }
     const end = start + raw.length
@@ -243,7 +248,7 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
     }
     let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
     if (!located && !canonicalSource && offsets.length) {
-      // A global diff is quadratic across many normalized bullet markers. Probe the visible
+      // A global diff is quadratic across many normalized list markers. Probe the visible
       // boundaries directly after proving the normalization preserved each line's content.
       const boundaries = listPaintBoundaries(frame.text, canonicalText, offsets)
       if (boundaries) {
