@@ -1,7 +1,7 @@
 # What a window reaches its backend over
 
-Status: deferred, 2026-11-22. Not designed. It waits on [apack-state](../apack-state.md)'s host port, which puts the
-app on [apack-link](https://github.com/spankyed/apack-link), and on one measurement. This records what would
+Status: deferred, 2026-11-22. Not designed. It waits on apack-state's host port (spankyed/apack#590, its order of
+work, step 3), which puts the app on [apack-link](https://github.com/spankyed/apack-link), and on one measurement. This records what would
 change, what it would take, and what is not known.
 
 ## Where it stands
