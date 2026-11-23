@@ -11,11 +11,9 @@
 
 ---
 
-**apack is a programmable desktop workspace for working with and building shared tools.**
-
-Build tools and workflows around your own work, then share them as **packs**. A pack can contain
-reusable prompts and actions or add an entire feature with its own interface, services and data.
-Most of apack ships in the `default-setup` pack, using the same APIs available to pack authors.
+**apack is a programmable desktop workspace for working with and building shared tools.** A pack can contain
+reusable actions, prompts, and flows or add an entire feature with its own interface, services and data.
+Most of apack's feature ship in the [default-setup](https://github.com/spankyed/default-setup) pack, using the same APIs available to pack authors.
 
 Conversations, documents and automation work with a shared data layer. Write actions, save
 parameterized prompts and connect them in the visual flow editor. Flows can call models, run tools,
