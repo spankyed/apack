@@ -1043,9 +1043,11 @@ const isNearBottom = ref(true)
 const nativeTranscriptVisible = computed(() => !nativeTerminalActive.value && !focusedAgent.value && !agentSelection.value && !mainCommandView.value && !pendingNativeQuestion.value && !pendingNativePlan.value)
 // Navigation takes space beside history; the composer must not consume both.
 const nativeConversationNavigation = computed(() => !!currentThread.value?.context?.claudeCode && (!isNearBottom.value || !!currentThread.value.context.claudeCode.pendingElicitation) && allMessages.value.length > 0)
-const compactNavigationInHeader = computed(() => compactWorkspaceOwner.value === 'parent' && nativeTranscriptVisible.value
-  && !pendingNativeApproval.value && !nativeComposerOwner.value?.notice
-  && !currentThread.value?.context?.claudeCode?.nativeContinuation)
+const compactNavigationInHeader = computed(() => {
+  if (!nativeTranscriptVisible.value || pendingNativeApproval.value || currentThread.value?.context?.claudeCode?.nativeContinuation) return false
+  const notice = nativeComposerOwner.value?.notice
+  return notice?.kind === 'peer_inbound_approval' || compactWorkspaceOwner.value === 'parent' && !notice
+})
 
 const pendingScrollOnSend = ref(false)
 const lightboxOpen = ref(false)

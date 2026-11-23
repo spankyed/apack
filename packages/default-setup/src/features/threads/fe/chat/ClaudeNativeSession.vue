@@ -403,7 +403,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); unmountView('CLAUDE_
 /* In a short workspace split, the peer details can scroll independently of the choices and draft. */
 @media (max-height: 720px) {
   .native-launch:has([data-native-notice='peer_inbound_approval']) {
-    max-height: max(9rem, calc(100% - 13.5rem));
+    max-height: max(9rem, calc(100% - 14.5rem));
   }
   .native-notice[data-native-notice='peer_inbound_approval'] {
     display: flex;
