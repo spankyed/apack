@@ -647,9 +647,9 @@ describe('installPackFromLocal (pack layout path)', () => {
     const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
     manifest.version = '2.0.0';
     fs.writeFileSync(file, JSON.stringify(manifest));
-    const staging = vi.spyOn(fs, 'mkdtempSync');
+    const staging = vi.spyOn(fs, 'mkdtempDisposableSync');
     syncBuiltinESMExports();
-    const created = () => staging.mock.results.flatMap(result => result.type === 'return' && typeof result.value === 'string' ? [result.value] : []);
+    const created = () => staging.mock.results.flatMap(result => result.type === 'return' && typeof result.value?.path === 'string' ? [result.value.path] : []);
     try {
       await expect(installPackFromLocal(root, path.join(tmp, 'packs'))).rejects.toThrow('manifest does not match its built declarations');
       expect(created()).toHaveLength(1);
