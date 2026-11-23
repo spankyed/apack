@@ -10,7 +10,12 @@
       <span class="text-xs text-neutral-400">/{{ state.output.commandName }}</span>
       <div class="flex gap-2"><button type="button" class="rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200" @click="emit('expand', !expanded)">{{ expanded ? 'Show composer' : 'Expand output' }}</button><button type="button" class="rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200" @click="emit('dismiss')">Back to messages</button></div>
     </header>
-    <div role="region" aria-label="Command result" tabindex="0" class="min-h-0 flex-1 overflow-auto overscroll-contain p-3"><NativeTranscriptMessage v-if="frame" :frame="frame" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" /><pre v-else :class="state.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.output.text }}</pre></div>
+    <div role="region" aria-label="Command result" tabindex="0" class="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
+      <NativeTranscriptMessage v-if="frame" :frame="frame" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
+        <template v-if="feedbackIssue" #engine><pre class="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed" :class="frame.isErrored ? 'text-red-300' : 'text-neutral-300'"><FeedbackIssueText /></pre></template>
+      </NativeTranscriptMessage>
+      <pre v-else :class="state.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300"><FeedbackIssueText v-if="feedbackIssue" /><template v-else>{{ state.output.text }}</template></pre>
+    </div>
   </section>
   <section v-else-if="state?.status === 'confirmation' || state?.status === 'deciding'" aria-label="Native command confirmation" class="mx-4 mb-3 shrink-0 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3">
     <p class="text-sm text-neutral-200 [overflow-wrap:anywhere]">{{ state.command?.title }}</p>
@@ -20,7 +25,8 @@
 </template>
 <script setup lang="ts">
 import NativeBackgroundReview from './NativeBackgroundReview.vue'
-import { nextTick, ref, watch } from 'vue'
+import { computed, h, nextTick, ref, watch } from 'vue'
+import { openLink } from '@apackdev/sdk/fe'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
@@ -32,7 +38,37 @@ import NativePermissionsPanel from './NativePermissionsPanel.vue'
 const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; inputBlocked?: boolean; terminalSession?: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSession; dismissed: boolean; expanded: boolean }>()
 const emit = defineEmits<{ background: [request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }]; settings: [request: import('#features/code/common/native-settings.ts').ClaudeSettingsRequest]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
 function settingsOperation(action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation) { emit('settings', { requestId: crypto.randomUUID(), action }) }
+const FeedbackIssueText = () => {
+  const issue = feedbackIssue.value
+  if (!issue) return
+  const openIssue = (event: MouseEvent) => {
+    event.preventDefault()
+    openLink(feedbackIssueUrl)
+  }
+  return [
+    issue.before,
+    h('a', {
+      href: feedbackIssueUrl,
+      class: 'text-blue-400 underline focus-visible:outline focus-visible:outline-current',
+      onClick: openIssue,
+      onAuxclick: (event: MouseEvent) => { if (event.button === 1) openIssue(event) },
+    }, feedbackIssueUrl),
+    issue.after,
+  ]
+}
 const terminalPanel = ref<string>()
 const cancel = ref<HTMLButtonElement>()
+const feedbackIssueUrl = 'https://github.com/anthropics/claude-code/issues'
+const feedbackIssue = computed(() => {
+  const output = props.state?.output
+  if (output?.commandName !== 'feedback') return
+  const text = props.frame?.displayText ?? output.text
+  const offset = text.indexOf(' ' + feedbackIssueUrl)
+  if (offset < 0) return
+  const start = offset + 1
+  const after = text.slice(start + feedbackIssueUrl.length)
+  if (!/^(?:[.!?,;:]?(?:\s|$))/.test(after)) return
+  return { before: text.slice(0, start), after }
+})
 watch(() => props.state?.status, async status => { if (status === 'confirmation') { await nextTick(); cancel.value?.focus({ preventScroll: true }) } })
 </script>
