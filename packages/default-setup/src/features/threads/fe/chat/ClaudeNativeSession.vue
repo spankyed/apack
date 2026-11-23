@@ -400,6 +400,20 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); unmountView('CLAUDE_
 :global(.claude-native-lsp-details p) { margin: 0 0 8px; }
 .native-notice[data-native-notice='peer_inbound_approval'] .native-notice__body { max-height: min(15rem, 32vh); }
 .native-notice__peer-message { white-space: pre-wrap; unicode-bidi: plaintext; border-inline-start: 2px solid currentColor; padding-inline-start: 0.625rem; margin-block: 0.5rem; }
+/* In a short workspace split, the peer details can scroll independently of the choices and draft. */
+@media (max-height: 720px) {
+  .native-launch:has([data-native-notice='peer_inbound_approval']) {
+    max-height: max(9rem, calc(100% - 13.5rem));
+  }
+  .native-notice[data-native-notice='peer_inbound_approval'] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .native-notice[data-native-notice='peer_inbound_approval'] .native-notice__body { min-height: 0; }
+  .native-notice[data-native-notice='peer_inbound_approval'] .native-notice__actions,
+  .native-launch:has([data-native-notice='peer_inbound_approval']) .native-launch__actions { flex-shrink: 0; }
+}
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { container-type: inline-size; container-name: claude-native; --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
