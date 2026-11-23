@@ -9,7 +9,7 @@ vi.mock('@apackdev/sdk/fe', async () => { const { computed } = await import('vue
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following, latest, intentRevision: () => 0 }) }))
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus', 'openSettings'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<div><input aria-label="Agent draft" :disabled="disabled" /><button @click="openSettings">Claude settings</button></div>' } }))
 vi.mock('#features/threads/fe/chat/NativeTranscriptMessage.vue', () => ({ default: { template: '<div />' } }))
-vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', () => ({ default: { template: '<div />' } }))
+vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', () => ({ default: { props: ['modelValue'], template: '<div>{{ modelValue }}</div>' } }))
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); send.mockClear(); latest.mockClear(); following.value = true; context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
 afterEach(() => { app?.unmount(); vi.unstubAllGlobals(); document.body.replaceChildren() })
 async function mount(draft = 'Keep this draft') {
@@ -98,6 +98,23 @@ it('shows original compaction as a system event and offers the worker summary as
   expect(details.textContent).not.toContain('You')
   expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.disabled).toBe(false)
   expect(f.draftChange).not.toHaveBeenCalled()
+})
+
+it('shows native teammate attribution and body while preserving literal composer text', async () => {
+  const f = await mount()
+  const body = 'Read the release checklist.'
+  const envelope = '<teammate-message teammate_id="team-lead" summary="Release review">\n' + body + '\n</teammate-message>'
+  const native = { uuid: 'assignment', role: 'user' as const, text: envelope, renderText: envelope, origin: { kind: 'unclassified' } }
+  context.nativeUiViews[f.ui].state.agent.messages = [
+    native,
+    { ...native, uuid: 'person', origin: { kind: 'composer' } },
+    { ...native, uuid: 'unverified', text: envelope.replace('team-lead', 'worker').replace('">\n', '" verified="false">\n'),
+      renderText: envelope.replace('team-lead', 'worker').replace('">\n', '" verified="false">\n') },
+  ]
+  await nextTick()
+  expect(f.root.querySelector('[data-native-agent-message="assignment"]')?.textContent).toBe('Team lead' + body)
+  expect(f.root.querySelector('[data-native-agent-message="person"]')?.textContent).toBe('You' + envelope)
+  expect(f.root.querySelector('[data-native-agent-message="unverified"]')?.textContent).toBe('worker (unverified)' + body)
 })
 
 it('moves focus to the transcript when jumping back to live output', async () => {

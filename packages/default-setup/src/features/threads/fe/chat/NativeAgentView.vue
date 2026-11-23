@@ -19,7 +19,7 @@
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full min-w-0 flex-1 overflow-y-auto overscroll-contain py-3 pl-4 pr-1" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
-      <article v-for="message in state?.agent?.messages ?? []" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-5 min-w-0 last:mb-0">
+      <article v-for="{ message, teammate } in transcript" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-5 min-w-0 last:mb-0">
         <template v-if="message.role === 'system'">
           <p v-if="message.compaction === 'boundary'" class="flex items-center gap-3 text-xs text-neutral-400 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">Conversation compacted</p>
           <details v-else class="rounded-lg border border-white/10 px-3 py-2 text-sm">
@@ -28,11 +28,13 @@
           </details>
         </template>
         <template v-else>
-          <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">{{ message.role === 'user' ? 'You' : name }}</p>
+          <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">{{ teammate?.sender ?? (message.role === 'user' ? 'You' : name) }}</p>
           <time v-if="timestamps.has(message.uuid)" :datetime="timestamps.get(message.uuid)?.datetime" data-claude-message-timestamp
             class="mb-1 block break-words text-xs text-neutral-400">{{ timestamps.get(message.uuid)?.label }}</time>
-          <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field" />
-          <TiptapEditor v-else mode="viewer" variant="chat" :model-value="message.text" />
+          <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field">
+            <template v-if="teammate" #engine><TiptapEditor mode="viewer" variant="chat" :model-value="teammate.text" /></template>
+          </NativeTranscriptMessage>
+          <TiptapEditor v-else mode="viewer" variant="chat" :model-value="teammate?.text ?? message.text" />
         </template>
       </article>
       <NativeAgentHandback v-if="state?.agent?.handback" :report="state.agent.handback" />
@@ -113,6 +115,19 @@ watch(selectionRoot, (element, _previous, cleanup) => {
 const pageSelection = provideClaudeUiSelection(() => selectionRoot.value)
 watch(() => JSON.stringify([uiMount.value, state.value?.agent?.messages.filter(message => message.role === 'user').at(-1)?.uuid]), pageSelection.clear)
 
+// Native teammate messages have their own sender and body. Keep the original row and hook source intact.
+const teammateHeader = /^<teammate-message\s+teammate_id="([A-Za-z0-9][A-Za-z0-9._@-]{0,127})"(?:\s+color="[^"<>]*")?(?:\s+summary="[^"<>]*")?(?:\s+verified="(false)")?>/
+const teammateFooter = '</teammate-message>'
+const transcript = computed(() => (state.value?.agent?.messages ?? []).map(message => {
+  if (message.role !== 'user' || message.origin?.kind !== 'unclassified' || message.renderText !== message.text
+    || !message.text.endsWith(teammateFooter)) return { message }
+  const header = teammateHeader.exec(message.text)
+  if (!header) return { message }
+  const text = message.text.slice(header[0].length, -teammateFooter.length).trim()
+  if (!text || text.includes('<teammate-message') || text.includes(teammateFooter)) return { message }
+  const sender = header[1] === 'team-lead' ? 'Team lead' : header[1]
+  return { message, teammate: { sender: header[2] ? sender + ' (unverified)' : sender, text } }
+}))
 const frames = computed(() => new Map(state.value?.transcriptMessages?.map(frame => [frame.uuid, frame])))
 const timestamps = computed(() => new Map(selectedOwner.value ? state.value?.transcriptTimestamps?.map(timestamp => [timestamp.uuid, timestamp]) : []))
 const terminal = computed(() => context.value.nativeTerminalViews[terminalMount])
