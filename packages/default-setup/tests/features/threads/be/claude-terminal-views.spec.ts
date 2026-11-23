@@ -939,3 +939,57 @@ it('releases only the disconnected window’s teammate attachments, including an
     expect(f.owner.close).not.toHaveBeenCalled()
   } finally { f.views.clear() }
 })
+
+it.each(['crash', 'clean stop', 'session reset'] as const)('scopes an attached teammate across %s', async exit => {
+  const f = fixture(), { ownerId, sessionId } = f.owner.state
+  const parent = { ...f.owner, keepAttachedTeammatesAfterCrash: false }
+  f.setCurrent(parent)
+  parent.state.tasks = [{ id: 'agent', name: 'Reviewer', status: 'idle', canStop: true }]
+  const child = {
+    snapshot: { id: randomUUID(), terminalSession: { id: 'broker-client', target: null }, jobId: 'agent',
+      sessionId, cwd: '/fixture', clientPid: 234, status: 'live' as const, output: [] },
+    input: vi.fn(), resize: vi.fn(), subscribe: vi.fn(() => () => {}), close: vi.fn(async () => {}),
+  }
+  const open = vi.fn(async () => child)
+  parent.openTeammateTerminal = open
+  const request = { ...mount, type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId: 'agent', revision: 1 }
+  try {
+    f.views.handle(mount, 'teammate-window', f.send)
+    f.views.handle(request, 'teammate-window', f.send)
+    await vi.waitFor(() => expect(f.send).toHaveBeenLastCalledWith(expect.objectContaining({
+      attachment: expect.objectContaining({ state: child.snapshot, status: 'ready' }),
+    })))
+    parent.state.tasks = []
+    if (exit === 'crash') {
+      parent.keepAttachedTeammatesAfterCrash = true
+      parent.state.status = 'error'
+      f.setCurrent()
+    } else if (exit === 'clean stop') {
+      parent.state.status = 'exited'
+      f.setCurrent()
+    } else {
+      parent.state.sessionId = randomUUID()
+    }
+    for (const notify of f.listeners) notify()
+    await Promise.resolve()
+
+    if (exit === 'crash') {
+      expect(child.close).not.toHaveBeenCalled()
+      f.views.handle({ ...request, revision: 2 }, 'teammate-window', f.send)
+      expect(open).toHaveBeenCalledOnce()
+      f.views.handle({ ...mount, type: 'CLAUDE_BACKGROUND_INPUT', attachmentId: child.snapshot.id, text: 'still connected' }, 'teammate-window', f.send)
+      expect(child.input).toHaveBeenCalledExactlyOnceWith(child.snapshot.id, 'still connected')
+      const replacement = { ...f.owner, state: { ...f.owner.state, status: 'live' as const, ownerId: randomUUID() } }
+      f.setCurrent(replacement)
+      f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_OPEN' }, 'parent-window', vi.fn())
+      expect(child.close).not.toHaveBeenCalled()
+      f.views.handle(mount, 'parent-window', vi.fn())
+    }
+
+    expect(child.close).toHaveBeenCalledOnce()
+    expect(f.send.mock.calls.at(-1)?.[0].attachment).toBeUndefined()
+    f.views.handle({ ...mount, type: 'CLAUDE_BACKGROUND_INPUT', attachmentId: child.snapshot.id, text: 'stale' }, 'teammate-window', f.send)
+    expect(child.input).not.toHaveBeenCalledWith(child.snapshot.id, 'stale')
+    expect(parent.close).not.toHaveBeenCalled()
+  } finally { f.views.clear() }
+})

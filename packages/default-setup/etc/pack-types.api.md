@@ -2957,6 +2957,8 @@ interface ClaudeNativeTerminalOwner {
         stopped?: boolean;
         details?: ClaudeNativeTaskDetails;
     }>;
+    /** A separately attached tmux client can outlive a parent killed outside the app. */
+    readonly keepAttachedTeammatesAfterCrash?: boolean;
     openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>;
     getMcpStatus(): Promise<ClaudeMcpStatus>;
     getMemoryDialog(): Promise<ClaudeMemoryDialog>;

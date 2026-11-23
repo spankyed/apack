@@ -199,8 +199,17 @@ export function createClaudeTerminalViews(dependencies: {
     if (target) {
       const owner = view.owner
       const state = owner?.state
-      return owner === dependencies.get(view.threadId) && state?.status === 'live' && state.ownerId === target.ownerId
-        && state.sessionId === view.attachment?.sessionId && state.tasks.some(task => task.id === target.taskId && task.canStop)
+      if (state?.ownerId !== target.ownerId || state.sessionId !== view.attachment?.sessionId) return false
+      const currentOwner = dependencies.get(view.threadId)
+      if (state.status === 'live') {
+        return owner === currentOwner && state.tasks.some(task => task.id === target.taskId && task.canStop)
+      }
+      // This does not grant a new attachment. Only the already-verified broker client can
+      // survive this owner's crash, while its window and the original native session still match.
+      if (state.status !== 'error' || !owner?.keepAttachedTeammatesAfterCrash || currentOwner && currentOwner !== owner
+        || view.attachment?.status !== 'ready') return false
+      const client = view.attachmentOwner?.snapshot
+      return client?.status === 'live' && client.inputBlocked !== true && client.jobId === target.taskId && client.sessionId === state.sessionId
     }
     const continuation = dependencies.continuation?.(view.threadId)
     return !!view.attachment && continuation?.sessionId === view.attachment.sessionId && continuation.continuedInSessionId === view.attachment.continuedInSessionId
@@ -332,6 +341,10 @@ export function createClaudeTerminalViews(dependencies: {
       view.queued = true
       queueMicrotask(() => { view.queued = false; publish(key, view) })
     })
+    // A reopened owner replaces the terminal authority for the entire thread.
+    for (const [id, candidate] of views) {
+      if (candidate !== view && candidate.threadId === view.threadId && candidate.owner !== owner && candidate.attachment?.teammate) publish(id, candidate)
+    }
   }
   return {
     handle(event: ClaudeTerminalViewRequest | (ClaudeQueuedPromptEdit & {type: 'EDIT_CLAUDE_QUEUED_PROMPT'}),

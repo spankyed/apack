@@ -82,6 +82,8 @@ export interface ClaudeNativeTerminalOwner {
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
+  /** A separately attached tmux client can outlive a parent killed outside the app. */
+  readonly keepAttachedTeammatesAfterCrash?: boolean
   openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   getMcpStatus(): Promise<ClaudeMcpStatus>
   getMemoryDialog(): Promise<ClaudeMemoryDialog>
@@ -149,6 +151,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let continuation: ClaudeNativeContinuation | undefined
   let exitCode: number | undefined, stopping = false, changingModel = false, changingPermission = false
   let startupPolicyProblem: string | undefined
+  let keepAttachedTeammatesAfterCrash = false
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
@@ -190,6 +193,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     // `code` is absent when a signal ended it, which this trace takes only integers for; `outcome` is what
     // carries that case, and the signal itself reaches the window on the session's own exit
     trace('exit', {outcome:stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code: code ?? undefined});
+    keepAttachedTeammatesAfterCrash = !stopping && bridge.ready && signal === 'SIGKILL'
     closed = true; clearTimeout(hardStop); status = stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code ?? undefined
     if (status === 'error' && !bridge.ready) {
       // A managed document can prevent the bridge from connecting. The pinned CLI
@@ -561,6 +565,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback, choice: response.choice, choiceToken: response.choiceToken }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
       },
+      get keepAttachedTeammatesAfterCrash() { return keepAttachedTeammatesAfterCrash },
       async openTeammateTerminal(taskId, signal) {
         const {nativePid, sessionId} = currentState()
         if (closed || process.platform === 'win32' || !nativePid) throw Error('The private teammate terminal is unavailable')
