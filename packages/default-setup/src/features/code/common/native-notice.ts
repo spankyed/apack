@@ -31,13 +31,23 @@ export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
   z.object({ ...identity, ...body, kind: z.literal('resume_return'), choices: z.array(z.object({ value: z.enum(['resume_compact', 'resume_continue', 'resume_never']), label: z.string().min(1).max(4000) })).length(3) }),
   z.object({ ...identity, ...body, kind: z.literal('fullscreen_upsell'), choices: z.array(z.object({ value: z.enum(['fullscreen_accept', 'fullscreen_dismiss']), label: z.string().min(1).max(4000) })).length(2) }),
   z.object({ ...identity, ...body, kind: z.literal('ide_onboarding'), choices: z.tuple([z.object({ value: z.literal('ide_welcome_dismiss'), label: z.literal('Continue') })]) }),
+  z.object({
+    ...identity,
+    ...body,
+    kind: z.literal('peer_inbound_approval'),
+    message: z.string().max(16000),
+    choices: z.tuple([
+      z.object({ value: z.literal('peer_deny'), label: z.string().min(1).max(4000) }),
+      z.object({ value: z.literal('peer_deliver'), label: z.string().min(1).max(4000) }),
+    ]),
+  }),
   z.object({ ...identity, ...body, kind: z.literal('goal_proposal'), choices: z.array(z.object({ value: z.enum(['goal_decline', 'goal_accept']), label: z.string().min(1).max(4000) })).length(2) }),
   z.object({ ...identity, ...body, kind: z.literal('auto_mode_server_fallback'), helpUrl: z.string().max(4000) }),
   z.object({ ...identity, ...body, kind: z.literal('plugin_hint'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), sourceCommand: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'disable']), label: z.string().min(1).max(4000) })).length(3) }),
   z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), fileExtension: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
 ])
 export type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>
-export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({decision:'credit';credit:ClaudeCreditRequest} | { selectedValues?: string[]; decision: 'effort_accept' | 'effort_decline' | 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry' | 'computer_cancel' | 'chrome_install' | 'chrome_not_now' | 'chrome_never' | 'chrome_continue' | 'chrome_wait' | 'chrome_skip' | 'chrome_cancel' | 'browser_allow' | 'browser_domain' | 'browser_deny' | 'browser_cancel' | 'quota_resume' | 'quota_new_conversation' | 'quota_dismiss' | 'newer_accept' | 'newer_keep' | 'newer_dismiss' | 'resume_compact' | 'resume_continue' | 'resume_never' | 'resume_dismiss' | 'background_confirm' | 'background_stay' | 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny' | 'sandbox_cancel' | 'policy_approve' | 'policy_reject' | 'compact_previous' | 'compact_next' | 'compact_accept' | 'compact_keep' | 'compact_dismiss' | 'goal_accept' | 'goal_decline' | 'ide_welcome_dismiss' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' })
+export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({decision:'credit';credit:ClaudeCreditRequest} | { selectedValues?: string[]; decision: 'effort_accept' | 'effort_decline' | 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry' | 'computer_cancel' | 'chrome_install' | 'chrome_not_now' | 'chrome_never' | 'chrome_continue' | 'chrome_wait' | 'chrome_skip' | 'chrome_cancel' | 'browser_allow' | 'browser_domain' | 'browser_deny' | 'browser_cancel' | 'quota_resume' | 'quota_new_conversation' | 'quota_dismiss' | 'newer_accept' | 'newer_keep' | 'newer_dismiss' | 'resume_compact' | 'resume_continue' | 'resume_never' | 'resume_dismiss' | 'background_confirm' | 'background_stay' | 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny' | 'sandbox_cancel' | 'policy_approve' | 'policy_reject' | 'compact_previous' | 'compact_next' | 'compact_accept' | 'compact_keep' | 'compact_dismiss' | 'goal_accept' | 'goal_decline' | 'peer_deny' | 'peer_deliver' | 'peer_cancel' | 'ide_welcome_dismiss' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' })
 export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decision: string): boolean {
   if (notice.kind === 'fable_overage_consent_prompt') return decision === 'credit'
   if (notice.kind === 'credit_consent_result') return false
@@ -57,6 +67,7 @@ export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decisio
   if (notice.kind === 'resume_return') return decision === 'resume_dismiss' || notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'fullscreen_upsell') return notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'ide_onboarding') return decision === 'ide_welcome_dismiss'
+  if (notice.kind === 'peer_inbound_approval') return decision === 'peer_cancel' || notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'goal_proposal') return notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'refusal_fallback_prompt') return decision === 'cancelled' || notice.choices.some(choice => choice.value === decision)
   return notice.kind === 'lsp_recommendation' || notice.kind === 'plugin_hint' ? notice.choices.some(choice => choice.value === decision) : decision === 'continue' || decision === 'interrupt'
