@@ -877,7 +877,7 @@ function rejectNativeQuestion(identity: import('#features/code/be/services/claud
   send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
-function respondNativeApproval(response: Record<string, unknown>) {
+function respondNativeApproval(response: { approved: boolean; reason?: string }) {
   const approval = pendingNativeApproval.value
   if (approval) send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: approval.messageId, response })
 }
