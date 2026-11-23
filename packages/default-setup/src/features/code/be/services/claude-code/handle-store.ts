@@ -216,7 +216,7 @@ function readUntilAborted<T>(read: () => Promise<T>, signal: AbortSignal): Promi
 }
 
 /** Explicit handoff/reopen; reservation and a fresh settings probe keep one session writer. */
-export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions, backgroundObserver?: ClaudeBackgroundStatusObserver) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
+export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions, backgroundObserver?: ClaudeBackgroundStatusObserver, teammateRecoveryThread?: string) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
   const {resume: saved, signal, ...overrides} = options
   if (signal?.aborted) throw new Error('Native terminal startup was cancelled')
   const previous = conversations.get(key), retained = terminalResumes.get(key), resume = saved ? ClaudeNativeLaunchSchema.parse(saved) : retained
@@ -251,7 +251,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
     }
     if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
     if (typeof launch.cwd !== 'string' || !launch.cwd) throw new Error('Native terminal handoff has no current working directory')
-    prepared = await prepare({ ...launch, settings, signal: abort.signal, teammateRecoveryThread: key }, backgroundObservers.get(key)?.observer.parentSessionId === launch.sessionId ? backgroundObservers.get(key)?.observer : undefined)
+    prepared = await prepare({ ...launch, settings, signal: abort.signal }, backgroundObservers.get(key)?.observer.parentSessionId === launch.sessionId ? backgroundObservers.get(key)?.observer : undefined, key)
     if (!current()) throw new Error('Claude conversation changed before terminal startup')
     await previous?.owner.close()
     if (abort.signal.aborted || starting.get(key) !== ticket) throw new Error('Native terminal handoff was cancelled')

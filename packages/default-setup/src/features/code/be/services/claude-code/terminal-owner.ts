@@ -108,7 +108,6 @@ export interface ClaudePreparedNativeTerminal { start(): Promise<ClaudeNativeTer
 export interface ClaudeNativeTerminalOptions {
   sessionId: string
   cwd: string
-  teammateRecoveryThread?: string
   settings: ClaudeSettings
   permissionMode: PermissionMode
   prePlanMode?: PermissionMode
@@ -127,7 +126,7 @@ export interface ClaudeNativeTerminalOptions {
 }
 
 /** One native terminal process; no print sidecar and no independent status-command scheduler. */
-export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalOptions, backgroundObserver?: import('./background-status-observer.ts').ClaudeBackgroundStatusObserver): Promise<ClaudePreparedNativeTerminal> {
+export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalOptions, backgroundObserver?: import('./background-status-observer.ts').ClaudeBackgroundStatusObserver, teammateRecoveryThread?: string): Promise<ClaudePreparedNativeTerminal> {
   // **Three POSIX dependencies, named so the next reader knows what Windows needs rather than that it is
   // unsupported.** The pty is the broker's and portable; these are not: `session.signal` below, which the
   // terminal service refuses off POSIX because Windows has no signals; the bridge's unix sockets, which
@@ -210,10 +209,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       const tail = stripVTControlCharacters(output.map(chunk => chunk.text).join(''))
       startupPolicyProblem = tail.match(/^[^\r\n]{1,4096}: Managed settings document could not be parsed as a JSON object; none of its settings are in effect\. Fix or remove it\.\r?$/m)?.[0].trim()
     }
-    if (keepAttachedTeammatesAfterCrash && options.teammateRecoveryThread && verifiedPanes.size) {
+    if (keepAttachedTeammatesAfterCrash && teammateRecoveryThread && verifiedPanes.size) {
       const sessionId = bridge.projection.sessionId
       const panes = [...verifiedPanes.values()].filter(pane => pane.sessionId === sessionId)
-      await saveClaudeTeammateCheckpoint({profile:resolveAppEnvironment().userDataDir, threadId:options.teammateRecoveryThread, sessionId}, panes, env)
+      await saveClaudeTeammateCheckpoint({profile:resolveAppEnvironment().userDataDir, threadId:teammateRecoveryThread, sessionId}, panes, env)
         .catch(error => logger.warn('Claude teammate checkpoint could not be saved', { error: error instanceof Error ? error.message : String(error) }))
     }
     try { await bridge.close() } finally {
