@@ -1,8 +1,9 @@
 # Claude research replay tools
 
 `runner.tgz` contains only authored research tools from the commit in `manifest.json`.
-It contains no recovered Claude implementation, native binary, private traffic, credentials or
-`node_modules`. The fixture is generated, not a second maintained copy of the research tools.
+The generated archive contains committed `src/`, `package.json` and `package-lock.json`.
+Use the research checkout for documentation, upgrade-contract validation and the archived
+app evidence and its run-specific verifiers. [Research handoff](https://github.com/spankyed/claude-code-research/blob/master/docs/research-handoff.md).
 
 Current lifecycle entry points also include `driveFreshNativeBackgroundNavigation`
 (`apack-fresh-native-background-navigation-drive.mjs`), with
