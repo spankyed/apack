@@ -27,7 +27,6 @@
 
 import { query as queryRaw, type QueryHandle } from './query.ts'
 import { execOnce, spawnStream } from './runner.ts'
-import type { QueryOptions } from './types.ts'
 
 import * as sessions from './sessions.ts'
 import * as mcp from './mcp.ts'
@@ -63,7 +62,7 @@ export interface ClaudeCodeContext {
 }
 
 export interface ClaudeCode {
-  query(opts: QueryOptions): Promise<QueryHandle>
+  query: typeof queryRaw
   sessions: typeof sessions
   mcp: typeof mcp
   plugins: typeof plugins
@@ -82,12 +81,12 @@ export interface ClaudeCode {
  */
 function createClaudeCode(ctx: ClaudeCodeContext = {}): ClaudeCode {
   return {
-    query: opts => queryRaw({
+    query: (opts, initialize) => queryRaw({
       cwd: ctx.cwd,
       env: ctx.env,
       cliPath: ctx.cliPath,
       ...opts,
-    }),
+    }, initialize),
     sessions,
     mcp,
     plugins,

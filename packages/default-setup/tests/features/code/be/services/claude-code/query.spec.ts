@@ -1,3 +1,4 @@
+import { claudeCode } from '#features/code/be/services/claude-code/index.ts'
 import { ResultLineSchema, type StreamLine } from '#features/code/be/services/claude-code/types.ts'
 /**
  * Tests for the `finaliseNoResult` helper — the single point in `query.ts`
@@ -615,6 +616,17 @@ describe('query() — stdin EOF handling (single-turn default)', () => {
     await handle.close()
 
     expect(mock.endInputCalls).toBe(1)
+  })
+
+  it('forwards the print prediction opt-in through the Claude Code instance to initialize', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await claudeCode.query({ cwd: '/tmp', keepStdinOpen: true }, { promptSuggestions: true })
+    expect(mock.writes).toEqual([expect.objectContaining({
+      type: 'control_request', request: expect.objectContaining({ subtype: 'initialize', promptSuggestions: true }),
+    })])
+    mock.forceExit()
+    await handle.close()
   })
 
   it('sends only the initialize handshake when no prompt is provided', async () => {
