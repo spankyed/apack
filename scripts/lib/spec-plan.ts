@@ -30,13 +30,7 @@ export interface Run {
   readonly cwd: string;
   readonly command: string;
   readonly args: readonly string[];
-  /**
-   * Printed after it, for what the mechanism cannot cover.
-   *
-   * A list, because a run can sit behind more than one seam at once. A source file that a pack suite reaches
-   * through `dist` and an integration half reaches through a second config is behind both, and while there
-   * was one seam one slot was enough — the second could only have arrived by displacing the first.
-   */
+  /** What the selected Vitest config cannot cover. */
   readonly notes?: readonly string[];
   /**
    * The unit suites this run executes **in full**, by workspace name.
@@ -59,11 +53,6 @@ export interface Run {
    */
   readonly claimsCoverageOf?: string;
   /**
-   * Specs covering this run's target that the run itself cannot reach. Printed after it when it found some —
-   * as `note` is — and *in place of* "no spec covers it" when it found none, which is the case it exists for.
-   */
-  readonly beyond?: BuildEdge;
-  /**
    * The vitest options that produce this run's file list without running it, for `spec:dry`.
    *
    * Declared rather than parsed back out of `args`, so the prediction asks the same question the run does
@@ -78,29 +67,6 @@ export interface Run {
    * spec is named for.
    */
   readonly specs?: readonly string[];
-}
-
-/**
- * Specs that cover a target and that no walk of the module graph will reach, because a build stands between
- * them: `src` -> `apack pack build` -> build output -> the spec that reads it.
- *
- * **Beside a run, never instead of one.** An apply *helper* is imported by specs directly — measured,
- * `src/content/actions/claude-code/_helpers/thread-context.ts` reaches 3 — and routing every `src/content/**`
- * file at the build would throw that answer away to recommend a build. So the walk still runs and this is
- * what it could not see, which is the shape `packSuiteNote` already has.
- *
- * What it changes when the walk finds nothing is the sentence. `related` reports the same emptiness for a
- * file nothing covers and for one whose specs are behind a build, and those are opposite facts — a gap in
- * the suite against a gap in the router. Until this existed the content source got the first for the second:
- * *"No spec covers …"*, which `tests/content/` refutes.
- */
-export interface BuildEdge {
-  /** Repo-relative, as the user gave it */
-  readonly target: string;
-  /** What covers it and how it is reached, as a sentence fragment */
-  readonly covers: string;
-  /** The command that answers it */
-  readonly how: string;
 }
 
 /** Exported for `spec-dry.ts`, which refuses anything else in a run's file list */
@@ -210,15 +176,8 @@ export const packageOf = (rel: string): string | null => /^packages\/([^/]+)\//.
 /**
  * The integration halves a change could reach: the edited package's own, and any whose package depends on it.
  *
- * **A second seam, and not the same one.** A pack suite is out of reach because it resolves `dist`, so no
- * module graph connects an edit to it without a build. An integration half is out of reach for a duller
- * reason — it is a second vitest config, and the root projects `exclude` its specs — but the consequence is
- * the same and was worse, because nothing said so: `npm run spec -- <a source file>` printed *"every spec
- * covering X"* over a run that had skipped every integration spec covering X. Measured, 22 modules in
- * `@apackdev/cli` alone are imported directly by one.
- *
- * Which is also why the sentence must not say "through a build": these specs resolve `@apackdev/source` like
- * any host project, so `spec:full` reaches them without building anything.
+ * The fast project config excludes integration specs. The planner can report the affected
+ * integration suites or run their separate config with `--full`.
  */
 export function affectedIntegrationSuites(editedPackages: readonly (string | null)[], root?: string): string[] {
   const edited = new Set(editedPackages.filter((pkg): pkg is string => pkg !== null));
@@ -236,14 +195,13 @@ const integrationNote = (affected: readonly string[], full = false): string | un
 /**
  * The run that answers it: the pool, which is what the chain runs and what one suite's config cannot be.
  *
- * It runs every integration half, not only the affected ones — as `packSuiteRun` does, because one pooled
+ * It runs every integration half, not only the affected ones because one pooled
  * run is what the step is and splitting it would be slower than running it whole.
  *
  * **Its file list is named rather than `covers`**, which would be the obvious thing and is wrong here.
  * `covers` means a unit suite executed *in full*, and pricing reads that suite's whole record — but these
  * three workspaces each keep one record holding both halves, and the pool runs one of them. Measured, the
  * prediction came out at 260.9s for a run of 232.7s and listed fast specs among what it would execute.
- * `packSuiteRun` can use `covers` honestly because a pack's record is its whole suite.
  */
 const integrationRun = (root: string): Run => ({
   label: 'the integration halves, as the chain pools them',
@@ -346,7 +304,7 @@ const groupByPackage = (specs: readonly string[], root: string): Map<string | nu
 const IS_VITEST_CONFIG = /(^|\/)vitest\.[\w.]*config\.ts$/;
 const CONFIG_READER = 'internal-repo-checks';
 
-/** `--full` asks for the answer a rebuild would give as well, which costs a build and the pack suite */
+/** `--full` includes the separate integration pool when the target can reach it. */
 export interface PlanOptions { readonly full?: boolean }
 
 /**
@@ -407,7 +365,7 @@ export function planTargets(targets: readonly string[], flags: readonly string[]
   const ambiguous: { query: string; specs: string[] }[] = [];
   const named: string[] = [];          // spec files the targets name, grouped at the end
   const sourcePackages: (string | null)[] = [];   // whose integration suites can cover the changes
-  let wantsRoot = false;      // a root run was planned, so the pack suites it cannot reach are worth naming
+  let wantsRoot = false;      // a root run was planned, so the integration suites it cannot reach are worth naming
   let needsEnsure = false;    // a run was planned that npm fires no `pretest` for
 
   for (const arg of targets) {
@@ -459,9 +417,7 @@ export function planTargets(targets: readonly string[], flags: readonly string[]
  * With no target: the specs your uncommitted changes affect.
  *
  * One root `--changed` answers it for every host project at once, resolving the same graph `related` does
- * — including a change under `scripts/`, which reaches `@app/internal-repo-checks` through its specs' imports. The
- * pack suite is asked separately because it is not a root project, and it is asked at all because a change
- * *inside* it is the one thing a root run cannot see.
+ * — including changes under `scripts/`, which reach `@app/internal-repo-checks` through its specs' imports.
  *
  * Takes the changed paths rather than their packages, and derives the packages here: what the caller has is
  * `git status`, and deciding is this file's job. It also needs the paths themselves, to say whether anything
@@ -476,18 +432,15 @@ export function planChanged(changedPaths: readonly string[], flags: readonly str
 
   const changedPackages = [...new Set(changedPaths.map(packageOf))].filter((pkg) => pkg !== null);
   const affectedIntegration = affectedIntegrationSuites(changedPackages, root);
-  // No root run when nothing in the change set is in its graph: a pack's manifest and its content sources are
-  // covered by that pack's own suite below, and asking the root for them is the empty vitest this route
-  // stopped paying for
-  const runs: Run[] = [ensurePackages(root)];
-  if (coverable.length > 0) {
-    runs.push(rootRun(root, 'the specs your changes affect', ['--changed', '--run'], flags,
+  const runs: Run[] = [
+    ensurePackages(root),
+    rootRun(root, 'the specs your changes affect', ['--changed', '--run'], flags,
       [integrationNote(affectedIntegration, full)],
-      `${coverable.length} changed file${coverable.length === 1 ? '' : 's'} a spec could cover`));
-  }
-  const pack = rootProjects(root);
+      `${coverable.length} changed file${coverable.length === 1 ? '' : 's'} a spec could cover`),
+  ];
+  const projects = rootProjects(root);
   for (const pkg of changedPackages) {
-    if (!pack.includes(pkg)) runs.push(packageRun(root, pkg, [], flags, '(changed)'));
+    if (!projects.includes(pkg)) runs.push(packageRun(root, pkg, [], flags, '(changed)'));
   }
   if (full && affectedIntegration.length > 0) runs.push(integrationRun(root));
   return { runs, unmatched: [], ambiguous: [] };

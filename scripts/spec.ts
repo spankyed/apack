@@ -15,7 +15,7 @@
 //   npm run spec -- <source file>           every spec that imports it, transitively, in whatever package
 //   npm run spec -- <any of the above> -t "case"     anything starting with `-` goes to vitest untouched
 //   npm run spec -- --changed HEAD~1        a different base for the change set
-//   npm run spec:full [...]                 and the pack suites a rebuilt `dist` would reach
+//   npm run spec:full [...]                 also run the separate integration pool when applicable
 //
 // A **source file** is the case worth knowing about. Its own package would be one of the seven suites that
 // cover `@apackdev/sdk`: a green run of specs that could not fail for the change. So it runs one vitest over
@@ -23,27 +23,14 @@
 // That costs what the blast radius costs — a component nothing imports is still 1-3s, a type every pack's
 // data flows through is 28s and 104 files. To go back to one spec while iterating, name it.
 //
-// Where it can, it delegates to the package's own `test` script, so @apackdev/cli's and @app/default-setup's
-// pretest guard (`packages:ensure`) and each vitest config still apply. A root run has no such hook, so the
-// plan puts `packages:ensure` in front of it.
-//
-// **Two more edges run through a build, inside a pack.** `src/content/**` compiles to `dist/*.content.json`, which
-// `tests/content/` reads against its goldens, and `apack.json` drives codegen into `src/__generated__/`, which
-// every spec in the pack imports. The walk still runs — an apply helper the specs import directly is answered by
-// it — and carries what it could not see (`Run.beyond`); `npm run spec:full` builds the pack and runs them.
-//
-// What a module graph cannot reach is a **pack suite**: it resolves the published `dist` while the host
-// projects resolve source, so its specs never import `packages/<dep>/src` and no import edge runs from the
-// file you edited to the spec that covers it. `npm run spec` says so when it is true — derived from the
-// declared dependencies, so editing a package no pack depends on says nothing — and `npm run spec:full`
-// answers it, at the cost of a build (14s when stale) and the pack suite (18s).
+// Named specs use their workspace's test script. Root runs explicitly ensure the published packages.
+// Integration specs have a separate config, and spec:full includes that pool when applicable.
 //
 // **Three exit codes, because the three need different next moves and only one is a bug in the code:**
 //
 //   1  a spec failed — the ordinary one
 //   2  a name was wide enough to be a search, so the paths were listed instead of run
-//   3  nothing ran and nothing passed: no spec covers the target, or the specs that do sit behind a build
-//      this run is not doing (a pack's content sources, its build inputs) — `npm run spec:full` answers those
+//   3  the selected config ran no specs for a coverage target
 //
 // 3 is the one worth knowing about. `vitest related` exits 0 when the module graph reaches no spec, so until it
 // existed "nothing covers this" and "everything covering this passed" were the same output and the same code —
@@ -56,7 +43,7 @@
 // does: the collector and the pricing load behind `await import`, and internal-repo-checks asserts that from this
 // file's source. And `--no-bail` reports every failure in the plan rather than stopping at the first, for
 // when you want the whole picture in one run; bailing is the default because a 1s failure otherwise pays for
-// the pack suite behind it.
+// the suites behind it.
 //
 // `scripts/lib/spec-plan.ts` decides all of that and is asserted by a spec; this file runs what it returns.
 import { spawnSync } from 'node:child_process';
@@ -205,9 +192,6 @@ async function main(): Promise<number> {
         console.log(`   ${price.unpriced.length} not measured on this machine yet: ${price.unpriced.slice(0, 3).join(', ')}${price.unpriced.length > 3 ? `, and ${price.unpriced.length - 3} more` : ''}`);
       }
       for (const note of run.notes ?? []) if (!said.has(note)) { console.log(`   ${note}`); said.add(note); }
-      if (run.beyond !== undefined) {
-        console.log(`   not in this answer: ${run.beyond.covers} — ${run.beyond.how}`);
-      }
     }
 
     // **File time summed across workers, never a wall estimate** — measured on one target three days apart,
@@ -226,7 +210,7 @@ async function main(): Promise<number> {
   const uncovered: Run[] = [];
   const noCount: string[] = [];
   // Each distinct note once: two source-file targets are two root runs carrying the same sentence about the
-  // pack suites, and a limit worth stating is not worth stating twice
+  // integration suites, and a limit worth stating is not worth stating twice
   const said = new Set<string>();
   try {
     for (const [index, run] of runs.entries()) {
@@ -244,11 +228,6 @@ async function main(): Promise<number> {
       if (verdict === 'uncovered') uncovered.push(run);
       if (verdict === 'no count') noCount.push(run.label);
       for (const note of run.notes ?? []) if (!said.has(note)) { console.log(`   ${note}`); said.add(note); }
-      // Said only when the run answered something: when it did not, the edge is the whole answer and is
-      // reported below instead, where it replaces a sentence that would be false
-      if (run.beyond !== undefined && verdict === 'pass') {
-        console.log(`   not in this answer: ${run.beyond.covers} — ${run.beyond.how}`);
-      }
     }
   } finally {
     fs.rmSync(reports, { recursive: true, force: true });
@@ -262,14 +241,8 @@ async function main(): Promise<number> {
     console.error('  npm run spec -- --no-bail … runs them anyway.');
   }
 
-  // Two sentences for one emptiness, because they are opposite facts: a gap in the suite, and specs that
-  // exist behind a build this run did not do. A content source is the second, never the first
   for (const run of uncovered) {
-    const target = run.claimsCoverageOf!;
-    console.error(run.beyond === undefined
-      ? `\nNo spec covers ${target} — nothing ran, so nothing passed.`
-      : `\nNothing ran for ${target}. It is covered by ${run.beyond.covers} — an edge that runs through a `
-        + `build, so no module graph connects the two.\n  ${run.beyond.how}`);
+    console.error(`\nNo spec covers ${run.claimsCoverageOf} in the selected config. Nothing ran.`);
   }
   // Loud rather than assumed, because assuming it ran something is how the check would stop checking
   for (const label of noCount) {
