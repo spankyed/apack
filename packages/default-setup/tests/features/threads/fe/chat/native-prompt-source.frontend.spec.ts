@@ -49,6 +49,30 @@ it('retains a linked target through raw URI caret placement but drops former con
   bridge.dispose()
 })
 
+it('does not transfer a source reference to an identical copied token after its original is edited', () => {
+  editor.commands.setContent({
+    type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Use ' }, { type: 'reference' }, { type: 'text', text: ' today' },
+    ] }],
+  })
+  const source = '# Heading\n\n' + text()
+  const token = '[Context](apack-ref://thread/thread-id)'
+  const sourceStart = source.indexOf(token)
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: source, cursor: sourceStart + 3 } })
+    expect(editor.state.doc.firstChild?.type.name).toBe('claudePromptSource')
+    const refs = () => claudePromptSourceReferences(editor.state.doc.firstChild!)
+    editor.view.dispatch(editor.state.tr.insertText(token, 1))
+    expect(refs()).toHaveLength(1)
+    const originalUri = 1 + token.length + source.indexOf('thread-id')
+    editor.view.dispatch(editor.state.tr.insertText('different-id', originalUri, originalUri + 'thread-id'.length))
+    expect(text()).toContain(token)
+    expect(text()).toContain('different-id')
+    expect(refs()).toEqual([])
+  } finally { bridge.dispose() }
+})
+
 it('refuses native atom removal rather than silently dropping context metadata',async()=>{
   editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'reference'}]}]})
   const before=editor.state.doc,bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
