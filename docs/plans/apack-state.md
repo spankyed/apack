@@ -63,6 +63,12 @@ machine is across, and a feature is known to be across when its specs pass, unch
    view host (`@apackdev/host/views`) holds each view's `Watching` and waits on `caughtUp({ soon: true })` before a
    step's sends to that window are released. What a window reaches its backend over is its own plan
    ([deferred](deferred/what-a-window-reaches-its-backend-over.md)).
+   **The backend has to be told when a window is gone.** A link outlives its connection, so a socket closing no
+   longer says so, and today the backend knows a window only as a socket: main starts it with `spawn` and tells
+   it nothing of windows after. Main makes a credential for each window, the backend takes that window's
+   connections as its, and main tells the backend when the window closes. Without this a backend keeps a link's
+   bound for every window that ever closed or reloaded. The link's half is proposed in apack-link's
+   `docs/proposed/sessions-have-owners.md`.
 4. **The pack contract.** `defineSystem`, the generated `#generated/events` and `#generated/fe`, `apack.json`'s
    `system.contract` and `surface.contract`, and the SDK's `ask`/`fromAsk`, `useState` and `fromView` are restated
    over states. The recorded API reports and the facade report move with them.
