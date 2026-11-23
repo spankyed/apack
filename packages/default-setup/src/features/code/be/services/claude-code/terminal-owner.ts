@@ -599,13 +599,17 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         // process generations while that authority still exists. A server name or pane number
         // alone can be reused after a crash. Failed identity reads leave ordinary attach usable.
         const identify = async (address: string[], abort: AbortSignal) => {
-          const [socket, serverPid, workerPid, targetSession, targetPane, dead, activePane, activeWindow] = (await probe([
-            'display-message', '-p', '-t', paneId,
-            '#{socket_path}\t#{pid}\t#{pane_pid}\t#{session_id}\t#{pane_id}\t#{pane_dead}\t#{pane_active}\t#{window_active}',
-          ], abort, address)).split('\t')
-          if (!socket || !isAbsolute(socket) || !serverPid || !workerPid || !/^[1-9][0-9]*$/.test(serverPid)
-            || !/^[1-9][0-9]*$/.test(workerPid) || targetSession !== session || targetPane !== paneId || dead !== '0')
-            throw new Error('The native teammate terminal target changed')
+          const panes = await probe(['list-panes', '-s', '-t', session, '-F',
+            '#{pane_id}\t#{socket_path}\t#{pid}\t#{pane_pid}\t#{pane_dead}\t#{pane_active}\t#{window_active}',
+          ], abort, address)
+          const [row, ...otherMatches] = panes.split('\n').map(line => line.split('\t'))
+            .filter(([id]) => id === paneId)
+          if (!row || otherMatches.length) throw new Error('The original tmux pane is missing or ambiguous')
+          const [, socket, serverPid, workerPid, dead, activePane, activeWindow] = row
+          if (!socket || !isAbsolute(socket)) throw new Error('The native teammate socket address is unavailable')
+          if (!serverPid || !workerPid || !/^[1-9][0-9]*$/.test(serverPid) || !/^[1-9][0-9]*$/.test(workerPid))
+            throw new Error('The tmux server or teammate process ID is unavailable')
+          if (dead !== '0') throw new Error('The original tmux pane has ended')
           const processStart = async (pid: string) => {
             const info = await readFile('/proc/' + pid + '/stat', { encoding:'utf8', signal:abort })
             const fields = info.slice(info.lastIndexOf(') ') + 2).split(' ')
