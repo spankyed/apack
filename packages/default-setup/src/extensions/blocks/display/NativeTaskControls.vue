@@ -55,7 +55,7 @@
         </footer>
       </div>
     </dialog>
-    <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
+    <section v-if="shell && shown && state?.details?.shell" ref="shellOutput" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
       <button type="button" :disabled="pending" class="mb-2 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
       <details class="mb-3">
         <summary class="cursor-pointer text-neutral-400">Command details</summary>
@@ -90,6 +90,13 @@ const sessionState = computed(() => {
 const state = computed(() => sessionState.value?.taskId === props.task.id ? sessionState.value : undefined)
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
+const shellOutput = ref<HTMLElement | null>(null)
+let revealShellRevision: number | undefined
+watch(state, value => {
+  if (!value || value.revision !== revealShellRevision || value.status === 'pending') return
+  revealShellRevision = undefined
+  if (value.status === 'done' && shown.value) shellOutput.value?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+}, { flush: 'post' })
 const mcpDialog = ref<HTMLDialogElement | null>(null)
 watch(mcpDialog, (dialog, previous) => {
   previous?.close()
@@ -98,12 +105,14 @@ watch(mcpDialog, (dialog, previous) => {
 function closeDetails() {
   mcpDialog.value?.close()
   shown.value = false
+  revealShellRevision = undefined
   toggle.value?.focus({ preventScroll: true })
 }
 const expanded = computed(() => shown.value && state.value !== undefined)
 let submitted: { revision: number; text: string } | undefined
 watch(taskKey, () => {
   shown.value = false
+  revealShellRevision = undefined
   draft.value = ''
   submitted = undefined
 })
@@ -118,5 +127,9 @@ function leaveConversation(event: KeyboardEvent) {
   if (event.isComposing || event.defaultPrevented || !expanded.value) return
   event.preventDefault(); event.stopPropagation(); closeDetails()
 }
-function showConversation() { shown.value = !expanded.value; if (shown.value) controls?.operate(props.task, 'inspect') }
+function showConversation() {
+  shown.value = !expanded.value
+  const revision = shown.value ? controls?.operate(props.task, 'inspect') : undefined
+  if (shell.value) revealShellRevision = revision
+}
 </script>

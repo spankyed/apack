@@ -116,6 +116,47 @@ it('offers shell output and Stop without Agent reply or foreground controls', as
   expect(buttons().every(button => button.disabled)).toBe(true)
 })
 
+it('reveals a shell output panel only for the inspection that opened it', async () => {
+  const task = { id: 'shell', kind: 'shell' as const, ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const state = ref<ClaudeTerminalTaskState>()
+  const reply = {
+    ownerId: 'owner', sessionId: 'session', taskId: 'shell', revision: 2, operation: 'inspect' as const, status: 'done' as const,
+    details: { taskId: 'shell', name: 'Release check', status: 'running', canInput: false, canMessage: false, messages: [], truncated: false,
+      shell: { command: 'check', commandTruncated: false, output: 'Ready', totalBytes: 5, truncated: false } },
+  }
+  let revision = 1
+  const operate = vi.fn(() => ++revision)
+  const root = document.createElement('div')
+  document.body.append(root)
+  app = createApp({
+    setup() {
+      provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate })
+      return () => h(NativeTaskControls, { task })
+    },
+  })
+  const scroll = vi.fn()
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: scroll, configurable: true })
+  try {
+    app.mount(root)
+    const button = (text: string) => [...root.querySelectorAll('button')].find(node => node.textContent === text)!
+    button('View output').click()
+    state.value = { ...reply, taskId: 'other-shell' }
+    await nextTick()
+    expect(scroll).not.toHaveBeenCalled()
+    state.value = reply
+    await nextTick()
+    expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest' })
+    button('Refresh output').click()
+    state.value = { ...reply, revision: 3 }
+    await nextTick()
+    expect(scroll).toHaveBeenCalledTimes(1)
+  } finally {
+    if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original)
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  }
+})
+
 it('shows MCP task details and native refusal without offering Agent controls', async () => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
   HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
