@@ -1149,3 +1149,51 @@ it('opens the earlier teammate separately after same-session resume and retires 
     expect(recovered.close).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
+
+it('restores a verified reconnect on a fresh mount after every matching window closes', async () => {
+  const f = fixture(), {ownerId, sessionId} = f.owner.state
+  const parent = {...f.owner, keepAttachedTeammatesAfterCrash:false}
+  f.setCurrent(parent)
+  parent.state.tasks = [{id:'agent', name:'Reviewer', status:'idle', canStop:true}]
+  const child = () => ({
+    snapshot:{id:randomUUID(), terminalSession:{id:randomUUID(),target:null}, jobId:'agent',
+      sessionId, cwd:'/fixture', clientPid:234, status:'live' as const, output:[]},
+    input:vi.fn(), resize:vi.fn(), subscribe:vi.fn(() => () => {}), close:vi.fn(async () => {}),
+  })
+  const first = child(), fresh = child()
+  const reconnect = vi.fn(async (_signal: AbortSignal) => fresh)
+  parent.openTeammateTerminal = vi.fn(async () => ({...first, reconnect, canReconnect:async () => true}))
+  const request = {...mount, type:'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId:'agent', revision:1}
+  const resumedMount = {...mount, mountId:randomUUID()}
+  const latest = () => f.send.mock.calls.at(-1)?.[0]
+  try {
+    f.views.handle(mount, 'closed', f.send)
+    f.views.handle(request, 'closed', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.status).toBe('ready'))
+    parent.keepAttachedTeammatesAfterCrash = true
+    parent.state.status = 'error'
+    parent.state.tasks = []
+    f.setCurrent()
+    for (const notify of f.listeners) notify()
+    await vi.waitFor(() => expect(latest()?.teammateReconnect?.taskId).toBe('agent'))
+    f.views.disconnect('closed')
+    expect(first.close).toHaveBeenCalledOnce()
+    expect(f.listeners.size).toBe(0)
+
+    f.views.handle(request, 'closed', f.send)
+    f.views.handle({...resumedMount, mountId:randomUUID(), threadId:'other-thread'}, 'fresh', f.send)
+    expect(latest()?.teammateReconnect).toBeUndefined()
+    f.views.handle({...resumedMount, mountId:randomUUID(), queueComposer:true}, 'fresh', f.send)
+    expect(latest()?.teammateReconnect).toBeUndefined()
+    f.views.handle(resumedMount, 'fresh', f.send)
+    expect(latest()?.teammateReconnect).toMatchObject({ownerId, sessionId, taskId:'agent'})
+    f.views.handle({...request, mountId:resumedMount.mountId}, 'fresh', f.send)
+    await vi.waitFor(() => expect(latest()?.attachment?.state?.id).toBe(fresh.snapshot.id))
+    expect(reconnect).toHaveBeenCalledOnce()
+
+    f.views.disconnect('fresh')
+    f.views.clear(mount.threadId)
+    f.views.handle(resumedMount, 'after-reset', f.send)
+    expect(latest()?.teammateReconnect).toBeUndefined()
+  } finally { f.views.clear() }
+})

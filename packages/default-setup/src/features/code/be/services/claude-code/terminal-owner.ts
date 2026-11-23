@@ -89,6 +89,7 @@ export interface ClaudeNativeTerminalOwner {
   readonly keepAttachedTeammatesAfterCrash?: boolean
   openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment & {
     reconnect?: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>
+    canReconnect?: (signal: AbortSignal) => Promise<boolean>
   }>
   getMcpStatus(): Promise<ClaudeMcpStatus>
   getMemoryDialog(): Promise<ClaudeMemoryDialog>
@@ -636,15 +637,19 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         ensureCurrent()
         const client = await attach(server, signal)
         if (!verified) return client
+        const address = ['-S', verified.socket]
+        const verifyTarget = async (abort: AbortSignal, requireActive: boolean) => {
+          if (!keepAttachedTeammatesAfterCrash) return false
+          const current = await identify(address, abort).catch(() => undefined)
+          return !!current && (!requireActive || current.active)
+            && current.identity.every((value, index) => value === verified.identity[index])
+            && await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], abort, address) === 'off'
+        }
         return Object.assign(client, {
+          canReconnect: (abort: AbortSignal) => verifyTarget(abort, false),
           async reconnect(abort: AbortSignal) {
-            if (!keepAttachedTeammatesAfterCrash) throw new Error('The original Claude session did not disconnect unexpectedly')
-            const address = ['-S', verified.socket]
             const ensureTarget = async () => {
-              const current = await identify(address, abort).catch(() => undefined)
-              if (!current || !current.active || !current.identity.every((value, index) => value === verified.identity[index])
-                || await probe(['show-options', '-Av', '-t', session, 'destroy-unattached'], abort, address) !== 'off')
-                throw new Error('The original teammate pane is no longer available')
+              if (!await verifyTarget(abort, true)) throw new Error('The original teammate pane is no longer available')
             }
             await ensureTarget()
             const replacement = await attach(address, abort)

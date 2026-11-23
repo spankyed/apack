@@ -96,6 +96,7 @@ const terminalViews = createClaudeTerminalViews({
   command: submitClaudeParentCommand,
   accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
+  savedSession: key => repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.sessionId,
   get: key => services.cli.claudeCode.getNativeTerminal(key),
   async open(key, signal) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;

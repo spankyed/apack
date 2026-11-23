@@ -102,7 +102,18 @@ export interface ClaudeBackgroundAttachmentView {
   problem?: string
 }
 type ClaudeTeammateReconnect = {ownerId: string; sessionId: string; taskId: string; name: string; recoveryId?: string}
-type TeammateReconnectAuthority = {target: ClaudeTeammateReconnect; open(signal: AbortSignal): Promise<ClaudeBackgroundAttachment>}
+type TeammateReconnectAuthority = {
+  target: ClaudeTeammateReconnect
+  open(signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
+  available?(signal: AbortSignal): Promise<boolean>
+}
+type SurvivingTeammate = TeammateReconnectAuthority & {resumedOwnerId: string}
+type ParkedTeammate = {
+  owner: ClaudeNativeTerminalOwner
+  reconnect: TeammateReconnectAuthority
+  resumed?: SurvivingTeammate
+  check?: AbortController
+}
 export type ClaudeTerminalViewSnapshot = {
   teammateReconnect?: ClaudeTeammateReconnect
   backgroundInfo?: import('#features/code/common/native-background.ts').ClaudeBackgroundStatus
@@ -139,7 +150,7 @@ interface View {
   attachment?: ClaudeBackgroundAttachmentView
   attachmentRevision?: number
   teammateReconnect?: TeammateReconnectAuthority
-  survivingTeammate?: TeammateReconnectAuthority & {resumedOwnerId: string}
+  survivingTeammate?: SurvivingTeammate
   attachmentOwner?: ClaudeBackgroundAttachment
   attachmentAbort?: AbortController
   attachmentUnsubscribe?: () => void
@@ -181,6 +192,7 @@ export function createClaudeTerminalViews(dependencies: {
   backgroundInfo?(threadId: string): import('#features/code/common/native-background.ts').ClaudeBackgroundStatus | undefined
   subscribeBackground?(threadId: string, changed: () => void): () => void
   restoreBackground?(threadId: string): Promise<void>
+  savedSession?(threadId: string): string | undefined
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string, signal: AbortSignal): Promise<ClaudeNativeTerminalOwner>
   accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
@@ -189,6 +201,41 @@ export function createClaudeTerminalViews(dependencies: {
   prepareInput?(text: string, references?: MessageReferences): Promise<{ text: string; images: ClaudeNativeImage[] }>
 }) {
   const views = new Map<string, View>()
+  const parkedTeammates = new Map<string, ParkedTeammate>()
+  let parkedSweep: ReturnType<typeof setInterval> | undefined
+  function removeParkedTeammate(threadId: string) {
+    parkedTeammates.get(threadId)?.check?.abort()
+    parkedTeammates.delete(threadId)
+    if (!parkedTeammates.size && parkedSweep) { clearInterval(parkedSweep); parkedSweep = undefined }
+  }
+  let sweepingParked = false
+  async function sweepParkedTeammates() {
+    if (sweepingParked) return
+    sweepingParked = true
+    try {
+      for (const [threadId, parked] of parkedTeammates) {
+        if (dependencies.savedSession && dependencies.savedSession(threadId) !== parked.reconnect.target.sessionId
+          || parked.resumed && dependencies.get(threadId) !== parked.owner) {
+          removeParkedTeammate(threadId)
+          continue
+        }
+        const check = new AbortController()
+        parked.check = check
+        const available = await parked.reconnect.available?.(check.signal).catch(() => false)
+        if (parkedTeammates.get(threadId) !== parked) continue
+        parked.check = undefined
+        if (!available) removeParkedTeammate(threadId)
+      }
+    } finally { sweepingParked = false }
+  }
+  function parkTeammate(threadId: string, owner: ClaudeNativeTerminalOwner, reconnect: TeammateReconnectAuthority, resumed?: SurvivingTeammate) {
+    // Closed windows release their PTYs. Keep only the capability to recheck and open a fresh one.
+    if (!reconnect.available) return
+    removeParkedTeammate(threadId)
+    parkedTeammates.set(threadId, {owner, reconnect, resumed})
+    parkedSweep ??= setInterval(() => { void sweepParkedTeammates() }, 30000)
+    parkedSweep.unref?.()
+  }
   type QueueDraft = NonNullable<ClaudeTerminalViewSnapshot['queueDraft']>
   const queueDrafts = new WeakMap<ClaudeNativeTerminalOwner, {draft: QueueDraft; view?: View}>()
   const queueEditsInFlight = new WeakSet<ClaudeNativeTerminalOwner>()
@@ -282,7 +329,10 @@ export function createClaudeTerminalViews(dependencies: {
         const [id, candidate] = continued
         candidate.teammateReconnect = reconnect
         publish(id, candidate)
-      }
+      } else if (view.owner) parkTeammate(view.threadId, view.owner, reconnect)
+    } else if (transferTeammate && view?.owner) {
+      const survivor = survivingTeammateCurrent(view)
+      if (survivor) parkTeammate(view.threadId, view.owner, survivor, survivor)
     }
     const owner = view?.owner, recovered = owner && queueDrafts.get(owner)
     if (recovered && recovered.view === view) {
@@ -412,6 +462,25 @@ export function createClaudeTerminalViews(dependencies: {
       if (candidate !== view && candidate.threadId === view.threadId && candidate.owner !== owner && (candidate.attachment?.teammate || candidate.teammateReconnect || candidate.survivingTeammate)) publish(id, candidate)
     }
   }
+  function restoreParkedTeammate(key: string, view: View, owner: ClaudeNativeTerminalOwner | undefined) {
+    const parked = parkedTeammates.get(view.threadId)
+    if (!parked || view.queueComposer || view.teammateReconnect || view.survivingTeammate) return
+    const sessionId = parked.reconnect.target.sessionId
+    if (dependencies.savedSession && dependencies.savedSession(view.threadId) !== sessionId
+      || owner && owner.state.sessionId !== sessionId || parked.resumed && owner !== parked.owner) {
+      removeParkedTeammate(view.threadId)
+      return
+    }
+    removeParkedTeammate(view.threadId)
+    attach(key, view, parked.owner)
+    if (parked.resumed) {
+      view.survivingTeammate = {
+        ...parked.resumed, target: {...parked.resumed.target, recoveryId: randomUUID()},
+      }
+    } else {
+      view.teammateReconnect = parked.reconnect
+    }
+  }
   return {
     handle(event: ClaudeTerminalViewRequest | (ClaudeQueuedPromptEdit & {type: 'EDIT_CLAUDE_QUEUED_PROMPT'}),
       client: string | undefined, send: ((reply: ClaudeTerminalViewReply) => void) | undefined, signal?: AbortSignal) {
@@ -437,6 +506,7 @@ export function createClaudeTerminalViews(dependencies: {
         }
         view.send = send; view.expires = Date.now() + 30000
         const owner = dependencies.get(event.threadId)
+        restoreParkedTeammate(key, view, owner)
         if (owner) attach(key, view, owner)
         publish(key, view)
         timer ??= setInterval(() => { for (const [id, entry] of views) if (entry.expires <= Date.now()) drop(id) }, 1000)
@@ -480,7 +550,7 @@ export function createClaudeTerminalViews(dependencies: {
               if (client.reconnect && client.snapshot.status === 'live') {
                 target.teammateReconnect = {
                   target: {ownerId:event.ownerId, sessionId:event.sessionId, taskId:event.taskId, name:task.name},
-                  open:client.reconnect,
+                  open:client.reconnect, available:client.canReconnect,
                 }
               }
             })
@@ -781,6 +851,9 @@ export function createClaudeTerminalViews(dependencies: {
     disconnect(client: string) {
       for (const [key, view] of views) if (view.client === client) drop(key)
     },
-    clear(threadId?: string) { for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key, false) },
+    clear(threadId?: string) {
+      for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key, false)
+      for (const key of parkedTeammates.keys()) if (threadId === undefined || key === threadId) removeParkedTeammate(key)
+    },
   }
 }

@@ -2962,6 +2962,7 @@ interface ClaudeNativeTerminalOwner {
     readonly keepAttachedTeammatesAfterCrash?: boolean;
     openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment & {
         reconnect?: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>;
+        canReconnect?: (signal: AbortSignal) => Promise<boolean>;
     }>;
     getMcpStatus(): Promise<ClaudeMcpStatus>;
     getMemoryDialog(): Promise<ClaudeMemoryDialog>;
