@@ -410,12 +410,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     return
   }
   if(event.type==='CLAUDE_UI_DECISION_PAUSE') {
-    if(!view||view.nativeView||view.backgroundView)return;
+    if(!view||view.backgroundView)return;
     const scope=parseClaudeDecisionPauseScope(event.scope);if(!scope)return;
     bind(view);const owner=view.owner;
     const identity={threadId:event.threadId,mountId:event.mountId,messageId:scope.messageId,ownerId:scope.ownerId};
     logger.info('Native decision Pause received',identity);
-    if(!owner||owner.question?.ownerId!==scope.ownerId||getClaudeUiOwner(view.threadId)!==owner){logger.info('Native decision Pause completed',{...identity,handled:false});return;}
+    if(!owner||owner.question?.ownerId!==scope.ownerId||getClaudeUiOwner(view.threadId,view.nativeView)!==owner){logger.info('Native decision Pause completed',{...identity,handled:false});return;}
     void services.action.executeIfFound('CC: Pause Turn',{threadId:view.threadId,nativeDecision:scope}).then(result=>{
       logger.info('Native decision Pause completed',{...identity,handled:result?.success===true});
     }).catch(()=>logger.warn('Native decision Pause failed',identity));

@@ -58,7 +58,7 @@
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
-    <NativeAgentComposer v-show="!panelActive" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || !selectedOwner || returning || stopping || panelActive || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
+    <NativeAgentComposer v-show="!panelActive && !approvalPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || !selectedOwner || returning || stopping || panelActive || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
@@ -86,7 +86,7 @@ import type { ThreadsState } from '../state.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
-const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; active: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
+const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; active: boolean; approvalPending?: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
 const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; 'draft-snapshot': [target: ClaudeNativeAgentUiTarget, snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; returning: [value: boolean]; returned: []; scrollPosition: [target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition] }>()
 const transcriptViewport = ref<HTMLElement>(), transcriptContent = ref<HTMLElement>()
 const scrollTarget = props.target
@@ -155,7 +155,7 @@ watch(() => props.active, active => { detach(); if (active) { uiMount.value = cr
 function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value || stopping.value || commandActive.value) }
 function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> {
   if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
-  if (!uiMount.value || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim()) return Promise.reject(Error('Agent input is unavailable. Your draft was kept.'))
+  if (!uiMount.value || props.approvalPending || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim()) return Promise.reject(Error('Agent input is unavailable. Your draft was kept.'))
   problem.value = undefined
   const request = ++revision
   return new Promise((resolve, reject) => { submission = { revision: request, text, preserveDraft: options.preserveDraft === true, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; sendToThreads({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })

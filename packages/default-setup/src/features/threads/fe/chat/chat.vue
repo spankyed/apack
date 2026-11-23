@@ -52,7 +52,7 @@
           </div>
         </section>
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
-        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
+        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" :class="{ 'chat-composer-area--background': nativeSessionBackgrounded, 'chat-composer-area--background-reply': nativeBackgroundReplyActive }" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
           <p v-if="nativeUiDrawing?.gestureProblem" role="alert" class="px-4 py-2 text-sm text-amber-200">{{ nativeUiDrawing.gestureProblem }}</p>
@@ -132,12 +132,6 @@
             </div>
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
-          <div v-if="pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
-            <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
-              @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
-              @edit-workflow="nativeSession?.open()"
-              @pause="pauseNativeDecision" />
-          </div>
           <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
               @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
@@ -203,6 +197,12 @@
               @statusline-click="handleStatuslineClick"
             />
           </div>
+        </div>
+        <div v-if="!nativeTerminalActive && !agentSelection && pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
+          <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
+            @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
+            @edit-workflow="nativeSession?.open()"
+            @pause="pauseNativeApproval" />
         </div>
         <!-- Thread bar — stays within chat column (hidden during onboarding) -->
         <div v-if="!isOnboarding" class="flex-shrink-0 w-full" data-testid="thread-navigation">
@@ -802,12 +802,20 @@ watch(() => mainCommand.value?.status, (status, before) => {
   if (status !== 'command_output') mainOutputExpanded.value = false
 })
 
+// A native permission belongs to the terminal session, including when its Agent view is selected.
+const nativeApprovalOwner = computed(() => {
+  const target = focusedAgent.value?.target
+  if (!target) return nativeComposerOwner.value
+  const owner = taskView.value?.[1].state, view = owner?.view
+  if (!nativeSessionBackgrounded.value && owner?.ownerId === target.ownerId && owner.sessionId === target.sessionId
+      && view?.kind === 'agent' && view.taskId === target.taskId && view.revision === target.revision) return owner
+})
 const pendingNativeApproval = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown; notebook_path?: unknown; command?: unknown };
     nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; genericTool?: unknown; tool?: unknown; review?: unknown; file?: unknown; workflow?: unknown; bash?: unknown; cwd?: unknown; question?: unknown; reason?: unknown };
   } | undefined
-  const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
+  const native = pending?.nativeTerminal, owner = nativeApprovalOwner.value
   const generic = ClaudeGenericToolPermissionApprovalSchema.safeParse(native?.genericTool).data
   if (native?.genericTool !== undefined && !generic) return undefined
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || typeof pending?.toolName !== 'string' || !generic && !['Read', 'Bash', 'Write', 'Edit', 'NotebookEdit', 'Workflow', 'WebFetch', 'Skill'].includes(pending.toolName) || typeof pending.approvalMessageId !== 'string' || (!generic && (pending?.toolName === 'WebFetch' || pending?.toolName === 'Skill' ? !ClaudeToolPermissionApprovalSchema.safeParse(native.tool).success : pending?.toolName === 'Workflow' ? !ClaudeWorkflowApprovalSchema.safeParse(native.workflow).success : pending?.toolName === 'Bash' ? typeof pending.originalInput?.command !== 'string' : pending?.toolName === 'NotebookEdit' ? typeof pending.originalInput?.notebook_path !== 'string' : typeof pending.originalInput?.file_path !== 'string'))) return undefined
@@ -863,6 +871,18 @@ function rejectNativeQuestion(identity: import('#features/code/be/services/claud
   send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
+function pauseNativeApproval(scope?: ClaudeDecisionPauseScope) {
+  const target = focusedAgent.value?.target
+  if (!target) { pauseNativeDecision(scope); return }
+  if (!scope || !nativeApprovalOwner.value) return
+  const threadId = currentThread.value?.id
+  const mountId = Object.entries(nativeUiViews.value).find(([, view]) => {
+    const selected = view.mountRequest?.nativeView
+    return view.threadId === threadId && selected?.ownerId === target.ownerId && selected.sessionId === target.sessionId
+      && selected.taskId === target.taskId && selected.revision === target.revision
+  })?.[0]
+  if (threadId && mountId) send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId, mountId, scope })
+}
 function pauseNativeDecision(scope?: ClaudeDecisionPauseScope) {
   const mount = nativeUiMount.value;
   if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, scope });

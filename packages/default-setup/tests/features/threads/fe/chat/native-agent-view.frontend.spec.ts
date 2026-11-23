@@ -14,16 +14,31 @@ beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconne
 afterEach(() => { app?.unmount(); vi.unstubAllGlobals(); document.body.replaceChildren() })
 async function mount(draft = 'Keep this draft') {
   const root = document.createElement('div'); document.body.append(root)
-  const pending = vi.fn(), returned = vi.fn(), draftChange = vi.fn()
-  app = createApp({ render: () => h(NativeAgentView, { threadId: 'thread', target: { ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 3 }, name: 'Worker', draft, onDraft: draftChange, active: true, onPending: pending, onReturned: returned }) }); app.mount(root)
+  const pending = vi.fn(), returned = vi.fn(), draftChange = vi.fn(), approvalPending = ref(false)
+  app = createApp({ render: () => h(NativeAgentView, { threadId: 'thread', target: { ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 3 }, name: 'Worker', draft, onDraft: draftChange, active: true, approvalPending: approvalPending.value, onPending: pending, onReturned: returned }) }); app.mount(root)
   const requests = send.mock.calls.map(([value]) => value), ui = requests.find(value => value.type === 'CLAUDE_UI_MOUNT').mountId, terminal = requests.find(value => value.type === 'CLAUDE_TERMINAL_MOUNT').mountId
   const owner: ClaudeNativeTerminalState = { ownerId: 'owner', sessionId: 'session', cwd: '/private/tmp', status: 'live', busy: true, view: { kind: 'agent', revision: 3, registryId: 'registry-agent', taskId: 'agent' }, tasks: [{ id: 'agent', name: 'Worker', status: 'running' }] }
   context.nativeTerminalViews[terminal] = { state: owner, opening: false, output: [] }
   context.nativeUiViews[ui] = { state: { agent: { taskId: 'agent', name: 'Worker', status: 'running', canInput: true, canMessage: false, messages: [], truncated: false, metadata: { prompt: 'Original prompt', promptTruncated: false, model: 'native-model', effort: 'high', elapsedMs: 1234, tokenCount: 42, toolUseCount: 2, errorTruncated: false } } } }
   await nextTick()
   const button = (text: string) => [...root.querySelectorAll('button')].find(element => element.textContent === text)!
-  return { root, ui, terminal, owner, pending, returned, draftChange, button }
+  return { root, ui, terminal, owner, pending, returned, draftChange, approvalPending, button }
 }
+it('keeps the Agent editor mounted while a native approval owns input', async () => {
+  const f = await mount(), draft = f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!
+  draft.value = 'Keep the in-progress draft'
+  f.approvalPending.value = true; await nextTick()
+  expect(draft.disabled).toBe(true)
+  expect(draft.parentElement?.style.display).toBe('none')
+  expect(f.button('Back to conversation').disabled).toBe(false)
+  f.approvalPending.value = false; await nextTick()
+  expect(f.root.querySelector('[aria-label="Agent draft"]')).toBe(draft)
+  expect(draft.disabled).toBe(false)
+  expect(draft.parentElement?.style.display).toBe('')
+  expect(draft.value).toBe('Keep the in-progress draft')
+  expect(f.draftChange).not.toHaveBeenCalled()
+})
+
 it('stops only the selected worker, rejects unrelated acknowledgments and retains parent navigation', async () => {
   const f = await mount(); f.button('Stop Agent').click(); await nextTick()
   const request = send.mock.calls.map(([value]) => value).find(value => value.type === 'CLAUDE_TERMINAL_TASK')
