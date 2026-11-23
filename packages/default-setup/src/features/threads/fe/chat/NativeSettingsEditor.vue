@@ -1,6 +1,6 @@
 <template>
   <section ref="editorRoot" aria-label="Claude Code setting editor" class="flex min-h-0 flex-1 flex-col overflow-hidden">
-    <header v-if="!hideHeader" class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
+    <header v-if="!hideHeader" class="native-settings-editor-header flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
       <h3 class="min-w-0 break-words text-sm font-medium text-neutral-200">{{ editor.title || 'Choose a value' }}</h3>
       <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">{{ cancelLabel ?? (editor.kind === 'group' || editor.kind === 'information' ? 'Close' : (editor.kind === 'choice' || editor.kind === 'form') && editor.consent ? editor.consent.cancelLabel : 'Cancel') }}</button>
     </header>

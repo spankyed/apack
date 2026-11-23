@@ -1,7 +1,7 @@
 <template>
-  <section role="dialog" :aria-label="panelTitle" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown="handleKeydown">
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-      <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ subject !== 'settings' ? state?.snapshot?.editor?.title || panelTitle : panelTitle }}</h2><p v-if="subject === 'settings'" class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
+  <section role="dialog" :aria-label="panelTitle" :class="{ 'native-settings-theme-picker': state?.snapshot?.editor?.kind === 'choice' && state.snapshot.editor.canPreview }" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown="handleKeydown">
+    <header class="native-settings-header flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+      <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ subject !== 'settings' ? state?.snapshot?.editor?.title || panelTitle : panelTitle }}</h2><p v-if="subject === 'settings' && !state?.snapshot?.editor" class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
       <button type="button" :disabled="state?.snapshot?.dismissible === false" class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="closePanel">{{ closeLabel }}</button>
     </header>
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
@@ -65,7 +65,7 @@
       </template>
       <NativeSettingsStats v-else-if="activeTab === 'Stats'" :stats="frame?.stats" :pending="pending" @action="action => operate({kind:'stats',action})" />
     </div>
-    <footer class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-3 text-xs">
+    <footer class="native-settings-footer flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-3 text-xs">
       <p v-if="state?.problem" role="alert" class="min-w-0 flex-1 break-words text-amber-200">{{ state.problem }}</p>
       <p v-else-if="footerStatus" role="status" class="text-neutral-400">{{ footerStatus }}</p>
       <button type="button" :disabled="pending" class="ml-auto rounded-lg px-3 py-2 text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="emit('operate', { kind: 'read' })">Refresh</button>
@@ -105,6 +105,7 @@ const footerStatus=computed(()=>{
   if(props.subject==='theme'||props.subject==='credits')return undefined
   if(props.subject==='model'){const editor=props.state?.snapshot?.editor;return editor?.kind==='choice'&&editor.model?'Choose a model':undefined}
   if(props.state?.savedKey)return 'Saved by Claude Code'
+  if(props.state?.snapshot?.editor)return undefined
   return activeTab.value==='Config'?`${rows.value.length} settings`:activeTab.value
 })
 const rows = computed(() => (props.state?.snapshot?.rows ?? []).filter(row => `${row.label} ${row.description ?? ''} ${row.key}`.toLowerCase().includes(search.value.toLowerCase())))
@@ -149,3 +150,14 @@ onUnmounted(() => clearTimeout(refreshTimer))
 watch(() => props.state?.savedKey, key => { if (key) delete drafts.value[key] })
 onMounted(() => { searchInput.value?.focus(); emit('operate', {kind:'read'}) })
 </script>
+
+
+<style scoped>
+@media (max-height: 700px) {
+  .native-settings-theme-picker .native-settings-header,
+  .native-settings-theme-picker .native-settings-footer,
+  .native-settings-theme-picker :deep(.native-settings-editor-header) {
+    padding-block: 0.375rem;
+  }
+}
+</style>
