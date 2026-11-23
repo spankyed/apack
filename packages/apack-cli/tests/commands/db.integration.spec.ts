@@ -22,6 +22,7 @@ import { dbRepl } from '../../src/commands/db/repl';
 import { mintProfile, openProfile } from '../../src/app/profiles';
 import type { CliDirs } from '../../src/app/pack-host';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import { sealPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { settles } from '@apackdev/sdk/testing/waiting';
@@ -35,7 +36,7 @@ vi.mock('../../src/app/pack-host', async (importOriginal) => ({
   cliDirs: () => cliTree,
 }));
 
-const DEFAULT_SETUP_DIST = path.resolve(import.meta.dirname, '..', '..', '..', 'default-setup', 'dist');
+const DEFAULT_SETUP_DIST = path.join(checkoutShippedPacksDir(path.resolve(import.meta.dirname, '../../../..')), 'default-setup');
 
 const dirs: string[] = [];
 afterEach(() => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { checkoutShippedPacksDir } from '../../../src/packs/assets.ts';
 import { getBridgedSdkSpecifiers } from '../../../src/packs/runtime/bridge.ts';
 import { APP_UNBRIDGED, renderSharedModules } from '../../../src/build/render-sdk-modules.ts';
 import { SHARED_INSTANCE_PACKAGES, sharedInstanceExports } from '../../../src/build/shared-deps.ts';
@@ -14,7 +15,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
  */
 const ACCOUNTED_FOR: readonly string[] = [...SHARED_INSTANCE_PACKAGES, '@apackdev/host'];
 const SDK_MODULES_FILE = path.join(REPO_ROOT, 'packages', 'apack-host', 'src', 'packs', 'runtime', 'sdk-modules.ts');
-const RUNTIME_ENTRY = path.join(REPO_ROOT, 'packages', 'default-setup', 'dist', 'runtime', 'index.cjs');
+const RUNTIME_ENTRY = path.join(checkoutShippedPacksDir(REPO_ROOT), 'default-setup', 'runtime', 'index.cjs');
 
 /**
  * Subpaths unbridged by policy: pack runtime code never requires them. These

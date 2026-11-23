@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { BUILD_UNITS, repoRelative, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { isPackInputPath } from '@apackdev/host/build/pack-inputs';
+import { CHECKOUT_DISTRIBUTION_DIRECTORY, SHIPPED_PACKS_LOCK_FILE } from '@apackdev/host/packs/assets';
 import { PUBLISH_TREE } from '@apackdev/host/build/published-manifest';
 import { coresFor } from './core-budget.ts';
 import type { BudgetClass } from './step-budgets.ts';
@@ -722,7 +723,7 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     ...(reads.inputs ?? []),
     ...(half !== 'fast' ? reads.integrationInputs ?? [] : []),
     ...(reads.packages ? PACKAGE_BUILD_READS : []),
-    ...(reads.pack ? PACK_OUTPUTS : []),
+    ...(reads.pack ? [...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] : []),
     ...(reads.repo ? EVERY_SOURCE : []),
   ];
 }
@@ -933,7 +934,10 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-host/src/build/source-resolution.ts',
       'packages/apack-host/src/build/node-options.js', 'packages/apack-host/src/build/node-options.d.ts',
       'packages/apack-host/src/replace-dir.ts'] },
-  // Build the built-in pack before build:runtime reads its outputs.
+  { name: 'packs:stage', budget: 'quick', outputs: [CHECKOUT_DISTRIBUTION_DIRECTORY],
+    inputs: [...ROOT, SHIPPED_PACKS_LOCK_FILE, 'package.json', ...workspace('apack-host'), ...PACKAGE_BUILD_READS,
+      'scripts/with-source.mjs', 'scripts/stage-shipped-starter.ts', 'scripts/lib/shipped-pack-lock.ts', 'build/build-metadata.ts'] },
+  // The source workspace remains during the distribution cutover for its authoring checks.
   // Includes cold compiler capture, codegen, all bundles and final source/input verification.
   { name: 'build:default-setup', budget: 'suite', outputs: PACK_OUTPUTS,
     // The pack's whole authored tree, tests included: `apack pack build` records all of it (`PACK_SOURCES`)
@@ -965,7 +969,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // by `:app`, changes every run, and is read by nothing
     excludes: FIXTURE_TEST_OUTPUT,
     inputs: [...ROOT, ...PACK_BUILD_MANIFEST, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-contract.sh',
-      'tests/acceptance/external-pack/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
+      'tests/acceptance/external-pack/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
   // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite. Its build,
   // archive and housekeeping phases take shares of this step's bound (`DEFAULT_FORK_BUDGET_MS`).
   { name: 'test:external-pack:fork', budget: 'scenario', outputs: [DEFAULT_FORK_OUTPUT],
@@ -997,7 +1001,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   { name: 'build:runtime', budget: 'suite', outputs: APP_OUTPUTS,
     inputs: [...ROOT, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host'].flatMap(workspace),
       'packages/server/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
-      ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
+      ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
   // App checks load the shipped pack separately at runtime. Its bytes can change while every
   // app workspace bundle stays identical, so their cache keys must include PACK_OUTPUTS too.
   // Each fixture pack's Playwright suite on one worker per three cores, with the default-fork lifecycle
@@ -1010,7 +1014,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // name rather than by path, so nothing that reads a step's text can see the edge
     keepsOnFailure: FIXTURE_TEST_OUTPUT,
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
-      'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+      'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
   // Never cached: it drives real Electron with real timing and is the likeliest step to be flaky, and a
   // flaky pass cached green hides an intermittent failure indefinitely. 28s is cheap enough to always pay.
   // It declares what it writes although it is never cached and so never reads a stamp: the guard that a
@@ -1039,7 +1043,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // so the next run would take it
     evidence: ['.apack/tests/results'],
     inputs: [...ROOT, 'tests/e2e/smoke', 'playwright.config.ts',
-      ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+      ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
   // The rest of the E2E suite, a gate like the others. A spec nothing runs breaks unseen when the app changes under
   // it, and a broken one is a broken promise about the app whether or not it was written to drive it; about 1.5
   // minutes of the chain, after `test:smoke`. Never cached, so a flaky pass is never what a later run reads.
@@ -1051,7 +1055,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // reader must not observe. Declaring them is what makes that a mutex instead of a scheduling accident;
     // the step is never cached, so it buys the ordering and costs no precision
     inputs: [...ROOT, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
-      ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+      ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
   /**
    * Two steps, split at the app boundary: only the last of the check's nine phases launches one.
    *
@@ -1067,8 +1071,8 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     outputs: ['.apack/tests/authoring-handoff', '.apack/tests/authoring-handoff/work-ready', '.apack/tests/authoring-handoff/archive'],
     // APACK_HOST selects default-setup's built snapshot for the external pack's dependency.
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
-      'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
+      'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
   { name: 'test:packaged-authoring:app', budget: 'suite', expensive: true,
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
-      'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+      'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS, CHECKOUT_DISTRIBUTION_DIRECTORY] },
 ];

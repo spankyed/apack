@@ -8,6 +8,7 @@
  * transformation below, which is a second copy of a cache key — the thing most worth not having two of.
  */
 import * as path from 'node:path';
+import { sha256File } from '@apackdev/host/packs/assets';
 import { REPO_ROOT, type BuildUnit } from '@apackdev/host/build/packages-built';
 import type { ChainStep } from './chain-steps.ts';
 import { commandText, rootScripts } from './npm-scripts.ts';
@@ -56,6 +57,8 @@ export const flatStepName = (step: string): string => step.replace(/[:/]/g, '-')
  * launching the app, and asking it any other way would be a second account of what those steps read.
  */
 export function unitFor(step: ChainStep, budget?: number): BuildUnit {
+  const selectedLock = step.name === 'packs:stage' && process.env.APACK_SHIPPED_PACKS_LOCK;
+  const alternateLock = selectedLock ? `\nAPACK_SHIPPED_PACKS_LOCK=${sha256File(path.resolve(selectedLock))}` : '';
   return {
     inputs: step.inputs.map((input) => path.join(REPO_ROOT, input)),
     outputs: (step.outputs ?? []).map((output) => path.join(REPO_ROOT, output)),
@@ -63,7 +66,7 @@ export function unitFor(step: ChainStep, budget?: number): BuildUnit {
     ...(step.excludeSuffixes === undefined ? {} : { excludeSuffixes: step.excludeSuffixes }),
     // What `npm run <name>` resolves to, so a step's script is in its key without `package.json` being one
     command: commandText(step.name, rootScripts()) + (poolForStep(step.name) === undefined ? ''
-      : `\n${measureCommandFor(step.name, budget ?? box())}`),
+      : `\n${measureCommandFor(step.name, budget ?? box())}`) + alternateLock,
   };
 }
 

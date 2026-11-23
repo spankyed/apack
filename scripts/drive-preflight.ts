@@ -1,7 +1,7 @@
 /** Advisory only: driving an intentionally stale build remains supported. */
 import * as fs from 'node:fs';
 import path from 'node:path';
-import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
+import { CHECKOUT_DISTRIBUTION_DIRECTORY, SHIPPED_PACKS_LOCK_FILE, sha256File } from '@apackdev/host/packs/assets';
 import { inputFiles, repoRelative, skipsFingerprint, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { CHAIN_STEPS } from './lib/chain-steps.ts';
 import { unitFor } from './lib/chain-stamps.ts';
@@ -23,11 +23,12 @@ function newest(targets: readonly string[], prune = false): Edge | undefined {
 
 export function stalenessWarnings(): string[] {
   const warnings: string[] = [];
-  const root = path.join(REPO_ROOT, 'packages/default-setup');
+  const lock = process.env.APACK_SHIPPED_PACKS_LOCK ?? path.join(REPO_ROOT, SHIPPED_PACKS_LOCK_FILE);
   try {
-    assertPackBuildInputsCurrent(root, readPackBuildInputs(path.join(root, 'dist')));
+    const staged = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, CHECKOUT_DISTRIBUTION_DIRECTORY, 'build-manifest.json'), 'utf8'));
+    if (staged.lockSha256 !== sha256File(lock)) throw new Error('the distribution lock changed');
   } catch (error) {
-    warnings.push(`the pack the app ships: ${error instanceof Error ? error.message : String(error)} — \`npm run build:default-setup\``);
+    warnings.push(`the packs the app ships: ${error instanceof Error ? error.message : String(error)} — \`npm run packs:stage\``);
   }
   const runtime = CHAIN_STEPS.find(step => step.name === 'build:runtime')!;
   const unit = unitFor(runtime);

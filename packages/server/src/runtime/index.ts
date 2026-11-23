@@ -26,13 +26,14 @@ import { rootEvents } from '../transport/emitter.ts';
 import { initializeLogCapture, printLogEvents } from '../adapters/logging.ts';
 import { createRequire } from 'module';
 import pkg from '../../../../package.json';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /** Packaged processes read the same manifest; source runs use the checkout version. */
-const APP_VERSION: string = process.env.APACK_APP_MANIFEST
-  ? JSON.parse(readFileSync(process.env.APACK_APP_MANIFEST, 'utf8')).version
-  : pkg.version;
+const packagedManifest: { version: string; shippedPackIds?: readonly string[] } | undefined = process.env.APACK_APP_MANIFEST
+  ? JSON.parse(readFileSync(process.env.APACK_APP_MANIFEST, 'utf8'))
+  : undefined;
+const APP_VERSION = packagedManifest?.version ?? pkg.version;
 
 const logger = createLogger('backend');
 
@@ -168,15 +169,14 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   assertNoDatabaseWriter(appContext.userDataDir);
 
   const shippedDir = process.env.SHIPPED_PACKS_DIR;
-  const shipped = shippedDir ? readAppPackSources(shippedDir) : undefined;
-  let seedMissing: ReadonlySet<string> | undefined;
-  if (shipped) {
-    try {
-      seedMissing = recordShippedPackSeed(appContext, shippedPackSeedIds(shipped));
-    } catch (error) {
-      console.error("[packs] Could not record the profile's shipped pack selection:", error);
-    }
+  const declaredIds = packagedManifest?.shippedPackIds;
+  if (shippedDir && declaredIds === undefined && !existsSync(shippedDir)) {
+    throw new Error(`Cannot determine the profile's first shipped pack selection: ${shippedDir} is missing`);
   }
+  const shipped = shippedDir ? readAppPackSources(shippedDir) : undefined;
+  // Persist the distributor's selection before this boot writes host.json or opens the database.
+  // An I/O failure must leave a new profile eligible to retry the selection on its next boot.
+  const seedMissing = shipped ? recordShippedPackSeed(appContext, declaredIds ?? shippedPackSeedIds(shipped)) : undefined;
 
   // The app's data: the engine reads and writes it from here on
   const { engine, packs, catchUpProjections } = openAppStore(performance);
@@ -203,6 +203,12 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
     // nothing looks the same either way: on a fresh data dir both give an app with no surfaces
     console.warn('[packs] SHIPPED_PACKS_DIR is not set, so no pack the app ships is installed');
   } else {
+    if (declaredIds) {
+      const discoveredIds = new Set(shippedPackSeedIds(shipped));
+      for (const id of declaredIds) {
+        if (!discoveredIds.has(id)) console.error(`[packs] The app's shipped pack ${id} is missing from ${shippedDir}`);
+      }
+    }
     const results = await installShippedPacks(shipped, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, seedMissing, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(engine) });
     for (const result of results) {
       if (result.outcome === 'failed') console.error(`[packs] Could not install ${result.id}, which this app ships: ${result.error}`);

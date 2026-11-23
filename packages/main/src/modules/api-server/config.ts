@@ -2,7 +2,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {getAppEnvironment, shippedPacksDir} from '../../app-environment.ts';
+import {distributionManifest, getAppEnvironment, shippedPacksDir} from '../../app-environment.ts';
 import type {AppProcessEnv} from '@apackdev/sdk/env';
 
 // API Server Configuration
@@ -106,7 +106,7 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
     SHIPPED_PACKS_DIR: shippedPacksDir(),
     // Identity for the API process; resolveAppEnvironment() there reads these
     APACK_ENV: getAppEnvironment().env,
-    APACK_APP_MANIFEST: app.isPackaged ? path.join(app.getAppPath(), 'build-manifest.json') : undefined,
+    APACK_APP_MANIFEST: distributionManifest(),
     APACK_USER_DATA_DIR: getAppEnvironment().userDataDir,
     ELECTRON_RUN_AS_NODE: '1',
   };

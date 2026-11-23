@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import * as path from 'node:path';
 import type { Page } from '@playwright/test';
 import { test, expect } from '@apackdev/testing';
 
@@ -63,7 +64,7 @@ test('an app default can be disabled, removed and restored while host settings r
     await appPage.getByRole('combobox', { name: 'Pack operation' }).selectOption('replace');
     await appPage.getByRole('textbox', { name: 'Replacement pack ID' }).fill('default-setup');
     await appPage.getByPlaceholder('owner/repo, owner/repo@tag, or local path')
-      .fill(fileURLToPath(new URL('../../../../../packages/default-setup/', import.meta.url)));
+      .fill(path.join(fileURLToPath(new URL('../../../../..', import.meta.url)), '.temp/shipped-distribution/shipped-packs/default-setup'));
     await appPage.getByRole('button', { name: 'Replace', exact: true }).click();
     await app.waitForSurface('default-setup/threads');
     await ownershipBecomes(appPage, 'user');

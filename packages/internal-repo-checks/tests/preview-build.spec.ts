@@ -78,12 +78,31 @@ describe('local preview builds', () => {
     const pack = 'shipped-packs/example';
     fs.mkdirSync(path.join(stage, pack), { recursive: true });
     fs.writeFileSync(path.join(stage, pack, 'integrity.json'), '{}');
+    const notices = 'pack-redistribution/example/THIRD-PARTY-NOTICES.txt';
+    fs.mkdirSync(path.dirname(path.join(stage, notices)), { recursive: true });
+    fs.writeFileSync(path.join(stage, notices), 'Notices');
     completeBuildFixture(stage);
     fs.cpSync(stage, app, { recursive: true });
     fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ version: manifest.version }));
     expect(() => verifyPackagedBuild(app, stage)).not.toThrow();
+    fs.unlinkSync(path.join(app, notices));
+    expect(() => verifyPackagedBuild(app, stage)).toThrow(/outputs differ/);
+    fs.copyFileSync(path.join(stage, notices), path.join(app, notices));
     fs.unlinkSync(path.join(app, pack, 'integrity.json'));
     expect(() => verifyPackagedBuild(app, stage)).toThrow(/outputs differ/);
+  });
+
+  it('verifies an explicitly empty selection when the packager leaves out empty directories', () => {
+    const stage = createBuildSession({ APACK_ENV: 'production' });
+    const app = fs.mkdtempSync(path.join(os.tmpdir(), 'empty-pack-package-'));
+    dirs.push(stage, app);
+    const manifest = { ...readBuildManifest(stage), shippedPackIds: [] };
+    fs.writeFileSync(path.join(stage, 'build-manifest.json'), JSON.stringify(manifest));
+    completeBuildFixture(stage);
+    fs.cpSync(stage, app, { recursive: true });
+    fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ version: manifest.version }));
+    fs.rmdirSync(path.join(app, 'shipped-packs'));
+    expect(() => verifyPackagedBuild(app, stage)).not.toThrow();
   });
 
   it('refuses to seal an app without a staged pack directory', () => {

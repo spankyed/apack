@@ -19,8 +19,8 @@ function validateAppRoot(dir: string): void {
   const missing: string[] = [];
   if (!isValidAppRoot(dir)) missing.push('packages/entry-point.mjs');
   if (!fs.existsSync(path.join(dir, 'node_modules', 'electron'))) missing.push('node_modules/electron (run npm install)');
-  if (!fs.existsSync(path.join(dir, 'packages', 'main', 'dist'))) missing.push('packages/main/dist (run npm run build:default-setup && npm run build:runtime)');
-  if (!fs.existsSync(path.join(dir, 'packages', 'renderer', 'dist'))) missing.push('packages/renderer/dist (run npm run build:default-setup && npm run build:runtime)');
+  if (!fs.existsSync(path.join(dir, 'packages', 'main', 'dist'))) missing.push('packages/main/dist (run npm run packs:stage && npm run build:runtime)');
+  if (!fs.existsSync(path.join(dir, 'packages', 'renderer', 'dist'))) missing.push('packages/renderer/dist (run npm run packs:stage && npm run build:runtime)');
   if (missing.length > 0) {
     throw new Error(
       `apack checkout ${dir} is missing required files:\n` +

@@ -7,10 +7,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { buildPackConfigFromManifest, compilePack, type PackManifest } from '@apackdev/sdk/build';
+import { PACK_LAYOUT } from '@apackdev/host/packs';
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import { test, expect } from '@apackdev/testing';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
-const PACK_DIR = path.join(ROOT, 'packages/default-setup');
+const PACK_DIR = path.join(checkoutShippedPacksDir(ROOT), 'default-setup');
 const RUN = Date.now().toString(36);
 const PIC = `e2e-pic-${RUN}.png`;
 // A 1×1 PNG
@@ -45,13 +47,21 @@ async function compileContent(work: string): Promise<string> {
   const entry = (key: string, source: string) => ({ ...(sources[key] as object), path: path.relative(PACK_DIR, source) });
   // Documents are written by an applier the pack registers for a key it declares, and commands is
   // default-setup's one document key
-  const pack = { ...manifest, steps: undefined, content: { ...manifest.content, datasets: undefined, sources: { notes: entry('notes', path.join(work, 'notes')), commands: entry('commands', path.join(work, 'commands')) } } } as PackManifest;
+  const pack = {
+    ...manifest,
+    extensions: { ...manifest.extensions, steps: undefined },
+    content: { ...manifest.content, datasets: undefined, sources: {
+      notes: entry('notes', path.join(work, 'notes')), commands: entry('commands', path.join(work, 'commands')),
+    } },
+  } as PackManifest;
   const outputDir = path.join(work, 'compiled');
   const { tsImport } = await import('tsx/esm/api');
   await compilePack({
     packDir: PACK_DIR,
     outputDir,
-    packConfig: await buildPackConfigFromManifest(pack, PACK_DIR),
+    packConfig: await buildPackConfigFromManifest(pack, PACK_DIR, {
+      dependencyStepModules: [path.join(PACK_DIR, PACK_LAYOUT.stepsBuild)],
+    }),
     importModule: (file) => tsImport(file, import.meta.url) as Promise<Record<string, unknown>>,
   });
   return outputDir;

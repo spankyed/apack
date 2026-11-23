@@ -1,3 +1,4 @@
+import { checkoutShippedPacksDir } from '@apackdev/host/packs/assets';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,7 +27,7 @@ test('repairs invalid persisted settings in the app and starts packs only after 
   try {
     // Model an existing profile: its installed declaration must be discoverable even when saved
     // preferences make refreshing the shipped pack refuse before startup recovery.
-    await installPackFromLocal(path.join(root, 'packages/default-setup'),
+    await installPackFromLocal(path.join(checkoutShippedPacksDir(root), 'default-setup'),
       resolveAppEnvironment({ env: 'test', userDataDir }).packsDir);
     await writeData(userDataDir, () => {
       untypedCreate('Settings', { id: 'Settings-app' as EARS.EntityId }).set('data', {

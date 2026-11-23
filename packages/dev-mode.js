@@ -1,5 +1,5 @@
 import {build, createServer} from 'vite';
-import { fork, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import { prepareCheckoutProfile } from '../scripts/lib/dev-profile.mjs';
 
@@ -7,23 +7,18 @@ const mode = 'development';
 process.env.NODE_ENV = mode;
 process.env.MODE = mode;
 
-// Prepare pack content, codegen and backend before any app process reads them.
+// Download and stage the distributor's verified pack layouts before the app starts.
 await new Promise((resolve, reject) => {
-  const packBuild = spawn('npm', ['run', 'build:dev', '-w', '@app/default-setup'], {
-    stdio: 'inherit',
-    shell: true,
-  });
-  packBuild.once('error', reject);
-  packBuild.once('exit', (code) => {
-    if (code === 0) resolve();
-    else reject(new Error(`Default-setup build failed with code ${code}`));
-  });
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) return reject(new Error('Run the development app with npm run dev'));
+  const stage = spawn(process.execPath, [npmCli, 'run', 'packs:stage'], { stdio: 'inherit' });
+  stage.once('error', reject);
+  stage.once('exit', code => code === 0 ? resolve() : reject(new Error(`Shipped pack staging failed with code ${code}`)));
 });
 
 await prepareCheckoutProfile(process.cwd());
 
-// ── 1. Start the API build, the pack's build watcher and the renderer server concurrently ──
-
+// Start the API build and the renderer server concurrently.
 // API backend build (skips tsc, single ESM format, no DTS/minify)
 const apiBuild = spawn('npm', ['run', 'build:server:dev'], {
   stdio: 'inherit',
@@ -39,23 +34,6 @@ const apiBuildDone = new Promise((resolve) => {
   });
 });
 
-// The shipped pack's watcher publishes verified dist/ before asking the API to refresh its installed copy.
-const devBuild = fork(path.resolve('packages/apack-cli/bin/apack.mjs'), ['pack', 'build', '--watch'], {
-  cwd: path.resolve('packages/default-setup'),
-  stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
-});
-process.on('exit', () => devBuild.kill());
-const devBuildReady = new Promise((resolve) => {
-  devBuild.on('message', (msg) => { if (msg.type === 'ready') resolve(); });
-  devBuild.on('exit', (code) => {
-    if (code !== 0) {
-      console.error(`[dev-mode] default-setup's build watcher failed with code ${code}`);
-      process.exit(1);
-    }
-    resolve();
-  });
-});
-
 // Renderer dev server (other packages depend on its settings)
 /** @type {import('vite').ViteDevServer} */
 const rendererWatchServer = await createServer({
@@ -65,9 +43,6 @@ const rendererWatchServer = await createServer({
   root: path.resolve('packages/renderer'),
 });
 await rendererWatchServer.listen();
-
-// Wait for the first verified pack publication before the API boots
-await devBuildReady;
 
 // ── 2. Renderer watch server provider surface ──
 

@@ -33,6 +33,7 @@
     "dev:query": "tsx scripts/drive-preflight.ts && node scripts/with-source.mjs node scripts/app-dev.mjs drive --query",
     "dev:state": "tsx scripts/drive-preflight.ts && node scripts/with-source.mjs node scripts/app-dev.mjs drive --state",
     "build:default-setup": "npm run packages:ensure && npm run build -w @app/default-setup",
+    "packs:stage": "node scripts/with-source.mjs tsx scripts/stage-shipped-starter.ts --checkout",
     "build:runtime": "tsx scripts/build-runtime.ts",
     "build:server": "npm run build --workspace @app/server",
     "build:server:dev": "npm run build:dev --workspace @app/server",

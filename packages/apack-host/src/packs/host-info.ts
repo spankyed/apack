@@ -56,20 +56,20 @@ export function recordShippedPackSeed(
   offeredIds: readonly string[],
 ): ReadonlySet<string> {
   const file = path.join(appDir, 'shipped-pack-seed.json');
-  const readSeed = (): ReadonlySet<string> => {
-    const ids: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const selection = (ids: unknown): readonly string[] => {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !PACK_ID_PATTERN.test(id)) || new Set(ids).size !== ids.length) {
       throw new Error(`Invalid shipped pack selection in ${file}`);
     }
-    return new Set(ids);
+    return ids;
   };
+  const readSeed = () => new Set(selection(JSON.parse(fs.readFileSync(file, 'utf8'))));
   if (fs.existsSync(file)) return readSeed();
 
   // Read before boot opens its own database or updates host.json. Legacy profiles already made their
   // choices, including a profile that happened to run with no shipped packs.
   const { lmdb } = _appDataPaths(userDataDir);
   const existing = [hostCompatibilityFile(userDataDir), lmdb, installedPacksFile].some(entry => fs.existsSync(entry));
-  const initialIds = existing ? [] : offeredIds;
+  const initialIds = existing ? [] : selection(offeredIds);
   fs.mkdirSync(appDir, { recursive: true });
   const scratch = fs.mkdtempSync(path.join(appDir, '.shipped-pack-seed-'));
   try {

@@ -44,9 +44,10 @@ npm ci
 npm run dev
 ```
 
-`npm run dev` prepares the shipped pack and backend, starts the renderer development server and
-pack watcher, and launches Electron. Frontend edits use hot reload; backend and pack changes rebuild
-through the development workflow.
+`npm run dev` stages the packs selected in `build/shipped-packs.lock.json`, starts the renderer
+development server and launches Electron. Frontend and backend edits to the app use the existing
+watchers. Use `apack pack dev` for a pack checkout, and name that checkout in `APACK_DEV_PACK_DIRS`
+when launching the app if you also want frontend hot reload.
 
 | Command | Purpose |
 |---|---|
@@ -54,7 +55,7 @@ through the development workflow.
 | `npm run dev:inspect` | Start development with Electron's Node debugger |
 | `npm run spec` | Run focused checks selected from uncommitted changes |
 | `npm run chain` | Run the repository validation chain, reusing valid cached steps |
-| `npm run build:default-setup` | Build the shipped pack and required package bundles |
+| `npm run packs:stage` | Verify and stage the pinned packs for source app launches |
 | `npm run build:runtime` | Build the renderer, API, main and preload workspaces |
 
 Some compiler/native checks require an approved disposable environment. Follow the current
@@ -112,7 +113,7 @@ apack separates the desktop host from the features it runs:
 | `packages/main`, `packages/preload` | Desktop lifecycle, windows, protocols and IPC |
 | `packages/server`, `packages/renderer` | Backend process/transport and frontend shell |
 | `packages/apack-host` | Pack discovery, installation and runtime; host services and settings |
-| `packages/default-setup` | Shipped features, extensions and content |
+| [default-setup](https://github.com/spankyed/default-setup) | Independently released starter pack |
 | `packages/apack-sdk`, `packages/apack-ui` | Pack-facing APIs, types, components and editors |
 | `packages/apack-cli`, `packages/apack-testing` | Pack tooling, build pipeline and test helpers |
 | `packages/internal-repo-checks`, `packages/internal-publish-checks` | Repository tooling and package-consumer checks |

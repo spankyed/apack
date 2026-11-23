@@ -19,7 +19,6 @@ if (process.argv.includes('--help')) {
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
   const commands: [command: 'npm' | 'npx', args: string[]][] = [
     ['npm', ['run', 'packages:ensure']],
-    ['npm', ['run', 'build:default-setup']],
     ['npx', ['tsx', 'scripts/stage-shipped-starter.ts']],
     ['npm', ['run', 'build:runtime']],
   ];

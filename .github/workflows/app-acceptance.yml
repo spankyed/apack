@@ -63,6 +63,8 @@ jobs:
           else
             npm run build:default-setup
           fi
+      - name: Stage the pinned distribution
+        run: npm run packs:stage
       - name: Build app runtime
         if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' }}
         id: runtime
