@@ -1,8 +1,8 @@
 # A system's contract declares its answers apart from its news
 
-Status: planned, 2026-10-26, in Claude Code session `0e968e2f-d9bd-417a-8247-c87cc9d75fdd`. Nothing built. Follows live queries
-([archive/plans/live-queries.md](../archive/plans/live-queries.md), Open), which left this as the condition its step 5
-pack rule needed.
+Status: superseded, not built as written; the asks that replaced it are [asks-shape.md](../../plans/asks-shape.md).
+Planned 2026-10-26, following live queries ([live-queries.md](live-queries.md)), which left this as the condition
+its step 5 pack rule needed.
 
 ## Where it stands
 
