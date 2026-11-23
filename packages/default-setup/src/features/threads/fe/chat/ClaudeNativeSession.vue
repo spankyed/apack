@@ -396,6 +396,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); send({ type: 'CLAUDE
 :global(.claude-native-lsp-details h3) { margin: 0; color: #eee7dd; font-size: 13px; font-weight: 500; }
 :global(.claude-native-lsp-details header button) { color: #aaa59e; font-size: 11px; cursor: pointer; }
 :global(.claude-native-lsp-details p) { margin: 0 0 8px; }
+.native-notice[data-native-notice='peer_inbound_approval'] .native-notice__body { max-height: min(15rem, 32vh); }
 .native-notice__peer-message { white-space: pre-wrap; unicode-bidi: plaintext; border-inline-start: 2px solid currentColor; padding-inline-start: 0.625rem; margin-block: 0.5rem; }
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { container-type: inline-size; container-name: claude-native; --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
