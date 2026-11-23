@@ -120,12 +120,12 @@ it('keeps the native teammate name distinct from the task description across its
 it('advertises focused input for a running teammate without using the local Agent queue', async () => {
   const f = fixture()
   Object.assign(f.tasks[0], { type: 'in_process_teammate', status: 'running', identity: { agentName: 'worker' } })
-  expect((await f.request('inspect')).details.canInput).toBe(true)
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details).toMatchObject({ canInput: false, canFocusInput: true, canMessage: true })
   await expect(f.request('input')).rejects.toThrow('cannot accept user input')
   expect(f.queue).not.toHaveBeenCalled()
   expect(f.runner).not.toHaveBeenCalled()
   f.tasks[0].status = 'killed'
-  expect((await f.request('inspect')).details.canInput).toBe(false)
+  expect((await f.request('inspect')).details).toMatchObject({ canInput: false, canFocusInput: false })
 })
 
 it('uses the live running-teammate display rows without duplicating the journal echoes', async () => {

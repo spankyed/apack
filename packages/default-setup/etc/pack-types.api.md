@@ -2820,6 +2820,7 @@ interface ClaudeNativeTaskDetails {
     teammateName?: string;
     status: string;
     canInput: boolean;
+    canFocusInput?: boolean;
     canMessage: boolean;
     metadata?: {
         prompt?: string;

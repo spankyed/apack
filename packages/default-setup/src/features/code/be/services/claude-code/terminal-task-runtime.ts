@@ -155,7 +155,7 @@ async function nativeTaskControl(n,binding,request,abort,current){
  const endedTeammateAddress=task.type==='in_process_teammate'&&!liveTeammate&&request.task_id.includes('@');
  const canMessage=!endedTeammateAddress&&typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
  const canUseLocalInput=task.type==='local_agent'&&!task.resuming&&['running','completed','failed','killed'].includes(task.status);
- const canInput=canUseLocalInput||(task.type==='in_process_teammate'&&task.status==='running');
+ const canFocusInput=task.type==='in_process_teammate'?task.status==='running':undefined;
  if(request.operation==='input'){
   if(!canUseLocalInput)throw Error('This Agent cannot accept user input now');
   if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent input must contain 1 to 16384 characters');
@@ -241,5 +241,5 @@ async function nativeTaskControl(n,binding,request,abort,current){
   error:error?.slice(0,16384),errorTruncated:(error?.length??0)>16384};
  const handback=task.type==='local_agent'&&typeof task.handbackReport?.text==='string'?{taskId:request.task_id,text:task.handbackReport.text,...(typeof task.handbackReport.warning==='string'?{warning:task.handbackReport.warning}:{})}:undefined;
  const teammateName=nativeTeammateName(task);
- return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput,metadata,messages,truncated}};
+ return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput:canUseLocalInput,...(canFocusInput===undefined?{}:{canFocusInput}),metadata,messages,truncated}};
 }`

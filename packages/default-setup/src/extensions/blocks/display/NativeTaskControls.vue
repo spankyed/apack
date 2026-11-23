@@ -29,11 +29,12 @@
         </template>
       </article>
       <p v-if="state.details.truncated" class="text-neutral-500">Conversation preview shortened.</p>
-      <form v-if="state.details.canInput || state.details.canMessage" class="mt-3 border-t border-white/10 pt-3" @submit.prevent="sendMessage">
-        <label class="block text-[11px] text-neutral-400">{{ state.details.canInput ? 'Reply to this Agent' : 'Message this Agent' }}
-          <textarea v-model="draft" :aria-label="state.details.canInput ? 'Reply to this Agent' : 'Message this Agent'" maxlength="16384" rows="2" class="mt-1 block w-full resize-y rounded border border-white/10 bg-neutral-900/40 px-2 py-1.5 text-xs text-neutral-200 focus:border-blue-400/50 focus:outline-none" />
+      <p v-if="state.details.canFocusInput && controls.foregroundAvailable.value" class="mt-3 text-xs text-neutral-400">Open Agent to reply directly.</p>
+      <form v-if="sendOperation" class="mt-3 border-t border-white/10 pt-3" @submit.prevent="sendMessage">
+        <label class="block text-[11px] text-neutral-400">{{ messageLabel }}
+          <textarea v-model="draft" :aria-label="messageLabel" maxlength="16384" rows="2" class="mt-1 block w-full resize-y rounded border border-white/10 bg-neutral-900/40 px-2 py-1.5 text-xs text-neutral-200 focus:border-blue-400/50 focus:outline-none" />
         </label>
-        <button type="submit" :disabled="pending || !draft.trim()" class="mt-2 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && ['send', 'input'].includes(state.operation) ? 'Sending…' : state.details.canInput ? 'Reply to Agent' : 'Send to Agent' }}</button>
+        <button type="submit" :disabled="pending || !draft.trim()" class="mt-2 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && ['send', 'input'].includes(state.operation) ? 'Sending…' : sendOperation === 'input' ? 'Reply to Agent' : 'Send to Agent' }}</button>
       </form>
     </section>
     <dialog v-if="mcp && shown && state?.details?.mcp" ref="mcpDialog" aria-label="MCP task details"
@@ -126,9 +127,17 @@ watch(taskKey, () => {
   submitted = undefined
 })
 watch(state, value => { if (submitted && value?.status === 'done' && (value.operation === 'send' && value.sent || value.operation === 'input' && value.input) && value.revision === submitted.revision && draft.value === submitted.text) draft.value = '' })
+const sendOperation = computed(() => {
+  const details = state.value?.details
+  if (details?.canInput) return 'input'
+  if (details?.canMessage) return 'send'
+})
+const messageLabel = computed(() => sendOperation.value === 'input' ? 'Reply to this Agent'
+  : state.value?.details?.canFocusInput !== undefined ? 'Message as team lead' : 'Message this Agent')
 function sendMessage() {
-  if (!draft.value.trim() || pending.value) return
-  const text = draft.value, revision = controls?.operate(props.task, state.value?.details?.canInput ? 'input' : 'send', text)
+  const operation = sendOperation.value
+  if (!operation || !draft.value.trim() || pending.value) return
+  const text = draft.value, revision = controls?.operate(props.task, operation, text)
   if (revision !== undefined) submitted = { revision, text }
 }
 const pending = computed(() => sessionState.value?.status === 'pending')

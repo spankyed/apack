@@ -62,7 +62,7 @@
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
-    <NativeAgentComposer v-show="!panelActive && !approvalPending && !panelDecisionPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || panelDecisionPending || !selectedOwner || returning || stopping || panelActive || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
+    <NativeAgentComposer v-show="!panelActive && !approvalPending && !panelDecisionPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || panelDecisionPending || !selectedOwner || returning || stopping || panelActive || commandActive || !canFocusInput || state?.status === 'disconnected' || state?.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
     <slot name="decision" />
   </section>
@@ -142,6 +142,10 @@ const displayName = computed(() => {
 })
 provideClaudeHoverGroups(() => props.active && selectedOwner.value && snapshot.value && ['live', 'rendering'].includes(snapshot.value.state.status) && snapshot.value.attachmentId
   ? JSON.stringify([props.threadId, uiMount.value, snapshot.value.attachmentId, props.target.ownerId, props.target.sessionId, props.target.taskId, props.target.revision]) : undefined)
+const canFocusInput = computed(() => {
+  const details = state.value?.agent
+  return details?.taskId === props.target.taskId && (details.canFocusInput ?? details.canInput)
+})
 const canStopAgent = computed(() => {
   const status = selectedOwner.value?.tasks.find(task => task.id === props.target.taskId)?.status
   const details = state.value?.agent
@@ -167,7 +171,7 @@ function restoreManagedSettingsFocus() {
   void nextTick(() => {
     if (document.hasFocus() && document.activeElement === document.body && mount && uiMount.value === mount && props.active && selectedOwner.value
       && !managedSettingsDiagnostics.value?.length && !props.approvalPending && !props.panelDecisionPending && !commandActive.value && !outputActive.value
-      && !returning.value && !stopping.value && state.value?.agent?.canInput) agentComposer.value?.focus()
+      && !returning.value && !stopping.value && canFocusInput.value) agentComposer.value?.focus()
   })
 }
 const dismissedOutput = ref<string>()

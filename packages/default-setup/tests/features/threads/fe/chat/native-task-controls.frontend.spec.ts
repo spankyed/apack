@@ -24,6 +24,20 @@ it('retains an unsent message when native delivery is refused', async () => {
   f.state.value = { ...f.state.value, revision: 3, operation: 'send', status: 'error', problem: 'Native refusal' }; await nextTick()
   expect(f.input.value).toBe('User instruction'); expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Native refusal')
 })
+it('labels inline teammate messaging as team-lead delivery and offers the focused human path', async () => {
+  const f = await fixture()
+  f.state.value.details!.canFocusInput = true
+  await nextTick()
+  expect(f.input.getAttribute('aria-label')).toBe('Message as team lead')
+  expect(f.root.textContent).toContain('Open Agent to reply directly.')
+  await f.type('Team-lead handoff'); await f.send()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent' }), 'send', 'Team-lead handoff')
+  f.state.value.details!.canMessage = false
+  await nextTick()
+  expect(f.root.querySelector('textarea')).toBeNull()
+  expect(f.root.textContent).toContain('Open Agent to reply directly.')
+})
+
 it('clears only the submitted text after its exact receipt and preserves typing during delivery', async () => {
   const f = await fixture(); await f.type('First instruction'); await f.send(); await f.type('New unsent text')
   f.state.value = { ...f.state.value, revision: 3, operation: 'send', status: 'done', sent: true }; await nextTick()
