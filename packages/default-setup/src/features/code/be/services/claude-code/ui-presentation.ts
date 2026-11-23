@@ -162,6 +162,7 @@ export interface ClaudeUiTranscriptLayout {
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
   instanceRevision: number
   nativeHint?: boolean
+  idleReturnHint?: string
   groupExpanded?: boolean
   displayText: string
   outputRewritten?: boolean

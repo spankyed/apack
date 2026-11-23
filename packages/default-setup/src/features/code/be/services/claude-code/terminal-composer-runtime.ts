@@ -37,6 +37,17 @@ function nativeComposerInputs(n,signatures=composerSignatures,maxIdLength=256,ma
  }
  return result;
 }
+function nativeIdleReturnHint(n){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')return;
+ const signal=new AbortController(),context=binding.toolContext(signal),notice=context.getAppState().notifications?.current;
+ // The original store owns visibility and timing. Queued notifications are not visible.
+ if(notice?.key!=='idle-return-hint'||notice.kind!=='contextual'||!Array.isArray(notice.segments)||notice.segments.length!==4)return;
+ if(context.dialogStore.getState().open.length||nativeViewFacts(n,binding,signal).view.kind!=='main')return;
+ if(notice.segments.some(segment=>typeof segment?.text!=='string'||segment.text.length>128||/[\x00-\x1f\x7f-\x9f]/.test(segment.text)))return;
+ const text=notice.segments.map(segment=>segment.text).join('');
+ return text.length<=256?text:undefined;
+}
 function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n)){
  const source=inputs.get(JSON.stringify([component,id]));if(!source)return;
  if(component==='Spinner'){
@@ -47,8 +58,9 @@ function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n
  const props={...source.props};
  if(component==='Spinner'&&props.mode==='tool-input')props.mode='tool-use';
  if(component==='PromptHint'&&edits.has(client))props.isDraft=edits.get(client).box.text.length>0;
- const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props])).digest('hex');
- return {...source,props,fingerprint};
+ const idleReturnHint=component==='PromptHint'&&!props.isWorking?nativeIdleReturnHint(n):undefined;
+ const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props,idleReturnHint])).digest('hex');
+ return {...source,props,fingerprint,idleReturnHint};
 }
 function nativeComposerList(n,client,inputs=nativeComposerInputs(n)){
  const result=[];for(const source of inputs.values()){const facts=nativeComposerFacts(n,client,source.component,source.id,inputs);if(facts)result.push({component:facts.component,id:facts.id,revision:facts.fingerprint});}return result;

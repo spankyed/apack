@@ -91,3 +91,34 @@ it('refreshes a visible waiting count through the current native provider at its
   expect(store.refetch).toHaveBeenCalledTimes(2);
  }finally{clock.mockRestore();}
 })
+
+it('projects only the current native idle hint and retires it without altering the PromptHint hook input', () => {
+  const f = fixture()
+  const input = { surface: 'terminal', component: 'PromptHint', requestId: 'prompt-hint', props: { hint: 'Original keyboard help', isWorking: false } }
+  f.fiber.type = f.vY
+  f.fiber.memoizedState = { memoizedState: [input, []] }
+  const hint = { key: 'idle-return-hint', kind: 'contextual', segments: ['new task? ', '/clear', ' to save ', '15 tokens'].map(text => ({ text })) }
+  const notifications: { current?: unknown; queue: unknown[] } = { current: hint, queue: [] }
+  let dialogOpen = false
+  f.n.runtime.ey = () => ({
+    surface: 'terminal',
+    toolContext: () => ({
+      getAppState: () => ({ notifications }),
+      dialogStore: { getState: () => ({ open: dialogOpen ? [{}] : [] }) },
+    }),
+  })
+  const facts = () => f.api.facts(f.n, 'view', 'PromptHint', 'prompt-hint')
+  const shown = facts()
+  expect(shown.idleReturnHint).toBe('new task? /clear to save 15 tokens')
+  expect(shown.props).toEqual({ ...input.props, isDraft: true })
+  dialogOpen = true
+  expect(facts().idleReturnHint).toBeUndefined()
+  dialogOpen = false
+  input.props.isWorking = true
+  expect(facts().idleReturnHint).toBeUndefined()
+  input.props.isWorking = false
+  notifications.current = undefined
+  notifications.queue.push(hint)
+  expect(facts().idleReturnHint).toBeUndefined()
+  expect(facts().fingerprint).not.toBe(shown.fingerprint)
+})

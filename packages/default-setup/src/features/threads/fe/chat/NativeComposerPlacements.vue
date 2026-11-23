@@ -3,6 +3,7 @@
     <NativeTranscriptMessage v-for="frame in ordered" :key="frame.component + ':' + frame.uuid" :frame="frame" :data-native-placement="frame.component" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
       <template #engine><div v-if="frame.engineOutput" :role="frame.component === 'Spinner' ? 'status' : undefined" :aria-label="frame.component === 'Spinner' ? 'Claude activity' : frame.component === 'PromptHint' ? frame.nativeHint ? 'Native keyboard hint' : 'Claude prompt hint' : 'Claude session mode'" class="whitespace-pre-wrap break-words" :title="frame.component === 'PromptHint' && frame.nativeHint ? 'Keyboard hints for the native Claude interface' : undefined"><span v-if="frame.component === 'PromptHint' && frame.nativeHint" class="text-neutral-500">Native interface · </span><NativeStatusText :text="frame.engineOutput" /></div></template>
     </NativeTranscriptMessage>
+    <p v-for="frame in idleHints" :key="frame.uuid" class="break-words" data-testid="native-idle-return-hint">{{ frame.idleReturnHint }}</p>
   </div>
 </template>
 <script setup lang="ts">
@@ -13,7 +14,8 @@ import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ frames: ClaudeUiTranscriptFrame[]; location: 'status' | 'hint' | 'mode' }>()
 const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; height: [height: number] }>()
 const visible = (node: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiNode): boolean => node.kind === 'box' || node.kind === 'link' ? node.children.some(visible) : node.kind === 'text' ? !!node.text.trim() || !!node.children?.some(visible) : node.kind !== 'unsupported' || node.component !== 'engine'
-const ordered = computed(() => props.frames.filter(frame => (props.location === 'hint' ? frame.component === 'PromptHint' : props.location === 'mode' ? frame.component === 'SessionMode' : frame.component === 'Spinner') && (frame.body.status !== 'live' || !!frame.engineOutput || visible(frame.body.tree))).sort((a,b) => ['Spinner','SessionMode','PromptHint'].indexOf(a.component) - ['Spinner','SessionMode','PromptHint'].indexOf(b.component)))
+const ordered = computed(() => props.frames.filter(frame => (props.location === 'hint' ? frame.component === 'PromptHint' : props.location === 'mode' ? frame.component === 'SessionMode' : frame.component === 'Spinner') && (frame.body.status !== 'live' || !!frame.engineOutput || !!frame.idleReturnHint || visible(frame.body.tree))).sort((a,b) => ['Spinner','SessionMode','PromptHint'].indexOf(a.component) - ['Spinner','SessionMode','PromptHint'].indexOf(b.component)))
+const idleHints = computed(() => ordered.value.filter(frame => frame.component === 'PromptHint' && frame.idleReturnHint))
 const root = ref<HTMLElement | null>(null)
 let observer: ResizeObserver | undefined, lastHeight = -1
 function reportHeight() {
