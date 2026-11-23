@@ -599,16 +599,18 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         // process generations while that authority still exists. A server name or pane number
         // alone can be reused after a crash. Failed identity reads leave ordinary attach usable.
         const identify = async (address: string[], abort: AbortSignal) => {
+          // tmux can sanitize control characters in formats. Keep the socket path last
+          // so the printable separator can also appear in a legitimate socket directory.
           const panes = await probe(['list-panes', '-s', '-t', session, '-F',
-            '#{pane_id}\t#{socket_path}\t#{pid}\t#{pane_pid}\t#{pane_dead}\t#{pane_active}\t#{window_active}',
+            '#{pane_id}|#{pid}|#{pane_pid}|#{pane_dead}|#{pane_active}|#{window_active}|#{socket_path}',
           ], abort, address)
-          const [row, ...otherMatches] = panes.split('\n').map(line => line.split('\t'))
-            .filter(([id]) => id === paneId)
+          const [row, ...otherMatches] = panes.split('\n')
+            .map(line => /^(%[0-9]+)\|([1-9][0-9]*)\|([1-9][0-9]*)\|([01])\|([01])\|([01])\|(.*)$/.exec(line))
+            .filter(match => match?.[1] === paneId)
           if (!row || otherMatches.length) throw new Error('The original tmux pane is missing or ambiguous')
-          const [, socket, serverPid, workerPid, dead, activePane, activeWindow] = row
-          if (!socket || !isAbsolute(socket)) throw new Error('The native teammate socket address is unavailable')
-          if (!serverPid || !workerPid || !/^[1-9][0-9]*$/.test(serverPid) || !/^[1-9][0-9]*$/.test(workerPid))
-            throw new Error('The tmux server or teammate process ID is unavailable')
+          const [, , serverPid, workerPid, dead, activePane, activeWindow, socket] = row
+          if (!socket || !isAbsolute(socket) || !serverPid || !workerPid)
+            throw new Error('The native teammate socket or process identity is unavailable')
           if (dead !== '0') throw new Error('The original tmux pane has ended')
           const processStart = async (pid: string) => {
             const info = await readFile('/proc/' + pid + '/stat', { encoding:'utf8', signal:abort })
