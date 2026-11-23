@@ -28,7 +28,10 @@ it('labels inline teammate messaging as team-lead delivery and offers the focuse
   const f = await fixture()
   f.state.value.details!.canFocusInput = true
   await nextTick()
-  expect(f.input.getAttribute('aria-label')).toBe('Message as team lead')
+  expect(f.root.querySelector('label')?.htmlFor).toBe(f.input.id)
+  expect(f.root.querySelector('label')?.textContent).toBe('Message as team lead')
+  const readingControl = [...f.root.querySelectorAll('button')].find(button => button.textContent === 'Refresh conversation')!
+  expect(f.input.compareDocumentPosition(readingControl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(f.root.textContent).toContain('Open Agent to reply directly.')
   await f.type('Team-lead handoff'); await f.send()
   expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent' }), 'send', 'Team-lead handoff')
@@ -83,7 +86,7 @@ it('shows the native compaction boundary and collapses the summary in the inline
 
 it('uses human replies when supported and clears only their exact queued receipt', async () => {
   const f = await fixture(); f.state.value.details!.canInput = true; await nextTick()
-  expect(f.input.getAttribute('aria-label')).toBe('Reply to this Agent')
+  expect(f.input.labels?.[0]?.textContent).toBe('Reply to this Agent')
   await f.type('Human reply'); await f.send()
   expect(f.operate).toHaveBeenLastCalledWith(expect.anything(), 'input', 'Human reply')
   f.state.value = { ...f.state.value, operation: 'input', revision: 3, status: 'done', input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }; await nextTick()

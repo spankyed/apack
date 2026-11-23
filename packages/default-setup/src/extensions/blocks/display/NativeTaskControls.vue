@@ -11,7 +11,20 @@
       <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || !canStop" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : mcp ? 'Stop task' : 'Stop Agent' }}</button>
     </div>
     <p v-if="state?.status === 'error' && !mcpDialog" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
-    <section v-if="!workflow && !shell && !mcp && shown && state?.details" :aria-label="workflow ? 'Workflow details' : 'Agent conversation'" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-2 text-xs">
+    <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
+    <p v-if="state?.status === 'done' && state.operation === 'input' && state.input" role="status" class="mt-2 text-[11px] text-neutral-400">{{ state.input.mode === 'resumed' ? 'Agent resumed with your reply' : 'Reply queued for Agent' }}</p>
+    <section v-if="!workflow && !shell && !mcp && shown && state?.details" aria-label="Agent conversation" tabindex="0" class="mt-2 rounded border border-white/10 p-2 text-xs">
+      <form v-if="sendOperation" class="space-y-1.5 border-b border-white/10 pb-2 mb-2" @submit.prevent="sendMessage">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+          <label :for="messageFieldId" class="text-[11px] font-medium text-neutral-300">{{ messageLabel }}</label>
+          <p v-if="state.details.canFocusInput && controls.foregroundAvailable.value" class="text-[11px] text-neutral-400">Open Agent to reply directly.</p>
+        </div>
+        <div class="flex items-end gap-2">
+          <textarea :id="messageFieldId" v-model="draft" maxlength="16384" rows="2" class="block min-w-0 flex-1 resize-y rounded border border-white/10 bg-neutral-900/40 px-2 py-1 text-xs text-neutral-200 focus:border-blue-400/50 focus:outline-none" />
+          <button type="submit" :disabled="pending || !draft.trim()" class="shrink-0 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && ['send', 'input'].includes(state.operation) ? 'Sending…' : sendOperation === 'input' ? 'Reply to Agent' : 'Send to Agent' }}</button>
+        </div>
+      </form>
+      <p v-else-if="state.details.canFocusInput && controls.foregroundAvailable.value" class="mb-2 text-[11px] text-neutral-400">Open Agent to reply directly.</p>
       <button type="button" class="mb-2 text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'inspect')">{{ workflow ? 'Refresh details' : 'Refresh conversation' }}</button>
       <NativeAgentDetails :details="state.details" />
       <p v-if="!workflow && !state.details.messages.length" class="text-neutral-500">No conversation messages are available yet.</p>
@@ -29,13 +42,6 @@
         </template>
       </article>
       <p v-if="state.details.truncated" class="text-neutral-500">Conversation preview shortened.</p>
-      <p v-if="state.details.canFocusInput && controls.foregroundAvailable.value" class="mt-3 text-xs text-neutral-400">Open Agent to reply directly.</p>
-      <form v-if="sendOperation" class="mt-3 border-t border-white/10 pt-3" @submit.prevent="sendMessage">
-        <label class="block text-[11px] text-neutral-400">{{ messageLabel }}
-          <textarea v-model="draft" :aria-label="messageLabel" maxlength="16384" rows="2" class="mt-1 block w-full resize-y rounded border border-white/10 bg-neutral-900/40 px-2 py-1.5 text-xs text-neutral-200 focus:border-blue-400/50 focus:outline-none" />
-        </label>
-        <button type="submit" :disabled="pending || !draft.trim()" class="mt-2 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && ['send', 'input'].includes(state.operation) ? 'Sending…' : sendOperation === 'input' ? 'Reply to Agent' : 'Send to Agent' }}</button>
-      </form>
     </section>
     <dialog v-if="mcp && shown && state?.details?.mcp" ref="mcpDialog" aria-label="MCP task details"
       class="m-auto w-[calc(100vw-2rem)] max-w-md rounded-xl border border-white/10 bg-neutral-900 p-0 text-neutral-200 shadow-xl backdrop:bg-black/60"
@@ -70,15 +76,13 @@
       <pre v-if="state.details.shell.output" ref="shellLog" tabindex="0" aria-label="Output preview" class="shell-log m-0 max-h-24 overflow-y-auto overscroll-contain whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2">{{ state.details.shell.output }}</pre>
       <p v-else class="text-neutral-500">No output yet.</p>
     </section>
-    <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
-    <p v-if="state?.status === 'done' && state.operation === 'input' && state.input" role="status" class="mt-2 text-[11px] text-neutral-400">{{ state.input.mode === 'resumed' ? 'Agent resumed with your reply' : 'Reply queued for Agent' }}</p>
   </div>
 </template>
 <script setup lang="ts">
 import NativeAgentDetails from './NativeAgentDetails.vue'
 import NativeMcpTaskDetails from './NativeMcpTaskDetails.vue'
 import NativeWorkflowDetails from './NativeWorkflowDetails.vue'
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, useId, watch } from 'vue'
 import { claudeTaskControls, type ClaudeTaskIdentity } from './native-task-controls.ts'
 const props = defineProps<{ task: ClaudeTaskIdentity & { status: string } }>()
 const emit = defineEmits<{ 'reveal-shell-output': [element: HTMLElement] }>()
@@ -95,6 +99,7 @@ const sessionState = computed(() => {
 })
 const state = computed(() => sessionState.value?.taskId === props.task.id ? sessionState.value : undefined)
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
+const messageFieldId = useId()
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
 const taskControls = ref<HTMLElement | null>(null)
 const shellLog = ref<HTMLElement | null>(null)
