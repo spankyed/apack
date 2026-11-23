@@ -265,4 +265,12 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
 @container claude-agent-pane (max-height: 18rem) {
   .native-agent-messages > [role="region"] { padding-block: .25rem; }
 }
+/* Expanded tools reserve their draft and Send rows. Let the transcript use the space left in the pane. */
+.native-agent-view:has(.native-agent-composer--tools) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.native-agent-view:has(.native-agent-composer--tools) > .native-agent-messages {
+  min-height: 0;
+}
 </style>
