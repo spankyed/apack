@@ -128,6 +128,15 @@ it('advertises focused input for a running teammate without using the local Agen
   expect((await f.request('inspect')).details).toMatchObject({ canInput: false, canFocusInput: false })
 })
 
+it('advertises the pane destination without claiming the selected-view input can reach it', async () => {
+  const f = fixture()
+  Object.assign(f.tasks[0], { type: 'in_process_teammate', identity: { agentName: 'worker' }, paneTeardown: vi.fn() })
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details).toMatchObject({
+    canInput: false, canFocusInput: false, canMessage: true, externalPane: true,
+  })
+  await expect(f.request('send')).resolves.toEqual({ sent: true })
+})
+
 it('uses the live running-teammate display rows without duplicating the journal echoes', async () => {
   const f = fixture()
   Object.assign(f.tasks[0], { type: 'in_process_teammate', status: 'running' })

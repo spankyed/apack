@@ -14,6 +14,7 @@
     <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
     <p v-if="state?.status === 'done' && state.operation === 'input' && state.input" role="status" class="mt-2 text-[11px] text-neutral-400">{{ state.input.mode === 'resumed' ? 'Agent resumed with your reply' : 'Reply queued for Agent' }}</p>
     <section v-if="!workflow && !shell && !mcp && shown && state?.details" aria-label="Agent conversation" tabindex="0" class="mt-2 rounded border border-white/10 p-2 text-xs">
+      <p v-if="state.details.externalPane && state.details.status === 'running'" class="mb-2 text-[11px] text-neutral-400">Reply directly in the teammate’s terminal pane.</p>
       <form v-if="sendOperation" class="space-y-1.5 border-b border-white/10 pb-2 mb-2" @submit.prevent="sendMessage">
         <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
           <label :for="messageFieldId" class="text-[11px] font-medium text-neutral-300">{{ messageLabel }}</label>

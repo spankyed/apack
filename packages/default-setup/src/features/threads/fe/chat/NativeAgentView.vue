@@ -62,6 +62,7 @@
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
+    <p v-if="selectedOwner && state?.agent?.externalPane && state.agent.status === 'running'" class="mx-4 mb-2 text-xs text-neutral-400">Reply directly in the teammate’s terminal pane.</p>
     <NativeAgentComposer v-show="!panelActive && !approvalPending && !panelDecisionPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || panelDecisionPending || !selectedOwner || returning || stopping || panelActive || commandActive || !canFocusInput || state?.status === 'disconnected' || state?.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
     <slot name="decision" />

@@ -116,6 +116,7 @@ export interface ClaudeNativeTaskDetails {
   status: string
   canInput: boolean
   canFocusInput?: boolean
+  externalPane?: true
   canMessage: boolean
   metadata?: {
     prompt?: string

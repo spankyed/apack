@@ -59,6 +59,15 @@ it('submits to a running selected teammate through the native composer and refus
   expect(f.enter).toHaveBeenCalledOnce()
 })
 
+it('rejects a selected pane-backed teammate before writing or submitting a parent draft', async () => {
+  const f = fixture()
+  Object.assign(f.task, { type: 'in_process_teammate', status: 'running', paneTeardown: vi.fn() })
+  await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'Keep this draft' }, new AbortController()))
+    .rejects.toThrow('cannot accept input')
+  expect(f.composer.write).not.toHaveBeenCalled()
+  expect(f.enter).not.toHaveBeenCalled()
+})
+
 it('keeps confirmation alive after the initial HTTP request completes and refuses replay/foreign clients', async () => {
   const f = fixture(), abort = new AbortController()
   const result = await f.controller.dispatch(f.native, { client_id: 'client', text: '/compact' }, abort)

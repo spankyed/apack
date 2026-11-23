@@ -93,8 +93,8 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
  if(main&&!expectedRun)return {kind:'not_command'};
  if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
  const task=main?undefined:Object.values(context.taskRegistry.all()).find(value=>n.runtime.flt(value)?.id===facts.view.taskId);
- // The original selected-view submit dispatches human input to a running teammate's native queue.
- const acceptsInput=task?.type==='local_agent'&&!task.resuming||task?.type==='in_process_teammate'&&task.status==='running';
+ // Pane-backed task records belong to a separate Claude process, which reads its own terminal.
+ const acceptsInput=task?.type==='local_agent'&&!task.resuming||task?.type==='in_process_teammate'&&task.status==='running'&&typeof task.paneTeardown!=='function';
  if(!main&&!acceptsInput)throw Error('This Agent cannot accept input now');
  const original=await composer.read();current();
  if(original.text)throw Error('The native terminal has an unsent draft; your app draft was retained');
