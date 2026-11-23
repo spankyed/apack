@@ -1,5 +1,6 @@
 import { diffChars } from 'diff'
 import { Selection } from '@tiptap/pm/state'
+import { ReplaceStep } from '@tiptap/pm/transform'
 import { Fragment, Slice, type Mark, type Node as ProseMirrorNode } from '@tiptap/pm/model'
 
 export interface ClaudePromptDocument {
@@ -10,6 +11,16 @@ export interface ClaudePromptDocument {
   position: number
 }
 export type ClaudePromptSerializer = (doc: ProseMirrorNode) => string
+
+export interface ClaudePromptRewrite {
+  doc: ProseMirrorNode
+  position: number
+  storedMarks?: readonly Mark[]
+  normalized?: boolean
+  sourceEdit?: { before: ProseMirrorNode; step: ReplaceStep }
+  sourcePositions?: ReadonlyMap<number, number>
+  sourceOffsets?: ReadonlyMap<number, number>
+}
 
 export function isEmptyClaudePromptParagraph(doc: ProseMirrorNode): boolean {
   return doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size
@@ -97,7 +108,7 @@ export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, s
 }
 
 /** Keep original nodes/marks and reference attributes when the native rewrite is representable. */
-function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer): { doc: ProseMirrorNode; position: number } | undefined {
+function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer): ClaudePromptRewrite | undefined {
   if (!Number.isInteger(frame.cursor) || frame.cursor < 0 || frame.cursor > frame.text.length) return
   const original = snapshot.text
   let start = 0
@@ -105,6 +116,7 @@ function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: 
   let end = original.length, replacementEnd = frame.text.length
   while (end > start && replacementEnd > start && original[end - 1] === frame.text[replacementEnd - 1]) { end--; replacementEnd-- }
   let doc = snapshot.doc
+  let sourceEdit: ClaudePromptRewrite['sourceEdit']
   if (original !== frame.text) {
     const from = findClaudePromptPosition(doc, start, serialize), to = findClaudePromptPosition(doc, end, serialize)
     if (from === undefined || to === undefined) return
@@ -112,12 +124,17 @@ function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: 
     doc.nodesBetween(from, to, node => { if (node.isAtom && !node.isText) atom = true })
     if (atom) return
     const replacement = frame.text.slice(start, replacementEnd)
-    const marks = doc.resolve(from).marks()
-    try { doc = doc.replace(from, to, new Slice(replacement ? Fragment.from(doc.type.schema.text(replacement, marks)) : Fragment.empty, 0, 0)) } catch { return }
-    if (serialize(doc) !== frame.text) return
+    const resolvedFrom = doc.resolve(from), resolvedTo = doc.resolve(to)
+    const slice = new Slice(replacement ? Fragment.from(doc.type.schema.text(replacement, resolvedFrom.marks())) : Fragment.empty, 0, 0)
+    const step = new ReplaceStep(from, to, slice)
+    const changed = step.apply(doc).doc
+    if (!changed || serialize(changed) !== frame.text) return
+    // Keep the literal block's edit map so its reference offsets move with their tokens.
+    if (resolvedFrom.parent === resolvedTo.parent && resolvedFrom.parent.type.name === 'claudePromptSource') sourceEdit = { before: doc, step }
+    doc = changed
   }
   const position = frame.cursor === snapshot.cursor && doc === snapshot.doc ? snapshot.position : findClaudePromptPosition(doc, frame.cursor, serialize)
-  return position === undefined ? undefined : { doc, position }
+  return position === undefined ? undefined : { doc, position, sourceEdit }
 }
 
 
@@ -168,7 +185,7 @@ function listPaintBoundaries(source: string, canonical: string, offsets: readonl
 }
 
 /** Apply native Markdown structure through the editor schema while retaining unchanged atom attributes. */
-export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse?: (text: string) => ProseMirrorNode, offsets: readonly number[] = []): { doc: ProseMirrorNode; position: number; storedMarks?: readonly Mark[]; normalized?: boolean; sourcePositions?: ReadonlyMap<number, number>; sourceOffsets?: ReadonlyMap<number, number> } | undefined {
+export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse?: (text: string) => ProseMirrorNode, offsets: readonly number[] = []): ClaudePromptRewrite | undefined {
   const textOnly = rewriteClaudePromptText(snapshot, frame, serialize)
   if (textOnly || !parse || !Number.isInteger(frame.cursor) || frame.cursor < 0 || frame.cursor > frame.text.length) return textOnly
   try {

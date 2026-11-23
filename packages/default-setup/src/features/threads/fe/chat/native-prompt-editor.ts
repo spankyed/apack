@@ -7,7 +7,7 @@ import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
 import type { ClaudePromptHostRequest } from '#generated/types.ts'
 import { TextSelection } from '@tiptap/pm/state'
 import type { ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow } from '#generated/types.ts'
-import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument, type ClaudePromptDocument } from './native-prompt-document.ts'
+import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument, type ClaudePromptDocument, type ClaudePromptRewrite } from './native-prompt-document.ts'
 
 /** A mounted view owns its revisions and listeners; it never owns the editor's lifetime. */
 export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean; viewport?: HTMLElement | null }) {
@@ -192,13 +192,19 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     }
     return { next, text, offset, runs, before: snapshot.text }
   }
+  function rewriteTransaction(next: ClaudePromptRewrite) {
+    const tr = editor.state.tr
+    if (next.sourceEdit?.before === tr.doc) return tr.step(next.sourceEdit.step)
+    if (next.doc !== tr.doc) tr.replaceWith(0, tr.doc.content.size, next.doc.content)
+    return tr
+  }
   function placeDraft(input: DraftFill, expectedRevision: number, origin: 'app' | 'person', prepend = false): boolean {
     const prepared = prepareDraft(input, expectedRevision, prepend)
     if (!prepared) return false
     const { next, runs } = prepared
     const drawn = drawClaudePromptDecorations(next.doc, runs, serialize, next.sourcePositions, next.sourceOffsets)
     fillPaint = origin === 'app' ? { revision: revision + 1, text: serialize(next.doc), drawn } : undefined
-    const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
+    const tr = rewriteTransaction(next)
     tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', origin)
     tr.setMeta(decorations.key, drawn)
     if (next.doc.firstChild?.type.name === 'claudePromptSource' && dom.ownerDocument.hasFocus()) tr.scrollIntoView()
@@ -277,8 +283,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (!next) { onProblem('Claude prompt rewrite cannot be represented without changing editor structure'); finishPending(false); return }
       applying = true
       try {
-        const tr = editor.state.tr
-        if (next.doc !== snapshot.doc) tr.replaceWith(0, tr.doc.content.size, next.doc.content)
+        const tr = rewriteTransaction(next)
         // A text/cursor acknowledgment carries no selection-range change.
         if (next.doc !== snapshot.doc || reply.frame.cursor !== snapshot.cursor) tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null)
         // Native app adoption returns only text/cursor. It acknowledges this fill, not a new edit.
@@ -319,7 +324,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(snapshot.cursor), cursor: start + row.text.length }, serialize, parse)
       retireCompletions()
       if (!next) { onProblem('Claude completion cannot replace this token without changing editor structure'); return false }
-      const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
+      const tr = rewriteTransaction(next)
       tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', 'app')
       editor.view.dispatch(tr)
       editor.view.focus()

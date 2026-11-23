@@ -73,6 +73,35 @@ it('does not transfer a source reference to an identical copied token after its 
   } finally { bridge.dispose() }
 })
 
+it('keeps a positioned source reference and exact decoration when Claude inserts text before it', () => {
+  editor.commands.setContent({
+    type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Use ' }, { type: 'reference' }, { type: 'text', text: ' today' },
+    ] }],
+  })
+  const source = '# Heading\n\n' + text()
+  const token = '[Context](apack-ref://thread/thread-id)'
+  const reference = { refType: 'thread', refId: 'thread-id', shortCode: 'T-1', label: 'Context' }
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: source, cursor: 1 } })
+    expect(editor.state.doc.firstChild?.type.name).toBe('claudePromptSource')
+    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([reference])
+    editor.commands.setTextSelection(3)
+    const prefix = 'Important: '
+    const rewritten = prefix + source
+    const start = rewritten.indexOf(token)
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text: rewritten, cursor: prefix.length + 2,
+      decorations: [{ start, end: start + '[Context]'.length, bold: true }],
+    } })
+    expect(bridge.readDraft()).toEqual({ text: rewritten, cursor: prefix.length + 2 })
+    expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('[Context]')
+    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([reference])
+    expect(editor.state.doc.firstChild!.attrs.references[0].from).toBe(start)
+  } finally { bridge.dispose() }
+})
+
 it('refuses native atom removal rather than silently dropping context metadata',async()=>{
   editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'reference'}]}]})
   const before=editor.state.doc,bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
