@@ -3,10 +3,11 @@ function isSuppressedError(value: unknown): value is Error & { error: unknown; s
 }
 
 function collectSuppressedChain(value: unknown, out: unknown[], visited: Set<unknown>): void {
-  if (!isSuppressedError(value) || visited.has(value)) {
+  if (!isSuppressedError(value)) {
     out.push(value);
     return;
   }
+  if (visited.has(value)) return;
   visited.add(value);
   // `suppressed` always happened before `error`; in-order traversal flattens both nested `using`
   // blocks and multi-disposer `DisposableStack` trees into chronological order.
@@ -23,6 +24,7 @@ export function errorMessage(error: unknown): string {
   if (isSuppressedError(error)) {
     const chain: unknown[] = [];
     collectSuppressedChain(error, chain, new Set());
+    if (chain.length === 0) return error.message;
     const [primary, ...cleanup] = chain.map((item) => (Error.isError(item) ? item.message : String(item)));
     return cleanup.length > 0 ? `${primary} (cleanup also failed: ${cleanup.join('; ')})` : primary!;
   }

@@ -67,6 +67,7 @@ export interface CompilationInputs {
   retainInputs(inputs: PackBuildInputs): void;
   finish(options: readonly string[]): Promise<PackBuildInputs>;
   dispose(): void;
+  [Symbol.dispose](): void;
   assertCurrent(): void;
 }
 
@@ -270,6 +271,7 @@ export function captureCompilationInputs(packRoot: string, view?: PackCompilerIn
       disposed = true;
       withoutCompilerFileReads(() => { try { modules.dispose(); } finally { tree?.dispose(); } });
     },
+    [Symbol.dispose]() { this.dispose(); },
     assertCurrent,
   };
 }

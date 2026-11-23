@@ -1,5 +1,5 @@
 /**
- * Runs a command under a wall-clock budget: `tsx scripts/bounded.ts <class> <command> [args...]`.
+ * Runs a command under a wall-clock budget: `node scripts/bounded.ts <class> <command> [args...]`.
  *
  * For the npm scripts that invoke a shell script directly. The chain kills a step's process group when it
  * overruns, so a script run *through the chain* is already bounded — but the direct run is the one people
@@ -36,7 +36,7 @@ import { BUDGET_CLASSES, whyKilled, budgetMsFor, type BudgetClass } from './lib/
 const [className, command, ...args] = process.argv.slice(2);
 
 if (!command || className === undefined) {
-  process.stderr.write(`usage: tsx scripts/bounded.ts <${BUDGET_CLASSES.join('|')}> <command> [args...]\n`);
+  process.stderr.write(`usage: node scripts/bounded.ts <${BUDGET_CLASSES.join('|')}> <command> [args...]\n`);
   process.exitCode = 2;
 } else {
   // Refuses an unknown class rather than defaulting to one: a budget is a ceiling, so a confident wrong
