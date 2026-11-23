@@ -891,3 +891,51 @@ it('owns only the teammate terminal client and retires it when the addressed tas
     expect(f.owner.close).not.toHaveBeenCalled()
   } finally { f.views.clear() }
 })
+
+it('releases only the disconnected window’s teammate attachments, including an open in flight', async () => {
+  const f = fixture(), { ownerId, sessionId } = f.owner.state
+  const client = () => ({
+    snapshot: { id: randomUUID(), terminalSession: { id: randomUUID(), target: null }, jobId: 'agent',
+      sessionId, cwd: '/fixture', clientPid: 234, status: 'live' as const, output: [] },
+    input: vi.fn(), resize: vi.fn(), subscribe: vi.fn(() => () => {}), close: vi.fn(async () => {}),
+  })
+  const active = client(), other = client(), late = client()
+  const pending = Promise.withResolvers<typeof late>()
+  const open = vi.fn().mockResolvedValueOnce(active).mockResolvedValueOnce(other).mockReturnValueOnce(pending.promise)
+  f.owner.openTeammateTerminal = open
+  f.owner.state.tasks = [{ id: 'agent', name: 'Reviewer', status: 'idle', canStop: true }]
+  const request = { ...mount, type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN' as const, ownerId, sessionId, taskId: 'agent', revision: 1 }
+  const pendingMount = { ...mount, mountId: randomUUID() }
+  const sendOther = vi.fn()
+  try {
+    f.views.handle(mount, 'closed', f.send)
+    f.views.handle(request, 'closed', f.send)
+    f.views.handle(mount, 'remaining', sendOther)
+    f.views.handle(request, 'remaining', sendOther)
+    f.views.handle(pendingMount, 'closed', f.send)
+    f.views.handle({ ...request, mountId: pendingMount.mountId }, 'closed', f.send)
+    await vi.waitFor(() => {
+      expect(sendOther).toHaveBeenLastCalledWith(expect.objectContaining({
+        attachment: expect.objectContaining({ state: other.snapshot, status: 'ready' }),
+      }))
+      expect(f.send).toHaveBeenCalledWith(expect.objectContaining({
+        attachment: expect.objectContaining({ state: active.snapshot, status: 'ready' }),
+      }))
+      expect(open).toHaveBeenCalledTimes(3)
+    })
+    const [, signal] = open.mock.calls[2]!
+    const closedUpdates = f.send.mock.calls.length
+
+    f.views.disconnect('closed')
+    expect(signal.aborted).toBe(true)
+    expect(active.close).toHaveBeenCalledOnce()
+    pending.resolve(late)
+    await vi.waitFor(() => expect(late.close).toHaveBeenCalledOnce())
+
+    expect(f.send).toHaveBeenCalledTimes(closedUpdates)
+    expect(other.close).not.toHaveBeenCalled()
+    f.views.handle({ ...mount, type: 'CLAUDE_BACKGROUND_INPUT', attachmentId: other.snapshot.id, text: 'still here' }, 'remaining', sendOther)
+    expect(other.input).toHaveBeenCalledExactlyOnceWith(other.snapshot.id, 'still here')
+    expect(f.owner.close).not.toHaveBeenCalled()
+  } finally { f.views.clear() }
+})

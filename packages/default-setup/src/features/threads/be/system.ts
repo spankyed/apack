@@ -15,6 +15,7 @@ import { services } from '#generated/services.ts';
 import { setup, fromPromise, spawnChild } from 'xstate';
 import { runThreadHistoryOperation, type ThreadHistoryOperationInput } from './history-operation.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
+import { onConnectionEnded } from '@apackdev/sdk/events';
 
 import { write, transact, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
@@ -110,6 +111,15 @@ const terminalViews = createClaudeTerminalViews({
   },
 });
 registerThreadTeardown(key => terminalViews.clear(key));
+
+export function startClaudeTerminalViews(): () => void {
+  const unsubscribe = onConnectionEnded(client => terminalViews.disconnect(client));
+  return () => {
+    unsubscribe();
+    terminalViews.clear();
+  };
+}
+
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();
 

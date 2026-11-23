@@ -669,6 +669,9 @@ export function createClaudeTerminalViews(dependencies: {
         })
       }
     },
+    disconnect(client: string) {
+      for (const [key, view] of views) if (view.client === client) drop(key)
+    },
     clear(threadId?: string) { for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key) },
   }
 }

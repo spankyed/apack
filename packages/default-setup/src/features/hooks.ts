@@ -1,5 +1,6 @@
 import { disposeClaudeTerminalHistory } from './threads/be/claude-terminal-sync.ts';
 import { clearClaudeUiViews } from './threads/be/claude-ui.ts';
+import { startClaudeTerminalViews } from './threads/be/system.ts';
 import { killAllHandles } from './code/be/services/claude-code/handle-store.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
@@ -12,6 +13,7 @@ import { stopCodex } from './code/be/services/codex/index.ts';
 /** What the pack's backend follows for as long as it runs */
 let stopTerminalSizing: (() => void) | undefined;
 let stopStoppingWindowReads: (() => void) | undefined;
+let stopClaudeTerminalViews: (() => void) | undefined;
 
 /**
  * The pack's backend started.
@@ -30,6 +32,7 @@ export const onInit = () => {
   stopTerminalSizing = startTerminalSizing();
   // A blame or a history a window asked for is stopped when the window goes
   stopStoppingWindowReads = startStoppingWindowReads();
+  stopClaudeTerminalViews = startClaudeTerminalViews();
   const folded = services.repository.chatCommands.foldStrandedMessageText();
   if (folded > 0) services.logger.info('folded the text of messages a turn left unfinished', { messages: folded });
 };
@@ -66,6 +69,9 @@ export const onShutdown = () => {
   // only by its modules. The pack stopping is not always the process ending: a reload replaces those modules in
   // a process that goes on, where a child they started would run on with nothing left to end it, and the views
   // a handle fed would have nobody to reach. Stopping the app server ends every Codex turn with it.
+  const stopClaudeViews = stopClaudeTerminalViews;
+  stopClaudeTerminalViews = undefined;
+  if (stopClaudeViews) dispose(stopClaudeViews);
   dispose(disposeClaudeTerminalHistory);
   dispose(clearClaudeUiViews);
   dispose(killAllHandles);
