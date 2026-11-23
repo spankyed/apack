@@ -7,7 +7,7 @@
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
-    <details v-show="!panelActive" v-if="state?.agent?.metadata" class="mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
+    <details v-show="!panelActive" v-if="state?.agent?.metadata" class="native-agent-details mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
     <NativeIdePanel v-if="panelActive && state?.agentInput?.panel?.commandName === 'ide'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
     <NativeHelpPanel v-else-if="panelActive && state?.agentInput?.panel?.commandName === 'help'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
@@ -245,6 +245,8 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
 
 <style scoped>
 .native-agent-view { container-type: size; container-name: claude-agent-pane; }
+/* Expanded details and the draft scroll independently when they share the pane with the transcript. */
+.native-agent-details[open] { flex-shrink: 1; min-height: 1.5rem; }
 /* Compact the assigned pane, including a short split inside a tall window. */
 @container claude-agent-pane (max-height: 24rem) {
   .native-agent-view > header { padding-top: .25rem; padding-bottom: .5rem; margin-bottom: .25rem; }
@@ -254,6 +256,9 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
   .native-agent-view > details { margin-bottom: 0; }
   /* In a short split, the transcript scrolls in the space left by the composer. */
   .native-agent-messages { min-height: 0; }
+  .native-agent-details[open] ~ .native-agent-messages {
+    min-height: clamp(0px, calc(100cqh - 13rem), 6.5rem);
+  }
 }
 @container claude-agent-pane (max-height: 18rem) {
   .native-agent-messages > [role="region"] { padding-block: .25rem; }
