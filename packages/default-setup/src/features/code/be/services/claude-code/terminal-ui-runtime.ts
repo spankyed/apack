@@ -1839,9 +1839,11 @@ const ownerTimer=setInterval(async()=>{
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
+  let bootstrapOwner=false;
   if(refreshView){
    const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence,heartbeat:true,promptQueue:gate.promptQueue});
    reportedView=viewKey;viewHeartbeat=0;
+   bootstrapOwner=response?.bootstrapOwner===true;
    const command=response?.prepareQueuedPrompt;
    if(command){
     let filled=false;
@@ -1876,10 +1878,12 @@ const ownerTimer=setInterval(async()=>{
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
   if(gate.privateHooksSuppressed||gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
   if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshNativeIdeContext(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();actionKeys.poll(native);}
-  if(!ownerIndependent)return;
+  if(!ownerIndependent&&!bootstrapOwner)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
-  const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};
+  const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true,...(!ownerIndependent?{bootstrapOwner:true,pid:process.pid}:{})};
   const command=await ownerPost('/poll',body);
+  if(command.keepPlugin===true)return;
+  ownerIndependent=true;
   await ownerPost('/transcript',{path:snapshot.transcriptPath});
   if(command.id){
    let filled=command.prepared===true;

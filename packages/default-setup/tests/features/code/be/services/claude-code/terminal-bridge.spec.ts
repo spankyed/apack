@@ -1036,3 +1036,26 @@ it('clears the observed prompt queue on native view changes and rejects stale pr
   await request('/native-view', {...returned, promptQueue: null})
   expect(bridge!.promptQueue).toBeUndefined()
 })
+
+it.each([false, true])('offers authenticated native bootstrap while preserving healthy plugin precedence (%s)', async pluginArrives => {
+  bridge = await createClaudeTerminalBridge({
+    backgroundAuthority: () => ({identify:async () => {throw Error('No child in this fixture')},close:async () => {}}),
+    sessionId:session, settings:{effective:{},sources:[]}, ownsProcess:async pid => pid===process.pid, changed(){}, enter(){},
+  })
+  const view = {sessionId:session,pid:process.pid,sequence:1,view:{kind:'main'},heartbeat:true}
+  const direct = {sessionId:session,agents:[],directOwner:true,bootstrapOwner:true,pid:process.pid,busy:false,turn:null}
+  expect((await request('/poll',direct)).status).toBe(409)
+  expect(bridge.ready).toBe(false)
+  expect((await request('/observer-ready',{sessionId:session,pid:process.pid})).status).toBe(200)
+  expect((await request('/native-view',view)).value).toEqual({bootstrapOwner:true})
+  expect((await request('/poll',{...direct,pid:process.pid+1})).status).toBe(409)
+  expect((await request('/poll',{...direct,sessionId:randomUUID()})).status).toBe(409)
+  expect(bridge.ready).toBe(false)
+  if (pluginArrives) await request('/poll',{sessionId:session,agents:[]})
+  const response=await request('/poll',direct)
+  expect(response.status).toBe(200)
+  expect(response.value).toEqual(pluginArrives ? {keepPlugin:true} : {})
+  expect(bridge.ready).toBe(true)
+  const later=await request('/poll',{sessionId:session,agents:[]})
+  expect(later.value.reportEveryMs).toBe(pluginArrives ? 250 : 0)
+})

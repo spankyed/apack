@@ -364,6 +364,13 @@ export async function createClaudeTerminalBridge(options: {
         // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
         if (nativePolling && value.directOwner !== true) return answer()
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
+        // The native UI can initialize the owner if the plugin hasn't reported. If the
+        // plugin won the race, leave its normal polling route in charge.
+        if (value.bootstrapOwner === true) {
+          if (value.directOwner !== true || observerPid === undefined || value.pid !== observerPid
+            || value.sessionId !== projection.sessionId || nativeView?.kind !== 'main') return reply(409, {})
+          if (ready && !nativePolling) return answer({keepPlugin: true})
+        }
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
         for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
         const policy = value.policy === undefined ? undefined : object(value.policy)
@@ -473,7 +480,10 @@ export async function createClaudeTerminalBridge(options: {
           options.changed()
         }
         const submission = pending
-        if (next.kind !== 'main' || !submission || submission.sessionId !== value.sessionId) return reply(200, {})
+        if (next.kind !== 'main' || !submission || submission.sessionId !== value.sessionId) {
+          // A confirmed native prompt view exists even if the private plugin didn't load.
+          return reply(200, !ready && next.kind === 'main' && value.heartbeat === true ? {bootstrapOwner: true} : {})
+        }
         // While a turn is running, the CLI can service its view heartbeat even when the hook does not poll.
         if (submission.queue && value.heartbeat === true) {
           if (!submission.sent) {
