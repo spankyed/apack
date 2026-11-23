@@ -1,5 +1,6 @@
 import { CLAUDE_NATIVE_TERMINAL_COLORS } from '../../terminal-colors.ts'
 import {claudeCreditRequest} from '../../../common/native-credit.ts'
+import { createLogger } from '@apackdev/sdk/logger'
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import type { TerminalSession } from '@apackdev/sdk/services'
 import { services } from '#generated/services.ts'
@@ -37,6 +38,8 @@ import { createClaudeTerminalBridge } from './terminal-bridge.ts'
 import type { PermissionMode } from './types.ts'
 import { ClaudeMemoryDialogSchema, type ClaudeMemoryDialog, ClaudeMcpStatusSchema, type ClaudeMcpStatus, ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
+
+const logger = createLogger('claude-code-terminal-owner')
 
 export interface ClaudeNativeTerminalOwner {
   readonly backgroundObserver?: import('./background-status-observer.ts').ClaudeBackgroundStatusObserver
@@ -616,7 +619,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           return {socket, active:activePane === '1' && activeWindow === '1', identity:[socket, file.dev, file.ino, serverPid, serverStart, workerPid, workerStart]}
         }
         const verified = process.platform === 'linux' ? await identify(server, signal).catch(error => {
-          if (!signal.aborted) console.warn('Claude teammate reconnect identity unavailable', error)
+          if (!signal.aborted) logger.warn('Claude teammate reconnect identity unavailable', {
+            error: error instanceof Error ? error.message : String(error),
+          })
           return undefined
         }) : undefined
         const attach = (address: string[], abort: AbortSignal) => openClaudeTerminalAttachment(
