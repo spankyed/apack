@@ -29,6 +29,16 @@
 
         <NativeUiNotices v-if="nativeUi?.notices" :notices="nativeUi.notices" @operate="emit('native-ui-notice', $event)" />
 
+        <div v-if="unappliedQueueEdit" class="flex shrink-0 items-start gap-3 border-b border-white/10 px-5 py-2 text-xs">
+          <details class="min-w-0 flex-1 text-neutral-300">
+            <summary class="cursor-pointer rounded py-1.5 font-medium focus-visible:outline focus-visible:outline-2">Recovered queued prompt</summary>
+            <p v-if="unappliedQueueEdit.text" class="max-h-24 overflow-y-auto whitespace-pre-wrap break-words">{{ unappliedQueueEdit.text }}</p>
+            <p v-if="unappliedQueueEdit.images?.length" class="text-neutral-400">{{ unappliedQueueEdit.images.length }} image{{ unappliedQueueEdit.images.length === 1 ? '' : 's' }}</p>
+          </details>
+          <button type="button" class="shrink-0 rounded-md border border-white/10 px-2 py-1.5 text-neutral-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2"
+            @click="restoreQueuedPrompt">Return to draft</button>
+        </div>
+
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
           class="flex shrink-0 items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin" :class="$style.attachments">
@@ -81,12 +91,6 @@
             </li>
           </ul>
         </section>
-        <details v-if="unappliedQueueEdit" class="px-5 py-1 text-xs text-neutral-300">
-          <summary class="cursor-pointer">Recovered queued prompt</summary>
-          <p v-if="unappliedQueueEdit.text" class="max-h-24 overflow-y-auto whitespace-pre-wrap">{{ unappliedQueueEdit.text }}</p>
-          <p v-if="unappliedQueueEdit.images?.length">{{ unappliedQueueEdit.images.length }} image{{ unappliedQueueEdit.images.length === 1 ? '' : 's' }}</p>
-          <button type="button" class="rounded underline focus-visible:outline focus-visible:outline-2" @click="restoreQueuedPrompt">Return to draft</button>
-        </details>
         <p v-if="nativeQueueOperation?.status === 'error'" role="alert" class="px-5 py-1 text-xs text-amber-200">{{ nativeQueueOperation.problem }}</p>
 
         <!-- Editor container -->
