@@ -3243,7 +3243,7 @@ type ClaudePromptEdit = Omit<ClaudeUiPromptEdit, 'client_id' | 'surface'> & {
 interface ClaudePromptHost {
     available?(): boolean;
     read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>;
-    fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>;
+    fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean | ClaudePromptHostFillResult>;
     suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
     selection?(signal: AbortSignal, expiresAt: number): Promise<ClaudeUiSelection | undefined>;
     copy?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
@@ -3252,6 +3252,11 @@ interface ClaudePromptHost {
 type ClaudePromptHostBox = z.infer<typeof box>;
 
 type ClaudePromptHostFill = z.infer<typeof fill>;
+
+type ClaudePromptHostFillResult = {
+    filled: boolean;
+    change?: ClaudePromptHostBox;
+};
 
 type ClaudePromptHostRequest = {
     requestId: string;
@@ -3278,10 +3283,9 @@ type ClaudePromptHostResponse = {
 } & ({
     kind: 'read';
     box?: ClaudePromptHostBox;
-} | {
+} | ({
     kind: 'fill';
-    filled: boolean;
-} | {
+} & ClaudePromptHostFillResult) | {
     kind: 'suggest';
     shown: boolean;
 } | {
@@ -11834,7 +11838,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean, pai
     register(client: string, host: ClaudePromptHost): () => void;
     answers(client: string): string[];
     detach: (client: string) => void;
-    receive(line: ControlRequestLine, allowVirtualDecorations?: boolean): boolean;
+    receive(line: ControlRequestLine, ownedTerminal?: boolean): boolean;
     cancel(id: string): boolean;
     close(): void;
 };
