@@ -14,7 +14,7 @@ import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { ApiEndpoint } from '@apackdev/host/process-liveness';
-import { API_HOST, API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
+import { API_HOST, API_TOKEN_HEADER, errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('backend');
 
@@ -78,7 +78,7 @@ async function handleDevRequest(url: string, req: http.IncomingMessage, res: htt
     return answer(res, 200, { ok: true, ...await installDevPack(appPacks, root, backendActor) });
   } catch (err) {
     logger.error(`${url} failed:`, err as Error);
-    answer(res, 500, { error: (err as Error).message });
+    answer(res, 500, { error: errorMessage(err) });
   }
 }
 

@@ -178,9 +178,10 @@ export function createPackFrontends(io: PackFrontendIO, packs: FePackRegistry): 
       const settings = registration.bindSettings ? await io.settingsForPack!(pack) : undefined;
       if (settings) pendingSettings.defer(() => settings.dispose());
       checkCurrent();
-      // The prepared registry owns provisional authority; publication and CSS share one host commit.
-      prepared = packs.preparePackFE({ kind: 'loaded', pack }, registration, settings, packs.hasPackFE(pack.id));
+      // The prepared registry owns provisional authority (and `settings` on entry); publication and CSS share one host commit.
+      const replacing = packs.hasPackFE(pack.id);
       pendingSettings.move();
+      prepared = packs.preparePackFE({ kind: 'loaded', pack }, registration, settings, replacing);
       checkCurrent();
       const surfaces = prepared.commit(() => { checkCurrent(); commitStyles(); });
       unwind.move();

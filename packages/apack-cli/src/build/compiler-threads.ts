@@ -6,6 +6,7 @@ import threads, { SHARE_ENV, BroadcastChannel, getEnvironmentData, setEnvironmen
 import { withoutCompilerFileReads, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
 import { answerWhileWorking, threadWork } from '@apackdev/sdk/progress';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 /**
  * How much of its own CPU a worker may spend before it accepts the final input collection: what refuses a worker
@@ -159,7 +160,7 @@ export function serveCompilerThread(
   const finalize = () => finished ??= (async () => {
     let report: ThreadReport;
     try { report = { observations: await finish() }; }
-    catch (error) { report = { error: Error.isError(error) ? error.message : String(error) }; }
+    catch (error) { report = { error: errorMessage(error) }; }
     // Exit and broadcast delivery have no shared ordering. The owner reads this on native exit.
     withoutCompilerFileReads(() => fs.writeFileSync(handoff.report, JSON.stringify(report)));
     return report;

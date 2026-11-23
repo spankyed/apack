@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest": "node ../../scripts/ensure-packages-built.ts",
     "test": "vitest run",
-    "pretest:integration": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest:integration": "node ../../scripts/ensure-packages-built.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "devDependencies": {

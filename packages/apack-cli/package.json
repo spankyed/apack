@@ -16,11 +16,11 @@
     "node": ">=24.12.0"
   },
   "scripts": {
-    "build:package": "tsx ../../scripts/bundle-package.ts .",
+    "build:package": "node ../../scripts/bundle-package.ts .",
     "typecheck": "tsc --noEmit",
-    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest": "node ../../scripts/ensure-packages-built.ts",
     "test": "vitest run",
-    "pretest:integration": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest:integration": "node ../../scripts/ensure-packages-built.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {

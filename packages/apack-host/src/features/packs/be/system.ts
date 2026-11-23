@@ -322,14 +322,12 @@ export function createPacksSystem(registry: PackRegistry) {
           broadcast('packs', { type: 'PACK_INSTALL_FAILED' as const, packSlug, error: operationInProgress(packSlug) });
           return;
         }
-        console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
-
-        broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
-
-        const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
         void (async () => {
           using claims = new DisposableStack();
           claims.use(slugClaim);
+          console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
+          broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
+          const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
           let startAccepted: (() => boolean) | undefined;
           try {
             const result = await runInstall(packSlug, ev.sourceKind, undefined, {

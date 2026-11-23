@@ -55,9 +55,14 @@ describe('errorMessage', () => {
     expect(errorMessage(crossSuppressed)).toBe('vm body (cleanup also failed: vm close)');
   });
 
-  it('terminates on cyclic SuppressedError chains', () => {
+  it('terminates cleanly on cyclic SuppressedError chains', () => {
     const cyclic = new SuppressedError(new Error('cleanup'), new Error('primary'));
     cyclic.suppressed = cyclic;
-    expect(errorMessage(cyclic)).toContain('cleanup');
+    expect(errorMessage(cyclic)).toBe('cleanup');
+
+    const doubleCyclic = new SuppressedError(new Error('cleanup'), new Error('primary'), 'cycle fallback');
+    doubleCyclic.suppressed = doubleCyclic;
+    doubleCyclic.error = doubleCyclic;
+    expect(errorMessage(doubleCyclic)).toBe('cycle fallback');
   });
 });

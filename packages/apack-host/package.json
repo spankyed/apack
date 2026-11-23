@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "sdk-modules:check": "npm test -- tests/packs/runtime/sdk-bridge-drift.spec.ts",
-    "sdk-modules:update": "tsx scripts/sdk-modules.ts"
+    "sdk-modules:update": "node scripts/sdk-modules.ts"
   },
   "exports": {
     "./app-state": "./src/app-state/index.ts",

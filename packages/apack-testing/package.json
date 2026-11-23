@@ -31,9 +31,9 @@
   },
   "scripts": {
     "api:build": "node -e \"require('fs').rmSync('.temp/api-types', { recursive: true, force: true })\" && tsc -p tsconfig.api-extractor.json",
-    "api:check": "npm run api:build && tsx ../../scripts/api-reports.ts .",
-    "api:update": "npm run api:build && tsx ../../scripts/api-reports.ts . --local",
-    "build:package": "tsx ../../scripts/bundle-package.ts .",
+    "api:check": "npm run api:build && node ../../scripts/api-reports.ts .",
+    "api:update": "npm run api:build && node ../../scripts/api-reports.ts . --local",
+    "build:package": "node ../../scripts/bundle-package.ts .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

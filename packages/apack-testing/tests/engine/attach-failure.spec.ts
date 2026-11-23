@@ -5,7 +5,7 @@
 // then nothing closed the CDP connection or the socket, so the process sat there for ever. Measured before
 // the fix: `npm run dev:drive -- --eval` printed its reason to stderr and was still running 25s later.
 import { describe, expect, it, vi } from 'vitest';
-import { _claimDrive, _closingOnFailure } from '../../src/engine/index.ts';
+import { _attachRollback, _claimDrive } from '../../src/engine/index.ts';
 
 const conflict = () => Object.assign(new Error('"host/drive" is already claimed'), { code: 'CONFLICT' });
 
@@ -14,18 +14,29 @@ describe('a step that fails after the attach', () => {
    * **A handle left open does not fail, it hangs**: Node keeps running while one is, so the reason reaches
    * stderr and the process never exits — which reads as the verb hanging rather than as a refusal.
    */
-  it('closes what was already open', async () => {
-    const close = vi.fn();
+  it('closes what was already open in reverse order', async () => {
+    const order: string[] = [];
+    const closeFirst = vi.fn(() => { order.push('first'); });
+    const closeSecond = vi.fn(() => { order.push('second'); });
 
-    await expect(_closingOnFailure(close, async () => { throw new Error('refused'); })).rejects.toThrow('refused');
+    await expect(_attachRollback(async (deferClose) => {
+      deferClose(closeFirst);
+      deferClose(closeSecond);
+      throw new Error('refused');
+    })).rejects.toThrow('refused');
 
-    expect(close).toHaveBeenCalledOnce();
+    expect(closeFirst).toHaveBeenCalledOnce();
+    expect(closeSecond).toHaveBeenCalledOnce();
+    expect(order).toEqual(['second', 'first']);
   });
 
   it('leaves it open when the work succeeds', async () => {
     const close = vi.fn();
 
-    expect(await _closingOnFailure(close, async () => 'the session')).toBe('the session');
+    expect(await _attachRollback(async (deferClose) => {
+      deferClose(close);
+      return 'the session';
+    })).toBe('the session');
 
     expect(close).not.toHaveBeenCalled();
   });
@@ -40,7 +51,8 @@ describe('a step that fails after the attach', () => {
   it('reports what failed rather than what the cleanup did', async () => {
     const close = vi.fn(() => { throw new Error('and the close threw too'); });
 
-    await expect(_closingOnFailure(close, async () => {
+    await expect(_attachRollback(async (deferClose) => {
+      deferClose(close);
       throw new Error('the claim was refused');
     })).rejects.toThrow('the claim was refused');
     expect(close, 'and it still tried to close').toHaveBeenCalled();
