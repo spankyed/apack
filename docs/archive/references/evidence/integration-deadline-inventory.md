@@ -91,7 +91,7 @@ operations and declarations; completed console case counts are the execution evi
 | [packages/apack-cli/tests/commands/add-feature-validate.integration.spec.ts](../../../../packages/apack-cli/tests/commands/add-feature-validate.integration.spec.ts) | 13 passed, 0 failed, 0 pending; 128.273s. | 1 |
 | [packages/apack-cli/tests/commands/app-install.integration.spec.ts](../../../../packages/apack-cli/tests/commands/app-install.integration.spec.ts) | 1 passed, 0 failed, 0 pending; 0.224s. | 1 |
 | [packages/apack-cli/tests/commands/db.integration.spec.ts](../../../../packages/apack-cli/tests/commands/db.integration.spec.ts) | 64 passed; 46.855s. | — |
-| [packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts](../../../../packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts) | 1 passed, 0 failed, 0 pending; 30.428s. | 4 |
+| [packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts](https://github.com/spankyed/apack/blob/18d8a47b19495498f5a4bf52b41dae684c6efc12/packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts) | 1 passed, 0 failed, 0 pending; 30.428s. | 4 |
 | [packages/apack-cli/tests/commands/dev-build.integration.spec.ts](../../../../packages/apack-cli/tests/commands/dev-build.integration.spec.ts) | 2 passed, 0 failed, 0 pending; 49.975s. | 3 |
 | [packages/apack-cli/tests/commands/doctor.integration.spec.ts](../../../../packages/apack-cli/tests/commands/doctor.integration.spec.ts) | 9 passed, 0 failed, 0 pending; 0.670s. | 3 |
 | [packages/apack-cli/tests/commands/facade-report.integration.spec.ts](../../../../packages/apack-cli/tests/commands/facade-report.integration.spec.ts) | 10 passed, 1 failed, 0 pending; 149.049s. | 5 |

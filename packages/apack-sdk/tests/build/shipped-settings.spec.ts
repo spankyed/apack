@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SettingsDefinition } from '../../src/framework/settings-definition.ts';
 import { _compileSettingsDefinition } from '../../src/framework/settings-validation.ts';
 
-const features = JSON.parse(readFileSync(new URL('../../../default-setup/apack.json', import.meta.url), 'utf8')).features as Record<string, { settings: SettingsDefinition }>;
+const features = JSON.parse(readFileSync(new URL('../../../../.temp/shipped-distribution/shipped-packs/default-setup/apack.json', import.meta.url), 'utf8')).features as Record<string, { settings: SettingsDefinition }>;
 
 /** Protect the real constraints preserved when the shipped feature schemas moved out of executable modules. */
 describe('shipped feature settings declarations', () => {
