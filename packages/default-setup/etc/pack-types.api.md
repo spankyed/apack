@@ -3698,7 +3698,7 @@ type ClaudeTerminalViewRequest = {
 });
 
 type ClaudeTerminalViewSnapshot = {
-    teammateReconnect?: ClaudeTeammateReconnect;
+    teammateReconnects?: ClaudeTeammateReconnect[];
     backgroundInfo?: ClaudeBackgroundStatus;
     canReplyBackground?: boolean;
     attachment?: ClaudeBackgroundAttachmentView;
