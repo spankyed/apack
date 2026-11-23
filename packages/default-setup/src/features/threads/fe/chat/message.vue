@@ -193,6 +193,9 @@
             :is-disabled="!!message.responseTimestamp" :response="message.blockResponse" />
         </template>
 
+        <p v-if="message.context?.claudeNativeQuestion && message.responseTimestamp && message.blockResponse?.cancelled === true"
+          class="mb-1 text-xs text-neutral-400">Question closed without an answer</p>
+
         <!-- Message content -->
         <div data-chat-message-content class="min-w-0 leading-relaxed text-[15px]">
           <slot v-if="!hasNativeTranscript" />
