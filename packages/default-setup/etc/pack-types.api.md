@@ -3027,6 +3027,7 @@ interface ClaudeNativeTerminalState {
     mainStatus?: string;
     tasks: ClaudeNativeTerminalTask[];
     problem?: string;
+    startupPolicyProblem?: string;
 }
 
 /** Native task ids and terminal owners are independent of apack thread ids. */
