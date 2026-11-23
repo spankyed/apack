@@ -132,6 +132,12 @@
             </div>
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
+          <div v-if="!focusedAgent && pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
+            <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
+              @respond="respondNativeApproval"
+              @edit-workflow="nativeSession?.open()"
+              @pause="pauseNativeApproval" />
+          </div>
           <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
               @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
@@ -198,9 +204,9 @@
             />
           </div>
         </div>
-        <div v-if="!nativeTerminalActive && !agentSelection && pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
+        <div v-if="focusedAgent && !nativeTerminalActive && !agentSelection && pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
           <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
-            @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
+            @respond="respondNativeApproval"
             @edit-workflow="nativeSession?.open()"
             @pause="pauseNativeApproval" />
         </div>
@@ -871,6 +877,10 @@ function rejectNativeQuestion(identity: import('#features/code/be/services/claud
   send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
+function respondNativeApproval(response: Record<string, unknown>) {
+  const approval = pendingNativeApproval.value
+  if (approval) send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: approval.messageId, response })
+}
 function pauseNativeApproval(scope?: ClaudeDecisionPauseScope) {
   const target = focusedAgent.value?.target
   if (!target) { pauseNativeDecision(scope); return }
