@@ -8860,6 +8860,10 @@ interface QueryHandle {
     interrupt(options?: {
         cancelQueued?: boolean;
     }): Promise<ClaudeInterruptReceipt>;
+    /** Cancel one input in this print process's native queue; false means Claude did not remove it. */
+    cancelQueuedMessage(messageUuid: string): Promise<boolean>;
+    /** Request process-wide prediction pause or resume; acknowledgement does not establish native eligibility. */
+    setPromptSuggestionsPaused(paused: boolean): Promise<void>;
     /** Rename the native session; an explicit ID protects against renaming a different session. */
     renameSession(title: string, sessionId?: string): Promise<void>;
     /** Read the current native plan without a model turn. */

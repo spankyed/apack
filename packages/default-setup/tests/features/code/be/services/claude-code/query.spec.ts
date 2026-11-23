@@ -422,6 +422,36 @@ describe('query() native control replies', () => {
     await handle.close()
   })
 
+  it('addresses queued input without interrupting the turn and awaits the separate prediction pause acknowledgement', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const init = mock.writes[0] as { request_id: string }
+    const cancel = handle.cancelQueuedMessage('queued-input-id')
+    const pause = handle.setPromptSuggestionsPaused(true)
+    expect(mock.writes).toHaveLength(1)
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [], agents: [], models: [] },
+    } })
+    await handle.initialized
+    const [remove, suspend] = mock.writes.slice(1) as Array<{ request_id: string; request: unknown }>
+    expect(remove.request).toEqual({ subtype: 'cancel_async_message', message_uuid: 'queued-input-id' })
+    expect(suspend.request).toEqual({ subtype: 'set_prompt_suggestions_paused', paused: true })
+    const cancelled = vi.fn()
+    void cancel.then(cancelled)
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: suspend.request_id } })
+    await expect(pause).resolves.toBeUndefined()
+    expect(cancelled).not.toHaveBeenCalled()
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: remove.request_id,
+      response: { cancelled: false },
+    } })
+    await expect(cancel).resolves.toBe(false)
+    await expect(handle.cancelQueuedMessage('')).rejects.toThrow()
+    await expect(handle.setPromptSuggestionsPaused('yes' as never)).rejects.toThrow()
+    expect(mock.writes).toHaveLength(3)
+    await handle.close()
+  })
+
   it('correlates permission-mode acknowledgements and propagates CLI rejection', async () => {
     const mock = makeMockStream()
     vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)

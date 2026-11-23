@@ -104,6 +104,10 @@ export interface QueryHandle {
   cancelUserDialog(requestId: string): void
   /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
   interrupt(options?: { cancelQueued?: boolean }): Promise<ClaudeInterruptReceipt>
+  /** Cancel one input in this print process's native queue; false means Claude did not remove it. */
+  cancelQueuedMessage(messageUuid: string): Promise<boolean>
+  /** Request process-wide prediction pause or resume; acknowledgement does not establish native eligibility. */
+  setPromptSuggestionsPaused(paused: boolean): Promise<void>
   /** Rename the native session; an explicit ID protects against renaming a different session. */
   renameSession(title: string, sessionId?: string): Promise<void>
   /** Read the current native plan without a model turn. */
@@ -318,6 +322,19 @@ export async function query(opts: QueryOptions, { promptSuggestions = false } = 
         subtype: 'interrupt',
         ...(valid.cancelQueued === undefined ? {} : { cancel_queued: valid.cancelQueued }),
       }))
+    },
+
+    async cancelQueuedMessage(messageUuid: string): Promise<boolean> {
+      const message_uuid = z.string().min(1).parse(messageUuid)
+      await initialized
+      const response = await hostControls.request({ subtype: 'cancel_async_message', message_uuid })
+      return z.object({ cancelled: z.boolean() }).parse(response).cancelled
+    },
+
+    async setPromptSuggestionsPaused(paused: boolean): Promise<void> {
+      const valid = z.boolean().parse(paused)
+      await initialized
+      await hostControls.request({ subtype: 'set_prompt_suggestions_paused', paused: valid })
     },
 
     async renameSession(title: string, sessionId?: string): Promise<void> {
