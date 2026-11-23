@@ -589,6 +589,7 @@ export const claudeNativeLinuxBindings: {
     "NCe": "p_e",
     "wwe": "Cwe",
     "Xte": "Zte",
+    "$T": "ox",
     "jat": "Xat",
     "lr": "lr",
     "UCe": "w_e",

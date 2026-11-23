@@ -7,7 +7,7 @@ function fixture(withFeedback = false) {
   function jat() {}
   function Xe() {}
   const item = { id: 'permission', kind: 'permission_powershell' }
-  const payload = { toolName: 'PowerShell' }
+  const payload: { toolName: string; networkAllowHosts?: string[] } = { toolName: 'PowerShell' }
   const open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
   let current = dialog
@@ -52,14 +52,15 @@ function fixture(withFeedback = false) {
     nativeFunctionName: (name: string) => name,
     nativeFunctionHash: () => createHash('sha256').update(jat.toString()).digest('hex'),
     nativeGenericPermissionText: (_runtime: unknown, node: string) => Promise.resolve(node),
-    nativeGenericPermissionDetail: async (_runtime: unknown, label: string, node: { props: { children: { props: { children: string } } } }) => ({
-      label, value: node.props.children.props.children, ansi: '\x1b[33m' + node.props.children.props.children + '\x1b[0m',
-    }),
+    nativeGenericPermissionDetail: async (_runtime: unknown, label: string, node: { props: { children: { props: { children: string; preview?: string } } } }) => {
+      const value = node.props.children.props.preview ?? node.props.children.props.children
+      return { label, value, ansi: '\x1b[33m' + value + '\x1b[0m' }
+    },
     nativeDialog: () => current,
   })
   const show = () => runtime.show(n, dialog)
   const answer = (token: string, decision: string, choice: string, feedback?: string, prefix?: string) => runtime.answer(n, dialog, { feedback, prefix, toolName: 'PowerShell', choiceToken: token, decision, choice }, new AbortController().signal)
-  return { show, answer, usePrefix, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, body, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  return { show, answer, usePrefix, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, body, payload, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 
 it.each([['allow', 'yes'], ['deny', 'no'], ['cancel', '']])('sends %s to the original PowerShell control', async (decision, choice) => {
@@ -167,6 +168,33 @@ it('preserves the original warning and refuses a decision after the warning chan
   f.command.marker = '(Original withheld marker)'
   expect(await f.show()).toBeUndefined()
   f.command.kind = 'full'
+  const fresh = await f.show()
+  await f.answer(fresh.presentation.token, 'deny', 'no')
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('no')
+})
+
+it('shows the original network summary and binds choices to the complete native host list', async () => {
+  function $T() {}
+  const f = fixture()
+  const preview = 'Original sandbox host summary (+1 more)'
+  const mount = (hosts: string[]) => {
+    f.payload.networkAllowHosts = hosts
+    f.body[0] = { props: { children: { type: $T, props: { hosts, preview } } } }
+  }
+  mount(['first.example', 'hidden.example'])
+  const prior = await f.show()
+  expect(prior.presentation.details.at(-1)).toEqual({
+    label: 'Network access', value: preview, ansi: '\x1b[33m' + preview + '\x1b[0m',
+  })
+  expect(JSON.stringify(prior.presentation)).not.toContain('hidden.example')
+  mount(['first.example', 'other.example'])
+  await expect(f.answer(prior.presentation.token, 'allow', 'yes')).rejects.toThrow('choices changed')
+  expect(f.onChange).not.toHaveBeenCalled()
+  f.payload.networkAllowHosts = ['mismatch.example']
+  expect(await f.show()).toBeUndefined()
+  mount(Array.from({ length: 101 }, (_, i) => `host${i}.example`))
+  expect(await f.show()).toBeUndefined()
+  mount(['first.example', 'other.example'])
   const fresh = await f.show()
   await f.answer(fresh.presentation.token, 'deny', 'no')
   expect(f.onChange).toHaveBeenCalledExactlyOnceWith('no')
