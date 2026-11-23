@@ -77,19 +77,11 @@ describe('the packs a dev server serves from source', () => {
     expect(idsOf(packages, 'packages/twice')).toEqual(['twice']);
   });
 
-  // The scan is of a location, so a location that is not there holds no packs. Nothing is named here, so
-  // nothing is worth saying about it
-  /**
-   * Over this repo, not a fixture. Every other case here writes the tree it then reads, so all of them
-   * would pass against a discovery that cannot read `packages/` at all — and the renderer's Vite and
-   * Tailwind configs call this to decide which packs the dev server serves from source. One returning
-   * nothing gives a dev server that serves no pack's frontend, with no error anywhere.
-   */
-  it("finds this checkout's packs", () => {
+  it('does not serve the released starter as local workspace source', () => {
     const found = discoverDevPackFrontends(path.join(REPO_ROOT, 'packages'), undefined, REPO_ROOT, warn);
 
-    expect(found.map((pack) => pack.id), 'discovery found nothing in this repo, which is not a tree with no packs')
-      .toContain('default-setup');
+    expect(found.map((pack) => pack.id)).not.toContain('default-setup');
+    expect(warnings).toEqual([]);
   });
 
   it('reports no packs, quietly, when the root it scans does not exist', () => {
