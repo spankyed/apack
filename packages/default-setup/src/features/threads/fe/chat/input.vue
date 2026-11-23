@@ -555,8 +555,21 @@ watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   onCleanup(() => { editor.off('transaction', update) })
 })
 const pageSelection = useClaudeUiSelection()
+function promptHostAvailable(expiresAt: number) {
+  return Date.now() < expiresAt && !!promptEditor && !props.disabled && !submitting.value && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
+}
+let handledSuggestion: string | undefined
+watch([() => props.nativePrompt?.hostRequest, () => props.isBusy], ([request, busy]) => {
+  if (request?.kind !== 'suggest' || request.requestId === handledSuggestion) return
+  const available = promptHostAvailable(request.expiresAt) && promptEditor?.revision === request.revision
+  // The native predictor can finish just before the terminal owner publishes its idle state.
+  if (available && busy) return
+  handledSuggestion = request.requestId
+  const shown = available && (promptEditor?.showSuggestion(request.text, request.revision) ?? false)
+  emit('native-prompt-host-response', { requestId: request.requestId, kind: 'suggest', shown })
+})
 watch(() => props.nativePrompt?.hostRequest, request => {
-  if (!request) return
+  if (!request || request.kind === 'suggest') return
   if (request.kind === 'selection') {
     const owner = promptEditor, epoch = composerEpoch, mountId = props.nativePrompt?.mountId, attachment = props.nativePrompt?.attachmentId
     void replyClaudeUiSelection(request.replyUrl, pageSelection, request.expiresAt, () => composerEpoch === epoch && !!owner && promptEditor === owner && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
@@ -569,13 +582,10 @@ watch(() => props.nativePrompt?.hostRequest, request => {
       .then(copied => emit('native-prompt-host-response', { requestId: request.requestId, kind: 'copy', copied }))
     return
   }
-  const available = Date.now() < request.expiresAt && !!promptEditor && !props.disabled && !submitting.value && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
+  const available = promptHostAvailable(request.expiresAt)
   if (request.kind === 'read') {
     const box = available ? promptEditor?.readDraft() : undefined
     emit('native-prompt-host-response', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) })
-  } else if (request.kind === 'suggest') {
-    const shown = available && (promptEditor?.showSuggestion(request.text, request.revision) ?? false)
-    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'suggest', shown })
   } else {
     const filled = available && (promptEditor?.fillDraft(request.input, request.revision) ?? false)
     emit('native-prompt-host-response', { requestId: request.requestId, kind: 'fill', filled })
