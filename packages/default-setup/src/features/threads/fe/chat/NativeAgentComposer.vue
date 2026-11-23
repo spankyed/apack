@@ -4,7 +4,7 @@
     <StatusLine ref="statusLineRef" class="shrink-0" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <div class="native-agent-draft-scroll min-h-10 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
     <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
-    <p v-if="problem || nativeProblem" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
+    <p v-if="(problem || nativeProblem) && !agentDraftTooLong" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     </div>
     <NativePromptCompletions :anchor-el="composerRef" :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
     </div>
@@ -12,13 +12,15 @@
       <div class="flex min-w-0 items-center gap-2">
         <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="disabled || submitting" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
         <button v-if="audience === 'background'" type="button" :disabled="submitting" class="rounded py-1 text-xs text-neutral-400 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @click="emit('leave')">Back to parent notes</button>
+        <span v-else-if="agentDraftTooLong" role="status" class="min-w-0 text-xs text-amber-200">{{ CLAUDE_UI_TEXT_LIMIT_MESSAGE }}</span>
         <span v-else class="truncate text-[11px] text-neutral-500">{{ disabled ? (audience === 'background' ? 'Background input unavailable' : 'Agent input unavailable') : 'Enter to send · Shift+Enter for a new line' }}</span>
       </div>
-      <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
+      <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || agentDraftTooLong || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
     </div>
   </form>
 </template>
 <script setup lang="ts">
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudeNativeAgentInputReview } from '#features/code/common/native-terminal.ts'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Settings2 } from 'lucide-vue-next'
@@ -52,11 +54,12 @@ watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded, () => props.ui
 
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
+const agentDraftTooLong = computed(() => !props.audience && (props.draft.length > CLAUDE_UI_TEXT_MAX_LENGTH || nativeProblem.value === CLAUDE_UI_TEXT_LIMIT_MESSAGE))
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
 let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true, adoptedEditor: Editor | undefined
 let committedState: Editor['state'] | undefined
 watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmentId], ([editor, mountId], _old, cleanup) => {
-  bridge?.dispose(); bridge = undefined; offers.value = []
+  bridge?.dispose(); bridge = undefined; offers.value = []; nativeProblem.value = undefined
   if (!editor) return
   nativePromptEditors.add(editor)
   const releaseCommands = holdEditorCommandSuggestions(editor)
@@ -164,7 +167,7 @@ async function openNativeSettings() {
   finally { submitting.value = false; emit('pending', false) }
 }
 async function submit() {
-  if (props.disabled || submitting.value || !bridge) return
+  if (props.disabled || submitting.value || agentDraftTooLong.value || !bridge) return
   const editor = editorRef.value?.editor, active = bridge
   if (!editor) return
   submitting.value = true; emit('pending', true); problem.value = undefined

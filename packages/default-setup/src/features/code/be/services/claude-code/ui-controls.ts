@@ -203,11 +203,11 @@ export function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIni
       ]).parse(await request({ subtype: 'apack_ui_parent_command', operation: 'read', ...valid }))
     },
     async submitAgent(options: { client_id: string; text: string }) {
-      const valid = z.object({ client_id: clientId, text: z.string().min(1).max(16384).refine(text => !!text.trim()) }).strict().parse(options)
+      const valid = z.object({ client_id: clientId, text: z.string().min(1).max(CLAUDE_UI_TEXT_MAX_LENGTH).refine(text => !!text.trim()) }).strict().parse(options)
       if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
       return z.discriminatedUnion('kind', [
         z.object({ kind: z.literal('input'), messageId: z.string().uuid(), previousStatus: z.string().max(64) }).strict(),
-        z.object({ kind: z.literal('review'), text: z.string().max(16384), removed: z.number().int().positive() }).strict(),
+        z.object({ kind: z.literal('review'), text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH), removed: z.number().int().positive() }).strict(),
         z.object({ kind: z.literal('panel'), id: z.string().uuid(), commandName: z.string().max(256) }).strict(),
         z.object({ kind: z.literal('command_output'), messageId: z.string().uuid(), commandName: z.string().max(256), text: z.string().min(1).max(65536), isErrored: z.boolean(), outcome: z.string().max(128).optional() }).strict(),
         z.object({ kind: z.literal('blocked'), message: z.string().max(16384) }).strict(),

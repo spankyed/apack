@@ -1,3 +1,4 @@
+import {CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH} from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudePrintPrediction } from '#features/code/be/services/claude-code/conversation.ts'
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
@@ -469,6 +470,22 @@ it('uses Agent snapshots and publishes exact native input receipts only on the s
   expect(f.states.at(-1)?.agentInput).toEqual({ revision: 2, status: 'review', review: { text: 'Clean reply', removed: 1 } })
   expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
   f.replace(); await mount.submitAgent(3, 'Stale reply'); expect(f.ui.submitAgent).toHaveBeenCalledTimes(2)
+  await mount.dispose()
+})
+
+it('settles above-limit Agent input and admits a corrected reply once on the same mount', async () => {
+  const f = fixture()
+  Object.assign(f.owner, { nativeView: { session_id: 'session', revision: 2, agent_id: 'agent' } })
+  const mount = f.mount(); await mount.ready
+  const atLimit = '👋'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH / 2)
+  await mount.submitAgent(1, atLimit + 'x')
+  expect(f.states.at(-1)?.agentInput).toEqual({ revision: 1, status: 'error', problem: CLAUDE_UI_TEXT_LIMIT_MESSAGE })
+  expect(f.ui.submitAgent).not.toHaveBeenCalled()
+
+  await mount.submitAgent(2, atLimit)
+  await mount.submitAgent(2, 'Duplicate revision')
+  expect(f.ui.submitAgent).toHaveBeenCalledExactlyOnceWith({ client_id: expect.any(String), text: atLimit })
+  expect(f.states.at(-1)?.agentInput).toMatchObject({ revision: 2, status: 'done' })
   await mount.dispose()
 })
 

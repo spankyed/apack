@@ -83,6 +83,7 @@ import NativeHelpPanel from './NativeHelpPanel.vue'
 import NativeIdePanel from './NativeIdePanel.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ThreadsState } from '../state.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
 const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; active: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
@@ -153,7 +154,8 @@ function detach() {
 watch(() => props.active, active => { detach(); if (active) { uiMount.value = crypto.randomUUID(); renew(); heartbeat = setInterval(renew, 10000) } }, { immediate: true })
 function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value || stopping.value || commandActive.value) }
 function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> {
-  if (!uiMount.value || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
+  if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
+  if (!uiMount.value || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim()) return Promise.reject(Error('Agent input is unavailable. Your draft was kept.'))
   problem.value = undefined
   const request = ++revision
   return new Promise((resolve, reject) => { submission = { revision: request, text, preserveDraft: options.preserveDraft === true, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; sendToThreads({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })

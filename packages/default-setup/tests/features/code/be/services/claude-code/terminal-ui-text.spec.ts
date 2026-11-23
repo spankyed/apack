@@ -48,6 +48,8 @@ it('round-trips bounded long drafts and native accepted text through the owned s
  const text = '漢'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH)
  try {
   await expect(f.transport.request({subtype:'apack_prepare_prompt',text})).resolves.toEqual({text})
+  const agentText = '\u0000'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH)
+  await expect(f.transport.request({subtype:'apack_ui_agent_dispatch',text:agentText})).resolves.toEqual({text:agentText})
   f.control.mockResolvedValueOnce({text,cursor:text.length})
   await expect(f.transport.request({subtype:'apack_prompt_outcome'})).resolves.toEqual({text,cursor:text.length})
  } finally { await f.close() }

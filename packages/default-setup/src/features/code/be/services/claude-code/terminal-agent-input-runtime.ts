@@ -85,7 +85,7 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
  const identityCurrent=()=>{const now=nativeViewFacts(n,binding,new AbortController());if(now.sessionId!==facts.sessionId||now.sequence!==facts.sequence)throw Error('Native Agent selection changed');};
  const viewCurrent=()=>{identityCurrent();if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');};
  const current=()=>{abort.signal.throwIfAborted();viewCurrent();};
- if(typeof request.text!=='string'||!request.text.trim()||request.text.length>(main?32768:16384))throw Error('Native input is empty or too long');
+ if(typeof request.text!=='string'||request.text.length>(main?32768:nativeUiTextMaxLength)||!request.text.trim())throw Error('Native input is empty or too long');
  const prepared=n.runtime.GYt(request.text,{});
  const text=prepared.input.trimEnd(),context=binding.toolContext(abort),composer=binding.composer;
  const parsed=n.commandInput.IS(text),command=parsed&&n.engine.Rs(parsed.commandName,binding.commands());

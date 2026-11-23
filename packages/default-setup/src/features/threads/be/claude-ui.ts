@@ -310,7 +310,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     return
   }
   if (event.type === 'CLAUDE_UI_AGENT_INPUT') {
-    if (!view?.nativeView || typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384) return
+    if (!view?.nativeView || typeof event.text !== 'string') return
     bind(view)
     void view.mount?.submitAgent(event.revision, event.text)
     return

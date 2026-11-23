@@ -1,4 +1,5 @@
 import { readClaudeUiActionKeys, type ClaudeUiActionKeyState, type ClaudeUiActionKeyRequest } from './ui-controls.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '../../../common/native-prompt-limits.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeApprovalHost } from './ui-approval-host.ts'
 import { createClaudeQuestionHost } from './ui-question-host.ts'
@@ -362,6 +363,11 @@ export function mountClaudeUi(options: {
     },
     async submitAgent(revision: number, text: string) {
       if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding', 'panel'].includes(agentInput?.status ?? '')) return
+      if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH || !text.trim()) {
+        agentInput = { revision, status: 'error', problem: text.length > CLAUDE_UI_TEXT_MAX_LENGTH ? CLAUDE_UI_TEXT_LIMIT_MESSAGE : 'Enter a message for the Agent.' }
+        publish(lastState)
+        return
+      }
       agentInput = { revision, status: 'pending' }; messages.refresh(); publish(lastState)
       try {
         await ready
