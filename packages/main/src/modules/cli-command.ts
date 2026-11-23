@@ -35,6 +35,10 @@ async function linkWithAdminPrivileges(source: string, target: string): Promise<
   await promisify(execFile)('osascript', ['-e', `do shell script ${appleScriptString(command)} with administrator privileges`]);
 }
 
+/** Tells the user the command was not installed, and why */
+const couldNotInstall = (name: string, error: any) =>
+  dialog.showMessageBox({type: 'error', message: `Couldn't install the '${name}' command.`, detail: String(error?.message ?? error)});
+
 /** "Install 'apack' command in PATH": symlink the app-bundled CLI launcher into /usr/local/bin. */
 export async function installCliCommand(): Promise<void> {
   const name = cliCommandName();
@@ -67,13 +71,18 @@ export async function installCliCommand(): Promise<void> {
     fs.rmSync(target, {force: true});
     fs.symlinkSync(source, target);
   } catch (err: any) {
-    if (err?.code !== 'EACCES' && err?.code !== 'EPERM') throw err;
+    // Only a permission refusal is worth asking for an administrator's password; anything else (a read-only volume, a
+    // path component that is a file) would fail the same way elevated, so the user is told why now
+    if (err?.code !== 'EACCES' && err?.code !== 'EPERM') {
+      await couldNotInstall(name, err);
+      return;
+    }
     try {
       await linkWithAdminPrivileges(source, target);
     } catch (elevationError: any) {
       // -128: the user cancelled the password prompt
       if (String(elevationError?.stderr ?? elevationError?.message).includes('-128')) return;
-      await dialog.showMessageBox({type: 'error', message: `Couldn't install the '${name}' command.`, detail: String(elevationError?.message ?? elevationError)});
+      await couldNotInstall(name, elevationError);
       return;
     }
   }
