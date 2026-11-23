@@ -66,7 +66,7 @@
         <pre class="max-h-32 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.command }}</pre>
         <p v-if="state.details.shell.commandTruncated" class="text-neutral-500">Command preview shortened.</p>
       </details>
-      <pre v-if="state.details.shell.output" ref="shellLog" tabindex="0" aria-label="Output preview" class="shell-log m-0 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2">{{ state.details.shell.output }}</pre>
+      <pre v-if="state.details.shell.output" ref="shellLog" tabindex="0" aria-label="Output preview" class="shell-log m-0 max-h-24 overflow-y-auto overscroll-contain whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2">{{ state.details.shell.output }}</pre>
       <p v-else class="text-neutral-500">No output yet.</p>
     </section>
     <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
