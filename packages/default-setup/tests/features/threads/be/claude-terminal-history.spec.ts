@@ -25,6 +25,31 @@ it('uses native human provenance for composer rows and never guesses it for unst
   expect(unstamped.context.claudeNativeUserMessage).toMatchObject({ origin: { kind: 'unclassified' } })
 })
 
+it('projects a batched native teammate mailbox frame as one system row with separate reports', () => {
+  const frame = (from: string, result: string, idleReason = 'available') =>
+    `<teammate-message teammate_id="${from}" color="blue">\n${JSON.stringify({ type: 'idle_notification', from, timestamp: '2026-11-23T15:53:53.013Z', idleReason, result })}\n</teammate-message>`
+  const content = 'Another Claude session sent a message:\n' + [
+    frame('release-reviewer', 'The release headings are clear.'),
+    frame('upgrade-reviewer', 'The rollback review was paused.', 'interrupted'),
+  ].join('\n\n') + '\n\nThis came from another Claude session — fixture model instructions.'
+  const native = { ...row, type: 'user', entrypoint: 'cli', message: { content } }
+  const projected = projectClaudeTerminalHistory({ sessionId, row: native })!
+  expect(projected).toMatchObject({ sender: 'system', uuid, sessionId, blocks: [], context: {
+    claudeNativeTeammateReports: [
+      { title: 'Teammate @release-reviewer finished', body: 'The release headings are clear.' },
+      { title: 'Teammate @upgrade-reviewer was interrupted', body: 'The rollback review was paused.' },
+    ],
+  } })
+  expect(projected.text).not.toContain('fixture model instructions')
+  expect(projected.context.claudeNativeUserMessage).toBeUndefined()
+  for (const extra of [{ origin: { kind: 'human' } }, { promptSource: 'sdk' }, { turnOrigin: 'human' }, { entrypoint: 'sdk-cli' }]) {
+    expect(projectClaudeTerminalHistory({ sessionId, row: { ...native, ...extra } })).toMatchObject({ sender: 'user', text: content })
+  }
+  for (const literal of [content.replace('"from":"release-reviewer"', '"from":"other"'), content.replace('color="blue"', 'verified="false"'), content.split('\n\nThis came')[0]]) {
+    expect(projectClaudeTerminalHistory({ sessionId, row: { ...native, message: { content: literal } } })).toMatchObject({ sender: 'user', text: literal })
+  }
+})
+
 it('retains structured plan-reset continuations without calling them human composer inputs', () => {
   const continuation = { ...row, type: 'user', origin: { kind: 'auto-continuation' }, planContent: '# Approved plan', queueSkipAttachments: true, message: { role: 'user', content: 'Implement the following plan:\n\n# Approved plan' } }
   const projected = projectClaudeTerminalHistory({ sessionId, row: continuation })!

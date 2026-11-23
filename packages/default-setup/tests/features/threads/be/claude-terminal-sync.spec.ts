@@ -460,3 +460,29 @@ it.each([false, true])('keeps one original user row when queued replay arrives f
   expect(fake.messages[0]).toMatchObject({ sender: 'user', text: 'Original user row', context: { cliUuid: uuid } })
   expect(fake.messages[0].context).not.toHaveProperty('claudeNativeQueuedPrompt')
 })
+
+it('reclassifies a previously imported teammate report without creating a second message', async () => {
+  const uuid = '22222222-2222-2222-2222-222222222222'
+  const body = 'The release is ready.'
+  const frame = JSON.stringify({ type: 'idle_notification', from: 'reviewer', timestamp: '2026-11-23T15:53:53.013Z', result: body })
+  const text = 'Another Claude session sent a message:\n<teammate-message teammate_id="reviewer">\n' + frame
+    + '\n</teammate-message>\n\nThis came from another Claude session — fixture instructions.'
+  fake.messages.push({ id: 'prior', sender: 'user', text, context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId } } })
+  const row = { sessionId, uuid, type: 'user', entrypoint: 'cli', message: { content: text } }
+  const owner = {
+    state: { sessionId, cwd: directory, status: 'live', busy: false, tasks: [], ownerId: 'owner' },
+    readJournal: async () => ({ entries: [{ sessionId, row }], pending: false, problems: [] }),
+    beforeRelease: vi.fn(), refreshMcpInput: async () => {}, refreshNotice: async () => {},
+    getGenericToolPermissionDialogs: async () => [], getToolPermissionDialogs: async () => [],
+    getWorkflowDialogs: async () => [], getFileDialogs: async () => [], getBashDialogs: async () => [],
+    getQuestionDialogs: async () => [], getPlanDialogs: async () => [],
+  } as unknown as ClaudeNativeTerminalOwner
+  const { disposeClaudeTerminalHistory, syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
+  try {
+    await vi.waitFor(() => {
+      expect(fake.messages).toHaveLength(1)
+      expect(fake.messages[0]).toMatchObject({ id: 'prior', sender: 'system', text: 'Teammate @reviewer finished\n' + body })
+    })
+  } finally { disposeClaudeTerminalHistory() }
+})

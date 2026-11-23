@@ -47,6 +47,14 @@
         <p class="text-sm whitespace-pre-wrap text-neutral-200 [overflow-wrap:anywhere]">{{ message.text }}</p>
       </div>
 
+      <div v-else-if="nativeTeammateReports.length" class="space-y-2">
+        <div v-for="(report, index) in nativeTeammateReports" :key="index" data-native-teammate-report
+          class="space-y-1 rounded-md border-l-2 border-white/20 py-1 pl-3 pr-2">
+          <p class="text-xs font-medium text-neutral-300 [overflow-wrap:anywhere]">{{ report.title }}</p>
+          <p v-if="report.body" class="whitespace-pre-wrap text-sm text-neutral-200 [overflow-wrap:anywhere]">{{ report.body }}</p>
+        </div>
+      </div>
+
       <!-- System message: non-interactive aside -->
       <div v-else-if="isSystem" class="text-xs italic py-1 px-2 text-neutral-500">
         {{ message.text }}
@@ -402,6 +410,12 @@ const isSystem = computed(() => props.message.sender === 'system')
 const nativeChannel = computed(() => {
   const channel = props.message.context?.claudeNativeChannel as { server?: unknown } | undefined
   if (props.isClaudeCodeThread && isSystem.value && typeof channel?.server === 'string') return channel.server
+})
+const nativeTeammateReports = computed(() => {
+  const reports = props.message.context?.claudeNativeTeammateReports
+  if (!props.isClaudeCodeThread || !isSystem.value || !Array.isArray(reports)) return []
+  return reports.filter((report): report is { title: string; body: string } =>
+    typeof report?.title === 'string' && typeof report?.body === 'string')
 })
 const nativeCompaction = computed(() => {
   const kind = props.message.context?.claudeNativeCompaction

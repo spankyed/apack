@@ -11106,7 +11106,7 @@ declare const chatCommands: {
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
-        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
+        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "sender" | "status" | "text">>;
     }) => {
         messageId: EARS.EntityId;
         updatedAt: number;
@@ -13591,7 +13591,7 @@ declare function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig
  *   text: 'Updated message content'
  * });
  */
-declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'references' | 'responseTimestamp' | 'status' | 'text'>>): void;
+declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'references' | 'responseTimestamp' | 'sender' | 'status' | 'text'>>): void;
 
 /**
  * Writes one of a block's tool entries, and answers its row.

@@ -123,7 +123,9 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       block.props.state = entries.some(item => item.status === 'running') ? 'streaming' : entries.some(item => item.status === 'error') ? 'error' : 'done'
     }
     if (existing) {
-      updateMessageState(existing.id, { text: row.text, context: row.context, ...(references ? { references } : {}) })
+      // Replay can revisit a mailbox row imported before native reports had their own presentation.
+      updateMessageState(existing.id, { text: row.text, context: row.context,
+        ...(row.context.claudeNativeTeammateReports ? { sender: row.sender } : {}), ...(references ? { references } : {}) })
       // **A block is a row, so a sync writes each one against the row it already has.** Rebuilding the
       // array and handing it over is what this did when `blocks` was a field; writing them without their
       // ids would add a second copy of every block on each sync of the same message.

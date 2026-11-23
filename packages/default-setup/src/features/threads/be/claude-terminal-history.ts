@@ -17,6 +17,35 @@ function nativeChannelBody(value: string, server: string): string | undefined {
   const body = envelope.slice(open[0].length, end)
   return body.trim() ? body : undefined
 }
+/** Read only complete idle reports with matching sender names from the native parent mailbox wrapper. */
+function nativeTeammateReports(text: string): { title: string; body: string }[] | undefined {
+  if (text.length > 65_536) return
+  const prefix = /^Another Claude session sent a message(?: while you were working)?:\n/.exec(text)
+  const trailer = /\n\nThis came from another Claude session — [^\r\n]+$/.exec(text)
+  if (!prefix || !trailer) return
+  const envelope = text.slice(prefix[0].length, trailer.index)
+  const frames = /<teammate-message teammate_id="([a-zA-Z0-9][a-zA-Z0-9._@-]{0,127})"(?: color="[^"<>\r\n]{1,32}")?>\n([^\r\n]+)\n<\/teammate-message>(?:\n\n|$)/y
+  const reports: { title: string; body: string }[] = []
+  while (frames.lastIndex < envelope.length) {
+    const frame = frames.exec(envelope)
+    if (!frame || reports.length >= 32) return
+    let value: unknown
+    try { value = JSON.parse(frame[2]) } catch { return }
+    const report = object(value)
+    if (report?.type !== 'idle_notification' || report.from !== frame[1]
+      || typeof report.timestamp !== 'string' || !Number.isFinite(Date.parse(report.timestamp))) return
+    const reason = report.idleReason
+    if (reason !== undefined && reason !== 'available' && reason !== 'interrupted' && reason !== 'failed') return
+    if (report.result !== undefined && typeof report.result !== 'string'
+      || report.failureReason !== undefined && typeof report.failureReason !== 'string') return
+    const action = reason === 'failed' ? 'failed' : reason === 'interrupted' ? 'was interrupted' : 'finished'
+    const detail = typeof report.failureReason === 'string' ? report.failureReason.trim().slice(0, 200) : ''
+    const title = `Teammate @${frame[1]} ${action}${detail ? ': ' + detail : ''}`
+    const body = typeof report.result === 'string' ? report.result.trim().slice(0, 4000) : ''
+    reports.push({ title, body })
+  }
+  if (reports.length) return reports
+}
 /** Project persisted native rows; hidden context and agent conversations never become user bubbles. */
 export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
@@ -99,6 +128,18 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
         claudeNativeChannel: { server: origin.server } } }
   }
   if (row.isMeta === true) return
+  if (row.type === 'user' && row.entrypoint === 'cli' && row.origin === undefined && row.promptSource === undefined
+    && row.turnOrigin === undefined && row.isVirtual !== true && typeof message.content === 'string') {
+    const reports = nativeTeammateReports(message.content)
+    if (reports) {
+      const timestamp = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
+      return { uuid: row.uuid, sessionId: entry.sessionId, sender: 'system',
+        text: reports.map(({ title, body }) => body ? title + '\n' + body : title).join('\n\n'), blocks: [],
+        ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+        context: { cliUuid: row.uuid, claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId },
+          claudeNativeTeammateReports: reports } }
+    }
+  }
   const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : Array.isArray(message.content) ? message.content.map(object).filter((block): block is Record<string, unknown> => !!block) : []
   const text = content.filter(block => block.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
   // Preserve native interruption events without assigning person/composer ownership.
