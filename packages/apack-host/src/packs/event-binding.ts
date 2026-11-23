@@ -21,7 +21,7 @@ export function eventBindingProblem(contracts: Readonly<PackEventContracts> | un
       const protocol = kind === 'system' ? SYSTEM_EVENT_TYPES : SURFACE_EVENT_TYPES;
       const expected = new Set([...('incoming' in declared ? declared.incoming : declared.receives), ...protocol]);
       const received = new Set([...binding.receives, ...protocol]);
-      if (expected.size !== received.size || [...expected].some(name => !received.has(name))) return `${path}.receives`;
+      if (expected.size !== received.size || !expected.isSubsetOf(received)) return `${path}.receives`;
     }
   }
 }

@@ -10,7 +10,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.12.0"
   },
   "files": [
     "dist",
@@ -18,14 +18,14 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:package": "tsx ../../scripts/build-package.ts .",
+    "build:package": "node ../../scripts/build-package.ts .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "api:build": "node -e \"require('fs').rmSync('.temp/api-types', { recursive: true, force: true })\" && tsc -p tsconfig.api-extractor.json",
-    "schema:check": "tsx scripts/generate-schema.ts --check",
-    "api:check": "npm run api:build && tsx ../../scripts/api-reports.ts .",
-    "api:update": "npm run api:build && tsx ../../scripts/api-reports.ts . --local",
-    "schema:update": "tsx scripts/generate-schema.ts"
+    "schema:check": "node scripts/generate-schema.ts --check",
+    "api:check": "npm run api:build && node ../../scripts/api-reports.ts .",
+    "api:update": "npm run api:build && node ../../scripts/api-reports.ts . --local",
+    "schema:update": "node scripts/generate-schema.ts"
   },
   "exports": {
     ".": {

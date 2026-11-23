@@ -48,20 +48,16 @@ export async function dbRuns(args: string[], io: DbIo): Promise<void> {
 
   // History is read, never changed, so this works while the app runs. Read-only data.mdb still requires
   // writable reader registration in lock.mdb.
-  const runs = openRunHistory(dir, { readOnly: true });
-  try {
-    const history = _createRunHistory(runs.engine);
-    if (typeof values.run === 'string') {
-      const tree = history.tree(values.run as RunNodeId);
-      if (!tree) throw new Error(`No run node ${values.run} in the run history`);
-      io.out(toJSON(tree));
-      return;
-    }
-    const found = history.findRuns({ limit, ...(typeof values.flow === 'string' && { flowId: values.flow as EARS.EntityId }) });
-    if (values.json) io.out(toJSON(found));
-    else if (found.length === 0) io.out('No runs');
-    else found.forEach((run) => io.out(runLine(run)));
-  } finally {
-    runs.database.close();
+  using runs = openRunHistory(dir, { readOnly: true });
+  const history = _createRunHistory(runs.engine);
+  if (typeof values.run === 'string') {
+    const tree = history.tree(values.run as RunNodeId);
+    if (!tree) throw new Error(`No run node ${values.run} in the run history`);
+    io.out(toJSON(tree));
+    return;
   }
+  const found = history.findRuns({ limit, ...(typeof values.flow === 'string' && { flowId: values.flow as EARS.EntityId }) });
+  if (values.json) io.out(toJSON(found));
+  else if (found.length === 0) io.out('No runs');
+  else found.forEach((run) => io.out(runLine(run)));
 }

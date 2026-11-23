@@ -1,19 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { createRequire, findPackageJSON } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { packInputFiles, packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { dependencyClosure, packageIdentity } from '@apackdev/host/build/package-identity';
 
 function packageRoot(entry: string): string {
-  let root = path.dirname(entry);
-  while (!fs.existsSync(path.join(root, 'package.json'))) {
-    const parent = path.dirname(root);
-    if (parent === root) throw new Error(`Cannot locate build tool package for ${entry}`);
-    root = parent;
-  }
-  return fs.realpathSync.native(root);
+  const manifest = findPackageJSON(pathToFileURL(entry));
+  if (!manifest) throw new Error(`Cannot locate build tool package for ${entry}`);
+  return fs.realpathSync.native(path.dirname(manifest));
 }
 
 /**

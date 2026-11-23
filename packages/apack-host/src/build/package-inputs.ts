@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { BuildInputObserver } from './pack-inputs.ts';
 
@@ -179,7 +179,7 @@ export function createPackageDigestCache(options: { now?: () => number; elapsed?
   };
 }
 
-const digestOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+const digestOf = (bytes: Buffer) => hash('sha256', bytes, 'hex');
 
 /** One file's content digest, through the cache when its reader keeps one. */
 export function readFileDigest(file: string, digests?: PackageDigestCache): string {
@@ -372,7 +372,7 @@ function* packageInputReads(owners: readonly PackageInputOwner[], options: Packa
     links: node.links.map(link => [link.path, path.relative(node.directory, link.target)]),
     dependencies: node.dependencies,
   }));
-  return { hash: createHash('sha256').update(JSON.stringify({ roots, imported, nodes: identity })).digest('hex'), roots, imported, nodes };
+  return { hash: hash('sha256', JSON.stringify({ roots, imported, nodes: identity }), 'hex'), roots, imported, nodes };
 }
 
 /** Synchronous consumers and capture share the same traversal, callbacks and content identity. */

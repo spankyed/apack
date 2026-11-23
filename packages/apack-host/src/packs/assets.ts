@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
 
 function sha256(content: string | Buffer): string {
-  return crypto.createHash('sha256').update(content).digest('hex');
+  return crypto.hash('sha256', content, 'hex');
 }
 
 /** The receipt's content identity, shared by admission and revisioned asset delivery. */

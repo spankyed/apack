@@ -312,17 +312,15 @@ function withInstallationRecord(
 
 /** Copy across filesystems into a private candidate, retaining the exact accepted receipt. */
 function preparePack(sourceDir: string, packsDir: string, expected: PackIntegrity): string {
+  using unwind = new DisposableStack();
   const incoming = fs.mkdtempSync(path.join(packsDir, `.${expected.id}.installing-${process.pid}-`));
-  try {
-    fs.cpSync(fs.realpathSync(sourceDir), incoming, { recursive: true });
-    if (!isDeepStrictEqual(verifyPack(incoming), expected)) {
-      throw new Error('Pack changed while preparing installation; retry with the complete pack');
-    }
-    return incoming;
-  } catch (err) {
-    fs.rmSync(incoming, { recursive: true, force: true });
-    throw err;
+  unwind.defer(() => fs.rmSync(incoming, { recursive: true, force: true }));
+  fs.cpSync(fs.realpathSync(sourceDir), incoming, { recursive: true });
+  if (!isDeepStrictEqual(verifyPack(incoming), expected)) {
+    throw new Error('Pack changed while preparing installation; retry with the complete pack');
   }
+  unwind.move();
+  return incoming;
 }
 
 /**
@@ -335,53 +333,49 @@ async function installFromDirectory(dir: string, packsDir: string, options: Inst
   assertHostCompatible(manifestSource, options.hostVersion);
 
   let layoutDir = dir;
-  let stageRoot: string | undefined;
-  let incoming: string | undefined;
-  try {
-    if (!isPackLayout(dir) && hasBuiltPackSections(dir)) {
-      stageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-stage-'));
-      layoutDir = path.join(stageRoot, manifestSource.id);
-      try { stagePack(dir, layoutDir, { packFormat: options.packFormat }); }
-      catch (error) { throw new Error(`Pack "${manifestSource.id}" can't be installed: ${reason(error)}`); }
-    }
-    if (!isPackLayout(layoutDir)) {
-      throw new Error(`Pack ${manifestSource.id} is not built: ${dir} has no ${PACK_LAYOUT.integrity} and no dist/${PACK_LAYOUT.runtimeEntry} with dist/${PACK_LAYOUT.snapshot}. Run "apack pack build" first.`);
-    }
-    const integrity = verifyPack(layoutDir);
-    if (integrity.id !== manifestSource.id) throw new Error('Pack identity changed while preparing installation; retry with the complete pack');
-    incoming = preparePack(layoutDir, packsDir, integrity);
-    const manifest = readValidManifest(incoming);
-    assertHostCompatible(manifest, options.hostVersion);
-    // Refused here rather than at the app's next start, where the loader would skip it
-    const buildProblem = packBuildProblem(incoming, options.packFormat);
-    if (buildProblem) {
-      if (options.packFormat !== undefined || buildProblem.kind !== 'format') throw new Error(`Pack "${integrity.id}" can't be installed: ${buildProblem.message}`);
-      log.warn(`Pack "${integrity.id}" may not load: ${buildProblem.message}; which one apack reads isn't recorded in its data dir. The app checks the build before loading it and reports refusals in its Packs view`);
-    }
-
-    if (options.settingsOverrides) assertPackSettings(manifest, options.settingsOverrides());
-    options.beforePlace?.(structuredClone(manifest));
-    const destDir = path.join(packsDir, manifest.id);
-    const result: InstallResult = {
-      id: manifest.id, name: manifest.name, version: manifest.version, dir: destDir,
-      missingDependencies: [], integrity,
-    };
-    replaceDir(incoming, destDir, previousDirectory => {
-      result.missingDependencies = checkDependencies(manifest, packsDir);
-      const accept = () => options.accept?.(structuredClone(result), previousDirectory);
-      if (!options.installedPacksFile) return accept();
-      return withInstallationRecord(options.installedPacksFile, manifest.id, previous => {
-        const { shippedRevision: _revision, suppressAppInstall: _suppression, ...record } = previous;
-        return { ...record, enabled: previous.suppressAppInstall ? true : previous.enabled, updatesWith: 'user' };
-      }, accept, previousDirectory);
-    });
-    incoming = undefined;
-    log.info(`Installed "${manifest.name}" v${manifest.version} to ${destDir}`);
-    return result;
-  } finally {
-    if (incoming) fs.rmSync(incoming, { recursive: true, force: true });
-    if (stageRoot) fs.rmSync(stageRoot, { recursive: true, force: true });
+  using tempCleanup = new DisposableStack();
+  if (!isPackLayout(dir) && hasBuiltPackSections(dir)) {
+    const stageRoot = tempCleanup.use(fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'apack-stage-'))).path;
+    layoutDir = path.join(stageRoot, manifestSource.id);
+    try { stagePack(dir, layoutDir, { packFormat: options.packFormat }); }
+    catch (error) { throw new Error(`Pack "${manifestSource.id}" can't be installed: ${reason(error)}`); }
   }
+  if (!isPackLayout(layoutDir)) {
+    throw new Error(`Pack ${manifestSource.id} is not built: ${dir} has no ${PACK_LAYOUT.integrity} and no dist/${PACK_LAYOUT.runtimeEntry} with dist/${PACK_LAYOUT.snapshot}. Run "apack pack build" first.`);
+  }
+  const integrity = verifyPack(layoutDir);
+  if (integrity.id !== manifestSource.id) throw new Error('Pack identity changed while preparing installation; retry with the complete pack');
+  using incomingGuard = new DisposableStack();
+  const incoming = preparePack(layoutDir, packsDir, integrity);
+  incomingGuard.defer(() => fs.rmSync(incoming, { recursive: true, force: true }));
+  const manifest = readValidManifest(incoming);
+  assertHostCompatible(manifest, options.hostVersion);
+  // Refused here rather than at the app's next start, where the loader would skip it
+  const buildProblem = packBuildProblem(incoming, options.packFormat);
+  if (buildProblem) {
+    if (options.packFormat !== undefined || buildProblem.kind !== 'format') throw new Error(`Pack "${integrity.id}" can't be installed: ${buildProblem.message}`);
+    log.warn(`Pack "${integrity.id}" may not load: ${buildProblem.message}; which one apack reads isn't recorded in its data dir. The app checks the build before loading it and reports refusals in its Packs view`);
+  }
+
+  if (options.settingsOverrides) assertPackSettings(manifest, options.settingsOverrides());
+  options.beforePlace?.(structuredClone(manifest));
+  const destDir = path.join(packsDir, manifest.id);
+  const result: InstallResult = {
+    id: manifest.id, name: manifest.name, version: manifest.version, dir: destDir,
+    missingDependencies: [], integrity,
+  };
+  replaceDir(incoming, destDir, previousDirectory => {
+    result.missingDependencies = checkDependencies(manifest, packsDir);
+    const accept = () => options.accept?.(structuredClone(result), previousDirectory);
+    if (!options.installedPacksFile) return accept();
+    return withInstallationRecord(options.installedPacksFile, manifest.id, previous => {
+      const { shippedRevision: _revision, suppressAppInstall: _suppression, ...record } = previous;
+      return { ...record, enabled: previous.suppressAppInstall ? true : previous.enabled, updatesWith: 'user' };
+    }, accept, previousDirectory);
+  });
+  incomingGuard.move();
+  log.info(`Installed "${manifest.name}" v${manifest.version} to ${destDir}`);
+  return result;
 }
 
 function validateExpectedChecksum(options: InstallOptions): void {
@@ -403,48 +397,41 @@ export async function installPackFromLocal(inputPath: string, targetPacksDir?: s
     return installFromDirectory(resolved, packsDir, options);
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-install-'));
-  try {
-    // Every archive is checked before anything is unpacked, whatever its format
-    if (options.sha256) assertChecksum(resolved, options.sha256);
-    let root: string;
-    if (resolved.endsWith('.tgz') || resolved.endsWith('.tar.gz')) {
-      root = await extractPackArchive(resolved, tmpDir);
-    } else if (resolved.endsWith('.zip')) {
-      extractZip(resolved, tmpDir);
-      root = findPackRoot(tmpDir);
-    } else {
-      throw new Error('Source must be a directory, .zip, or .tgz file');
-    }
-    return await installFromDirectory(root, packsDir, options);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  using tmp = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'apack-install-'));
+  const tmpDir = tmp.path;
+  // Every archive is checked before anything is unpacked, whatever its format
+  if (options.sha256) assertChecksum(resolved, options.sha256);
+  let root: string;
+  if (resolved.endsWith('.tgz') || resolved.endsWith('.tar.gz')) {
+    root = await extractPackArchive(resolved, tmpDir);
+  } else if (resolved.endsWith('.zip')) {
+    extractZip(resolved, tmpDir);
+    root = findPackRoot(tmpDir);
+  } else {
+    throw new Error('Source must be a directory, .zip, or .tgz file');
   }
+  return await installFromDirectory(root, packsDir, options);
 }
 
 export async function installPackFromUrl(url: string, targetPacksDir?: string, options: InstallOptions = {}): Promise<InstallResult> {
   validateExpectedChecksum(options);
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-install-'));
-  try {
-    const filename = new URL(url).pathname.split('/').pop() || 'pack.tgz';
-    if (!/\.(tgz|tar\.gz|zip)$/.test(filename)) {
-      throw new Error('URL must point to a .tgz or .zip file');
-    }
-    const downloadPath = path.join(tmpDir, filename);
-    if (!options.sha256) {
-      log.warn(`Installing ${filename} from ${url} without a checksum: nothing verifies what was downloaded`);
-    }
-
-    // The signal bounds the body too, so a download that stalls fails instead of hanging the install
-    const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
-    const response = await fetch(url, { signal }).catch(downloadFailed(url));
-    if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-    fs.writeFileSync(downloadPath, Buffer.from(await response.arrayBuffer().catch(downloadFailed(url))));
-
-    return await installPackFromLocal(downloadPath, targetPacksDir, options);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  using tmp = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'apack-install-'));
+  const filename = new URL(url).pathname.split('/').pop() || 'pack.tgz';
+  if (!/\.(tgz|tar\.gz|zip)$/.test(filename)) {
+    throw new Error('URL must point to a .tgz or .zip file');
   }
+  const downloadPath = path.join(tmp.path, filename);
+  if (!options.sha256) {
+    log.warn(`Installing ${filename} from ${url} without a checksum: nothing verifies what was downloaded`);
+  }
+
+  // The signal bounds the body too, so a download that stalls fails instead of hanging the install
+  const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
+  const response = await fetch(url, { signal }).catch(downloadFailed(url));
+  if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+  fs.writeFileSync(downloadPath, Buffer.from(await response.arrayBuffer().catch(downloadFailed(url))));
+
+  return await installPackFromLocal(downloadPath, targetPacksDir, options);
 }
 
 export async function installPackFromGitHub(slug: string, targetPacksDir?: string, options: InstallOptions = {}): Promise<InstallResult> {
@@ -479,14 +466,10 @@ export async function installPackFromGitHub(slug: string, targetPacksDir?: strin
   }
 
   // Downloaded through GitHub's API when authenticated, so private repositories install too
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-install-'));
-  try {
-    const downloadPath = path.join(tmpDir, tgzAsset.name);
-    fs.writeFileSync(downloadPath, Buffer.from(await (await fetchReleaseAsset(tgzAsset)).arrayBuffer()));
-    return await installPackFromLocal(downloadPath, targetPacksDir, { ...options, sha256 });
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+  using tmp = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'apack-install-'));
+  const downloadPath = path.join(tmp.path, tgzAsset.name);
+  fs.writeFileSync(downloadPath, Buffer.from(await (await fetchReleaseAsset(tgzAsset)).arrayBuffer()));
+  return await installPackFromLocal(downloadPath, targetPacksDir, { ...options, sha256 });
 }
 
 /** The route the installer will use, also needed when recording whether GitHub updates are available. */

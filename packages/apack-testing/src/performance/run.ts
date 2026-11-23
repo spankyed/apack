@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash as cryptoHash } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -26,7 +26,7 @@ const indexSchema = z.object({ format: z.literal(2), status: z.enum(['incomplete
   measured: z.number().int().min(1).max(100), records: z.array(recordSchema).max(105),
   invocations: z.array(z.object({ phase: z.string().max(32), index: z.number().int().nonnegative().optional(), exitCode: z.number().int().nullable(), signal: z.string().max(32).nullable() })).max(106).optional(),
   summary: z.unknown() });
-const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+const hash = (value: string | Buffer) => cryptoHash('sha256', value, 'hex');
 function read(file: string, maximum: number) {
   const stat = lstatSync(file);
   if (!stat.isFile() || stat.size > maximum) throw Error(`Invalid or oversized performance report: ${file}`);

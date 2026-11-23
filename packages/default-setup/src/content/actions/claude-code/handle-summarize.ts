@@ -84,7 +84,7 @@ export async function action(
     sender?: string;
     context?: Record<string, unknown>;
   }>;
-  const lastAssistant = [...messages].reverse().find(
+  const lastAssistant = messages.findLast(
     (m) => m.sender === 'assistant' && m.context?.cliUuid,
   );
   const cliUuid = lastAssistant?.context?.cliUuid as string | undefined;

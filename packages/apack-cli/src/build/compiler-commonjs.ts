@@ -21,7 +21,7 @@ export function registerCompilerCommonJS(compilation: CompilationInputs, directo
   };
   let inputs: CompilationInputs | undefined = compilation;
   const loaders: Record<string, Loader> = { '.js': 'js', '.cjs': 'js', '.ts': 'ts', '.cts': 'ts', '.tsx': 'tsx', '.jsx': 'jsx' };
-  const restore: Array<() => void> = [];
+  using restore = new DisposableStack();
   let enabled = true;
   // Native lookup must retain owned filenames; source-path projection belongs to compiler code.
   const resolve: typeof nativeResolve = function(this: typeof module, request, parent, ...args) {
@@ -43,7 +43,7 @@ export function registerCompilerCommonJS(compilation: CompilationInputs, directo
     return enabled && (owns(request) || owns(parent?.filename)) ? withoutCompilerFileReads(run) : run();
   };
   module._resolveFilename = resolve;
-  restore.push(() => { if (module._resolveFilename === resolve) module._resolveFilename = nativeResolve; });
+  restore.defer(() => { if (module._resolveFilename === resolve) module._resolveFilename = nativeResolve; });
   for (const extension of Object.keys(loaders)) {
     const previous = extensions[extension];
     const fallback = previous ?? extensions['.js']!;
@@ -66,11 +66,12 @@ export function registerCompilerCommonJS(compilation: CompilationInputs, directo
       (module as NodeJS.Module & { _compile(code: string, filename: string): void })._compile(code, source);
     };
     extensions[extension] = load;
-    restore.push(() => {
+    restore.defer(() => {
       if (extensions[extension] !== load) return;
       if (previous) extensions[extension] = previous;
       else delete extensions[extension];
     });
   }
-  return () => { enabled = false; inputs = undefined; for (const reset of restore.reverse()) reset(); };
+  const owned = restore.move();
+  return () => { enabled = false; inputs = undefined; owned.dispose(); };
 }

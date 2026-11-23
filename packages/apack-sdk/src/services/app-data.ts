@@ -67,8 +67,10 @@ export class AppDataBusyError extends Error {
  * `--skip-unknown`.
  */
 export class UnknownBackupDatabasesError extends Error {
-  constructor(readonly databases: string[]) {
+  readonly databases: string[];
+  constructor(databases: string[]) {
     super(`The backup holds data this apack doesn't have: ${databases.join(', ')}. It was made by a newer apack, and importing it would replace your data with an incomplete copy.`);
     this.name = 'UnknownBackupDatabasesError';
+    this.databases = databases;
   }
 }

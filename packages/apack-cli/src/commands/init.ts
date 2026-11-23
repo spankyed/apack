@@ -61,7 +61,7 @@ Written from src/content/${EXAMPLE_CONTENT_KEY}/hello.md by the "${EXAMPLE_CONTE
  */
 export const PACK_TSCONFIG = {
   compilerOptions: {
-    target: 'ES2022',
+    target: 'ES2024',
     module: 'esnext',
     moduleResolution: 'bundler',
     strict: true,
@@ -113,7 +113,7 @@ const PACKAGE_JSON_TEMPLATE = (name: string) => JSON.stringify({
     // Unit tests run the pack's content and repositories in memory (@apackdev/testing/harness)
     ...UNIT_TEST_DEV_DEPENDENCIES(SDK_RANGE()),
     // The scaffold's tsconfig uses Node types
-    '@types/node': '^22.15.17',
+    '@types/node': '^24.12.0',
     typescript: '^5.8.3',
   },
 }, null, 2);

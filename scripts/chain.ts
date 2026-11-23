@@ -273,7 +273,11 @@ const envFor = (step: ChainStep, budget: number): NodeJS.ProcessEnv => ({
 
 /** Thrown to leave `stampedRun` without a stamp: a failed step must read as never run */
 class StepFailed extends Error {
-  constructor(readonly result: Result) { super(result.step); }
+  readonly result: Result;
+  constructor(result: Result) {
+    super(result.step);
+    this.result = result;
+  }
 }
 
 /**
@@ -517,9 +521,9 @@ async function main(): Promise<void> {
    * Released on the way out by `exclusive-lock.ts`'s own `exit` and interrupt handlers, so there is no
    * `finally` here for a chain that throws or is Ctrl-C'd.
    */
-  let lock: ExclusiveLock;
+  let acquired: ExclusiveLock;
   try {
-    lock = await holdChainLock({
+    acquired = await holdChainLock({
       what: chainInvocation(),
       wait: args.flags.has('wait'),
       onWait: (holder) => console.log(`waiting for another chain run to finish:\n  ${holder}`),
@@ -532,6 +536,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  using _lock = acquired;
 
   // After the lock, which is what makes one run the only writer of either store
   evidence = openRunEvidence({ startedAt: new Date(started), pid: process.pid });
@@ -693,9 +698,7 @@ async function main(): Promise<void> {
   // printed just above is the one thing here worth reading. Measured: piped, process.exit() delivers 64KB
   // of a 500KB write, and @app/default-setup's suite output alone is 654KB.
   process.exitCode = outcome.failed || (strict && voided.length > 0) ? 1 : 0;
-  // The handlers in `exclusive-lock.ts` would do this on the way out anyway; releasing here frees it for the
-  // next run while this one is still printing, which on a piped run is the longest part of its exit
-  lock.release();
+  // `_lock` disposes here on return, freeing the lock for the next run while stdout finishes flushing.
 }
 
 

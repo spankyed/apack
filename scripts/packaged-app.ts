@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { packagedOptions, selectPackagedApp, stopPackagedApp, resetTargets, startPackagedApp, verifyPackagedSigning, REPO_ROOT } from './lib/packaged-app.ts';
 
@@ -34,7 +34,7 @@ if (args.includes('--help')) {
     const server = path.join(app.appDir, 'packages/server/dist/server.js');
     fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify({ appPath: app.appPath, metadata: app.metadata,
       userDataDir: app.context.userDataDir, logsDir: app.logsDir,
-      apiSha256: createHash('sha256').update(fs.readFileSync(server)).digest('hex') }, null, 2));
+      apiSha256: hash('sha256', fs.readFileSync(server), 'hex') }, null, 2));
     for (const [name, command, argv] of [
       ['processes.txt', 'ps', ['-axo', 'pid,ppid,stat,lstart,command']],
       ['git-status.txt', 'git', ['status', '--short']],

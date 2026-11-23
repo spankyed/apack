@@ -75,7 +75,7 @@ async function bundlePackSource<T extends EsbuildOptions>(
     bundle: true,
     format: 'esm',
     platform: 'node',
-    target: 'node20',
+    target: 'node24',
     external: [...HOST_EXTERNALS, ...HOST_RESOLVED_BINARIES],
     tsconfigRaw: configuration && esbuildTsconfig(configuration, tree?.path),
     minify: options.release ?? false,

@@ -12,7 +12,7 @@
 // second protocol — and why a window, which opens its own connection to draw a terminal, needs only to be
 // told a different socket.
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import * as net from 'node:net';
 import { createLogger } from '@apackdev/sdk/logger';
@@ -31,7 +31,7 @@ const STDERR_KEPT = 4096;
 
 /** A target's name among the app's sockets: the same command is the same target */
 export function relayKey(command: readonly string[]): string {
-  return createHash('sha256').update(JSON.stringify(command)).digest('hex').slice(0, 12);
+  return hash('sha256', JSON.stringify(command), 'hex').slice(0, 12);
 }
 
 /** Whether `key` is one `relayKey` could have made, which is what a caller naming a relay is held to */
@@ -141,7 +141,10 @@ export async function serveRelay(socket: string, command: readonly string[], env
   return {
     socket,
     // A run still going that has answered nothing is the failure being asked about, before it has ended
-    lastFailure: () => [...running.values()].filter(run => !run.answered).map(silence)[0] ?? failure,
+    lastFailure: () => {
+      const unanswered = running.values().find(run => !run.answered);
+      return unanswered ? silence(unanswered) : failure;
+    },
     async close() {
       for (const child of running.keys()) child.kill();
       await new Promise<void>((resolve) => server.close(() => resolve()));

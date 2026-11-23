@@ -85,6 +85,21 @@ describe('redactSecrets', () => {
     expect(redacted.error).toMatchObject({ name: 'Error', message: `401 for ${REDACTED}`, code: 'E_AUTH', status: 401, cause: { name: 'Error', message: 'socket closed' } });
     expect(redacted.at).toEqual(at);
   });
+
+  it("keeps and redacts a SuppressedError's non-enumerable error and suppressed fields", () => {
+    const err = new SuppressedError(
+      new Error('cleanup failed for sk-abcdefghij1234567890'),
+      new Error('primary failed for sk-proj-abcdefghij1234567890'),
+      'An error was suppressed during disposal',
+    );
+    const redacted = redactSecrets(err) as unknown as Record<string, unknown>;
+    expect(redacted).toMatchObject({
+      name: 'SuppressedError',
+      message: 'An error was suppressed during disposal',
+      error: { name: 'Error', message: `cleanup failed for ${REDACTED}` },
+      suppressed: { name: 'Error', message: `primary failed for ${REDACTED}` },
+    });
+  });
 });
 
 // How a key with no recognizable shape (Mistral, Cohere) is caught in text once the app has used it

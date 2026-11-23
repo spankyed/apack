@@ -317,84 +317,85 @@ export function createPacksSystem(registry: PackRegistry) {
         const packSlug = ev.packSlug;
 
         // Reserve the source while downloading, then the resolved owner before publication.
-        if (!registry.claimPackOperation(packSlug)) {
+        const slugClaim = registry.claimPackOperation(packSlug);
+        if (!slugClaim) {
           broadcast('packs', { type: 'PACK_INSTALL_FAILED' as const, packSlug, error: operationInProgress(packSlug) });
           return;
         }
-        console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
-
-        broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
-
-        const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
-        let installingId: string | undefined;
-        let startAccepted: (() => boolean) | undefined;
-        runInstall(packSlug, ev.sourceKind, undefined, {
-          installedPacksFile: resolveAppEnvironment().installedPacksFile,
-          sha256: ev.sha256,
-          hostVersion: getAppVersion(),
-          packFormat: PACK_SNAPSHOT_FORMAT,
-          beforePlace: manifest => {
-            if (manifest.id === HOST_PACK_ID) throw new Error('The host is not an installable pack');
-            registry.catalog.assertPackSettings(manifest);
-            if (ev.type === 'REPLACE_PACK') {
-              if (manifest.id !== ev.packId) throw new Error(`Replacement expected pack "${ev.packId}", received "${manifest.id}"`);
-            } else {
-              registry.refreshCatalog();
-              const catalog = registry.catalog.getSnapshot();
-              if (packRecord(manifest.id).updatesWith === 'app'
-                || catalog.appPackSources.some(source => source.id === manifest.id)
-                || catalog.appPackSourceProblems.some(problem => problem.id === manifest.id)) {
-                throw new Error(`"${manifest.id}" is an app default. Use Replace to install your own version.`);
+        void (async () => {
+          using claims = new DisposableStack();
+          claims.use(slugClaim);
+          console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
+          broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
+          const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
+          let startAccepted: (() => boolean) | undefined;
+          try {
+            const result = await runInstall(packSlug, ev.sourceKind, undefined, {
+              installedPacksFile: resolveAppEnvironment().installedPacksFile,
+              sha256: ev.sha256,
+              hostVersion: getAppVersion(),
+              packFormat: PACK_SNAPSHOT_FORMAT,
+              beforePlace: manifest => {
+                if (manifest.id === HOST_PACK_ID) throw new Error('The host is not an installable pack');
+                registry.catalog.assertPackSettings(manifest);
+                if (ev.type === 'REPLACE_PACK') {
+                  if (manifest.id !== ev.packId) throw new Error(`Replacement expected pack "${ev.packId}", received "${manifest.id}"`);
+                } else {
+                  registry.refreshCatalog();
+                  const catalog = registry.catalog.getSnapshot();
+                  if (packRecord(manifest.id).updatesWith === 'app'
+                    || catalog.appPackSources.some(source => source.id === manifest.id)
+                    || catalog.appPackSourceProblems.some(problem => problem.id === manifest.id)) {
+                    throw new Error(`"${manifest.id}" is an app default. Use Replace to install your own version.`);
+                  }
+                }
+                if (manifest.id !== packSlug) {
+                  const idClaim = registry.claimPackOperation(manifest.id);
+                  if (!idClaim) throw new Error(operationInProgress(manifest.id));
+                  claims.use(idClaim);
+                }
+              },
+              accept: candidate => {
+                startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
+              },
+            });
+            let activated: boolean;
+            try {
+              if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
+                throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
               }
             }
-            if (manifest.id !== packSlug && !registry.claimPackOperation(manifest.id)) {
-              throw new Error(operationInProgress(manifest.id));
+            finally { activated = startAccepted!(); }
+            const problem = activationProblem(registry, result.id, activated);
+            if (problem) {
+              broadcast('packs', {
+                type: 'PACK_INSTALL_FAILED' as const,
+                packSlug,
+                error: `${result.name} was installed but ${problem}`,
+              });
+              emitPacksList(registry);
+              return;
             }
-            installingId = manifest.id;
-          },
-          accept: candidate => {
-            startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
-          },
-        }).then(result => {
-          let activated: boolean;
-          try {
-            if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
-              throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
-            }
-          }
-          finally { activated = startAccepted!(); }
-          const problem = activationProblem(registry, result.id, activated);
-          if (problem) {
+
+            broadcast('packs', {
+              type: 'PACK_INSTALL_COMPLETE' as const,
+              packSlug,
+              packId: result.id,
+              packName: result.name,
+              version: result.version,
+            });
+            broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId: result.id });
+            emitPacksList(registry);
+          } catch (err) {
+            const message = errorMessage(err);
+            console.error(`[packs] Install failed for ${packSlug}:`, message);
             broadcast('packs', {
               type: 'PACK_INSTALL_FAILED' as const,
               packSlug,
-              error: `${result.name} was installed but ${problem}`,
+              error: message,
             });
-            emitPacksList(registry);
-            return;
           }
-
-          broadcast('packs', {
-            type: 'PACK_INSTALL_COMPLETE' as const,
-            packSlug,
-            packId: result.id,
-            packName: result.name,
-            version: result.version,
-          });
-          broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId: result.id });
-          emitPacksList(registry);
-        }).catch(err => {
-          const message = errorMessage(err);
-          console.error(`[packs] Install failed for ${packSlug}:`, message);
-          broadcast('packs', {
-            type: 'PACK_INSTALL_FAILED' as const,
-            packSlug,
-            error: message,
-          });
-        }).finally(() => {
-          if (installingId) registry.releasePackOperation(installingId);
-          registry.releasePackOperation(packSlug);
-        });
+        })();
       },
 
       restorePack: ({ system, event }) => {
@@ -406,7 +407,8 @@ export function createPacksSystem(registry: PackRegistry) {
           fail(new Error('Select an installable app default'));
           return;
         }
-        if (!registry.claimPackOperation(packId)) {
+        const claim = registry.claimPackOperation(packId);
+        if (!claim) {
           fail(new Error(operationInProgress(packId)));
           return;
         }
@@ -439,7 +441,7 @@ export function createPacksSystem(registry: PackRegistry) {
             broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
           }
           emitPacksList(registry);
-        }).catch(fail).finally(() => { registry.releasePackOperation(packId); });
+        }).catch(fail).finally(() => { claim.release(); });
       },
 
       uninstallPack: ({ system, event }) => {
@@ -455,7 +457,8 @@ export function createPacksSystem(registry: PackRegistry) {
           return;
         }
 
-        if (!registry.claimPackOperation(packId)) {
+        const claim = registry.claimPackOperation(packId);
+        if (!claim) {
           broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: operationInProgress(packId) });
           return;
         }
@@ -483,7 +486,7 @@ export function createPacksSystem(registry: PackRegistry) {
             error: message,
           });
         }).finally(() => {
-          registry.releasePackOperation(packId);
+          claim.release();
         });
       },
 
@@ -492,7 +495,8 @@ export function createPacksSystem(registry: PackRegistry) {
         const fail = (error: unknown) => broadcast('packs', {
           type: 'PACK_UPDATE_FAILED' as const, packId, error: errorMessage(error),
         });
-        if (!registry.claimPackOperation(packId)) {
+        const claim = registry.claimPackOperation(packId);
+        if (!claim) {
           fail(new Error(operationInProgress(packId)));
           return;
         }
@@ -524,7 +528,7 @@ export function createPacksSystem(registry: PackRegistry) {
             if (activated) broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
           }
           emitPacksList(registry);
-        }).catch(error => { fail(error); emitPacksList(registry); }).finally(() => { registry.releasePackOperation(packId); });
+        }).catch(error => { fail(error); emitPacksList(registry); }).finally(() => { claim.release(); });
       },
 
       updatePack: ({ system, event }) => {
@@ -540,7 +544,8 @@ export function createPacksSystem(registry: PackRegistry) {
           return;
         }
 
-        if (!registry.claimPackOperation(packId)) {
+        const claim = registry.claimPackOperation(packId);
+        if (!claim) {
           broadcast('packs', { type: 'PACK_UPDATE_FAILED' as const, packId, error: operationInProgress(packId) });
           return;
         }
@@ -599,7 +604,7 @@ export function createPacksSystem(registry: PackRegistry) {
           });
           emitPacksList(registry);
         }).finally(() => {
-          registry.releasePackOperation(packId);
+          claim.release();
         });
       },
 
@@ -617,7 +622,8 @@ export function createPacksSystem(registry: PackRegistry) {
 
         if (packId === HOST_PACK_ID) return;
         // Claimed like any other operation on the pack, so a development install cannot land mid-toggle
-        if (!registry.claimPackOperation(packId)) {
+        const claim = registry.claimPackOperation(packId);
+        if (!claim) {
           // The pack's own disable is still tearing down: turning it back on is what was asked, once that ends
           const teardown = teardowns.get(packId);
           if (teardown) {
@@ -631,63 +637,58 @@ export function createPacksSystem(registry: PackRegistry) {
           }
           return;
         }
-        // Held until a disable's teardown finishes, since the pack is registered until then
-        let tearingDown: Promise<void> | undefined;
+        // Held until a disable's teardown finishes (handed off via move()), or released on any synchronous exit
+        using claims = new DisposableStack();
+        claims.use(claim);
+        if (!isInstalled(packId)) {
+          reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(`${packId} is not an installed pack`) });
+          return;
+        }
+        const entry = packRecord(packId);
+
+        const newEnabled = !entry.enabled;
+
         try {
-          if (!isInstalled(packId)) {
-            reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(`${packId} is not an installed pack`) });
-            return;
+          if (newEnabled) {
+            registry.refreshCatalog(resolveAppEnvironment().packsDir);
+            registry.catalog.assertPackEnabled(packId, true);
           }
-          const entry = packRecord(packId);
+        } catch (error) {
+          reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(errorMessage(error)) });
+          broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
+          return;
+        }
 
-          const newEnabled = !entry.enabled;
-
-          try {
-            if (newEnabled) {
-              registry.refreshCatalog(resolveAppEnvironment().packsDir);
-              registry.catalog.assertPackEnabled(packId, true);
-            }
-          } catch (error) {
-            reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(errorMessage(error)) });
-            broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
-            return;
-          }
-
-          if (!setPackEnabled(packId, newEnabled)) {
-            reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error',
-              error: new Error(`Couldn't save that ${packId} is ${newEnabled ? 'enabled' : 'disabled'}; the current state is unchanged.`),
-            });
-            broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
-            return;
-          }
-
-          if (!newEnabled) {
-            tearingDown = teardownPack(registry, packId, system.get(HOST.bus));
-            broadcast('packs', { type: 'PACK_DEACTIVATED' as const, packId });
-          } else {
-            if (activatePack(registry, packId, system.get(HOST.bus))) {
-              broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
-            }
-          }
-
-          broadcast('packs', {
-            type: 'PACK_ENABLED_CHANGED' as const,
-            packId,
-            enabled: newEnabled,
+        if (!setPackEnabled(packId, newEnabled)) {
+          reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error',
+            error: new Error(`Couldn't save that ${packId} is ${newEnabled ? 'enabled' : 'disabled'}; the current state is unchanged.`),
           });
-          emitPacksList(registry);
-        } finally {
-          if (tearingDown) {
-            const settled = tearingDown.finally(() => {
-              registry.releasePackOperation(packId);
-              teardowns.delete(packId);
-            });
-            teardowns.set(packId, settled);
-            void settled;
-          } else {
-            registry.releasePackOperation(packId);
+          broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
+          return;
+        }
+
+        if (!newEnabled) {
+          const tearingDown = teardownPack(registry, packId, system.get(HOST.bus));
+          const held = claims.move();
+          const settled = tearingDown.finally(() => {
+            held.dispose();
+            teardowns.delete(packId);
+          });
+          teardowns.set(packId, settled);
+          void settled;
+          broadcast('packs', { type: 'PACK_DEACTIVATED' as const, packId });
+        } else {
+          if (activatePack(registry, packId, system.get(HOST.bus))) {
+            broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
           }
         }
+
+        broadcast('packs', {
+          type: 'PACK_ENABLED_CHANGED' as const,
+          packId,
+          enabled: newEnabled,
+        });
+        emitPacksList(registry);
       },
     }),
   }).createMachine({

@@ -220,17 +220,17 @@ describe('createHostRuntime', () => {
       appVersion: '1.2.3', packs });
     const resetting = runtime.services.appData.reset();
     try {
-      const free = packs.claimPackOperation('any-pack');
-      if (free) packs.releasePackOperation('any-pack');
-      expect(free).toBe(false);
+      using free = packs.claimPackOperation('any-pack');
+      expect(free).toBeNull();
     } finally { finish(); await resetting; }
-    expect(packs.claimPackOperation('any-pack')).toBe(true);
-    try {
+    {
+      using claim = packs.claimPackOperation('any-pack');
+      expect(claim).not.toBeNull();
       const refused = runtime.services.appData.reset();
       await expect(refused).rejects.toThrow('A pack is being installed or changed');
       await expect(refused).rejects.toBeInstanceOf(AppDataBusyError);
       expect(clear).toHaveBeenCalledOnce();
-    } finally { packs.releasePackOperation('any-pack'); }
+    }
     order.length = 0;
   });
 

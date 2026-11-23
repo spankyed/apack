@@ -22,12 +22,8 @@ const WEB_SCHEMES = new Set(['http:', 'https:']);
  * address it prints.
  */
 export function webUrlProblem(url: string): string | undefined {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'it is not a URL';
-  }
+  const parsed = URL.parse(url);
+  if (!parsed) return 'it is not a URL';
   if (!WEB_SCHEMES.has(parsed.protocol)) return `its scheme is ${parsed.protocol}, and only http and https open as a link`;
   // "https://apple.com@evil.example" is a link to evil.example, read as one to apple.com
   if (parsed.username || parsed.password) return 'it carries credentials, which hide the host it opens';
@@ -36,10 +32,6 @@ export function webUrlProblem(url: string): string | undefined {
 
 /** A URL as a log line names it: its origin and path, without a query that may carry a token */
 export function summarizeUrl(url: string): string {
-  try {
-    const { origin, pathname } = new URL(url);
-    return `${origin}${pathname}`;
-  } catch {
-    return url.slice(0, 80);
-  }
+  const parsed = URL.parse(url);
+  return parsed ? `${parsed.origin}${parsed.pathname}` : url.slice(0, 80);
 }

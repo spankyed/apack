@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "esnext",
     "moduleResolution": "bundler",
     // @apackdev/sdk and @elmdb/ears resolve to their published declarations, not source: API
@@ -9,7 +9,7 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "skipLibCheck": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
   "include": [".temp/api-types/**/*.d.ts"]

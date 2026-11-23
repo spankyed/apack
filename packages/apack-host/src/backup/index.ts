@@ -1,4 +1,5 @@
-import fs from 'fs-extra';
+import fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@elmdb/ears';
@@ -76,6 +77,9 @@ export type BackupStores = { lmdb: BackupStore } & Partial<Record<Exclude<Databa
  * Each is copied by elmdb itself (`copyTo`, its compacted copy), so a backup taken while the app is running holds each store as of one
  * moment rather than whatever the files happened to say as they were read.
  */
+const pathExists = (target: string): Promise<boolean> =>
+  fsp.access(target).then(() => true, () => false);
+
 export async function exportDatabase(
   stores: BackupStores,
   targetPath: string,
@@ -85,16 +89,16 @@ export async function exportDatabase(
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fullBackupPath = path.join(targetPath, name || `apack-backup-${timestamp}`);
 
-  await fs.ensureDir(fullBackupPath);
+  await fsp.mkdir(fullBackupPath, { recursive: true });
 
   let includesMedia = false;
   if (databases.includes('lmdb')) {
-    if (await fs.pathExists(mediaPath)) {
+    if (await pathExists(mediaPath)) {
       includesMedia = true;
     }
   }
 
-  await fs.writeJson(path.join(fullBackupPath, 'metadata.json'), {
+  await fsp.writeFile(path.join(fullBackupPath, 'metadata.json'), `${JSON.stringify({
     timestamp: Date.now(),
     databases,
     includesMedia,
@@ -102,18 +106,18 @@ export async function exportDatabase(
     // backup restores is settled by opening its databases (readBackup), never by what this says.
     ...(appVersion !== undefined && { appVersion }),
     storageFormats: Object.fromEntries(databases.map((name) => [name, DATABASES[name].format])),
-  });
+  })}\n`);
 
   for (const dbName of databases) {
     const store = stores[dbName];
-    if (store && await fs.pathExists(store.path)) {
+    if (store && await pathExists(store.path)) {
       await store.copyTo(path.join(fullBackupPath, dbName));
       log.info(`Backed up ${dbName}`);
     }
   }
 
   if (includesMedia) {
-    await fs.copy(mediaPath, path.join(fullBackupPath, 'media'));
+    await fsp.cp(mediaPath, path.join(fullBackupPath, 'media'), { recursive: true });
     log.info('Backed up media assets');
   }
 
@@ -140,12 +144,12 @@ export async function importDatabase(
       withReplacement?: (replace: () => Promise<DatabaseImportResult>) => Promise<DatabaseImportResult>;
     } = {},
 ): Promise<DatabaseImportResult> {
-  const temporary = await fs.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-import-'));
+  const temporary = await fsp.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-import-'));
   const candidate = path.join(temporary, 'candidate');
   const rollback = path.join(temporary, 'rollback');
   let preserveRollback = false;
   try {
-    await fs.copy(backupPath, candidate);
+    await fsp.cp(backupPath, candidate, { recursive: true });
     let contents: BackupContents;
     try {
       contents = readBackup(candidate, entityTypes, validate);
@@ -170,8 +174,8 @@ export async function importDatabase(
     return await withReplacement(async () => {
       for (const { name, store } of restoring) await store.copyTo(path.join(rollback, name));
       const candidateMedia = path.join(candidate, 'media');
-      const hasMedia = await fs.pathExists(candidateMedia);
-      if (hasMedia && await fs.pathExists(mediaPath)) await fs.copy(mediaPath, path.join(rollback, 'media'));
+      const hasMedia = await pathExists(candidateMedia);
+      if (hasMedia && await pathExists(mediaPath)) await fsp.cp(mediaPath, path.join(rollback, 'media'), { recursive: true });
       try {
         // Each store takes the backup's contents in one unit, open all the while: a reader sees the old or the new
         for (const { name, store } of restoring) {
@@ -179,8 +183,8 @@ export async function importDatabase(
           log.info(`Imported ${name}`);
         }
         if (hasMedia) {
-          await fs.remove(mediaPath);
-          await fs.copy(candidateMedia, mediaPath);
+          await fsp.rm(mediaPath, { recursive: true, force: true });
+          await fsp.cp(candidateMedia, mediaPath, { recursive: true });
           log.info('Restored media assets');
         }
         const result = { databases, missingDatabases, unknownEntityTypes };
@@ -191,9 +195,9 @@ export async function importDatabase(
         try {
           for (const { name, store } of restoring) store.replaceWith(path.join(rollback, name));
           if (hasMedia) {
-            await fs.remove(mediaPath);
+            await fsp.rm(mediaPath, { recursive: true, force: true });
             const previousMedia = path.join(rollback, 'media');
-            if (await fs.pathExists(previousMedia)) await fs.copy(previousMedia, mediaPath);
+            if (await pathExists(previousMedia)) await fsp.cp(previousMedia, mediaPath, { recursive: true });
           }
           await restored?.();
         } catch (restoreError) {
@@ -204,28 +208,28 @@ export async function importDatabase(
       }
     });
   } finally {
-    if (!preserveRollback) await fs.remove(temporary);
+    if (!preserveRollback) await fsp.rm(temporary, { recursive: true, force: true });
   }
 }
 
 export async function readBackupSummary(backupPath: string) {
   try {
     const metadataPath = path.join(backupPath, 'metadata.json');
-    if (!await fs.pathExists(metadataPath)) return null;
+    if (!await pathExists(metadataPath)) return null;
 
-    const metadata = await fs.readJson(metadataPath);
+    const metadata = JSON.parse(await fsp.readFile(metadataPath, 'utf8'));
     // The databases a restore would bring back (see importDatabase)
     const databases = (metadata.databases as string[]).filter(isKnownDatabase);
     let totalSize = 0;
 
     for (const dbName of databases) {
       const dbPath = path.join(backupPath, dbName);
-      if (await fs.pathExists(dbPath)) {
-        totalSize += (await fs.stat(dbPath)).size;
+      if (await pathExists(dbPath)) {
+        totalSize += (await fsp.stat(dbPath)).size;
       }
     }
 
-    const hasMedia = await fs.pathExists(path.join(backupPath, 'media'));
+    const hasMedia = await pathExists(path.join(backupPath, 'media'));
 
     return {
       timestamp: metadata.timestamp,
@@ -279,7 +283,7 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   if (!fs.existsSync(metadataFile)) throw new Error(`${dir} isn't a backup: it has no metadata.json`);
   let metadata: { timestamp?: unknown; databases?: unknown; appVersion?: unknown; storageFormats?: unknown };
   try {
-    metadata = fs.readJsonSync(metadataFile);
+    metadata = JSON.parse(fs.readFileSync(metadataFile, 'utf8'));
   } catch (error) {
     throw new Error(`${metadataFile} can't be read: ${(error as Error).message}`);
   }

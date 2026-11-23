@@ -453,6 +453,29 @@ describe("a pack's frontend", () => {
     expect(registered).toEqual([]);
     expect(styles).toEqual([]);
   });
+
+  it('disposes the settings binding exactly once when preparePackFE throws', async () => {
+    const dispose = vi.fn();
+    const registration = {
+      id: 'ext',
+      declarationRevision: 'current',
+      features: {},
+      bindSettings: () => { throw new Error('settings bind rejected'); },
+    };
+    const { io } = fakeIO({ [`pack://ext/builds/${buildRevision}/runtime/fe.js`]: registration });
+    io.settingsForPack = async () => ({ port: {} as SettingsPort, dispose });
+    const registry = createNativeFrontendTestRegistry();
+    const pack = {
+      registrationId: 'runtime', id: 'ext', name: 'Ext', version: '1.0.0', manifest: declaration('ext'),
+      declarationRevision: 'current', buildRevision, feEntry: 'runtime/fe.js',
+    };
+
+    const caught = await createPackFrontends(io, registry).load(pack).catch((err: unknown) => err);
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(SuppressedError);
+    expect((caught as Error).message).toBe('settings bind rejected');
+    expect(dispose).toHaveBeenCalledOnce();
+  });
 });
 
 it.each(['identity', 'declaration'])('pins accepted backend %s before asynchronous frontend delivery', async change => {

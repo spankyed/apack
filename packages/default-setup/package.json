@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit",
-    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest": "node ../../scripts/ensure-packages-built.ts",
     "test": "vitest run",
     "generate:entries": "apack pack generate-entries",
     "build": "apack pack build",
@@ -45,7 +45,7 @@
     "@tiptap/core": "3.32.0",
     "@tiptap/starter-kit": "3.32.0",
     "@types/jsdom": "^21.1.7",
-    "@types/node": "^25.5.0",
+    "@types/node": "^24.12.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "esbuild": "^0.25.0",
     "jsdom": "^26.1.0",

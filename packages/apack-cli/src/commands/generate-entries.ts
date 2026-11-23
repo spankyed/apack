@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { PackManifest } from '@apackdev/sdk/build';
 import { _depTypesFile, _depTypesVersion, generatePackFiles } from '@apackdev/sdk/build';
@@ -42,7 +42,7 @@ export function warnStaleDepTypes(root: string, runtimeVersions: Map<string, str
 
 /** Inputs and exact output bytes from a successful generation. */
 interface InputsStamp { hash: string; files: Record<string, string> }
-const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex');
+const digest = (content: string | Buffer): string => cryptoHash('sha256', content, 'hex');
 
 function readStamp(hashPath: string): InputsStamp | null {
   try {
@@ -113,7 +113,7 @@ export async function generateEntries(
   // is invisible: every file is written, the last writer wins each one, and the result reads as a stale build
   // nobody can reproduce. It happened here — concurrent runs left the type barrel describing a fix that was
   // already compiled. The build takes this through this function too, and never around it: `holdExclusiveLock` has no re-entrancy, so a nested take would refuse itself, naming this pid.
-  const lock = holdExclusiveLock({
+  using _lock = holdExclusiveLock({
     file: path.join(outDir, GENERATE_LOCK),
     what: 'apack pack generate-entries',
     refuse: (holder) => new Error(
@@ -121,11 +121,7 @@ export async function generateEntries(
       + `Wait for it to finish. If none is running, delete ${path.join(outDir, GENERATE_LOCK)} and try again.`,
     ),
   });
-  try {
-    await writeGenerated(root, outDir, hashPath, currentHash, manifest, dependencies, compilation);
-  } finally {
-    lock.release();
-  }
+  await writeGenerated(root, outDir, hashPath, currentHash, manifest, dependencies, compilation);
 }
 
 /** The lock file, inside the directory it guards, so it travels with the output it protects */

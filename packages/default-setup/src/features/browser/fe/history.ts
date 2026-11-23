@@ -22,14 +22,11 @@ export interface AutocompleteSuggestion {
 }
 
 function computeUrlKey(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
-    const path = parsed.pathname.replace(/\/$/, '') + parsed.search + parsed.hash;
-    return `${parsed.protocol}//${host}${path}`;
-  } catch {
-    return url.toLowerCase();
-  }
+  const parsed = URL.parse(url);
+  if (!parsed) return url.toLowerCase();
+  const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+  const path = parsed.pathname.replace(/\/$/, '') + parsed.search + parsed.hash;
+  return `${parsed.protocol}//${host}${path}`;
 }
 
 // In-memory cache — avoids JSON.parse on every autocomplete keystroke

@@ -10,8 +10,10 @@ let metaSchemaChecker: Ajv | undefined;
 
 /** @internal Preserve value paths when build tools report invalid declared defaults. */
 export class _SettingsDefaultsError extends Error {
-  constructor(readonly problems: readonly SettingsProblem[]) {
+  readonly problems: readonly SettingsProblem[];
+  constructor(problems: readonly SettingsProblem[]) {
     super(`Invalid settings defaults: ${problems.map(problem => `${problem.path.join('.') || 'root'}: ${problem.message}`).join('; ')}`);
+    this.problems = problems;
   }
 }
 

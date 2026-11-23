@@ -25,8 +25,8 @@ export function findDatabaseWriter(userDataDir: string): string | null {
 const clearHint = (userDataDir: string) =>
   `If no tool is running, delete ${lockFile(userDataDir)} and try again.`;
 
-/** A lock a tool holds; `release()` is safe to call more than once */
-export interface DatabaseWriteLock {
+/** A lock a tool holds; `release()` and `[Symbol.dispose]()` are safe to call more than once */
+export interface DatabaseWriteLock extends Disposable {
   release(): void;
 }
 

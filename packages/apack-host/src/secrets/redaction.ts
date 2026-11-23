@@ -6,7 +6,7 @@ import type { SecretRedaction } from '@apackdev/sdk/runtime';
 
 const digests = new Set<string>();
 const lengths = new Set<number>();
-const sha256 = (text: string) => crypto.createHash('sha256').update(text).digest('hex');
+const sha256 = (text: string) => crypto.hash('sha256', text, 'hex');
 
 /**
  * Lets redaction mask this value wherever it's printed, without keeping it: only its digest and its length are

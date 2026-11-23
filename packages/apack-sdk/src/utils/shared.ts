@@ -1,6 +1,38 @@
-/** A thrown value's message: an Error's own, anything else as text */
+// Node 24+ / ES2026 `Error.isError` typed directly so source consumers without `ESNext.Error` in `lib` still typecheck.
+const isError = (value: unknown): value is Error =>
+  (Error as ErrorConstructor & { isError(v: unknown): v is Error }).isError(value);
+
+function isSuppressedError(value: unknown): value is Error & { error: unknown; suppressed: unknown } {
+  return isError(value) && value.name === 'SuppressedError' && 'error' in value && 'suppressed' in value;
+}
+
+function collectSuppressedChain(value: unknown, out: unknown[], visited: Set<unknown>): void {
+  if (!isSuppressedError(value)) {
+    out.push(value);
+    return;
+  }
+  if (visited.has(value)) return;
+  visited.add(value);
+  // `suppressed` always happened before `error`; in-order traversal flattens both nested `using`
+  // blocks and multi-disposer `DisposableStack` trees into chronological order.
+  collectSuppressedChain(value.suppressed, out, visited);
+  collectSuppressedChain(value.error, out, visited);
+}
+
+/**
+ * A thrown value's message: an Error's own, anything else as text.
+ * Unwraps `SuppressedError` trees (from `using` / `DisposableStack`) into chronological order so
+ * the primary failure is preserved ahead of any disposal failures instead of returning V8's generic text.
+ */
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (isSuppressedError(error)) {
+    const chain: unknown[] = [];
+    collectSuppressedChain(error, chain, new Set());
+    if (chain.length === 0) return error.message;
+    const [primary, ...cleanup] = chain.map((item) => (isError(item) ? item.message : String(item)));
+    return cleanup.length > 0 ? `${primary} (cleanup also failed: ${cleanup.join('; ')})` : primary!;
+  }
+  return isError(error) ? error.message : String(error);
 }
 
 /** Whether `object` has `key` itself, not by inheritance: a key such as `__proto__` read as data */
@@ -64,17 +96,19 @@ export function extractValueByPath(source: unknown, path: string): unknown {
   return current;
 }
 
-export enum BinaryOperator {
-  EQUALS = 'equals',
-  NOT_EQUALS = 'not_equals',
-  GREATER_THAN = 'greater_than',
-  LESS_THAN = 'less_than',
-  GREATER_THAN_OR_EQUALS = 'greater_than_or_equals',
-  LESS_THAN_OR_EQUALS = 'less_than_or_equals',
-  CONTAINS = 'contains',
-  STARTS_WITH = 'starts_with',
-  ENDS_WITH = 'ends_with',
-  MATCHES = 'matches',
-  IS_EMPTY = 'is_empty',
-  IS_NULL = 'is_null',
-}
+export const BinaryOperator = {
+  EQUALS: 'equals',
+  NOT_EQUALS: 'not_equals',
+  GREATER_THAN: 'greater_than',
+  LESS_THAN: 'less_than',
+  GREATER_THAN_OR_EQUALS: 'greater_than_or_equals',
+  LESS_THAN_OR_EQUALS: 'less_than_or_equals',
+  CONTAINS: 'contains',
+  STARTS_WITH: 'starts_with',
+  ENDS_WITH: 'ends_with',
+  MATCHES: 'matches',
+  IS_EMPTY: 'is_empty',
+  IS_NULL: 'is_null',
+} as const;
+
+export type BinaryOperator = (typeof BinaryOperator)[keyof typeof BinaryOperator];

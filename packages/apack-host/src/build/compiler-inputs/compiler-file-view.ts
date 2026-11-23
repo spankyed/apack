@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { createCompilerInputObservations, hashCompilerInputObservations } from './compiler-observations.ts';
 import { isPackInputPath, type BuildInputKind, type BuildInputObserver } from '../pack-inputs.ts';
 import { compilerSourcePath, relativeCompilerPath, resolveCompilerPath, type CompilerPathMapping } from './compiler-paths.ts';
@@ -114,7 +114,7 @@ export function createCompilerFileView(root: string, options: {
   const digests = new WeakMap<Buffer, string>();
   const digest = (bytes: Buffer) => {
     let value = digests.get(bytes);
-    if (value === undefined) digests.set(bytes, value = createHash('sha256').update(bytes).digest('hex'));
+    if (value === undefined) digests.set(bytes, value = hash('sha256', bytes, 'hex'));
     return value;
   };
   const physical = new Map<string, string>();

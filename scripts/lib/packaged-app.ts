@@ -2,11 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { readBuildManifest, resolveBuildIdentity } from '../../build/build-metadata.ts';
 import { resolveAppEnvironment } from '../../packages/apack-sdk/src/env/index.ts';
 
-export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+export const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 export type Channel = 'production' | 'beta' | 'preview';
 export interface Options { channel: Channel; app?: string; dataDir?: string }
 

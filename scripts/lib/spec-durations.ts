@@ -703,14 +703,10 @@ export function readDurations(root: string, dir: string, half: Half): DurationRe
  * another's, and a corrupt or absent file starts a window of one rather than refusing.
  */
 export function writeDurations(root: string, rows: readonly FileDuration[], measuredAt = new Date().toISOString()): void {
-  const byRecord = new Map<string, FileDuration[]>();
-  for (const row of rows) {
-    const key = `${row.dir}\u0000${row.half}`;
-    byRecord.set(key, [...byRecord.get(key) ?? [], row]);
-  }
+  const byRecord = Map.groupBy(rows, (row) => `${row.dir}\u0000${row.half}`);
   for (const [key, held] of byRecord) {
     const [dir, half] = key.split('\u0000') as [string, Half];
-    const sorted = [...held].sort((a, b) => a.file.localeCompare(b.file));
+    const sorted = held.toSorted((a, b) => a.file.localeCompare(b.file));
     const ms = Object.fromEntries(sorted.map((row) => [row.file, row.ms]));
     const overheadMs = Object.fromEntries(sorted.map((row) => [row.file, row.overheadMs]));
     prependToWindow(recordFor(root, dir, half), { measuredAt, ms, overheadMs }, soundDurations);

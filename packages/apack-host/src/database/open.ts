@@ -59,7 +59,9 @@ export interface DatabaseStoreOptions {
  * while that pack registers. Nothing is installed.
  */
 export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
+  using unwind = new DisposableStack();
   const database = openDatabase({ path, readOnly });
+  unwind.defer(() => database.close());
   const engine = createEarsEngine({
     database,
     callSites: _EARS_CALL_SITES,
@@ -69,19 +71,15 @@ export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStor
       : message)),
   });
   if (!readOnly) {
-    try {
-      engine.admin.declare(engineSchemaOf(schema));
-    } catch (error) {
-      database.close();
-      throw error;
-    }
+    engine.admin.declare(engineSchemaOf(schema));
     schema.onRegistrationChanged?.(() => { if (database.isOpen) engine.admin.declare(engineSchemaOf(schema)); });
   }
+  unwind.move();
   return { database, engine };
 }
 
 /** The run history's database and the engine over it, which no `transact` on the app's engine reaches */
-export interface RunsDatabase {
+export interface RunsDatabase extends Disposable {
   database: EarsDatabase;
   engine: EarsEngine;
 }
@@ -98,8 +96,12 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  */
 export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean } = {}): RunsDatabase {
   const open = (): RunsDatabase => {
+    using unwind = new DisposableStack();
     const database = openDatabase({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
-    return { database, engine: createEarsEngine({ database, callSites: _EARS_CALL_SITES }) };
+    unwind.defer(() => database.close());
+    const engine = createEarsEngine({ database, callSites: _EARS_CALL_SITES });
+    unwind.move();
+    return { database, engine, [Symbol.dispose]() { database.close(); } };
   };
   try {
     return open();
@@ -122,7 +124,7 @@ export function resetRunHistoryInPlace(dir: string): void {
 }
 
 /** An app's database opened outside the app */
-export interface AppDatabase {
+export interface AppDatabase extends Disposable {
   userDataDir: string;
   /** The data dir's stores */
   paths: _AppDataPaths;
@@ -157,11 +159,12 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, sche
   const context = resolveAppEnvironment({ env, userDataDir });
   const paths = findAppDataPaths(userDataDir);
   const schema = readInstalledSchema(context, { schemaFrom });
+  using unwind = new DisposableStack();
   // The database is held to the schema the app last declared, which a tool doesn't change: the app declares what its
   // packs' code says (their required fields among it), and no manifest carries all of that
   const database = openDatabase({ path: paths.lmdb, readOnly });
+  unwind.defer(() => database.close());
   if (!readOnly && database.schema === null) {
-    database.close();
     throw new Error(`The database in ${userDataDir} holds no schema yet: start apack on it once, which declares its packs', then run this again.`);
   }
   const engine = createEarsEngine({ database, callSites: _EARS_CALL_SITES });
@@ -171,7 +174,10 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, sche
   // engine of its own, so it gets none back; what this is for is a caller that does — a test file, or a command
   // holding one data dir open while it reads another, where unbinding would leave the first unreachable.
   const previousEngine = _bindEars(engine);
+  unwind.defer(() => _bindEars(previousEngine));
 
+  const owned = unwind.move();
+  const close = () => owned.dispose();
   return {
     userDataDir,
     paths,
@@ -179,9 +185,7 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, sche
     database,
     ears: engine,
     admin: engine.admin,
-    close() {
-      _bindEars(previousEngine);
-      database.close();
-    },
+    close,
+    [Symbol.dispose]: close,
   };
 }

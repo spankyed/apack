@@ -19,8 +19,7 @@ if (fixes.length === 0) {
   process.exit(0);
 }
 
-const byFile = new Map<string, Fix[]>();
-for (const fix of fixes) byFile.set(fix.file, [...(byFile.get(fix.file) ?? []), fix]);
+const byFile = Map.groupBy(fixes, (fix) => fix.file);
 console.log(`specifiers:fix — ${fixes.length} specifier${fixes.length === 1 ? '' : 's'} in ${byFile.size} file${byFile.size === 1 ? '' : 's'}${dry ? ' (--dry, writing nothing)' : ''}\n`);
 for (const [file, found] of [...byFile].sort(([a], [b]) => a.localeCompare(b))) {
   console.log(`  ${file}`);

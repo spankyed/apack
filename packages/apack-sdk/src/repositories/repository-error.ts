@@ -9,8 +9,10 @@ export type RepositoryErrorCode = typeof RepositoryErrorCode[keyof typeof Reposi
 
 /** A repository's refusal. `reportError` turns a `NOT_FOUND` into a message the user can act on */
 export class RepositoryError extends Error {
-  constructor(message: string, public code: RepositoryErrorCode) {
+  code: RepositoryErrorCode;
+  constructor(message: string, code: RepositoryErrorCode) {
     super(message);
     this.name = 'RepositoryError';
+    this.code = code;
   }
 }

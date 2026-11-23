@@ -111,9 +111,8 @@ const CHUNK_SIZE = 4096
  * `customTitle` first, falls back to `aiTitle`.
  */
 async function extractTitle(filePath: string, fileSize: number): Promise<string | undefined> {
-  let fh: fs.promises.FileHandle | undefined
   try {
-    fh = await fs.promises.open(filePath, 'r')
+    await using fh = await fs.promises.open(filePath, 'r')
     const headBuf = Buffer.alloc(Math.min(CHUNK_SIZE, fileSize))
     await fh.read(headBuf, 0, headBuf.length, 0)
     const head = headBuf.toString('utf8')
@@ -132,8 +131,6 @@ async function extractTitle(filePath: string, fileSize: number): Promise<string 
       ?? extractJsonField(head, 'aiTitle')
   } catch {
     return undefined
-  } finally {
-    await fh?.close()
   }
 }
 

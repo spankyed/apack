@@ -1,5 +1,5 @@
 import type { ElectronApplication, Page } from '@playwright/test';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { availableParallelism, cpus, hostname, release, totalmem } from 'node:os';
@@ -14,7 +14,7 @@ export function classifySourceFiles(trackedDiff: Buffer, untracked: readonly str
   return { dirty: trackedDiff.length > 0 || authoredUntracked.length > 0, authoredUntracked, excludedUntracked };
 }
 
-const digest = (input: string | Buffer) => createHash('sha256').update(input).digest('hex');
+const digest = (input: string | Buffer) => cryptoHash('sha256', input, 'hex');
 /** Build identities are hashes of actual output bytes, collected outside the measured interval. */
 function treeIdentity(root: string) {
   const hash = createHash('sha256');

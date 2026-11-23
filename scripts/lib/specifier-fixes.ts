@@ -69,8 +69,7 @@ export function applyFixes(
   fixes: readonly Fix[],
   write: (file: string, text: string) => void = (file, text) => fs.writeFileSync(file, text),
 ): { written: { file: string; count: number }[]; refused: { file: string; why: string }[] } {
-  const byFile = new Map<string, Fix[]>();
-  for (const fix of fixes) byFile.set(fix.file, [...(byFile.get(fix.file) ?? []), fix]);
+  const byFile = Map.groupBy(fixes, (fix) => fix.file);
   const written: { file: string; count: number }[] = [];
   const refused: { file: string; why: string }[] = [];
   for (const [file, found] of [...byFile].sort(([a], [b]) => a.localeCompare(b))) {

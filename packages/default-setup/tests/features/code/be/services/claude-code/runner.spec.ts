@@ -3,7 +3,7 @@
  * `execOnce` reports each way its child can fail.
  *
  * The scrub prevents an `ANTHROPIC_API_KEY` in the API server's environment
- * (loaded from `.env` by dotenv) from leaking into the Claude CLI subprocess,
+ * (loaded from `.env` via `process.loadEnvFile()`) from leaking into the Claude CLI subprocess,
  * where it would override the user's stored `claude auth login` session
  * and fail with "Invalid API key · Fix external API key".
  */

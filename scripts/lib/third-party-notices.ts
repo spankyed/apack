@@ -43,7 +43,7 @@
  * for esbuild's and ripgrep and PCRE2 for the `rg` @vscode/ripgrep's install downloads. The Rust standard library and
  * the crates compiled into Rollup's, keyring's and Linux's lzma's binaries carry no notice here.
  */
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -202,9 +202,9 @@ export function uncreditedAdaptations(
   const saying = new Set(sources.filter(({ file, text }) => shippedSource(file) && SAYS_ADAPTED.test(text)).map(({ file }) => file));
   const named = new Set([...adapted.map(({ file }) => file), ...Object.keys(firstParty)]);
   return [
-    ...[...saying].filter((file) => !named.has(file)).map((file) =>
+    ...saying.difference(named).values().map((file) =>
       `${file} says its code was adapted from elsewhere, and ADAPTED does not credit it: add it with its upstream's license, or to ADAPTED_FIRST_PARTY with why`),
-    ...[...named].filter((file) => !saying.has(file)).map((file) =>
+    ...named.difference(saying).values().map((file) =>
       `${file} is named in ADAPTED or ADAPTED_FIRST_PARTY, and no shipped source by that name says it was adapted from anything: remove it, and its texts`),
   ];
 }
@@ -505,8 +505,7 @@ export function staleExtras(packages: readonly NoticePackage[]): string[] {
  * then each file of the app's own adapted from third-party code, with its texts
  */
 export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[], adapted: readonly (Adaptation & { text: string })[] = []): string {
-  const groups = new Map<string, PackageNotice[]>();
-  for (const notice of notices) groups.set(notice.text, [...(groups.get(notice.text) ?? []), notice]);
+  const groups = Map.groupBy(notices, (notice) => notice.text);
   const line = (notice: PackageNotice) => `  ${notice.package.name} ${notice.package.version}, ${notice.license}, `
     + `${CARRIED_LABEL[notice.package.carried]}${notice.source ? `; source: ${notice.source}` : ''}`;
   const sorted = (lines: string[]) => [...new Set(lines)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -636,7 +635,7 @@ export function downloadedBinaries(packages: readonly NoticePackage[]): SbomComp
       const purl = `pkg:github/${binary.repository}@${release}`;
       found.set(purl, {
         type: 'application', name: binary.name, version: binary.version, purl, license: binary.license,
-        ...(file ? { sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex') } : {}),
+        ...(file ? { sha256: hash('sha256', fs.readFileSync(file), 'hex') } : {}),
       });
     }
   }
@@ -656,7 +655,7 @@ export function brokerSbomComponent(repoRoot: string, appDir: string, platform: 
   if (dir === undefined) return undefined;
   const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { resolved?: string }> };
   const commit = releaseCommit(lock.packages[`node_modules/${BROKER_PACKAGE_PREFIX}${platform}`]?.resolved);
-  const sha256 = (file: string) => createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest('hex');
+  const sha256 = (file: string) => hash('sha256', fs.readFileSync(path.join(dir, file)), 'hex');
   const files = fs.readdirSync(dir).filter((name) => fs.statSync(path.join(dir, name)).isFile() && name !== 'package.json').sort();
   const binary = files.find((name) => name === 'apack-terminal' || name === 'apack-terminal.exe');
   return {
@@ -770,8 +769,7 @@ export function writeAppNotices(options: {
   problems.push(...packs.flatMap((pack) => pack.problems));
   const packages = noticePackages([shippedPackages(options.appDir), records, ...packs.map((pack) => pack.packages)]);
   if (!packages.length) problems.push('No third-party package was found, which no build of this app carries');
-  const byName = new Map<string, NoticePackage[]>();
-  for (const pkg of packages) byName.set(pkg.name, [...(byName.get(pkg.name) ?? []), pkg]);
+  const byName = Map.groupBy(packages, (pkg) => pkg.name);
   const notices: PackageNotice[] = [];
   for (const pkg of packages) {
     const notice = noticeOf(pkg, options.licensesDir, byName, overrides);

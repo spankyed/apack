@@ -8,10 +8,12 @@
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/apack-sdk.tsbuildinfo",
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
-    "target": "ES2022",
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     // Relative imports name the .ts source; tsc rewrites them to .js in emitted JS
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,

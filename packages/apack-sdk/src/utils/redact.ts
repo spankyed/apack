@@ -128,15 +128,21 @@ export function redactSecrets<T>(value: T): T {
       if (Array.isArray(current)) return current.map(visit);
       const fields = Object.fromEntries(Object.entries(current).map(([key, field]) =>
         [key, SECRET_FIELDS.test(key) && field !== null && field !== undefined && field !== '' ? REDACTED : visit(field)]));
-      if (!(current instanceof Error)) return fields;
-      // cause and an AggregateError's errors, read without ES2022 types (this module also runs in the renderer)
-      const { cause, errors } = current as Error & { cause?: unknown; errors?: unknown };
+      const isError = (value: unknown): value is Error =>
+        (Error as ErrorConstructor & { isError(v: unknown): v is Error }).isError(value);
+      if (!isError(current)) return fields;
+      // cause, AggregateError.errors, and SuppressedError.error/suppressed are non-enumerable own fields
+      const { cause, errors, error, suppressed } = current as Error & {
+        cause?: unknown; errors?: unknown; error?: unknown; suppressed?: unknown;
+      };
       return {
         name: current.name,
         message: redactSecretText(current.message),
         ...(current.stack && { stack: redactSecretText(current.stack) }),
         ...(cause !== undefined && { cause: visit(cause) }),
         ...(Array.isArray(errors) && { errors: visit(errors) }),
+        ...(error !== undefined && { error: visit(error) }),
+        ...(suppressed !== undefined && { suppressed: visit(suppressed) }),
         ...fields,
       };
     } finally {

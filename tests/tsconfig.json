@@ -9,14 +9,14 @@
     // Playwright runner does under `npm test`; without it editors would read a stale dist
     "customConditions": ["@apackdev/source"],
     "allowImportingTsExtensions": true,
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM"],
     "types": ["node"]
   },
   "include": ["_support/**/*.ts", "e2e/**/*.ts", "performance/**/*.ts", "acceptance/**/*.ts", "../playwright.config.ts"]

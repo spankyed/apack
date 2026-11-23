@@ -40,32 +40,28 @@ export interface PackResult {
 
 export async function buildPackArchive(root: string, outDir = path.join(root, '.apack', 'archives')): Promise<PackResult> {
   // Keep one producer generation through verification, staging and archive publication.
-  const lock = await holdPackBuildLock(root, {
+  using _lock = await holdPackBuildLock(root, {
     packId: readValidManifest(root).id,
     what: 'apack pack export',
     onWait: (holder) => console.log(`Waiting for ${holder} to finish...`),
   });
-  let temporary: string | undefined;
-  try {
-    const manifest = readValidManifest(root);
-    // Archive the selected compiler/options context, not this command's ambient environment.
-    const inputs = readPackBuildInputs(path.join(root, 'dist'));
-    assertPackBuildInputsCurrent(root, inputs);
-    const stageDir = path.join(root, '.apack', 'staged', manifest.id);
-    const integrity = stagePack(root, stageDir, { sdkVersion: sdkVersion(), provenance: gitProvenance(root) });
-    temporary = fs.mkdtempSync(path.join(root, '.apack', 'archive-'));
-    const archive = await createPackArchive(stageDir, temporary);
-    assertPackBuildInputsCurrent(root, inputs);
-    fs.mkdirSync(outDir, { recursive: true });
-    const file = path.join(outDir, path.basename(archive.file));
-    const checksumFile = `${file}.sha256`;
-    fs.copyFileSync(archive.file, file);
-    fs.copyFileSync(archive.checksumFile, checksumFile);
-    return { file, checksumFile, sha256: archive.sha256, integrity };
-  } finally {
-    try { if (temporary) fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 5 }); }
-    finally { lock.release(); }
-  }
+  const manifest = readValidManifest(root);
+  // Archive the selected compiler/options context, not this command's ambient environment.
+  const inputs = readPackBuildInputs(path.join(root, 'dist'));
+  assertPackBuildInputsCurrent(root, inputs);
+  const stageDir = path.join(root, '.apack', 'staged', manifest.id);
+  const integrity = stagePack(root, stageDir, { sdkVersion: sdkVersion(), provenance: gitProvenance(root) });
+  using cleanup = new DisposableStack();
+  const temporary = fs.mkdtempSync(path.join(root, '.apack', 'archive-'));
+  cleanup.defer(() => fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 5 }));
+  const archive = await createPackArchive(stageDir, temporary);
+  assertPackBuildInputsCurrent(root, inputs);
+  fs.mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, path.basename(archive.file));
+  const checksumFile = `${file}.sha256`;
+  fs.copyFileSync(archive.file, file);
+  fs.copyFileSync(archive.checksumFile, checksumFile);
+  return { file, checksumFile, sha256: archive.sha256, integrity };
 }
 
 export async function exportPack(args: string[]) {

@@ -1302,9 +1302,8 @@ describe('catalog refresh refusal after a completed pack mutation', () => {
 describe('the claim on a pack', () => {
   /** Whether a claim is free now, taking nothing */
   const probeClaim = (key: string) => {
-    const free = registry.claimPackOperation(key);
-    if (free) registry.releasePackOperation(key);
-    return free;
+    using claim = registry.claimPackOperation(key);
+    return claim !== null;
   };
   const withSystem = {
     manifest: { features: { widget: { description: 'Widget.', system: { entry: 'src/system.ts' } } } },
@@ -1352,7 +1351,8 @@ describe('the claim on a pack', () => {
     await installPackFromLocal(packSource('1.0.0'));
     const system = runPacksSystem();
     takeSystemErrors();
-    expect(registry.claimPackOperation(PACK_ID)).toBe(true);
+    using claim = registry.claimPackOperation(PACK_ID);
+    expect(claim).not.toBeNull();
     try {
       system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });
       expect(takeSystemErrors().map(e => e.message).join('\n')).toContain('in progress');
@@ -1360,7 +1360,7 @@ describe('the claim on a pack', () => {
         { type: 'PACK_ENABLED_CHANGED', packId: PACK_ID, enabled: true },
       ]);
       expect(readInstalledPacks().find(record => record.id === PACK_ID)?.enabled ?? true).toBe(true);
-    } finally { registry.releasePackOperation(PACK_ID); system.stop(); }
+    } finally { system.stop(); }
   });
 
   it.each(['uninstall', 'update'] as const)('refused for %s is reported to the Packs view', async operation => {
@@ -1368,13 +1368,14 @@ describe('the claim on a pack', () => {
     // An update needs a source to update from before it asks for the claim
     recordUserInstall(resolveAppEnvironment().installedPacksFile, PACK_ID, 'owner/repo');
     const system = runPacksSystem();
-    expect(registry.claimPackOperation(PACK_ID)).toBe(true);
+    using claim = registry.claimPackOperation(PACK_ID);
+    expect(claim).not.toBeNull();
     try {
       system.send(operation === 'uninstall' ? { type: 'UNINSTALL_PACK', packId: PACK_ID } : { type: 'UPDATE_PACK', packId: PACK_ID });
       await vi.waitFor(() => expect(emitted(system.sent)).toContainEqual({
         type: operation === 'uninstall' ? 'PACK_UNINSTALL_FAILED' : 'PACK_UPDATE_FAILED',
         packId: PACK_ID, error: expect.stringContaining('in progress'),
       }));
-    } finally { registry.releasePackOperation(PACK_ID); system.stop(); }
+    } finally { system.stop(); }
   });
 });
