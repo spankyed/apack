@@ -1,4 +1,3 @@
-import { observeClaudePrintSessionCost } from './print-session-cost.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createClaudeBillingState, type ClaudeBillingObservation } from '../../../common/native-billing.ts'
 import { parseMcpElicitationForm, validateMcpElicitationForm } from '#features/code/common/mcp-elicitation-form.ts'
@@ -17,11 +16,7 @@ export interface ClaudeConversationTurn {
   costBaseline: number
   activity: ClaudeNestedActivity
 }
-export interface ClaudePrintCostOptions {
-  cwd: string
-  env: NodeJS.ProcessEnv
-  report(sessionId: string, totalCostUsd: number): void
-}
+export type ClaudeSessionCostObserver = (sessionId: string, totalCostUsd: number) => void
 export type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>
 export type ClaudePrintPrediction =
   | { kind: 'result'; signal: AbortSignal }
@@ -81,7 +76,7 @@ class ConversationQueue<T> implements AsyncIterable<T> {
 }
 
 /** One reader for the process lifetime; an ordinary result ends only its turn. */
-export function createClaudeConversation(native: QueryHandle, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0, cost?: ClaudePrintCostOptions): ClaudeConversation {
+export function createClaudeConversation(native: QueryHandle, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0, reportCost?: ClaudeSessionCostObserver): ClaudeConversation {
   type ActiveTurn = { turn: ClaudeConversationTurn; queue: ConversationQueue<StreamLine>; consumed: Promise<void>; released: Promise<void>; resolveRelease(): void; terminal: boolean; resolve(result: QueryResult): void; reject(error: unknown): void }
   const activity = createClaudeNestedActivity()
   const billing = createClaudeBillingState()
@@ -97,11 +92,6 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   let modelSelection: string | undefined
   if (!Number.isFinite(accountedCostUsd) || accountedCostUsd < 0) throw new ClaudeProtocolError('Invalid accounted native cost baseline')
   let cumulativeCost = accountedCostUsd
-  const costObserver = cost && observeClaudePrintSessionCost(cost.env, (observedSession, total) => {
-    if (observedSession !== sessionId || total < cumulativeCost) return
-    cumulativeCost = total
-    cost.report(observedSession, total)
-  })
   let consumerFailure: unknown
   const listeners = new Set<(event: StreamLine) => void>()
   const predictionListeners = new Set<(event: ClaudePrintPrediction) => void>()
@@ -211,6 +201,14 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     try {
       for await (const event of native.events) {
         const line = event as Record<string, unknown>
+        if (line.type === 'system' && line.subtype === 'apack_print_session_cost') {
+          const total = line.total_cost_usd
+          if (sessionId && line.session_id === sessionId && typeof total === 'number' && Number.isFinite(total) && total > cumulativeCost) {
+            cumulativeCost = total
+            try { reportCost?.(sessionId, total) } catch { /* An app observer cannot interrupt the native stream. */ }
+          }
+          continue
+        }
         if (line.type === 'prompt_suggestion') {
           const text = line.suggestion
           if (prediction && !prediction.offered && !closing && !active && !pending && !permissionRequests.size
@@ -229,7 +227,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
           // Native resets its cost ledger independently of the later session/init identity.
           trace('reset')
           billing.reset(line.new_conversation_id)
-          costObserver?.select()
+          sessionId = undefined
           cumulativeCost = 0
           if (active) active.turn.costBaseline = 0
         }
@@ -237,7 +235,6 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
           if (line.session_id !== sessionId) retirePrediction()
           if (typeof line.session_id === 'string' && line.session_id) { sessionId = line.session_id; billing.reset(sessionId) }
           if (typeof line.cwd === 'string' && line.cwd) sessionCwd = line.cwd
-          costObserver?.select(sessionId, sessionCwd ?? cost?.cwd)
         }
         if (pending && line.type === 'command_lifecycle' && line.command_uuid === pending.inputId && line.state === 'started') {
           if (active) throw new ClaudeProtocolError('native inputs overlapped before the prior turn completed')
@@ -308,7 +305,6 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         current.queue.push(event)
         const normalized = normaliseResult(raw)
         cumulativeCost = Math.max(cumulativeCost, normalized.totalCostUsd)
-        void costObserver?.refresh()
         if (raw.subtype === 'success' && raw.is_error !== true) {
           if (current.turn.inputId && sessionId && sessionId === raw.session_id && !closing) {
             const lifetime = new AbortController()
@@ -342,7 +338,6 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         await current.consumed.catch(() => {})
         if (active === current) active = undefined
       }
-      await costObserver?.close()
       trace('exit', {outcome: failure ? 'error' : stopped ? 'cancelled' : 'closed'})
       activity.close()
       clearPermissions()

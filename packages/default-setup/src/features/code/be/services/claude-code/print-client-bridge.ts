@@ -26,9 +26,9 @@ const hasClient = (tree: unknown): boolean => {
 }
 
 /** Per-print-process Client channel. Public render admission completes before any projection. */
-export async function prepareClaudePrintClients(options: { bunOptions?: string; currentPid(): number | undefined }) {
+export async function prepareClaudePrintClients(options: { bunOptions?: string; currentPid(): number | undefined; observeCost?: boolean }) {
   const directory = await mkdtemp(join(tmpdir(), 'cc-print-clients-'))
-  const config = { socketPath: join(directory, 'clients.sock'), token: randomBytes(32).toString('hex'), epoch: randomUUID(), originalBunOptions: options.bunOptions }
+  const config = { socketPath: join(directory, 'clients.sock'), token: randomBytes(32).toString('hex'), epoch: randomUUID(), originalBunOptions: options.bunOptions, costProof: options.observeCost ? randomBytes(32).toString('hex') : undefined }
   const preload = join(directory, 'clients.mjs')
   await writeFile(preload, createClaudePrintClientRuntime(config), { mode: 0o600 })
   let closed = false, sequence = 0, nativePid: number | undefined, handshake: Promise<void> | undefined
@@ -84,6 +84,11 @@ export async function prepareClaudePrintClients(options: { bunOptions?: string; 
   }
   return {
     projection,
+    readSessionCost(line: Record<string, unknown>) {
+      if (!options.observeCost || line.proof !== config.costProof || typeof line.session_id !== 'string' || !line.session_id
+        || typeof line.total_cost_usd !== 'number' || !Number.isFinite(line.total_cost_usd) || line.total_cost_usd < 0) return
+      return { type: 'system', subtype: 'apack_print_session_cost', session_id: line.session_id, total_cost_usd: line.total_cost_usd }
+    },
     bunOptions: [options.bunOptions, '--preload=' + pathToFileURL(preload).href].filter(Boolean).join(' '),
     async close() { if (closed) return; closed = true; scopes.clear(); for (const call of pending) call.destroy(Error('Print Client owner closed')); await rm(directory, { recursive: true, force: true }) },
   }

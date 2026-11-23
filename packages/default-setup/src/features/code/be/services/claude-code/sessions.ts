@@ -34,11 +34,6 @@ function projectBucket(cwd: string, env?: NodeJS.ProcessEnv): string {
   return path.join(configDir(env), 'projects', encodeProjectPath(cwd))
 }
 
-export function sessionJournalPath(id: string, cwd: string, env?: NodeJS.ProcessEnv): string {
-  assertSafeId(id)
-  return path.join(projectBucket(cwd, env), `${id}.jsonl`)
-}
-
 /**
  * Mirror of the CLI's `sanitizePath` — see the leaked source at
  * `src/utils/sessionStoragePortable.ts:311`. Replaces every non-alphanumeric
@@ -233,8 +228,9 @@ export async function find(
   id: string,
   opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
 ): Promise<SessionInfo | null> {
+  assertSafeId(id)
   const cwd = opts.cwd ?? process.cwd()
-  const file = sessionJournalPath(id, cwd, opts.env)
+  const file = path.join(projectBucket(cwd, opts.env), `${id}.jsonl`)
   const stat = await fs.promises.stat(file).catch(() => null)
   if (!stat) return null
   return { id, file, cwd, modifiedAt: stat.mtime, size: stat.size }
@@ -245,8 +241,9 @@ export async function view(
   id: string,
   opts: SessionViewOptions = {},
 ): Promise<SessionTranscriptEntry[]> {
+  assertSafeId(id)
   const cwd = opts.cwd ?? process.cwd()
-  const file = sessionJournalPath(id, cwd, opts.env)
+  const file = path.join(projectBucket(cwd, opts.env), `${id}.jsonl`)
   const raw = await fs.promises.readFile(file, 'utf8')
   const lines = raw.split('\n').filter(l => l.length > 0)
   const offset = opts.offset ?? 0

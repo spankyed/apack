@@ -5,7 +5,7 @@ import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 
 /** Runs inside the original print CLI; authored UI modules stay in its original sandbox. */
-export function createClaudePrintClientRuntime(config: { socketPath: string; token: string; epoch: string; originalBunOptions?: string }): string {
+export function createClaudePrintClientRuntime(config: { socketPath: string; token: string; epoch: string; originalBunOptions?: string; costProof?: string }): string {
   return withClaudeNativePlatformRuntime(`import {createServer} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {readFileSync} from 'node:fs';
 const config=${JSON.stringify(config)};
 ${claudeTerminalClientRuntime}
@@ -15,6 +15,21 @@ ${claudeManagedSettingsDiagnosticRuntime}
 ` + String.raw`
 if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')==='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37'){
 if(config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;
+// Observe the original price calculation without taking over its saver or rounding the total.
+if(config.costProof){
+ const session=await import('/$bunfs/root/chunk-hdxpvbx1.js');
+ const prototype=Object.getPrototypeOf(session.j().costLedger),record=prototype.recordCost;
+ prototype.recordCost=function(...args){
+  const result=Reflect.apply(record,this,args);
+  try{
+   if(session.j().costLedger===this&&!process.stdout.destroyed){
+    const sessionId=this.snapshot().ownerSessionId??session.q(),total=this.totalCostUSD();
+    process.stdout.write(JSON.stringify({type:'system',subtype:'apack_print_session_cost',session_id:sessionId,total_cost_usd:total,proof:config.costProof})+'\n');
+   }
+  }catch{/* Observation cannot interrupt native accounting. */}
+  return result;
+ };
+}
 const scopes=new Map(),latest=new Map(),pendingInvalidations=new Map(),latestAt=new Map();let initialization,host,engine,gate,clients,roster,invalidating,themeSettings,themeResolver,themeFiles,themePalette,stopThemeWatch,loadingTheme;
 const scopeKey=(client,component,instance)=>JSON.stringify([client,component,instance]);
 function invalidate(entry){

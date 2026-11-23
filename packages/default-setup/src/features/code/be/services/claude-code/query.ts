@@ -142,7 +142,7 @@ export async function query(opts: QueryOptions, { promptSuggestions = false } = 
   const args = argsFromOptions(opts)
   let processId: number | undefined
   const bunOptions = opts.env && Object.prototype.hasOwnProperty.call(opts.env, 'BUN_OPTIONS') ? opts.env.BUN_OPTIONS : process.env.BUN_OPTIONS
-  const printClients = await prepareClaudePrintClients({ bunOptions, currentPid: () => processId })
+  const printClients = await prepareClaudePrintClients({ bunOptions, currentPid: () => processId, observeCost: promptSuggestions })
   let stream: StreamHandle
   try {
     stream = await runner.spawnStream(args, {
@@ -185,7 +185,7 @@ export async function query(opts: QueryOptions, { promptSuggestions = false } = 
   const backgroundTasks = createBackgroundTaskTracker()
   const hostControls = createHostControls(value => stream.write(value), stream.child.pid)
   const promptHosts = createClaudePromptHosts(value => stream.write(value), async (clientId, input) => input.decorations?.length && printClients.projection.prompt ? { ...input, decorations: await printClients.projection.prompt(clientId, input.decorations) } : input)
-  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds, backgroundTasks, promptHosts)
+  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds, backgroundTasks, promptHosts, printClients.readSessionCost)
     .catch(err => {
       hostControls.close(err)
       sessionId.reject(err)
@@ -471,6 +471,7 @@ async function pump(
   hookCallbackIds: ReadonlySet<string>,
   backgroundTasks: ReturnType<typeof createBackgroundTaskTracker>,
   promptHosts: ReturnType<typeof createClaudePromptHosts>,
+  readSessionCost: Awaited<ReturnType<typeof prepareClaudePrintClients>>['readSessionCost'],
 ): Promise<void> {
   const pendingCallbacks = new Set<string>()
   let reading = true
@@ -503,6 +504,12 @@ async function pump(
         continue
       }
 
+      const raw = decoded.value as Record<string, unknown>
+      if (raw.type === 'system' && raw.subtype === 'apack_print_session_cost') {
+        const cost = readSessionCost(raw)
+        if (cost) eventQueue.push(cost)
+        continue
+      }
       const line = decoded.value as KnownStreamLine
       backgroundTasks.observe(line)
 
