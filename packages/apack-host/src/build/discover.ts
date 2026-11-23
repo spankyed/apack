@@ -10,8 +10,8 @@ export interface DevPackFrontend {
 
 /**
  * The pack directories a dev server serves frontends from source for: every pack under `packagesRoot` whose
- * codegen has written a frontend entry, plus every directory named in `APACK_DEV_PACK_DIRS` (colon- or
- * comma-separated, relative to `cwd`) — which is how a pack outside the workspace, `tests/packs/*` among
+ * codegen has written a frontend entry, plus every directory named in `APACK_DEV_PACK_DIRS` (separated
+ * by the platform path delimiter or commas, relative to `cwd`) — which is how a pack outside the workspace, `tests/packs/*` among
  * them, joins the same loop.
  *
  * It grants no manifest shipping privilege. A pack is eligible here because its source is on this disk, which is
@@ -28,7 +28,7 @@ export function discoverDevPackFrontends(
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.resolve(packagesRoot, entry.name))
     : [];
-  const named = (extraDirs ?? '').split(/[:,]/).filter(Boolean).map((dir) => path.resolve(cwd, dir));
+  const named = (extraDirs ?? '').split(path.delimiter === ';' ? /[;,]/ : /[:,]/).filter(Boolean).map((dir) => path.resolve(cwd, dir));
   const found: DevPackFrontend[] = [];
   for (const dir of [...scanned, ...named]) {
     // A scanned directory that is not a pack is ordinary; one the caller named by hand and that yields

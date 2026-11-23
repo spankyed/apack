@@ -3,7 +3,7 @@ import { rollupBundledPackages } from '@apackdev/host/build/bundled-packages'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { delimiter, dirname, resolve } from 'node:path'
-import { defineConfig, defaultClientConditions, defaultServerConditions, type Plugin, type Rollup, type ViteDevServer } from 'vite'
+import { defineConfig, searchForWorkspaceRoot, defaultClientConditions, defaultServerConditions, type Plugin, type Rollup, type ViteDevServer } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { sharedFeModules } from '@apackdev/host/build/shared-deps'
@@ -34,12 +34,16 @@ function devPackFrontendsPlugin(serving: boolean): Plugin {
   // rather than from here, so this is how it is told. **A declaration, not an inference**: it must not read
   // `NODE_ENV` to work out whether a dev server is running (`identity-guard.spec.ts`), and nothing but a
   // serving config writes this.
-  process.env.APACK_DEV_PACK_SOURCES = packs.map((pack) => dirname(dirname(dirname(pack.feEntry)))).join(delimiter);
+  const sourceDirs = packs.map(pack => dirname(dirname(dirname(pack.feEntry))));
+  process.env.APACK_DEV_PACK_SOURCES = sourceDirs.join(delimiter);
   if (serving) console.log(`[dev-pack-frontends] serving from source: ${packs.map((pack) => pack.id).join(', ') || 'none'}`);
 
   return {
     name: 'dev-pack-frontends',
     enforce: 'pre',
+    config() {
+      if (sourceDirs.length) return { server: { fs: { allow: [searchForWorkspaceRoot(rendererSrcDir), ...sourceDirs] } } };
+    },
     async resolveId(source, importer) {
       if (source === VIRTUAL_ID) return RESOLVED_VIRTUAL;
 
