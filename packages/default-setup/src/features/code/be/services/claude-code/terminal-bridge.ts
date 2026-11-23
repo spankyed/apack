@@ -434,6 +434,7 @@ export async function createClaudeTerminalBridge(options: {
         return answer()
       }
       if (value.sessionId !== projection.sessionId) return reply(409, {})
+      if (request.url === '/prompt-suggestion-view') return reply(200, { desktopAgent: nativeView?.kind === 'agent' && ui.hasPromptHosts })
       if (request.url === '/native-view') {
         const view = object(value.view)
         if (value.pid !== observerPid || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1 || (value.sequence as number) < nativeViewSequence || !view || !['main', 'agent'].includes(String(view.kind)) || view.kind === 'agent' && (typeof view.registryId !== 'string' || !view.registryId || view.registryId.length > 256 || view.taskId !== undefined && (typeof view.taskId !== 'string' || !view.taskId || view.taskId.length > 256))) return reply(409, {})

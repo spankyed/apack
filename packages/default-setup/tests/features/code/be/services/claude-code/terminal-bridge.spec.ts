@@ -283,6 +283,12 @@ it('publishes native view revisions only from its current process/session and re
   expect((await request('/native-view', { ...main, sequence: 3 })).status).toBe(409)
   expect((await request('/native-view', agent)).status).toBe(200)
   expect(bridge!.view).toEqual({ kind: 'agent', revision: 3, registryId: 'registry-a', taskId: 'agent-a' })
+  expect((await request('/prompt-suggestion-view', { sessionId: session })).value).toEqual({ desktopAgent: false })
+  const unregister = bridge!.uiTransport.promptHosts.register('agent', { read: async () => ({ text: '', cursor: 0 }), fill: async () => false })
+  try {
+    expect((await request('/prompt-suggestion-view', { sessionId: session })).value).toEqual({ desktopAgent: true })
+    expect((await request('/prompt-suggestion-view', { sessionId: '22222222-2222-2222-2222-222222222222' })).status).toBe(409)
+  } finally { unregister() }
   const otherSession = '22222222-2222-2222-2222-222222222222'
   await request('/poll', { sessionId: otherSession, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
   expect(bridge!.view).toEqual({ kind: 'agent', revision: 3, registryId: 'registry-a', taskId: 'agent-a' })

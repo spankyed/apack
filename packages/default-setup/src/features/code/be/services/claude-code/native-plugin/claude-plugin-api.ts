@@ -124,6 +124,15 @@ export interface ClaudePromptSubmitResult {
   drop?: string;
 }
 
+/** The origin of the native suggestion event. The CLI uses `suggestion` for its main-thread predictor. */
+export interface ClaudePromptSuggestEvent {
+  origin: { kind: string };
+}
+
+export interface ClaudePromptSuggestResult {
+  isShown: boolean;
+}
+
 /** `turn.start` and `turn.complete`. `agentId` is set for a subagent's turn, absent for the session's. */
 export interface ClaudeTurnEvent {
   agentId?: string;
@@ -147,6 +156,7 @@ export type ClaudeHookHandler<TEvent, TResult> = (
 export interface ClaudeHookRegistrar {
   (event: 'classic.*', handler: ClaudeHookHandler<ClaudeClassicEvent, unknown>): void;
   (event: 'session.append', handler: ClaudeHookHandler<ClaudeAppendEvent, ClaudeAppendResult>): void;
+  (event: 'prompt.suggest', handler: ClaudeHookHandler<ClaudePromptSuggestEvent, ClaudePromptSuggestResult>): void;
   (event: 'prompt.submit', handler: ClaudeHookHandler<unknown, ClaudePromptSubmitResult>): void;
   (event: 'session.start', handler: ClaudeHookHandler<unknown, unknown>): void;
   (event: 'ui.render', filter: { component: string }, handler: ClaudeHookHandler<unknown, unknown>): void;

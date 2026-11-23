@@ -1511,8 +1511,15 @@ async function control(request,abort){
   if(!clients.has(clientId)&&clients.size>=64)throw Error('Native UI attachment limit reached');
   const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest','ui_copy','ui_read_selection'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
   installNotices(n,n.runtime.ey());
-  if(answers.length)installHosts(n);
   if(clients.has(clientId)&&clientViews.get(clientId)!==viewKey)throw Error('Detach the previous native view before attaching again');
+  if(request.native_view&&answers.includes('ui_prompt_suggest')){
+   const binding=originalContext??n.runtime.ey(),viewAbort=new AbortController();
+   // Publish the live view before enabling the host, and cancel a parent suggestion that already passed its hook.
+   await ownerPost('/native-view',{...nativeViewFacts(n,binding,viewAbort),pid:process.pid});
+   if(clientViewKey(n)!==viewKey)throw Error('Native selected view changed during attachment');
+   binding.toolContext(viewAbort).session.promptSuggestion.abortController?.abort();
+  }
+  if(answers.length)installHosts(n);
   clients.add(clientId);clientViews.set(clientId,viewKey);
   try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);if(clientViewKey(n)!==viewKey)throw Error('Native selected view changed during attachment');}catch(error){clients.delete(clientId);clientViews.delete(clientId);try{await n.session.d2t(clientId,'detach');}catch{}if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);throw error;}
   replayNotices();publishPromptTheme(n);

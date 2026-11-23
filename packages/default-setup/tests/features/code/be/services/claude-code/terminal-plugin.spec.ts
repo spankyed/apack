@@ -33,6 +33,30 @@ it('registers and publishes child status before parent-only transcript reporting
  await hooks.get('ui.render')!(api,{},next);expect(api.clock.every).toHaveBeenCalledOnce()
 })
 
+it('suppresses only built-in predictions while a desktop Agent owns the prompt', async () => {
+ const hooks = new Map<string, (...args: any[]) => Promise<any>>()
+ createPluginFixture(CONFIG)(collector(hooks))
+ const suggest = hooks.get('prompt.suggest')!
+ const next = vi.fn(async () => ({ isShown: true }))
+ const builtin = { text: 'try the parent checklist', origin: { kind: 'suggestion' } }
+ const plugin = { ...builtin, origin: { kind: 'plugin', name: 'example' } }
+ const fetch = vi.fn(async () => ({ ok: true, text: JSON.stringify({ desktopAgent: true }) }))
+ const api = { session: { id: async () => CONFIG.background.parentSessionId }, http: { fetch } }
+
+ expect(await suggest(api, builtin, next)).toEqual({ isShown: false })
+ expect(fetch).toHaveBeenCalledWith('http://apack/prompt-suggestion-view', expect.objectContaining({
+  body: JSON.stringify({ sessionId: CONFIG.background.parentSessionId }),
+ }))
+ expect(next).not.toHaveBeenCalled()
+ expect(await suggest(api, plugin, next)).toEqual({ isShown: true })
+ expect(next).toHaveBeenLastCalledWith(plugin)
+ expect(fetch).toHaveBeenCalledOnce()
+ fetch.mockResolvedValueOnce({ ok: true, text: '{"desktopAgent":false}' })
+ expect(await suggest(api, builtin, next)).toEqual({ isShown: true })
+ fetch.mockRejectedValueOnce(Error('broker disconnected'))
+ expect(await suggest(api, builtin, next)).toEqual({ isShown: true })
+})
+
 it('configures a new background lease in the same exchange using usage refreshed after registration',async()=>{
  const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>(),requests:{path:string;body:any}[]=[]
  let tick!:()=>void,cost=0.00028,prefix:string|undefined
@@ -86,7 +110,7 @@ it('writes a program that loads with its config, registers hooks and keeps its e
  // The artifact is an ES module; a realm that evaluates a script hands its export back by name instead.
  const register=runInNewContext('Object.freeze(Error.prototype);'+written.replace(/^export\s*\{[^}]*\};?$/m,'')+';register',{URL,JSON,Object,Number,Date})
  register((event:string,...args:any[])=>hooks.set(event,args.at(-1)))
- expect([...hooks.keys()]).toEqual(['classic.*','session.append','prompt.submit','session.start','ui.render','turn.start','turn.complete'])
+ expect([...hooks.keys()]).toEqual(['classic.*','session.append','prompt.suggest','prompt.submit','session.start','ui.render','turn.start','turn.complete'])
  const requests:string[]=[];let tick!:()=>void
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>undefined},clock:{every:(_ms:number,callback:()=>void)=>{tick=callback;return{cancel(){}}}},process:{run:async()=>({exitCode:0,stdout:'119',stderr:''})},
   // The owning app is gone: only a named ApackBrokerUnavailable sends a non-parent session to the observer

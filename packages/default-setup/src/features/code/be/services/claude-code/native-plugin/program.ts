@@ -538,6 +538,20 @@ export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration
     }
     return result;
   });
+  on('prompt.suggest', async ($, event, next) => {
+    if (event.origin?.kind === 'suggestion') {
+      // Explicit plugin suggestions carry their own origin and can still reach the selected Agent.
+      const ownGeneration = generation;
+      let view;
+      try {
+        view = await send($, '/prompt-suggestion-view', {}, ownGeneration);
+      } catch {
+        // A detached terminal keeps its original behavior after the app socket closes.
+      }
+      if (ownGeneration !== generation || view?.desktopAgent === true) return { isShown: false };
+    }
+    return next(event);
+  });
   on('prompt.submit', async ($, event, next) => {
     const ownGeneration = generation;
     const own = submission;
