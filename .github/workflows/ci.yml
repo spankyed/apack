@@ -113,25 +113,11 @@ jobs:
       - name: Schema drift check
         run: npm run schema:check --workspace @apackdev/sdk
 
-      # Compiled content, snapshot, build/ (content compilers, content runtime) and the backend runtime: read by the
-      # content parity, dependent-pack, SDK bridge drift and content runtime tests
-      - name: Build default-setup pack output
-        working-directory: packages/default-setup
-        run: npx apack pack build
-
-      # The facade types dependents compile against match the reviewed report. It bundles the facade itself
-      # rather than reading what the build above wrote, so the order here is convenience and not a dependency
-      - name: Facade types report (default-setup)
-        run: npm run facade:check --workspace @app/default-setup
-
       - name: Stage the pinned distribution
         run: npm run packs:stage
 
       - name: Unit tests (server)
         run: npm test --workspace @app/server -- --reporter=verbose
-
-      - name: Unit tests (default-setup)
-        run: npm test --workspace @app/default-setup -- --reporter=verbose
 
       - name: Unit tests (sdk)
         run: npm test --workspace @apackdev/sdk -- --reporter=verbose
@@ -143,7 +129,7 @@ jobs:
         env:
           REQUIRE_RUNTIME_ENTRY: '1'
 
-      # The typecheck step already built these through typecheck:pack; this confirms they are current
+      # The typecheck step already ensured these; this confirms they are current
       - name: Build publishable packages
         run: npm run packages:ensure
 
@@ -219,7 +205,7 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build:default-setup && npm run packs:stage && npm run build:runtime
+        run: npm run packages:ensure && npm run packs:stage && npm run build:runtime
 
       - name: External pack E2E
         run: npm run test:external-pack

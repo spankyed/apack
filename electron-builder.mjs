@@ -21,7 +21,6 @@ const buildRoot = process.env.APACK_BUILD_ROOT;
 if (!buildRoot) throw new Error('Packaging requires a completed staging build. Use build:production or build:preview.');
 verifyBuildOutputs(buildRoot);
 const metadata = readBuildManifest(buildRoot);
-const pinnedPacks = fs.existsSync(path.join(buildRoot, PACK_REDISTRIBUTION_DIRECTORY));
 const isBeta = metadata.channel === 'beta';
 const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
@@ -90,17 +89,17 @@ export default /** @type import('electron-builder').Configuration */
     const electronVersion = context.packager.info.framework.version;
     const elmdb = path.join(appDir, 'node_modules', 'elmdb');
     const os = {darwin: 'mac', win32: 'win', linux: 'linux'}[context.electronPlatformName];
-    const shippedPacks = pinnedPacks ? (metadata.shippedPackIds ?? []).map(id => {
+    const shippedPacks = (metadata.shippedPackIds ?? []).map(id => {
       const dir = `${PACK_REDISTRIBUTION_DIRECTORY}/${id}`;
       const {pack: {version}} = JSON.parse(fs.readFileSync(path.join(appDir, dir, 'redistribution.json'), 'utf8'));
       const sbom = `${id}-${version}.cdx.json`;
       return {id, dir, sbom, component: shippedPackSbom(path.join(appDir, dir, sbom), id, version)};
-    }) : [];
+    });
     const problems = writeAppNotices({
       appDir,
       buildRoot,
       bundleRecords: APP_WORKSPACES.map(workspace => bundledPackagesFile(buildRoot, workspace)),
-      packDirs: pinnedPacks ? [] : [path.join(projectDir, 'packages', 'default-setup')],
+      packDirs: [],
       licensesDir: path.join(projectDir, 'build', 'licenses'),
       channel: metadata.channel,
       platform: context.electronPlatformName,
@@ -302,7 +301,7 @@ export default /** @type import('electron-builder').Configuration */
       to: `app/${SHIPPED_PACKS_DIRECTORY}`,
       filter: ['**/*'],
     }]),
-    ...(pinnedPacks && metadata.shippedPackIds?.length ? [{
+    ...(metadata.shippedPackIds?.length ? [{
       from: path.join(buildRoot, PACK_REDISTRIBUTION_DIRECTORY),
       to: `app/${PACK_REDISTRIBUTION_DIRECTORY}`,
       filter: ['**/*'],

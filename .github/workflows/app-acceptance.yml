@@ -52,17 +52,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
-      - name: Build shipped pack
-        env:
-          APACK_ACCEPTANCE_SUITE: ${{ inputs.suite }}
-        run: |
-          if [[ "$APACK_ACCEPTANCE_SUITE" == 'build' ]]; then
-            # Diagnostic only: observe build phase costs without running the application suites.
-            mkdir -p .apack/tests/results
-            node_modules/.bin/tsx scripts/bounded.ts scenario npm run build:default-setup | tee .apack/tests/results/default-build.log
-          else
-            npm run build:default-setup
-          fi
       - name: Stage the pinned distribution
         run: npm run packs:stage
       - name: Build app runtime

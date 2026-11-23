@@ -3,13 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPackBuild } from '@apackdev/host/packs';
-import { sha256File } from '@apackdev/host/packs/assets';
-import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
+import { checkoutShippedPacksDir, sha256File } from '@apackdev/host/packs/assets';
 import { boundedSpawn } from '../../../scripts/lib/bounded-spawn.ts';
 import { budgetMsFor } from '../../../scripts/lib/step-budgets.ts';
 
 const root = fs.realpathSync.native(fileURLToPath(new URL('../../..', import.meta.url)));
-const source = path.join(root, 'packages/default-setup');
+const source = path.join(checkoutShippedPacksDir(root), 'default-setup');
 const output = path.join(root, 'node_modules/.cache/apack-fixtures/default-fork');
 const remedy = 'Run npm run test:external-pack:fork to prepare the default fork.';
 
@@ -17,18 +16,14 @@ const remedy = 'Run npm run test:external-pack:fork to prepare the default fork.
 // construction. Each is a ceiling for a phase that spins: one that stops working is ended sooner, as stalled.
 const FORK_STEP_MS = budgetMsFor('scenario');
 export const DEFAULT_FORK_BUDGET_MS = {
-  build: 0.5 * FORK_STEP_MS,
-  // Two input replays plus archive staging/verification.
-  export: 0.3 * FORK_STEP_MS,
-  // Package freshness, source copying, final verification and removal of owned temporary trees.
-  housekeeping: 0.2 * FORK_STEP_MS,
+  acquire: 0.25 * FORK_STEP_MS,
+  build: 0.48 * FORK_STEP_MS,
+  export: 0.17 * FORK_STEP_MS,
+  housekeeping: 0.1 * FORK_STEP_MS,
 } as const;
 
 function shippedRevision(): string {
-  const dist = path.join(source, 'dist');
-  const build = readPackBuild(dist);
-  assertPackBuildInputsCurrent(source, readPackBuildInputs(dist, build.integrity));
-  return build.revision;
+  return readPackBuild(source).revision;
 }
 
 export function verifyDefaultPackFork(): void {
@@ -52,10 +47,22 @@ async function prepare(): Promise<void> {
   const staged = fs.mkdtempSync(path.join(path.dirname(output), '.default-fork-'));
   try {
     const fork = path.join(temporary, 'fork');
-    fs.cpSync(source, fork, { recursive: true,
-      filter: file => !['node_modules', 'dist', '.apack', '.git'].includes(path.basename(file)) && !file.endsWith('.tsbuildinfo'),
-    });
-    fs.symlinkSync(path.join(root, 'node_modules'), path.join(fork, 'node_modules'), 'dir');
+    const { integrity } = readPackBuild(source);
+    const { repo, commit } = integrity.provenance ?? {};
+    if (!repo?.startsWith('https://github.com/') || !commit) {
+      throw new Error('The released starter must identify its exact source checkout');
+    }
+    const npmCli = process.env.npm_execpath;
+    if (!npmCli) throw new Error('Run the fork scenario through npm');
+    const acquire = async (command: string, args: string[], cwd: string) => {
+      const result = await boundedSpawn(command, args, DEFAULT_FORK_BUDGET_MS.acquire, { cwd, stream: true });
+      if (result.code !== 0) throw new Error(`Default fork preparation failed: ${command} ${args.join(' ')}`);
+      return result.output.trim();
+    };
+    await acquire('git', ['clone', '--depth', '1', '--branch', `v${integrity.version}`, repo, fork], temporary);
+    if (await acquire('git', ['rev-parse', 'HEAD'], fork) !== commit) throw new Error('The pack release tag moved');
+    await acquire(process.execPath, [npmCli, 'run', 'toolchain'], fork);
+    await acquire(process.execPath, [npmCli, 'ci'], fork);
     const manifest = JSON.parse(fs.readFileSync(path.join(fork, 'apack.json'), 'utf8'));
     manifest.name = 'Acceptance fork';
     manifest.features.notes.surface.label = 'Fork Notes';
@@ -64,12 +71,9 @@ async function prepare(): Promise<void> {
     const original = fs.readFileSync(canvas, 'utf8');
     if (!original.includes('<template>')) throw new Error('Notes canvas has no template for the fork fixture');
     fs.writeFileSync(canvas, original.replace('<template>', '<template>\n  <div data-testid="fork-component">Fork component</div>'));
-    const config = path.join(fork, 'tsconfig.json');
-    fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(
-      '../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
-    for (const [phase, args] of [['build', ['build']], ['export', ['export', '--out', staged]]] as const) {
+    for (const [phase, args] of [['build', ['run', 'build']], ['export', ['run', 'export', '--', '--out', staged]]] as const) {
       console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
-      const result = await boundedSpawn(process.execPath, [path.join(root, 'node_modules/.bin/apack'), 'pack', ...args], DEFAULT_FORK_BUDGET_MS[phase],
+      const result = await boundedSpawn(process.execPath, [npmCli, ...args], DEFAULT_FORK_BUDGET_MS[phase],
         { cwd: fork, env: { ...process.env, APACK_HOST: root }, stream: true });
       if (result.code !== 0) throw new Error(`Default fork ${phase} ${result.timedOut ? 'timed out' : `failed (exit ${result.code})`}`);
       console.log(`Default fork ${phase}: completed in ${(result.ms / 1000).toFixed(1)}s`);
