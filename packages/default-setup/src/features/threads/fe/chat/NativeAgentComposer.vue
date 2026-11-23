@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import type { ClaudeAgentComposerSubmitResult } from './native-submit.ts'
-import { trackNativeSubmittedDraft } from './native-submitted-draft.ts'
+import { trackNativeSubmittedDraft, waitForSubmittedDraftComposition } from './native-submitted-draft.ts'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Settings2 } from 'lucide-vue-next'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
@@ -198,10 +198,15 @@ async function submit() {
       problem.value = applied ? `Removed ${result.removed} invisible character${result.removed === 1 ? '' : 's'}. Review the message before sending.` : 'The earlier message contained invisible characters. Your newer draft was kept; review it before sending.'
       return
     }
+    const accepted = !!result && 'accepted' in result
+    if (accepted && editor.view.composing) {
+      await waitForSubmittedDraftComposition(editor, current)
+      if (!current()) return
+    }
     if (editor.state.doc === doc) {
       editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
       emit('draft', '')
-    } else if (result && 'accepted' in result) {
+    } else if (accepted) {
       submittedDraft?.removeAcceptedPrefix()
     }
   } catch (error) {

@@ -93,6 +93,30 @@ it.each([
   expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['next.txt'])
 })
 
+it.each([false, true])('waits for composing text before cleaning up Send (thread replaced: %s)', async replaced => {
+  const f = mount(async () => undefined)
+  const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()
+  const nativeSubmit = vi.fn(() => promise)
+  f.state.nativeSubmit = nativeSubmit
+  await nextTick()
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledExactlyOnceWith('first', {}))
+  const setComposing = (value: boolean) => Object.defineProperty(editor.view, 'composing', { configurable: true, value })
+  setComposing(true)
+  resolve({ queued: false })
+  await nextTick()
+  expect(editor.state.doc.textContent).toBe('first')
+  if (replaced) {
+    f.state.currentThread = { id: 'thread-two', messages: [] }
+    await nextTick()
+    editor.commands.setContent('draft in another thread')
+    await vi.waitFor(() => expect(f.root.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.disabled).toBe(false))
+  } else editor.commands.insertContentAt(editor.state.doc.content.size - 1, '入力')
+  setComposing(false)
+  editor.view.dom.dispatchEvent(new CompositionEvent('compositionend', { data: '入力', bubbles: true }))
+  await vi.waitFor(() => expect(editor.state.doc.textContent).toBe(replaced ? 'draft in another thread' : '入力'))
+})
+
 it('keeps the full replacement draft if the user edits the submitted text before acknowledgement', async () => {
   const f = mount(async () => undefined)
   const { promise, resolve } = Promise.withResolvers<{ queued: boolean }>()

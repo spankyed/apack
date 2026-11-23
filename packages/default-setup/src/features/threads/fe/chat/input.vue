@@ -266,7 +266,7 @@
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
-import { trackNativeSubmittedDraft } from './native-submitted-draft.ts'
+import { trackNativeSubmittedDraft, waitForSubmittedDraftComposition } from './native-submitted-draft.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE } from '#features/code/common/native-prompt-limits.ts'
 import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
@@ -463,11 +463,11 @@ function handleComposerNativeHotkey(event: KeyboardEvent) {
 async function pressNativeAgentsGesture() {
   const editor = tiptapRef.value?.editor, bridge = promptEditor, mountId = props.nativePrompt?.mountId
   if (!editor || !bridge || !mountId) return
-  const revision = bridge.revision, epoch = composerEpoch
+  const revision = bridge.revision, epoch = composerEpoch.value
   try {
-    if (!await bridge.settle() || promptEditor !== bridge || bridge.revision !== revision || props.nativePrompt?.mountId !== mountId || epoch !== composerEpoch || props.disabled || submitting.value || !props.nativeBackground || editor.isDestroyed || !editor.isEmpty || hasAttachments.value || editor.view.composing) return
+    if (!await bridge.settle() || promptEditor !== bridge || bridge.revision !== revision || props.nativePrompt?.mountId !== mountId || epoch !== composerEpoch.value || props.disabled || submitting.value || !props.nativeBackground || editor.isDestroyed || !editor.isEmpty || hasAttachments.value || editor.view.composing) return
     emit('native-agents-gesture', { mountId, revision })
-  } catch (error) { if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Claude agents could not be opened' }
+  } catch (error) { if (epoch === composerEpoch.value) submissionProblem.value = error instanceof Error ? error.message : 'Claude agents could not be opened' }
 }
 const nativePromptProblem = ref<string>()
 const nativeDraftTooLong = computed(() => nativePromptProblem.value === CLAUDE_UI_TEXT_LIMIT_MESSAGE)
@@ -531,9 +531,9 @@ watch(() => props.nativeUi?.agentInput, state => {
   if (state.status === 'command_done' && state.decision === 'confirm') pending.accept()
 })
 defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks') })
-let composerEpoch = 0
-watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined; queuedNotice.value = false }, { flush: 'sync' })
-onUnmounted(() => { composerEpoch++ })
+const composerEpoch = ref(0)
+watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch.value++; submissionProblem.value = undefined; queuedNotice.value = false }, { flush: 'sync' })
+onUnmounted(() => { composerEpoch.value++ })
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
 // Restore only this native session's parent input before adopting it into a fresh prompt host.
 watch([() => tiptapRef.value?.editor, () => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId], ([editor, threadId, sessionId], _previous, cleanup) => {
@@ -576,8 +576,8 @@ watch([() => props.nativePrompt?.hostRequest, () => props.isBusy], ([request, bu
 watch(() => props.nativePrompt?.hostRequest, request => {
   if (!request || request.kind === 'suggest') return
   if (request.kind === 'selection') {
-    const owner = promptEditor, epoch = composerEpoch, mountId = props.nativePrompt?.mountId, attachment = props.nativePrompt?.attachmentId
-    void replyClaudeUiSelection(request.replyUrl, pageSelection, request.expiresAt, () => composerEpoch === epoch && !!owner && promptEditor === owner && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
+    const owner = promptEditor, epoch = composerEpoch.value, mountId = props.nativePrompt?.mountId, attachment = props.nativePrompt?.attachmentId
+    void replyClaudeUiSelection(request.replyUrl, pageSelection, request.expiresAt, () => composerEpoch.value === epoch && !!owner && promptEditor === owner && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
       .then(submitted => emit('native-prompt-host-response', { requestId: request.requestId, kind: 'selection', submitted }))
     return
   }
@@ -993,25 +993,25 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
   const label = command === '/background' ? 'background session review' : command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
   if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || submitting.value || !editor || !bridge || !submit) return
-  const epoch = composerEpoch, revision = bridge.revision
+  const epoch = composerEpoch.value, revision = bridge.revision
   submitting.value = true; submissionProblem.value = undefined
   try {
     if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge
-      || epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
+      || epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const result = await submit(command, {})
     if (result && 'review' in result) throw new Error(`Claude requested input review before opening ${label}. Use ${command} to review it.`)
   } catch (error) {
-    if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : `Claude ${label} could not be opened`
+    if (epoch === composerEpoch.value) submissionProblem.value = error instanceof Error ? error.message : `Claude ${label} could not be opened`
   } finally { submitting.value = false }
 }
 
-watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch++ })
+watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch.value++ })
 
 const handleSubmit = async () => {
   if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || props.nativeSendWaiting || nativeDraftTooLong.value || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
-  const epoch = composerEpoch, bridge = promptEditor
+  const epoch = composerEpoch.value, bridge = promptEditor
   const threadId = props.currentThread?.id
   let nativeSubmission: { doc: ProseMirrorNode; sessionId: string } | undefined
   let submittedDraft: ReturnType<typeof trackNativeSubmittedDraft> | undefined
@@ -1025,11 +1025,11 @@ const handleSubmit = async () => {
     if (bridge) {
       const revision = bridge.revision
       if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge) {
-        if (epoch === composerEpoch && !nativePromptProblem.value) submissionProblem.value = 'Claude input changed while preparing this message. Send again.'
+        if (epoch === composerEpoch.value && !nativePromptProblem.value) submissionProblem.value = 'Claude input changed while preparing this message. Send again.'
         return
       }
     }
-    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
+    if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const doc = editor.state.doc
     if (!doc.textContent.trim() && !hasAttachments.value) return
     const serialized = isEmptyClaudePromptParagraph(doc) ? '' : (editor.storage as any).markdown.getMarkdown() as string
@@ -1041,7 +1041,7 @@ const handleSubmit = async () => {
     const cmdState = commandSuggestionKey.getState(editor.state)
     if (props.nativeSubmit && !(cmdState?.active && cmdState.selectedCommand)) submittedDraft = trackNativeSubmittedDraft(editor, doc)
     const attachmentRefs = await attachments.collect(entityId)
-    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
+    if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const references: MessageReferences = {
       ...attachmentRefs,
       ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
@@ -1063,20 +1063,20 @@ const handleSubmit = async () => {
       const sessionId = props.currentThread?.context?.claudeCode?.sessionId
       if (sessionId) nativeSubmission = { doc, sessionId }
       const result = await props.nativeSubmit(md, references)
-      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+      if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
       if (result && 'review' in result) {
         if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').setContent(result.review.text).run(); submissionProblem.value = `Removed ${result.review.removed} invisible characters. Review and send again.` }
         return
       }
       if (result && 'commandPending' in result) {
         pendingNativeCommand = { revision: result.revision, accept() {
-          if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+          if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
           sentHistory.value.push(md); saveHistory(sentHistory.value)
           if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run(); messageContent.value = ''; hasTextContent.value = false; attachments.clear() }
         } }
         return
       }
-      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+      if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
       if (result && 'queued' in result) {
         nativeMessageAccepted = true
         queuedNotice.value = props.isBusy && result.queued
@@ -1089,6 +1089,13 @@ const handleSubmit = async () => {
     saveHistory(sentHistory.value)
     historyIndex.value = -1
     lastClearedContent.value = null
+    if (nativeMessageAccepted && editor.view.composing) {
+      const mountId = props.nativePrompt?.mountId, attachmentId = props.nativePrompt?.attachmentId
+      const current = () => epoch === composerEpoch.value && !editor.isDestroyed && tiptapRef.value?.editor === editor
+        && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachmentId
+      await waitForSubmittedDraftComposition(editor, current)
+      if (!current()) return
+    }
     if (editor.state.doc === doc) {
       editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
       messageContent.value = ''
@@ -1103,7 +1110,7 @@ const handleSubmit = async () => {
       && !editor.isDestroyed && editor.state.doc.eq(nativeSubmission.doc)) {
       rejectedNativeDraft.value = { ...nativeSubmission, sessionChanged: message === CLAUDE_STALE_DRAFT_MESSAGE }
     }
-    if (epoch === composerEpoch) submissionProblem.value = message
+    if (epoch === composerEpoch.value) submissionProblem.value = message
   } finally {
     submittedDraft?.dispose()
     submitting.value = false

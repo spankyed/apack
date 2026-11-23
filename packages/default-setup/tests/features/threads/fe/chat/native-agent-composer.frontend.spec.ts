@@ -80,6 +80,27 @@ it('keeps only the formatted next draft when the selected Agent acknowledges Sen
   expect(editor.state.selection.$head.parentOffset).toBe('Next Agent message'.length)
 })
 
+it.each([false, true])('waits for active composition before removing an accepted Agent draft (preedit transaction: %s)', async preeditTransaction => {
+  const { promise, resolve } = Promise.withResolvers<{ accepted: true }>()
+  const send = vi.fn(() => promise)
+  const f = await mount(send, true)
+  f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+  const setComposing = (value: boolean) => Object.defineProperty(editor.view, 'composing', { configurable: true, value })
+  const position = editor.state.doc.content.size - 1
+  setComposing(true)
+  if (preeditTransaction) editor.commands.insertContentAt(position, '入力')
+  resolve({ accepted: true })
+  await nextTick()
+  expect(editor.state.doc.textContent).toBe(preeditTransaction ? 'Unsent Agent draft入力' : 'Unsent Agent draft')
+  if (!preeditTransaction) editor.commands.insertContentAt(position, '入力')
+  setComposing(false)
+  editor.view.dom.dispatchEvent(new CompositionEvent('compositionend', { data: '入力', bubbles: true }))
+  await vi.waitFor(() => expect(f.state.draft).toBe('入力'))
+  expect(editor.state.doc.textContent).toBe('入力')
+  expect(editor.state.selection.$head.parentOffset).toBe(2)
+})
+
 it('ignores an acknowledgement after the attachment changes', async () => {
   const { promise, resolve } = Promise.withResolvers<void>()
   const send = vi.fn(() => promise)
