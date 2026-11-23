@@ -78,8 +78,9 @@ export function createClaudeTerminalStatus(sessionId: string) {
     accept(value: unknown): boolean {
       const event = record(value)
       if (!event || event.sessionId !== currentSession || (event.kind !== 'main' && event.kind !== 'subagent') || typeof event.stdout !== 'string' || event.stdout.length > 32768 || typeof event.truncated !== 'boolean' || typeof event.startedAt !== 'string' || !/^[0-9]{1,30}$/.test(event.startedAt) || (event.code !== null && !Number.isInteger(event.code))) return false
-      if (BigInt(event.startedAt) < (epochs.get(event.kind) ?? 0n)) return false
-      epochs.set(event.kind, BigInt(event.startedAt))
+      const startedAt = BigInt(event.startedAt), previous = epochs.get(event.kind)
+      if (previous !== undefined && startedAt <= previous) return false
+      epochs.set(event.kind, startedAt)
       if (event.kind === 'main') {
         mainStatus = event.code === 0 && !event.truncated && !event.signal ? event.stdout.trim().split('\n').map(line => line.trim()).filter(Boolean).join('\n') || undefined : undefined
         return true

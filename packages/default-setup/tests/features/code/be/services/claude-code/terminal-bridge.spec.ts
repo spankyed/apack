@@ -545,6 +545,47 @@ it.each(['main','subagent'] as const)('admits a fresh %s completion queued befor
  await request('/poll',{sessionId:session,agents:[],policy:{allowManagedHooksOnly:false,disableAllHooks:false},hooksDisabled:false})
  expect((await request('/native-status',event)).status).toBe(409)
 })
+it.each(['main', 'subagent'] as const)('admits fresh %s output when its policy poll arrives before the helper finishes', async kind => {
+  await create()
+  const agents = [{ id: 'task', type: 'worker', status: 'running' }]
+  const managed = { allowManagedHooksOnly: true, disableAllHooks: false }
+  const unmanaged = { ...managed, allowManagedHooksOnly: false }
+  const body = { sessionId: session, agents, statusCommand: 'main', subagentCommand: 'sub' }
+  await request('/poll', { ...body, policy: unmanaged })
+  const late = {
+    ...await observed(kind === 'main' ? 'main' : 'sub'),
+    kind, generation: (await config()).generations[kind],
+    ...(kind === 'subagent' ? { tasks: [{ id: 'task', status: 'running' }] } : {}),
+    stdout: kind === 'main' ? 'Fresh managed status' : '{"id":"task","content":"Fresh managed status"}',
+  }
+  await request('/poll', { ...body, policy: managed })
+  const sendLate = (policyKey: string) => request('/native-status', { ...late, policyKey })
+
+  expect((await request('/native-status', late)).status).toBe(409)
+  expect((await sendLate('[false,false,false]')).status).toBe(409)
+  expect((await sendLate('[true,false,false]')).status).toBe(200)
+  expect(kind === 'main' ? bridge!.projection.mainStatus : bridge!.projection.tasks[0].statusText).toBe('Fresh managed status')
+  expect((await sendLate('[true,false,false]')).status).toBe(409)
+  await request('/poll', { ...body, policy: unmanaged })
+  await request('/poll', { ...body, policy: managed })
+  expect((await sendLate('[true,false,false]')).status).toBe(409)
+})
+
+it('admits a newly configured command without accepting the preceding command or crossing a shell change', async () => {
+  await create()
+  const old = { ...await observed(), policyKey: '[false,false,false]' }
+  const next = { ...old, command: 'replacement', startedAt: '120', stdout: 'Replacement status' }
+  await request('/poll', { sessionId: session, agents: [], statusCommand: next.command })
+
+  expect((await request('/native-status', old)).status).toBe(409)
+  expect((await request('/native-status', next)).status).toBe(200)
+  expect(bridge!.projection.mainStatus).toBe(next.stdout)
+  const later = { ...await observed('another command'), policyKey: old.policyKey, startedAt: '140' }
+  await request('/poll', { sessionId: session, agents: [], statusCommand: later.command, shellPrefix: 'new-shell' })
+  expect((await request('/native-status', later)).status).toBe(409)
+  expect(bridge!.projection.mainStatus).toBeUndefined()
+})
+
 it('refuses a queued old-policy result even when the new command matches',async()=>{
  await create()
  expect((await request('/native-status',{...await observed('next main'),policyKey:'[false,false,false]'})).status).toBe(202)
