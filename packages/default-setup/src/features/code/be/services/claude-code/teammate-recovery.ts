@@ -236,12 +236,15 @@ async function pasteExactTeammateInput(pane: ClaudeRecoveryPane, env: NodeJS.Pro
   // An explicit pane target never follows the display client's selection. Raw paste writes directly to
   // that pane's PTY, including if the window has synchronize-panes enabled.
   const buffer = 'apack-' + randomUUID()
-  const condition = `#{&&:#{==:#{pid},${pane.server[0]}},#{&&:#{==:#{pane_pid},${pane.worker[0]}},#{==:#{pane_dead},0}}}`
-  const command = `paste-buffer -d -r -b ${buffer} -t ${pane.paneId}`
+  const target = `${pane.tmuxSession}:.${pane.paneId}`
+  const location = `#{&&:#{==:#{session_id},${pane.tmuxSession}},#{==:#{pane_id},${pane.paneId}}}`
+  const process = `#{&&:#{==:#{pid},${pane.server[0]}},#{&&:#{==:#{pane_pid},${pane.worker[0]}},#{==:#{pane_dead},0}}}`
+  const condition = `#{&&:${location},${process}}`
+  const command = `paste-buffer -d -r -b ${buffer} -t ${target}`
   const discard = `delete-buffer -b ${buffer} ; display-message -p refused`
   const address = ['-S', pane.socket]
   const child = spawn(pane.executable, [...address, 'load-buffer', '-b', buffer, '-', ';',
-    'if-shell', '-F', '-t', pane.paneId, condition, command, discard],
+    'if-shell', '-F', '-t', target, condition, command, discard],
     { env, cwd: pane.cwd, signal: AbortSignal.any([signal, AbortSignal.timeout(2000)]), stdio: ['pipe', 'pipe', 'ignore'] })
   let refused = false
   child.stdout.resume()
