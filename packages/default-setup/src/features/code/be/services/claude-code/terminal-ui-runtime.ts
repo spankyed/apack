@@ -841,6 +841,7 @@ function drainCompletion(n,clientId,state){
  const next=state.waiting;
  if(!next){if(completions.get(clientId)===state)completions.delete(clientId);return;}
  state.waiting=undefined;
+ if(!clientViewCurrent(n,clientId)){clearCompletion(clientId);next.answer({suggestions:[],superseded:true});return;}
  const token=nativeFileCompletionToken(next.box),args=n.session.rwt(next.box);
  if(!args&&!token){next.answer({suggestions:[]});drainCompletion(n,clientId,state);return;}
  const abort=new AbortController();state.active=abort;
@@ -849,6 +850,8 @@ function drainCompletion(n,clientId,state){
   .then(result=>result?n.session.n_n(result.suggestions):[]).catch(()=>[]);
  Promise.all([original,plugin]).then(([files,rows])=>{
   state.active=undefined;
+  // Plugin completion can finish after an original native view switch, before desktop detaches.
+  if(completions.get(clientId)===state&&!clientViewCurrent(n,clientId))clearCompletion(clientId);
   next.answer(abort.signal.aborted||completions.get(clientId)!==state?{suggestions:[],superseded:true}:{suggestions:[...files,...rows],start:args?.start??token?.start});
   if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
  });

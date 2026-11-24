@@ -5,7 +5,7 @@ import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/
 it('keeps only the latest native completion and cancels detached drafts', async () => {
   const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
   const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
-  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({autocomplete,clearCompletion})`, { AbortController, Promise, Map }) as {
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({autocomplete,clearCompletion})`, { AbortController, Promise, Map, clientViewCurrent: () => true }) as {
     autocomplete(native: unknown, client: string, box: { text: string }): Promise<{ suggestions: string[]; start?: number; superseded?: boolean }>
     clearCompletion(client: string): void
   }
@@ -30,6 +30,33 @@ it('keeps only the latest native completion and cancels detached drafts', async 
   calls[2]!.resolve({ suggestions: ['late'] })
   expect(await detached).toEqual({ suggestions: [], superseded: true })
   expect(await api.autocomplete(native, 'b', { text: '' })).toEqual({ suggestions: [] })
+})
+
+it('discards a completed plugin reply when the native view changed while it waited', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  let current = true
+  const api = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';autocomplete', {
+    AbortController, clientViewCurrent: () => current,
+  }) as (native: unknown, client: string, box: { text: string }) => Promise<unknown>
+  let finish!: (result: { suggestions: string[] }) => void
+  const plugin = vi.fn(() => new Promise<{ suggestions: string[] }>(resolve => { finish = resolve }))
+  const native = { session: { rwt: () => ({ start: 0 }), r_n: plugin, n_n: (rows: string[]) => rows } }
+
+  const old = api(native, 'parent-client', { text: 'first draft' })
+  await Promise.resolve()
+  expect(plugin).toHaveBeenCalledOnce()
+  current = false
+  finish({ suggestions: ['old-view completion'] })
+  expect(await old).toEqual({ suggestions: [], superseded: true })
+  expect(await api(native, 'parent-client', { text: 'retired draft' })).toEqual({ suggestions: [], superseded: true })
+  expect(plugin).toHaveBeenCalledOnce()
+
+  plugin.mockResolvedValueOnce({ suggestions: ['selected Agent completion'] })
+  current = true
+  expect(await api(native, 'agent-client', { text: 'new draft' })).toEqual({
+    start: 0, suggestions: ['selected Agent completion'],
+  })
 })
 
 it('keeps original indexed file rows distinct from plugin replacement ranges', async () => {
@@ -63,7 +90,7 @@ it('keeps original indexed file rows distinct from plugin replacement ranges', a
   expect(files.mock.calls[0]).toEqual([index, 'docs/release notes.md', true, storageV5])
   expect(api.nativeFileCompletionToken({ text: 'user@example', cursor: 12 })).toBeUndefined()
   current = false
-  expect(await api.autocomplete(native, 'old', { text, cursor })).toEqual({ start: 12, suggestions: [{ text: 'plugin-row' }] })
+  expect(await api.autocomplete(native, 'old', { text, cursor })).toEqual({ suggestions: [], superseded: true })
   expect(files).toHaveBeenCalledOnce()
 })
 
