@@ -1,16 +1,11 @@
 import { chromium } from '@playwright/test'
 import { readFile, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
-import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
-let terminalScreen: Screen | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test.afterEach(async ({ appPage, electronApp }, testInfo) => {
   if (!workspace || testInfo.status === testInfo.expectedStatus) return
   try {
@@ -44,37 +39,19 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
-  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
-  ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
-  const resize = async () => {
-    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
-    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));
-    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);
-    const cols=row?.match(/columns:\s*(\d+)/)?.[1], rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined;
-  }
-  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
-  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
-  terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
-  let lastSequence = 0
-  let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
+  const input = section.getByRole('textbox', { name: 'Terminal input', exact: true })
+  const terminalRows = section.locator('[data-terminal-text]')
+  const seen = new Set<string>()
   await expect.poll(async () => {
-    const current = await context(), native = current.native
-    const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
-    if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
-    const buffer = terminalScreen!.buffer.active
-    const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
+    const native = (await context()).native?.state
+    if (native?.status === 'live') return native.mainStatus?.includes('Session ready') === true
+    const text = await terminalRows.innerText({ timeout: 500 }).catch(() => '')
     const screen = recognizeOnboardingPrompt(text, workspace)
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
-    if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
-    else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
-    else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
-    else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
-    else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
-    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
+    if (screen && !seen.has(screen)) {
+      seen.add(screen)
+      await input.press(screen === 'workspace-trust' ? 'ArrowDown' : 'Enter')
+    }
+    return false
   }, { timeout: 25000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
@@ -97,6 +74,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   const realBrowser = process.env.CLAUDE_RESEARCH_NATIVE_MCP_BROWSER === '1'
   const browserOrigin = realBrowser ? JSON.parse(await readFile(join(workspace!, 'owned-mcp-browser.json'), 'utf8')).origin as string : undefined
   const browserReturns: unknown[] = [], browserCaptures: string[] = [], browserIds = new Set<string>()
+  let browserWaitingCancellation: { phase: number; dialogId: string; browserPid: number; finishedTurn: { id: string; reason: 'answer' }; capture: string } | undefined
   const retry = process.env.CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY === '1'
   const draft = 'Keep my release notes while I confirm browser input.'
   const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = []
@@ -151,6 +129,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     const pending = receipts.filter(row => row.method === 'tools/call' && row.params.arguments.phase === phase)
     expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
     browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: modern ? true : undefined, retryDeferred: retry ? true : undefined, waitingPreservedUntilCompletion: !modern && !retry ? true : undefined, browserOpenOnReturn: true })
+    return descriptor.pid as number
   }
   const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause', 'modern-withheld', 'modern-viewport'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
   for (const step of cases) {
@@ -239,6 +218,8 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     else if (step.scenario === 'url-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
     else {
       if (step.scenario === 'url-skip') await capturePhase('prompt')
+      const waitingTurnId = realBrowser && step.scenario === 'url-waiting-cancel'
+        ? (await context()).native.state.activeTurnId : undefined
       await panel.getByRole('button', { name: 'Accept', exact: true }).click()
       await expect.poll(async () => (await frame())?.kind).toBe('mcp_elicitation_waiting')
       await expect(panel.getByRole('button', { name: 'Skip confirmation', exact: true })).toBeEnabled()
@@ -252,8 +233,28 @@ test('uses original terminal URL decisions, waiting and completion with cancella
         await expect(panel.getByRole('button', { name: 'Skip confirmation', exact: true })).toBeEnabled()
         await panel.getByRole('button', { name: 'Skip confirmation', exact: true }).click()
       } else if (step.scenario === 'url-waiting-cancel') {
-        if (realBrowser) await visitBrowser(step.phase, 1100, 900, false, waiting, savedSelection)
-        await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+        if (realBrowser) {
+          const browserPid = await visitBrowser(step.phase, 1100, 900, false, waiting, savedSelection)
+          await expect.poll(async () => {
+            const state = (await context()).native.state
+            return !state.busy && state.activeTurnId === undefined && state.mcpUrl?.id === waiting.id
+          }, { timeout: 15000 }).toBe(true)
+          const finishedTurn = (await context()).native.state.lastTurn
+          expect(waitingTurnId).toBeTruthy()
+          expect(finishedTurn).toEqual({ id: waitingTurnId, reason: 'answer' })
+          await appPage.setViewportSize({ width: 680, height: 600 })
+          await expect(card.getByTitle('Pause agent work', { exact: true })).toBeHidden()
+          const cancel = panel.getByRole('button', { name: 'Cancel', exact: true })
+          await expect(cancel).toBeInViewport({ ratio: 1 })
+          expect((await frame()).id).toBe(waiting.id)
+          const capture = 'native-mcp-url-680-waiting-idle-cancel.png'
+          await appPage.screenshot({ path: testInfo.outputPath(capture) })
+          await cancel.click()
+          await expect(panel).toBeHidden({ timeout: 15000 })
+          expect((await context()).native.state.lastTurn).toEqual(finishedTurn)
+          expect(() => process.kill(browserPid, 0)).not.toThrow()
+          browserWaitingCancellation = { phase: step.phase, dialogId: waiting.id, browserPid, finishedTurn, capture }
+        } else await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
       }
       else {
         const completionPath = join(workspace!, 'mcp-url-completion-' + step.phase)
@@ -287,6 +288,6 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, browserReturns: realBrowser ? browserReturns : undefined, browserCaptures: realBrowser ? browserCaptures : undefined, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
+  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, browserReturns: realBrowser ? browserReturns : undefined, browserCaptures: realBrowser ? browserCaptures : undefined, browserWaitingCancellation, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeMcpUrlApp: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
