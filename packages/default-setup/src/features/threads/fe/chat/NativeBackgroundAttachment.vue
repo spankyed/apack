@@ -6,12 +6,12 @@
       <button type="button" @click="emit('close', attachment.requestId)">{{ attachment.status === 'opening' ? 'Cancel' : 'Close connection' }}</button>
     </header>
     <p v-if="attachment.problem" role="alert">{{ attachment.problem }}</p>
-    <div v-if="attachment.state" ref="viewport" class="child-terminal__viewport" :aria-label="attachment.teammate ? 'Claude teammate terminal output' : 'Background Claude output'" />
+    <div v-if="displayedTerminal" ref="viewport" class="child-terminal__viewport" :aria-label="attachment.teammate ? 'Claude teammate terminal output' : 'Background Claude output'" />
     <p v-if="attachment.status === 'ready' && attachment.state?.status === 'live'" class="child-terminal__hint">{{ attachment.teammate ? 'Close connection to detach. The teammate keeps running.' : 'Closing the terminal does not stop a running background session. Use Stop to end it.' }}</p>
   </section>
 </template>
 <script setup lang="ts">
-import {ref, watch, nextTick, onBeforeUnmount} from 'vue'
+import {computed, ref, watch, nextTick, onBeforeUnmount} from 'vue'
 import type {ClaudeBackgroundAttachmentView} from '#features/threads/be/claude-terminal-views.ts'
 import {mountNativeTerminal} from '#extensions/terminal/pool.ts'
 const props = defineProps<{attachment: ClaudeBackgroundAttachmentView; expanded: boolean; parentDisconnected?: boolean}>()
@@ -19,10 +19,14 @@ const emit = defineEmits<{'toggle-expanded': []; close:[requestId:string]; input
 const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined, attached: string | undefined
 function detach() {terminal?.detach();terminal=undefined;attached=undefined}
-watch(() => props.attachment.state, async state => {
+const displayedTerminal = computed(() => {
+  const state = props.attachment.state
+  return props.attachment.teammate && state?.status === 'exited' ? undefined : state
+})
+watch(displayedTerminal, async state => {
   if (!state) {detach();return}
   await nextTick()
-  if (!viewport.value || props.attachment.state?.id !== state.id) return
+  if (!viewport.value || displayedTerminal.value?.id !== state.id) return
   if (attached !== state.id) {
     detach();attached=state.id
     terminal=mountNativeTerminal(state.id,state.terminalSession,viewport.value,size=>{if(props.attachment.state?.id===state.id)emit('resize',state.id,size)},state.inputBlocked===true)
