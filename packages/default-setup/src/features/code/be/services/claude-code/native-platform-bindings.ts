@@ -497,8 +497,10 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-qa2233dq.js",
       "exports": {
         "AE": "Rv",
+        "Ldt": "Adt",
         "vws": "$Ss",
-        "wOt": "cIt"
+        "wOt": "cIt",
+        "xp": "Pp"
       }
     },
     "chunk-tt5gpzxk.js": {

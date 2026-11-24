@@ -4,7 +4,7 @@ import { ClaudeNativeTaskResultSchema } from '#features/code/be/services/claude-
 import { claudeTerminalTaskRuntime } from '#features/code/be/services/claude-code/terminal-task-runtime.ts'
 import { selectClaudeAgentTranscriptRows } from '#features/code/be/services/claude-code/ui-agent-transcript.ts'
 function fixture() {
-  const tasks: { id: string; agentId: string; type: string; status: string; description: string; identity?: { agentName: string }; handbackReport?: { text: string; warning?: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
+  const tasks: { id: string; agentId: string; type: string; status: string; description: string; parentAgentId?: string; evictAfter?: number; forkWorker?: boolean; identity?: { agentName: string }; handbackReport?: { text: string; warning?: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
   const registry = { get: (id: string) => tasks.find(task => task.id === id), all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
   const messageQueue = { getCommandQueueSnapshot: vi.fn(() => []) }, getMessages = vi.fn(() => [])
   const liveGate = vi.fn((_queue: unknown, read: () => unknown) => read)
@@ -21,8 +21,17 @@ function fixture() {
   let denied = false
   const message = vi.fn((value: unknown) => value)
   const runner = vi.fn(async function* (call: { id: string }, _assistant: unknown, _permission: unknown, _context: unknown, _clock: unknown) { yield { message: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: call.id, ...(denied ? { is_error: true, content: 'Native refusal' } : {}) }] }, toolUseResult: { success: !denied } } } })
-  const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { randomUUID: () => '12345678-1234-1234-1234-123456789abc', retireNativeAgentCommands: async () => {} }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
-  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ transcriptState:{AE:()=>true}, workflowTasks:{UAe:pause}, runtime: { Jgr: (origin: { kind?: string } | undefined) => ({ kind: origin?.kind === 'human' ? 'composer' : 'unclassified' }), Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
+  const nativeViewFacts = () => {
+    const selected = registry.get(nativeState.viewingAgentTaskId ?? '')
+    return { sequence: 3, view: selected ? { kind: 'agent', registryId: selected.id, taskId: selected.agentId } : { kind: 'main' } }
+  }
+  const transcriptState = {
+    AE: () => true,
+    Ldt: (task?: typeof tasks[number]) => task?.type === 'local_agent' && !task.forkWorker && task.evictAfter !== 0,
+    xp: (task?: typeof tasks[number]) => task?.type === 'in_process_teammate',
+  }
+  const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { nativeViewFacts, randomUUID: () => '12345678-1234-1234-1234-123456789abc', retireNativeAgentCommands: async () => {} }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
+  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction', fromAgent?: { taskId: string; revision: number }) => run({ transcriptState, workflowTasks:{UAe:pause}, runtime: { Jgr: (origin: { kind?: string } | undefined) => ({ kind: origin?.kind === 'human' ? 'composer' : 'unclassified' }), Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text, ...(fromAgent ? { from_agent: fromAgent } : {}) }, new AbortController(), current)
   return { pause, show, nativeState, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
 }
 it('stops the exact native registry task through the original user-stop callback', async () => {
@@ -58,6 +67,26 @@ it('projects the original worker compact boundary and summary without person-mes
   ])
   expect(result.messages[1]).toEqual({ uuid: 'worker-summary', role: 'system', compaction: 'summary', text: 'Saved worker summary' })
   expect(selectClaudeAgentTranscriptRows(result, 'session').map(row => row.uuid)).toEqual(['live'])
+})
+
+it('keeps completed ancestors of the selected Agent and refuses stale or unrelated breadcrumb targets', async () => {
+  const f = fixture()
+  f.tasks[0].parentAgentId = 'registry-parent'
+  const parent = { id: 'registry-parent', agentId: 'parent', type: 'local_agent', status: 'completed', description: 'Completed parent' }
+  f.tasks.push(parent, { ...parent, id: 'registry-other', agentId: 'other' })
+  f.nativeState.viewingAgentTaskId = 'registry-a'
+  const source = { taskId: 'agent-a', revision: 3 }
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details?.ancestors).toEqual([{ taskId: 'parent', name: 'Completed parent' }])
+  expect((await f.request('inspect', 'other')).details.ancestors).toBeUndefined()
+  await expect(f.request('foreground', 'parent', vi.fn(), '', { ...source, revision: 2 })).rejects.toThrow('breadcrumb expired')
+  await expect(f.request('foreground', 'other', vi.fn(), '', source)).rejects.toThrow('breadcrumb expired')
+  f.tasks[1].evictAfter = 0
+  await expect(f.request('foreground', 'parent', vi.fn(), '', source)).rejects.toThrow('breadcrumb expired')
+  expect(f.show).not.toHaveBeenCalled()
+  f.tasks[1].evictAfter = 100
+  expect(await f.request('foreground', 'parent', vi.fn(), '', source)).toEqual({ view: { taskId: 'parent' } })
+  expect(f.show).toHaveBeenCalledExactlyOnceWith({ agentId: 'parent' })
+  await expect(f.request('foreground', 'parent', vi.fn(), '', source)).rejects.toThrow('breadcrumb expired')
 })
 
 it('refuses a reply when its native session expires during transcript loading', async () => {

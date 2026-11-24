@@ -85,7 +85,7 @@ export interface ClaudeNativeTerminalOwner {
   answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
-  operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
+  operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget, fromAgent?: import('../../../common/native-terminal.ts').ClaudeNativeAgentViewSource): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
   /** A separately attached tmux client can outlive a parent killed outside the app. */
   readonly keepAttachedTeammatesAfterCrash?: boolean
   openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment & {
@@ -642,14 +642,17 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           },
         })
       },
-      async operateTask(taskId, operation, text, worker) {
-        if (closed || operation !== 'background' && !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
-        const sessionId = bridge.projection.sessionId
+      async operateTask(taskId, operation, text, worker, fromAgent) {
+        const { sessionId, tasks } = bridge.projection
+        const view = bridge.view
+        const inspectingSelected = operation === 'inspect' && view?.kind === 'agent' && view.taskId === taskId
+        if (closed || operation !== 'background' && !inspectingSelected && !fromAgent && !tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
+        if (fromAgent && (operation !== 'foreground' || view?.kind !== 'agent' || view.taskId !== fromAgent.taskId || view.revision !== fromAgent.revision)) throw new Error('Native Agent breadcrumb expired')
         const viewChange = operation === 'foreground' || operation === 'background'
         if (viewChange && (changingView || preparingParent)) throw new Error('Native view or parent input is changing')
         if (viewChange) { changingView = true; changed() }
         try {
-          const result = await bridge.uiTransport.request({ subtype: 'apack_task_control', session_id: sessionId, task_id: taskId, operation, ...(worker ? { worker } : {}), ...((operation === 'send' || operation === 'input') ? { text } : {}) })
+          const result = await bridge.uiTransport.request({ subtype: 'apack_task_control', session_id: sessionId, task_id: taskId, operation, ...(worker ? { worker } : {}), ...(fromAgent ? { from_agent: fromAgent } : {}), ...((operation === 'send' || operation === 'input') ? { text } : {}) })
           if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native task session changed')
           return ClaudeNativeTaskResultSchema.parse(result)
         } finally { if (viewChange) { changingView = false; changed() } }

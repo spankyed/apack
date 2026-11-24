@@ -383,6 +383,27 @@ it.each(['foreground', 'background'] as const)('holds shared UI suspension until
 })
 
 
+it('routes a completed ancestor outside the ordinary roster only from its current selection', async () => {
+  const resume = vi.fn(), suspend = vi.fn(async () => resume), f = fixture(undefined, suspend)
+  f.owner.state.view = { kind: 'agent', taskId: 'child', registryId: 'registry-child', revision: 5 }
+  vi.mocked(f.owner.operateTask).mockResolvedValue({ view: { taskId: 'parent' } })
+  try {
+    f.views.handle(mount, 'window', f.send)
+    const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId,
+      sessionId: f.owner.state.sessionId, taskId: 'parent', revision: 1, operation: 'foreground' } as const
+    f.views.handle(request, 'window', f.send)
+    f.views.handle({ ...request, fromAgent: { taskId: 'child', revision: 4 } }, 'window', f.send)
+    expect(suspend).not.toHaveBeenCalled()
+    const fromAgent = { taskId: 'child', revision: 5 }
+    f.views.handle({ ...request, fromAgent }, 'window', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)?.[0].task).toMatchObject({
+      status: 'done', operation: 'foreground', view: { taskId: 'parent' },
+    }))
+    expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('parent', 'foreground', undefined, undefined, fromAgent)
+    expect(resume).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})
+
 it('carries the selected phase only to the authenticated owner and preserves a native refusal', async () => {
   const f = fixture()
   try {

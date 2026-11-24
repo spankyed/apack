@@ -91,6 +91,23 @@ async function resumeNativeWorkflow(n,binding,task,abort,current){
   return {resume:{taskId:task.id,runId:task.workflowRunId,requested:true}};
  }finally{if(panel&&!invoked&&!panel.closed){panel.cancel();await panel.done;}}
 }
+function nativeAgentAncestors(n,registry,task){
+ if(task?.type!=='local_agent'||!n.transcriptState.Ldt(task))return [];
+ const ancestors=[],seen=new Set([task.id]);
+ let parentId=task.parentAgentId;
+ // The pinned terminal keeps an eligible completed ancestor in the selected branch until eviction.
+ while(parentId&&!seen.has(parentId)&&ancestors.length<32){
+  seen.add(parentId);
+  const parent=registry.get(parentId);
+  if(!n.transcriptState.Ldt(parent)&&!(n.transcriptState.xp(parent)&&parent.evictAfter!==0))break;
+  const identity=n.runtime.flt(parent);
+  if(typeof identity?.id!=='string'||!identity.id||identity.id.length>256||ancestors.some(item=>item.taskId===identity.id))break;
+  const name=String(nativeTeammateName(parent)||parent.description||parent.agentType||identity.id).slice(0,256);
+  ancestors.push({taskId:identity.id,name});
+  parentId=parent.type==='local_agent'?parent.parentAgentId:undefined;
+ }
+ return ancestors.reverse();
+}
 async function nativeTaskControl(n,binding,request,abort,current){
  current();
  if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background','skip_worker','retry_worker','pause_workflow','resume_workflow'].includes(request.operation))throw Error('Invalid native task operation');
@@ -107,6 +124,13 @@ async function nativeTaskControl(n,binding,request,abort,current){
  const matches=Object.values(registry.all()).filter(task=>['local_workflow','local_bash','mcp_task',...${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)}].includes(task.type)?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
+ if(request.from_agent!==undefined){
+  const source=request.from_agent,facts=nativeViewFacts(n,binding,abort);
+  const active=facts.view.kind==='agent'?registry.get(facts.view.registryId):undefined;
+  if(request.operation!=='foreground'||facts.view.kind!=='agent'||facts.sequence!==source?.revision||
+    facts.view.taskId!==source.taskId||!nativeAgentAncestors(n,registry,active).some(item=>item.taskId===request.task_id))
+   throw Error('Native Agent breadcrumb expired');
+ }
  if(${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)}.includes(task.type)){
   if(request.operation!=='stop')throw Error('Use the original native task manager for this task detail');
   if(!nativeManagedTaskCanStop(task))throw Error('This native task cannot be stopped directly; it may have ended or require confirmation');
@@ -249,5 +273,6 @@ async function nativeTaskControl(n,binding,request,abort,current){
  const handback=task.type==='local_agent'&&typeof task.handbackReport?.text==='string'?{taskId:request.task_id,text:task.handbackReport.text,...(typeof task.handbackReport.warning==='string'?{warning:task.handbackReport.warning}:{})}:undefined;
  const teammateName=nativeTeammateName(task);
  const canAttach=!!nativeExternalTmuxPane(context,task);
- return {details:{...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput:canUseLocalInput,...(canFocusInput===undefined?{}:{canFocusInput}),...(externalPane?{externalPane:true}:{}),...(canAttach?{canAttach:true}:{}),metadata,messages,truncated}};
+ const ancestors=context.getAppState().viewingAgentTaskId===task.id?nativeAgentAncestors(n,registry,task):[];
+ return {details:{...(ancestors.length?{ancestors}:{}),...(handback?{handback}:{}),...(teammateName?{teammateName}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput:canUseLocalInput,...(canFocusInput===undefined?{}:{canFocusInput}),...(externalPane?{externalPane:true}:{}),...(canAttach?{canAttach:true}:{}),metadata,messages,truncated}};
 }`

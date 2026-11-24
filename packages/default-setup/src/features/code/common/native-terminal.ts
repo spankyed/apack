@@ -25,6 +25,8 @@ export interface ClaudeNativeAgentUiTarget {
   taskId: string
 }
 
+export type ClaudeNativeAgentViewSource = Pick<ClaudeNativeAgentUiTarget, 'taskId' | 'revision'>
+
 export interface ClaudeNativePauseScope {
   ownerId: string
   sessionId: string
@@ -113,6 +115,7 @@ export interface ClaudeNativeTaskDetails {
   taskId: string
   name: string
   teammateName?: string
+  ancestors?: { taskId: string; name: string }[]
   status: string
   canInput: boolean
   canFocusInput?: boolean

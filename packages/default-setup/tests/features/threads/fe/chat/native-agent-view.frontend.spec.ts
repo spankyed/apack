@@ -37,6 +37,28 @@ it('uses a matching teammate name while retaining the label for ordinary or stal
   expect(heading.textContent).toBe('Worker')
 })
 
+it('addresses ancestor navigation from the current view and preserves the draft if native refuses it', async () => {
+  const f = await mount()
+  const details = context.nativeUiViews[f.ui].state.agent
+  details.ancestors = [{ taskId: 'parent', name: 'Completed parent' }]
+  await nextTick()
+  const nav = f.root.querySelector('[aria-label="Agent ancestry"]')!
+  expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe('Worker')
+  const enter = f.button('Completed parent')
+  enter.click(); await nextTick()
+  const request = send.mock.calls.map(([value]) => value).find(value => value.type === 'CLAUDE_TERMINAL_TASK')
+  expect(request).toMatchObject({ operation: 'foreground', taskId: 'parent', fromAgent: { taskId: 'agent', revision: 3 }, ownerId: 'owner', sessionId: 'session' })
+  expect(enter.disabled).toBe(true)
+  context.nativeTerminalViews[f.terminal] = { ...context.nativeTerminalViews[f.terminal], task: { ...request, status: 'error', problem: 'Native Agent breadcrumb expired' } }
+  await nextTick()
+  expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Native Agent breadcrumb expired')
+  expect(f.returned).not.toHaveBeenCalled()
+  expect(f.draftChange).not.toHaveBeenCalled()
+  context.nativeTerminalViews[f.terminal].state!.view = { kind: 'agent', revision: 4, registryId: 'registry-agent', taskId: 'agent' }
+  await nextTick()
+  expect(f.root.querySelector('[aria-label="Agent ancestry"]')).toBeNull()
+})
+
 it('keeps the Agent editor mounted while a native approval owns input', async () => {
   const f = await mount(), draft = f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!
   draft.value = 'Keep the in-progress draft'

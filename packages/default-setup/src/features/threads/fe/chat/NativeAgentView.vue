@@ -7,6 +7,15 @@
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
+    <nav v-if="ancestors.length" v-show="!panelActive && !panelDecisionPending" aria-label="Agent ancestry"
+      class="mx-4 mb-1 flex shrink-0 items-center gap-1 overflow-x-auto whitespace-nowrap text-xs text-neutral-400">
+      <template v-for="ancestor in ancestors" :key="ancestor.taskId">
+        <button type="button" class="rounded px-1 py-1 hover:bg-white/5 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50"
+          :disabled="!canNavigateAncestor" @click="navigateToAncestor(ancestor.taskId)">{{ ancestor.name }}</button>
+        <span aria-hidden="true">/</span>
+      </template>
+      <span aria-current="page" class="px-1 text-neutral-200">{{ displayName }}</span>
+    </nav>
     <NativeManagedSettingsNotice v-if="active && managedSettingsDiagnostics?.length" :diagnostics="managedSettingsDiagnostics"
       :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
     <details v-show="!panelActive && !panelDecisionPending" v-if="state?.agent?.metadata" class="native-agent-details mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
@@ -139,9 +148,11 @@ const selectedOwner = computed(() => {
 })
 const displayName = computed(() => {
   const details = state.value?.agent
-  return selectedOwner.value && details?.taskId === props.target.taskId && details.teammateName
-    ? details.teammateName : props.name
+  if (!selectedOwner.value || details?.taskId !== props.target.taskId) return props.name
+  return details.teammateName ?? (props.name === props.target.taskId ? details.name : props.name)
 })
+const ancestors = computed(() => selectedOwner.value && state.value?.agent?.taskId === props.target.taskId
+  ? state.value.agent.ancestors ?? [] : [])
 provideClaudeHoverGroups(() => props.active && selectedOwner.value && snapshot.value && ['live', 'rendering'].includes(snapshot.value.state.status) && snapshot.value.attachmentId
   ? JSON.stringify([props.threadId, uiMount.value, snapshot.value.attachmentId, props.target.ownerId, props.target.sessionId, props.target.taskId, props.target.revision]) : undefined)
 const canFocusInput = computed(() => {
@@ -189,6 +200,9 @@ let commandFocusOwned = false
 let commandDraft: { revision: number; text: string } | undefined
 const pending = ref(false), returning = ref(false), stopping = ref(false), problem = ref<string>()
 let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0, stopRevision = 0
+let ancestorTarget: string | undefined
+const canNavigateAncestor = computed(() => props.active && !props.approvalPending && !props.panelDecisionPending &&
+  !!selectedOwner.value && !selectedOwner.value.inputBlocked && !pending.value && !returning.value && !stopping.value && !commandActive.value)
 let submission: { revision: number; text: string; preserveDraft: boolean; scrollIntent: number; resolve(result?: ClaudeAgentComposerSubmitResult): void; reject(error: Error): void } | undefined
 const nativeActionKey = createClaudeActionKeyHandler(() => ({
   scope: props.active && uiMount.value && snapshot.value?.attachmentId ? `${uiMount.value}:${snapshot.value.attachmentId}` : undefined,
@@ -244,6 +258,15 @@ watch(() => state.value?.agentInput, value => {
   else if (value.status === 'blocked') request.resolve({ commandPending: true })
   else request.reject(Error(value.problem ?? 'Agent input was refused'))
 })
+function navigateToAncestor(taskId: string) {
+  if (!canNavigateAncestor.value || !ancestors.value.some(ancestor => ancestor.taskId === taskId)) return
+  const { ownerId, sessionId, revision: viewRevision } = props.target
+  ancestorTarget = taskId
+  returning.value = true; emit('returning', true); emit('pending', true); problem.value = undefined
+  returnRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
+  sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId, sessionId, taskId,
+    revision: returnRevision, operation: 'foreground', fromAgent: { taskId: props.target.taskId, revision: viewRevision } })
+}
 function returnToParent() {
   const owner = selectedOwner.value
   if (!owner || pending.value || returning.value || stopping.value || commandActive.value) return
@@ -264,9 +287,19 @@ watch(terminal, view => {
     stopping.value = false; emit('pending', pending.value || returning.value)
     if (result.status === 'error') problem.value = result.problem ?? 'Agent could not be stopped'
   }
-  if (!returning.value || result?.revision !== returnRevision || result.ownerId !== props.target.ownerId || result.taskId !== props.target.taskId || result.operation !== 'background' || result.status === 'pending') return
-  if (result.status === 'done' && result.view?.taskId === null && view?.state?.view?.kind === 'main') { returning.value = false; emit('returning', false); emit('pending', false); emit('returned') }
-  else if (result.status === 'error') { returning.value = false; problem.value = result.problem; emit('returning', false); emit('pending', false) }
+  const operation = ancestorTarget ? 'foreground' : 'background'
+  if (!returning.value || result?.revision !== returnRevision || result.ownerId !== props.target.ownerId ||
+    result.sessionId !== props.target.sessionId || result.taskId !== (ancestorTarget ?? props.target.taskId) ||
+    result.operation !== operation || result.status === 'pending') return
+  const selection = view?.state?.view
+  const arrived = ancestorTarget
+    ? selection?.kind === 'agent' && selection.taskId === ancestorTarget && result.view?.taskId === ancestorTarget
+    : selection?.kind === 'main' && result.view?.taskId === null
+  if (!(result.status === 'done' && arrived) && result.status !== 'error') return
+  returning.value = false; emit('returning', false); emit('pending', false)
+  if (result.status === 'error') problem.value = result.problem
+  else if (!ancestorTarget) emit('returned')
+  ancestorTarget = undefined
 })
 function decideCommand(decision: 'confirm' | 'cancel') {
   const input = state.value?.agentInput
