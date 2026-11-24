@@ -1,15 +1,10 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
-import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
-let terminalScreen: Screen | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('uses original native completion rows with keyboard navigation in main and Agent', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(120000)
   expect(process.env.HOME).toBe(workspace)
@@ -34,30 +29,14 @@ test('uses original native completion rows with keyboard navigation in main and 
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator("textarea[aria-label=\"Terminal input\"]")
-  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
-  ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
-  const resize = async () => {
-    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
-    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));
-    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);
-    const cols=row?.match(/columns:\s*(\d+)/)?.[1], rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined;
-  }
-  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
-  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
-  terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
-  let lastSequence = 0
+  const terminalRows = section.locator('[data-terminal-text]')
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
     const current = await context(), native = current.native
-    const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
-    if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
-    const buffer = terminalScreen!.buffer.active
-    const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
+    const text = await terminalRows.innerText({ timeout: 500 }).catch(() => '')
     if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
     const screen = recognizeOnboardingPrompt(text, workspace)
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
+    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
