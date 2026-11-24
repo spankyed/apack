@@ -398,11 +398,55 @@ it('carries the selected phase only to the authenticated owner and preserves a n
   } finally { f.views.clear() }
 })
 
+function mcpFormFor(request: { id: string; revision: string; sessionId: string; token: string }) {
+  const { id, revision, sessionId, token } = request
+  return { id, revision, sessionId, token, ready: true, serverName: 'test', message: 'Confirm this',
+    schema: {}, propertyOrder: [], values: {}, errors: {}, resolvingFields: [], focusedButton: null, textInputValue: '' }
+}
+
+it('never publishes an old MCP form failure to its replacement or blocks the replacement action', async () => {
+  const f = fixture()
+  let rejectOld!: (error: Error) => void
+  let completeNew!: () => void
+  vi.mocked(f.owner.operateMcpForm)
+    .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { rejectOld = reject }))
+    .mockImplementationOnce(() => new Promise<void>(resolve => { completeNew = resolve }))
+  const first = { id: 'dialog', revision: randomUUID(), sessionId: f.owner.state.sessionId,
+    token: 'a'.repeat(64), action: { operation: 'accept' as const } }
+  const second = { ...first, revision: randomUUID(), token: 'b'.repeat(64) }
+  const event = { ...mount, type: 'CLAUDE_TERMINAL_MCP_FORM' as const, ownerId: f.owner.state.ownerId }
+  try {
+    f.owner.state.mcpForm = mcpFormFor(first)
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle({ ...event, sequence: 1, request: first }, 'one', f.send)
+    await Promise.resolve()
+    expect(f.owner.operateMcpForm).toHaveBeenCalledExactlyOnceWith(first)
+    expect(f.send.mock.calls.at(-1)![0].mcpOperation).toMatchObject({ sequence: 1, status: 'pending' })
+
+    f.owner.state.mcpForm = mcpFormFor(second)
+    for (const notify of f.listeners) notify()
+    await Promise.resolve()
+    expect(f.send.mock.calls.at(-1)![0].mcpOperation).toBeUndefined()
+
+    f.views.handle({ ...event, sequence: 2, request: first }, 'one', f.send)
+    f.views.handle({ ...event, sequence: 3, request: second }, 'one', f.send)
+    await Promise.resolve()
+    expect(f.owner.operateMcpForm).toHaveBeenCalledTimes(2)
+    expect(f.owner.operateMcpForm).toHaveBeenLastCalledWith(second)
+    rejectOld(new Error('Old dialog expired'))
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].mcpOperation).toMatchObject({ sequence: 3, status: 'pending' }))
+    completeNew()
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].mcpOperation).toEqual({ sequence: 3, status: 'done' }))
+    expect(f.send.mock.calls.some(([reply]) => reply.mcpOperation?.problem === 'Old dialog expired')).toBe(false)
+  } finally { f.views.clear() }
+})
+
 it('addresses MCP operations to the live lease and deduplicates pending and completed sequences', async () => {
   const f = fixture(); let finish!: () => void
   vi.mocked(f.owner.operateMcpForm).mockImplementation(() => new Promise<void>(resolve => { finish = resolve }))
   const request = { ...mount, type: 'CLAUDE_TERMINAL_MCP_FORM' as const, ownerId: f.owner.state.ownerId, sequence: 1, request: { id: 'dialog', revision: randomUUID(), sessionId: f.owner.state.sessionId, token: 'a'.repeat(64), action: { operation: 'cancel' as const } } }
   try {
+    f.owner.state.mcpForm = mcpFormFor(request.request)
     f.views.handle(mount, 'one', f.send)
     f.views.handle(request, 'foreign', f.send); f.views.handle({ ...request, ownerId: 'foreign' }, 'one', f.send)
     expect(f.owner.operateMcpForm).not.toHaveBeenCalled()
@@ -414,9 +458,11 @@ it('addresses MCP operations to the live lease and deduplicates pending and comp
 })
 it('withdraws queued MCP work when its view detaches before dispatch', async () => {
   const f = fixture()
+  const request = { id: 'dialog', revision: randomUUID(), sessionId: f.owner.state.sessionId, token: 'a'.repeat(64), action: { operation: 'accept' as const } }
   try {
+    f.owner.state.mcpForm = mcpFormFor(request)
     f.views.handle(mount, 'one', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_MCP_FORM', ownerId: f.owner.state.ownerId, sequence: 1, request: { id: 'dialog', revision: randomUUID(), sessionId: f.owner.state.sessionId, token: 'a'.repeat(64), action: { operation: 'accept' } } }, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_MCP_FORM', ownerId: f.owner.state.ownerId, sequence: 1, request }, 'one', f.send)
     f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', f.send)
     await Promise.resolve(); expect(f.owner.operateMcpForm).not.toHaveBeenCalled(); expect(f.owner.close).not.toHaveBeenCalled()
   } finally { f.views.clear() }
@@ -427,6 +473,8 @@ it('shares sequencing across form/URL requests and rejects a detached URL action
   vi.mocked(f.owner.operateMcpUrl).mockImplementation(() => new Promise<void>(resolve => { finish = resolve }))
   const request = { ...mount, type: 'CLAUDE_TERMINAL_MCP_URL' as const, ownerId: f.owner.state.ownerId, sequence: 1, request: { id: 'url', revision: randomUUID(), sessionId: f.owner.state.sessionId, token: 'a'.repeat(64), action: { operation: 'open' as const } } }
   try {
+    f.owner.state.mcpUrl = { ...request.request, ready: true, kind: 'mcp_url_elicitation', phase: 'prompt', serverName: 'test',
+      message: 'Confirm this', url: 'https://example.net/', title: 'Owned fixture', userConfirmsCompletion: false, choices: [], warnings: [] }
     f.views.handle(mount, 'one', f.send); f.views.handle(request, 'foreign', f.send); expect(f.owner.operateMcpUrl).not.toHaveBeenCalled()
     f.views.handle(request, 'one', f.send)
     f.views.handle({ ...request, type: 'CLAUDE_TERMINAL_MCP_FORM', sequence: 2, request: { ...request.request, action: { operation: 'accept' } } }, 'one', f.send)

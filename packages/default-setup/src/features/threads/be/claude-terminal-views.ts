@@ -141,6 +141,14 @@ export type ClaudeTerminalViewReply = ClaudeTerminalViewSnapshot & {
   threadId: string
   mountId: string
 }
+type McpDialogAddress = { kind: 'form' | 'url'; id: string; revision: string; sessionId: string }
+
+function mcpDialogCurrent(state: ClaudeNativeTerminalState | undefined, address: McpDialogAddress): boolean {
+  if (state?.status !== 'live' || state.sessionId !== address.sessionId) return false
+  const dialog = address.kind === 'form' ? state.mcpForm : state.mcpUrl
+  return dialog?.id === address.id && dialog.revision === address.revision && dialog.sessionId === address.sessionId
+}
+
 interface View {
   client: string
   queueComposer: boolean
@@ -168,7 +176,7 @@ interface View {
   desktopPreparation?: object
   desktopRetry?: boolean
   backgroundRegistration?: string
-  mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
+  mcpOperation?: NonNullable<ClaudeTerminalViewSnapshot['mcpOperation']> & { dialog: McpDialogAddress }
   queueOperation?: ClaudeTerminalViewSnapshot['queueOperation']
   policyRecheck?: ClaudeTerminalViewSnapshot['policyRecheck']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
@@ -413,9 +421,14 @@ export function createClaudeTerminalViews(dependencies: {
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
+    let mcpOperation: ClaudeTerminalViewSnapshot['mcpOperation']
+    if (view.mcpOperation && mcpDialogCurrent(state, view.mcpOperation.dialog)) {
+      const { sequence, status, problem } = view.mcpOperation
+      mcpOperation = { sequence, status, ...(problem !== undefined && { problem }) }
+    }
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state, attachment: view.attachment ? {...view.attachment} : undefined, teammateReconnects: teammateReconnects.length ? teammateReconnects : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, teammateReconnects: teammateReconnects.length ? teammateReconnects : undefined, background: view.background, mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -709,10 +722,16 @@ export function createClaudeTerminalViews(dependencies: {
       const owner = dependencies.get(event.threadId)
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
       if (event.type === 'CLAUDE_TERMINAL_MCP_FORM' || event.type === 'CLAUDE_TERMINAL_MCP_URL') {
-        if (!Number.isSafeInteger(event.sequence) || event.sequence <= (target.mcpOperation?.sequence ?? 0) || target.mcpOperation?.status === 'pending') return
-        const operation: NonNullable<ClaudeTerminalViewSnapshot['mcpOperation']> = { sequence: event.sequence, status: 'pending' }
+        const { id, revision, sessionId } = event.request
+        const dialog: McpDialogAddress = { kind: event.type === 'CLAUDE_TERMINAL_MCP_FORM' ? 'form' : 'url', id, revision, sessionId }
+        const prior = target.mcpOperation, state = owner.state
+        // A new native dialog may mount before the old operation settles.
+        if (!mcpDialogCurrent(state, dialog) || !Number.isSafeInteger(event.sequence) || event.sequence <= (prior?.sequence ?? 0)
+          || prior?.status === 'pending' && mcpDialogCurrent(state, prior.dialog)) return
+        const operation: NonNullable<View['mcpOperation']> = { sequence: event.sequence, status: 'pending', dialog }
         target.mcpOperation = operation; publish(key, target)
-        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.mcpOperation === operation
+        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner
+          && target.mcpOperation === operation && mcpDialogCurrent(owner.state, dialog)
         void Promise.resolve().then(() => { if (current()) return event.type === 'CLAUDE_TERMINAL_MCP_URL' ? owner.operateMcpUrl(event.request) : owner.operateMcpForm(event.request) }).then(() => {
           if (current()) { target.mcpOperation = { ...operation, status: 'done' }; publish(key, target) }
         }).catch(error => {

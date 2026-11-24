@@ -481,16 +481,17 @@ const nativePermissionMode = computed(() => {
   const owner = nativeComposerOwner.value
   return owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === currentThread.value?.id && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId ? owner.session?.permissionMode : undefined
 })
+let nativeMcpSequence = 0
 function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, form = owner?.mcpForm
   if (!mount || !owner || !form) return
-  send({ type: 'CLAUDE_TERMINAL_MCP_FORM', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
+  send({ type: 'CLAUDE_TERMINAL_MCP_FORM', ...mount, ownerId: owner.ownerId, sequence: ++nativeMcpSequence,
     request: { id: form.id, revision: form.revision, sessionId: form.sessionId, token: form.token, action } })
 }
 function operateMcpUrl(action: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, url = owner?.mcpUrl
   if (!mount || !owner || !url) return
-  send({ type: 'CLAUDE_TERMINAL_MCP_URL', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
+  send({ type: 'CLAUDE_TERMINAL_MCP_URL', ...mount, ownerId: owner.ownerId, sequence: ++nativeMcpSequence,
     request: { id: url.id, revision: url.revision, sessionId: url.sessionId, token: url.token, action } })
 }
 const visibleMessages = computed(() => selectClaudeFocusMessages(allMessages.value, nativeComposerOwner.value));
