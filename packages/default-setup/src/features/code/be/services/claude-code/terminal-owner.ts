@@ -140,6 +140,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   if (!(await stat(options.cwd)).isDirectory()) throw new Error('Native terminal working directory is unavailable')
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
+  // Claude also recognizes iTerm2 by these markers. They describe the outer terminal, which does not own this PTY.
+  const unset = [...DENIED_TO_A_CHILD, 'ITERM_SESSION_ID', 'terminal']
+  for (const name of unset) delete terminalEnv[name]
+  delete terminalEnv.TERM_PROGRAM // Inherit the broker's declared terminal identity.
   // Advertise app rendering capabilities only when the caller has not chosen an override.
   if (!terminalEnv.NO_COLOR) terminalEnv.FORCE_COLOR ??= '3'
   terminalEnv.FORCE_HYPERLINK ??= '1'
@@ -292,7 +296,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           // **A session inherits the host's environment, so `env` cannot say what must be absent.** The CLI
           // authenticates as whoever the user signed in as, and a key the app happens to carry — the API
           // auto-loads `packages/server/.env` — would make it authenticate as the app instead
-          unset: DENIED_TO_A_CHILD,
+          unset,
           cwd: options.cwd,
         },
         {

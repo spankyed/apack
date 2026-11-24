@@ -38,6 +38,26 @@ it('preserves inherited capability overrides when no launch override is supplied
   finally { await prepared.dispose() }
 })
 
+it('uses the broker terminal identity even when apack was launched from iTerm2', async () => {
+  vi.stubEnv('TERM_PROGRAM', 'iTerm.app')
+  vi.stubEnv('ITERM_SESSION_ID', 'outer-window')
+  vi.stubEnv('terminal', 'iTerm.app')
+  native.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
+  const prepared = await prepareClaudeNativeTerminal({
+    sessionId: '11111111-1111-1111-1111-111111111111', cwd: tmpdir(), cliPath: process.execPath,
+    permissionMode: 'default', settings: { effective: {}, sources: [] },
+  })
+  try {
+    await prepared.start()
+    const { env, unset } = native.open.mock.calls[0][0]
+    expect(env).not.toHaveProperty('TERM_PROGRAM')
+    expect(env).not.toHaveProperty('ITERM_SESSION_ID')
+    expect(env).not.toHaveProperty('terminal')
+    expect(unset).toEqual(expect.arrayContaining(['ITERM_SESSION_ID', 'terminal']))
+    expect(unset).not.toContain('TERM_PROGRAM')
+  } finally { await prepared.dispose() }
+})
+
 it.each([undefined, '2'])('honors native NO_COLOR precedence, explicit FORCE_COLOR: %s', async color => {
   vi.stubEnv('FORCE_COLOR', undefined); vi.stubEnv('FORCE_HYPERLINK', undefined); vi.stubEnv('NO_COLOR', '1')
   native.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
