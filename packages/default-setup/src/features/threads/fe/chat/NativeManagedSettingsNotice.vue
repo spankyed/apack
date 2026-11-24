@@ -47,7 +47,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 @media (max-height: 700px) {
-  .managed-settings-details { max-height: 2.5rem; }
+  /* Show a wrapped diagnostic in a compact window while keeping room for the composer. */
+  .managed-settings-details {
+    max-height: clamp(2.5rem, calc(50dvh - 13rem), 6rem);
+    overflow-wrap: anywhere;
+  }
   .managed-settings-problem { max-height: 2rem; overflow-y: auto; }
 }
 </style>

@@ -140,6 +140,11 @@ test('honors OS-managed policy before user settings in the everyday composer', a
         expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
         await expect(status).toBeInViewport({ ratio: 1 })
         await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
+        if (mode === 0o000) {
+          const details = warning.getByRole('region', { name: 'Settings warning details' })
+          await expect(details).toBeInViewport({ ratio: 1 })
+          expect(await details.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
+        }
         await expect(card.getByRole('button', { name: 'Session tools', exact: true })).toHaveCount(0)
         const current = await context()
         expect(current.sessionId).toBe(sessionId)
