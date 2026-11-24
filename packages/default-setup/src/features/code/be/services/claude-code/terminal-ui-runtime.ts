@@ -9,6 +9,7 @@ import { CLAUDE_UI_CONTROL_RESPONSE_MAX_BYTES, CLAUDE_UI_PROMPT_RPC_SUBTYPES, CL
 import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
+import { claudeTerminalPublishPluginRuntime } from './terminal-publish-plugin-runtime.ts'
 import { claudeTerminalSandboxNetworkRuntime } from './terminal-sandbox-network-runtime.ts'
 import { claudeTerminalBrowserPermissionRuntime } from './terminal-browser-permission-runtime.ts'
 import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
@@ -859,6 +860,7 @@ ${claudeTerminalUltraplanChoiceRuntime}
 ${claudeTerminalUltraplanLaunchRuntime}
 ${claudeTerminalLeftArrowRuntime}
 ${claudeTerminalSandboxNetworkRuntime}
+${claudeTerminalPublishPluginRuntime}
 ${claudeTerminalBrowserPermissionRuntime}
 ${claudeTerminalComputerPermissionRuntime}
 ${claudeTerminalAutoModeSafetyRuntime}
@@ -892,7 +894,7 @@ function nativeDialog(n,kind){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- const supported=kind==='permission_monitor'?payload?.toolName==='Monitor'&&typeof payload.intervalMs==='number':kind==='permission_powershell'?payload?.toolName==='PowerShell'&&typeof payload.input?.command==='string':kind==='permission_prompt'?typeof payload?.toolName==='string'&&payload.toolName.length>0&&payload.toolName.length<=256:kind==='permission_webfetch'?payload?.toolName==='WebFetch'&&typeof payload.hostname==='string':kind==='permission_skill'?payload?.toolName==='Skill'&&typeof payload.skill==='string':kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)||payload?.toolName==='NotebookEdit'&&payload.operationType==='write'&&typeof payload.input?.notebook_path==='string'&&['notebook-edit-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ const supported=kind==='permission_publish_plugin'?payload?.toolName==='PublishPlugin'&&Array.isArray(payload.everything):kind==='permission_monitor'?payload?.toolName==='Monitor'&&typeof payload.intervalMs==='number':kind==='permission_powershell'?payload?.toolName==='PowerShell'&&typeof payload.input?.command==='string':kind==='permission_prompt'?typeof payload?.toolName==='string'&&payload.toolName.length>0&&payload.toolName.length<=256:kind==='permission_webfetch'?payload?.toolName==='WebFetch'&&typeof payload.hostname==='string':kind==='permission_skill'?payload?.toolName==='Skill'&&typeof payload.skill==='string':kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)||payload?.toolName==='NotebookEdit'&&payload.operationType==='write'&&typeof payload.input?.notebook_path==='string'&&['notebook-edit-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
  if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
   dialogRevisions.delete(kind);return {store,sessionId};
  }
@@ -1120,6 +1122,7 @@ async function readNativeNoticeSnapshot(n,signal){
   const autoSafety=nativeAutoModeSafety(n);if(autoSafety.item)return {notice:await projectNativeAutoModeSafety(n,autoSafety),retirements:refusal.retirements};
   const computer=nativeComputerPermission(n);if(computer.item)return {notice:await projectNativeComputerPermission(n,computer),retirements:refusal.retirements};
   const browser=nativeBrowserPermission(n);if(browser.item)return {notice:await projectNativeBrowserPermission(n,browser),retirements:refusal.retirements};
+  const publish=nativePublishPlugin(n);if(publish)return {notice:publish.notice,retirements:refusal.retirements};
   const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
   const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
   const quota=nativeColdQuota(n);if(quota.item)return {notice:await projectNativeColdQuota(n,quota),retirements:refusal.retirements};
@@ -1225,6 +1228,7 @@ async function control(request,abort){
   if(['auto_nudge_accept','auto_nudge_decline','auto_review_accept','auto_review_decline','auto_rules_all','auto_rules_pick','auto_rules_leave','auto_rules_select','auto_rules_submit','auto_safety_cancel'].includes(request.decision)){await answerNativeAutoModeSafety(n,request,abort);return {answered:true};}
   if(['computer_deny','computer_allow','computer_accessibility','computer_screen_recording','computer_retry','computer_cancel'].includes(request.decision)){answerNativeComputerPermission(n,request);return {answered:true};}
   if(['browser_allow','browser_domain','browser_deny','browser_cancel'].includes(request.decision)){answerNativeBrowserPermission(n,request);return {answered:true};}
+  if(['publish_plugin_confirm','publish_plugin_decline'].includes(request.decision)){await answerNativePublishPlugin(n,request,abort);return {answered:true};}
   if(['sandbox_allow','sandbox_remember','sandbox_deny','sandbox_cancel'].includes(request.decision)){answerNativeSandboxNetwork(n,request);return {answered:true};}
   if(['background_confirm','background_stay'].includes(request.decision)){await answerNativeLeftArrow(n,request);return {answered:true,handoffPending:nativeAgentsParkState(n)};}
   if(['quota_resume','quota_new_conversation','quota_dismiss'].includes(request.decision)){answerNativeColdQuota(n,request);return {answered:true};}

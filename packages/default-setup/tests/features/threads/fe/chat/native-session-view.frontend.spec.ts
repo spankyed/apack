@@ -886,3 +886,38 @@ it('shows loading terms before exposing the cloud action, then addresses Run and
   dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   expect(actor.send.mock.calls.at(-1)![0].notice).toMatchObject({ revision: terms.revision, decision: 'ultraplan_launch_escape' })
 })
+
+it('keeps the full Claude plugin publish file list and stale approval isolated', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } })
+  await nextTick()
+  f.back.click()
+  await nextTick()
+  const notice = {
+    id: 'publish', revision: 'first', sessionId: 'session', kind: 'permission_publish_plugin' as const,
+    title: 'Publish release-notes to organization Example?', paragraphs: ['Sends 2 files'],
+    previewFiles: ['README.md'], files: ['README.md', '<script>second file</script>'],
+    choices: [{ value: 'publish_plugin_confirm', label: 'Yes, publish' }, { value: 'publish_plugin_decline', label: 'No' }] as [{ value: 'publish_plugin_confirm'; label: string }, { value: 'publish_plugin_decline'; label: string }],
+  }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } })
+  await nextTick()
+  const panel = () => f.root.querySelector<HTMLElement>('[data-native-notice="permission_publish_plugin"]')!
+  const getButton = (label: string) => [...panel().querySelectorAll('button')].find(button => button.textContent === label)!
+  const count = actor.send.mock.calls.length
+  getButton('See every file').click()
+  await nextTick()
+  expect(panel().textContent).toContain(notice.files[1])
+  expect(panel().querySelector('script')).toBeNull()
+  panel().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await nextTick()
+  expect(actor.send.mock.calls.length).toBe(count)
+  const stale = getButton('Yes, publish')
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: { ...notice, revision: 'replacement' } } })
+  stale.click()
+  expect(actor.send.mock.calls.length).toBe(count)
+  await nextTick()
+  getButton('No').click()
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', notice: {
+    id: notice.id, revision: 'replacement', sessionId: notice.sessionId, decision: 'publish_plugin_decline',
+  } }))
+})

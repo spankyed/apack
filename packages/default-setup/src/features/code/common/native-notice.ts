@@ -6,6 +6,8 @@ import type {ClaudeCreditRequest} from './native-credit.ts'
 export const claudeOpus5RefusalRetryNotice = "Opus 5's safeguards stopped the response above · continuing once with that noted"
 
 const identity = { id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid() }
+const publishRows = z.array(z.string().max(16000)).max(4096)
+const publishDecline = z.object({ value: z.literal('publish_plugin_decline'), label: z.string().min(1).max(4000) })
 const body = { title: z.string().max(16000), paragraphs: z.array(z.string().max(16000)).max(32) }
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
@@ -22,6 +24,18 @@ export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
   z.object({ ...identity, ...body, kind: z.literal('permission_browser'), toolName: z.string().startsWith('mcp__claude-in-chrome__').max(256), requestId: z.string().min(1).max(256), choices: z.array(z.object({ value: z.enum(['browser_allow', 'browser_domain', 'browser_deny']), label: z.string().min(1).max(4000) })).min(2).max(3) }),
   z.object({ ...identity, ...body, kind: z.literal('left_arrow_confirm'), preferredChoice: z.enum(['background_confirm', 'background_stay']), choices: z.array(z.object({ value: z.enum(['background_confirm', 'background_stay']), label: z.string().min(1).max(4000) })).length(2) }),
   z.object({ ...identity, ...body, kind: z.literal('sandbox_network_access'), choices: z.array(z.object({ value: z.enum(['sandbox_allow', 'sandbox_remember', 'sandbox_deny']), label: z.string().min(1).max(4000) })).min(2).max(3) }),
+  z.object({
+    ...identity,
+    kind: z.literal('permission_publish_plugin'),
+    title: z.string().min(1).max(4000),
+    paragraphs: publishRows,
+    previewFiles: publishRows,
+    files: publishRows,
+    choices: z.union([
+      z.tuple([publishDecline]),
+      z.tuple([z.object({ value: z.literal('publish_plugin_confirm'), label: z.string().min(1).max(4000) }), publishDecline]),
+    ]),
+  }),
   z.object({ ...identity, ...body, kind: z.literal('managed_settings_security'), paragraphsAnsi: z.array(z.string().max(200000)).length(4), preferredChoice: z.enum(['policy_approve', 'policy_reject']), choices: z.array(z.object({ value: z.enum(['policy_approve', 'policy_reject']), label: z.string().min(1).max(4000) })).length(2) }).refine(value => value.paragraphs.length === value.paragraphsAnsi.length, 'Managed settings text/style rows must agree'),
   z.object({ ...identity, ...body, kind: z.literal('refusal_fallback_prompt'), helpUrl: z.string().url().startsWith('https://').max(4000).optional(), originalModel: z.string().max(16000), fallbackModel: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['retry_fallback', 'edit_prompt']), label: z.string().min(1).max(4000) })).length(2) }),
   z.object({ ...identity, ...body, kind: z.literal('autocompact_offer'), selectedTokens: z.number().int().positive(), canPrevious: z.boolean(), canNext: z.boolean(), choices: z.array(z.object({ value: z.enum(['compact_accept', 'compact_keep']), label: z.string().min(1).max(4000) })).length(2) }),
@@ -69,7 +83,7 @@ export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
   z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), fileExtension: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
 ])
 export type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>
-export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({decision:'credit';credit:ClaudeCreditRequest} | { selectedValues?: string[]; decision: 'effort_accept' | 'effort_decline' | 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry' | 'computer_cancel' | 'chrome_install' | 'chrome_not_now' | 'chrome_never' | 'chrome_continue' | 'chrome_wait' | 'chrome_skip' | 'chrome_cancel' | 'browser_allow' | 'browser_domain' | 'browser_deny' | 'browser_cancel' | 'quota_resume' | 'quota_new_conversation' | 'quota_dismiss' | 'newer_accept' | 'newer_keep' | 'newer_dismiss' | 'resume_compact' | 'resume_continue' | 'resume_never' | 'resume_dismiss' | 'background_confirm' | 'background_stay' | 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny' | 'sandbox_cancel' | 'policy_approve' | 'policy_reject' | 'compact_previous' | 'compact_next' | 'compact_accept' | 'compact_keep' | 'compact_dismiss' | 'goal_accept' | 'goal_decline' | 'peer_deny' | 'peer_deliver' | 'peer_cancel' | 'ide_welcome_dismiss' | 'cost_acknowledge' | 'remote_enable' | 'remote_dismiss' | 'ultraplan_launch_run' | 'ultraplan_launch_cancel' | 'ultraplan_launch_escape' | 'ultraplan_here' | 'ultraplan_fresh' | 'ultraplan_cancel' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' })
+export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({decision:'credit';credit:ClaudeCreditRequest} | { selectedValues?: string[]; decision: 'publish_plugin_confirm' | 'publish_plugin_decline' | 'effort_accept' | 'effort_decline' | 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry' | 'computer_cancel' | 'chrome_install' | 'chrome_not_now' | 'chrome_never' | 'chrome_continue' | 'chrome_wait' | 'chrome_skip' | 'chrome_cancel' | 'browser_allow' | 'browser_domain' | 'browser_deny' | 'browser_cancel' | 'quota_resume' | 'quota_new_conversation' | 'quota_dismiss' | 'newer_accept' | 'newer_keep' | 'newer_dismiss' | 'resume_compact' | 'resume_continue' | 'resume_never' | 'resume_dismiss' | 'background_confirm' | 'background_stay' | 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny' | 'sandbox_cancel' | 'policy_approve' | 'policy_reject' | 'compact_previous' | 'compact_next' | 'compact_accept' | 'compact_keep' | 'compact_dismiss' | 'goal_accept' | 'goal_decline' | 'peer_deny' | 'peer_deliver' | 'peer_cancel' | 'ide_welcome_dismiss' | 'cost_acknowledge' | 'remote_enable' | 'remote_dismiss' | 'ultraplan_launch_run' | 'ultraplan_launch_cancel' | 'ultraplan_launch_escape' | 'ultraplan_here' | 'ultraplan_fresh' | 'ultraplan_cancel' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' })
 export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decision: string): boolean {
   if (notice.kind === 'fable_overage_consent_prompt') return decision === 'credit'
   if (notice.kind === 'credit_consent_result') return false
@@ -81,6 +95,7 @@ export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decisio
   if (notice.kind === 'computer_use_approval') return decision === 'computer_cancel' || notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'permission_browser') return decision === 'browser_cancel' || notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'left_arrow_confirm') return notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'permission_publish_plugin') return notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'sandbox_network_access') return decision === 'sandbox_cancel' || notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'managed_settings_security') return notice.choices.some(choice => choice.value === decision)
   if (notice.kind === 'autocompact_offer') return decision === 'compact_dismiss' || decision === 'compact_previous' && notice.canPrevious || decision === 'compact_next' && notice.canNext || notice.choices.some(choice => choice.value === decision)
