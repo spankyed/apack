@@ -13,10 +13,10 @@ vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ d
 let app: App | undefined
 beforeEach(() => { settingsStatus.value = 'ready'; actor.send.mockClear(); links.open.mockClear(); drawing.focus.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
-async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation, canPresentRemoteCallout?: () => boolean) {
+async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation, canPresentIdleComposerNotice?: () => boolean) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const flags = ref({ busy: false, inputPending: false })
-  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, canPresentRemoteCallout, ...flags.value, onActive: active }) }); app.mount(root)
+  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, canPresentIdleComposerNotice, ...flags.value, onActive: active }) }); app.mount(root)
   const mount = actor.send.mock.calls.find(([event]) => event.type === 'CLAUDE_TERMINAL_MOUNT')![0]
   const snapshot: ClaudeTerminalViewSnapshot = { opening: false, output: [], state: { ownerId: 'owner', sessionId: 'session', cwd: '/fixture', status: 'live', busy: false, tasks: [{ id: 'agent-a', name: 'Worker', status: 'running' }], view: { kind: 'agent', revision: 2, registryId: 'registry-a', taskId: 'agent-a' } } }
   function publish(value: ClaudeTerminalViewSnapshot) { state.value = { context: { nativeTerminalViews: { [mount.mountId]: { ...value, threadId: 'thread' } as ClaudeTerminalViewSnapshot } } } }
@@ -754,4 +754,63 @@ it.each(['ready', 'disconnected'] as const)('retires the local terminal mount wh
     mountId: mount.mountId,
     ...(status === 'disconnected' ? { localOnly: true } : {}),
   })
+})
+
+it('shows the entire Ultraplan handoff and routes the native choices without changing the draft', async () => {
+  const idle = ref(false)
+  const f = await fixture(undefined, () => idle.value)
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } })
+  await nextTick()
+  f.back.click()
+  await nextTick()
+  const draft = document.createElement('textarea')
+  draft.value = 'Keep this draft'
+  f.root.prepend(draft)
+  draft.focus()
+  const notice = {
+    id: 'ultraplan', revision: 'revision', sessionId: 'session', kind: 'ultraplan_choice',
+    title: 'Ultraplan approved', paragraphs: ['How should the plan be implemented?'],
+    plan: Array.from({ length: 35 }, (_, index) => `Review step ${index + 1}`).join('\n') + '\n<img src="unsafe">',
+    choices: [
+      { value: 'ultraplan_here', label: 'Implement here', description: 'Use the current conversation' },
+      { value: 'ultraplan_fresh', label: 'Start new session', description: 'Start with only the plan' },
+      { value: 'ultraplan_cancel', label: 'Cancel', description: 'Save the plan and return' },
+    ],
+  } satisfies ClaudeNativeNotice
+  const ownerState = { ...f.snapshot.state!, view: { kind: 'main' as const, revision: 3 }, notice }
+  f.publish({ ...f.snapshot, state: ownerState })
+  await nextTick()
+  expect(f.root.querySelector('[data-native-notice="ultraplan_choice"]')).toBeNull()
+  expect(document.activeElement).toBe(draft)
+  idle.value = true
+  await nextTick()
+  await nextTick()
+  const panel = f.root.querySelector('[data-native-notice="ultraplan_choice"]')!
+  expect(panel.getAttribute('aria-label')).toBe(notice.title)
+  expect(panel.querySelector('pre')?.textContent).toBe(notice.plan)
+  expect(panel.querySelector('img')).toBeNull()
+  expect(document.activeElement).toBe(panel.querySelector('.native-notice__body'))
+  expect(draft.value).toBe('Keep this draft')
+  const fresh = panel.querySelector<HTMLButtonElement>('[data-native-choice="ultraplan_fresh"]')!
+  fresh.click()
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({
+    type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner', notice: {
+      id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'ultraplan_fresh',
+    },
+  }))
+  f.publish({ ...f.snapshot, state: ownerState, noticeAnswer: { id: notice.id, revision: notice.revision, status: 'pending' } })
+  await nextTick()
+  expect(fresh.disabled).toBe(true)
+  f.publish({ ...f.snapshot, state: ownerState })
+  await nextTick()
+  const beforeEscape = actor.send.mock.calls.length
+  panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send).toHaveBeenCalledTimes(beforeEscape)
+  panel.querySelector<HTMLButtonElement>('[data-native-choice="ultraplan_cancel"]')!.click()
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('ultraplan_cancel')
+  f.publish({ ...f.snapshot, state: { ...ownerState, notice: undefined } })
+  await nextTick()
+  await nextTick()
+  expect(panel.isConnected).toBe(false)
+  expect(document.activeElement).toBe(draft)
 })

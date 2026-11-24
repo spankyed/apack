@@ -680,11 +680,11 @@ const {
   handlePaste, handleFileDrop, addImageFromUrl, removeImage, restoreQueuedImages, openFilePicker, removeFile,
   captureAttachments, restoreFromReferences,
 } = useAttachments()
-function canPresentRemoteCallout() {
+function canPresentIdleComposerNotice() {
   const editor = tiptapRef.value?.editor
-  return !!editor && editor.isEmpty && !editor.view.composing && !hasAttachments.value && !hostPopupActive.value && !submitting.value
+  return !!editor && !hasTextContent.value && editor.isEmpty && !editor.view.composing && !hasAttachments.value && !hostPopupActive.value && !submitting.value
 }
-defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentRemoteCallout })
+defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentIdleComposerNotice })
 watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {
   if (values.some(Boolean)) paneFocusGrant.value = null
 })
