@@ -21,11 +21,13 @@ jobs:
     env:
       APACK_CHAIN_CORES: 2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 23.11.1
+          node-version: 24.22.2
           cache: npm
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
       - name: Record platform and candidate
         run: |
           git rev-parse HEAD
