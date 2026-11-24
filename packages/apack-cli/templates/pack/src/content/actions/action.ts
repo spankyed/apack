@@ -1,5 +1,5 @@
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 
 export const meta: ActionMeta = {
   label: '__LABEL__',
@@ -11,8 +11,6 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  z: Z,
-  flowId: string,
 ) {
   // Action implementation
 }

@@ -4,8 +4,8 @@ Content sources `apack pack build` compiles to JSON, as `apack.json` `content.fo
 
 ## Actions
 
-- Export `meta: ActionMeta` and `async function action(params, services, z, flowId)`. Both the flow action step and `services.action` run it with `runActionCode` (`extensions/steps/action/sandbox.ts`), which passes all four (`flowId` only from a flow step) and gives `services.logger` the name `action:<label>`
-- Import types: `import type { ActionMeta } from '@apackdev/sdk/build'` and `import type { Services, Z } from '#generated/services'`
+- Export `meta: ActionMeta` and `async function action(params, services)` (add `z` / `flowId` parameters when the action body reads them). Both the flow action step and `services.action` run it with `runActionCode` (`extensions/steps/action/sandbox.ts`), which passes `params`, `services`, `z`, and `flowId` (`flowId` only from a flow step) and gives `services.logger` the name `action:<label>`
+- Import types: `import type { ActionMeta } from '@apackdev/sdk/build'` and `import type { Services } from '#generated/services'` (and `import type { z as Zod } from 'zod'` with `z: typeof Zod` when typing the injected `z` parameter)
 - Bare package imports fail the build, except `@apackdev/sdk/actions`, an allowlisted sandbox-safe module whose source is inlined into the compiled body (`INLINABLE_PACKAGE_IMPORTS` in `apack-sdk/src/build/compile-utils.ts`). Type-only imports (`import type`) are erased before bundling and are always fine. References to Node-only globals in the bundle are reported as warnings, not errors
 - Relative imports (`./_helpers/...`) are bundled in. A `.ts` file without `export const meta` is a helper, not an action, whatever its name; `.example.ts` files are skipped
 - Reference: `docs/public-facing/content.md`

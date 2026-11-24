@@ -32,8 +32,9 @@ export function typecheck(files: Record<string, string>, names: string[], noUnus
   write('package.json', JSON.stringify({ type: 'module' }));
   const sdk = path.resolve(import.meta.dirname, '../../../..');
   const fromSdk = (name: string) => path.dirname(createRequire(path.join(sdk, 'package.json')).resolve(`${name}/package.json`));
-  // The generated facades import the engine too, which a pack installs with the SDK
-  const links = { '@apackdev/sdk': sdk, '@elmdb/ears': fromSdk('@elmdb/ears'), zod: fromSdk('zod'), vue: fromSdk('vue') };
+  // The generated facades import the engine too, which a pack installs with the SDK. `zod` is
+  // intentionally omitted so any generated import of `zod` fails typecheck with TS2307.
+  const links = { '@apackdev/sdk': sdk, '@elmdb/ears': fromSdk('@elmdb/ears'), vue: fromSdk('vue') };
   for (const [name, target] of Object.entries(links)) {
     const link = path.join(root, 'node_modules', name);
     fs.mkdirSync(path.dirname(link), { recursive: true });

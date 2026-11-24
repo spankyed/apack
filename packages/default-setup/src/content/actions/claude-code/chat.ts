@@ -16,7 +16,7 @@
 
 import type { AppSettings } from '@apackdev/sdk/types';
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z, EntityId } from '#generated/services.ts';
+import type { Services, EntityId } from '#generated/services.ts';
 import { createStreamWriter } from './_helpers/stream-writer.ts';
 import { createToolActivityWriter } from './_helpers/tool-activity-writer.ts';
 import { createThinkingWriter } from './_helpers/thinking-writer.ts';
@@ -77,8 +77,6 @@ export const phaseTipPromptLabel = (phase: string | undefined) =>
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const {
     threadId,

@@ -304,7 +304,7 @@ describe('apack pack add action, prompt and flow', () => {
   it('writes an action under its category, with the label and the typed services import', async () => {
     await add('action', ['analyze-text'], pack);
     const action = read('src/content/actions/demo-pack/analyze-text.ts');
-    expect(action).toContain("import type { Services, Z } from '#generated/services.ts';");
+    expect(action).toContain("import type { Services } from '#generated/services.ts';");
     expect(action).toContain("label: 'Analyze Text'");
     expect(action).toContain("category: 'demo-pack'");
     expect(action).toContain('export async function action(\n  params: Record<string, any>,\n  services: Services,');

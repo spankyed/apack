@@ -1,5 +1,5 @@
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { EntityId, Services, Z } from '#generated/services.ts';
+import type { EntityId, Services } from '#generated/services.ts';
 import { getOnboardingState } from './onboarding-helpers.ts';
 
 export const meta: ActionMeta = {
@@ -16,8 +16,6 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { response } = params;
   const threadId = params.threadId as EntityId;

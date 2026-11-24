@@ -1,5 +1,5 @@
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 
 export const meta: ActionMeta = {
   label: 'Set Instructions',
@@ -20,8 +20,6 @@ function stripHtml(html: string): string {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { text, threadId } = params;
 

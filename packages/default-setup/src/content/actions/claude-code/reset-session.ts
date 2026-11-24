@@ -8,7 +8,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z, EntityId } from '#generated/services.ts';
+import type { Services, EntityId } from '#generated/services.ts';
 import { clearClaudeState } from './_helpers/thread-context.ts';
 
 export const meta: ActionMeta = {
@@ -23,8 +23,6 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { threadId } = params as { threadId: EntityId };
 

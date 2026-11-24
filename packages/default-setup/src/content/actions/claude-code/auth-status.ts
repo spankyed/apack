@@ -7,7 +7,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 
 export const meta: ActionMeta = {
   label: 'Claude Code Auth Status',
@@ -19,8 +19,6 @@ export const meta: ActionMeta = {
 export async function action(
   _params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   try {
     const status = await services.cli.claudeCode.authStatus();

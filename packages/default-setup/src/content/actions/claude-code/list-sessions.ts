@@ -8,7 +8,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 
 export const meta: ActionMeta = {
   label: 'Claude Code List Sessions',
@@ -24,8 +24,6 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { cwd, limit, offset } = params as {
     cwd?: string;
