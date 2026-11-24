@@ -109,7 +109,7 @@ CASES = {
     'field-bounds': {'CLAUDE_RESEARCH_PROMPT_THEME': 'structured', 'CLAUDE_RESEARCH_FIELD_BOUNDS': '1'},
     'source-fill': {'CLAUDE_RESEARCH_PROMPT_THEME': 'structured', 'CLAUDE_RESEARCH_SOURCE_FILL': '1'},
     'question-tool-notice-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'everyday', 'CLAUDE_RESEARCH_QUESTION_TOOL_NOTICE': '1'},
-    'everyday': {'CLAUDE_RESEARCH_PROMPT_THEME': 'everyday'},
+    'everyday': {'CLAUDE_RESEARCH_PROMPT_THEME': 'everyday', 'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1'},
 }
 
 
