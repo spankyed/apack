@@ -13,8 +13,8 @@ function fixture(){
  const factory=vi.fn((value:any)=>({type:'original-engine',props:value.props})),cache=Array(22);cache[21]=factory
  const fiber:any={type:vtr,memoizedState:{memoizedState:[input,[]]},updateQueue:{memoCache:{data:[cache]}}}
  const roster={list:vi.fn(()=>[] as {clientId:string;answers:string[]}[])}, fleet={Kwn:{Provider:Symbol('mounted original provider')}}
- const n={roster:{Kw:roster},fleet,themeRoots:{ai:()=>new Map([[output,{container:{current:fiber}}]])},questionOptions:{Ze:()=> 'native-agent',j:()=> 'session'},runtime:{ey:()=>({})},nativeClients:{release:vi.fn(),suspend:vi.fn(),suspendInstance:vi.fn()},jsx:{e:(type:unknown,props:unknown)=>({type,props})},terminalComponents:{n:Symbol('native themed Text')},appProvider:{d_:Symbol('fresh original provider')},staticRender:{v6e:vi.fn(async(_tree:unknown,_options:unknown)=> 'Original native engine')}}
- const api=vm.runInNewContext(claudeTerminalComposerRuntime+`;({read:nativeComposerInputs,list:nativeComposerList,facts:nativeComposerFacts,refresh:refreshNativeComposer,current:currentComposerAction,format:formatNativeComposer,frames:composerFrames})`,{process:{stdout:output},createHash:crypto,clients,edits,publish,originalContext:undefined,clientViewCurrent:()=>true,nativeViewFacts:()=>({view:{kind:'main'}}),nativeThemeProvider:()=>({type:'theme',value:{resolvedTheme:{text:'#fff'}}}),AbortController,Date})
+ const n={roster:{Kw:roster},fleet,privateTasks:{$nr:{Provider:Symbol('private task store')}},privateTaskDrawing:{ktr:()=>null},documentDefaults:{$Et:()=>({})},themeRoots:{ai:()=>new Map([[output,{container:{current:fiber}}]])},questionOptions:{Ze:()=> 'native-agent',j:()=> 'session'},runtime:{ey:()=>({})},nativeClients:{release:vi.fn(),suspend:vi.fn(),suspendInstance:vi.fn()},jsx:{e:(type:unknown,props:unknown)=>({type,props})},terminalComponents:{n:Symbol('native themed Text')},appProvider:{d_:Symbol('fresh original provider')},staticRender:{v6e:vi.fn(async(_tree:unknown,_options:unknown)=> 'Original native engine')}}
+ const api=vm.runInNewContext(claudeTerminalComposerRuntime+`;({read:nativeComposerInputs,list:nativeComposerList,facts:nativeComposerFacts,refresh:refreshNativeComposer,current:currentComposerAction,format:formatNativeComposer,idleTasks:formatNativeIdleTasks,taskActions:nativeComposerTaskActions,frames:composerFrames})`,{process:{stdout:output},createHash:crypto,clients,edits,publish,originalContext:undefined,clientViewCurrent:()=>true,nativeViewFacts:()=>({view:{kind:'main'}}),nativeThemeProvider:()=>({type:'theme',value:{resolvedTheme:{text:'#fff'}}}),AbortController,Date,Set})
  return{n,api,fiber,input,factory,edits,publish,OH,vY,roster,fleet}
 }
 it('uses exact original inputs and default factories, mapping desktop mode without changing native props',async()=>{
@@ -121,4 +121,38 @@ it('projects only the current native idle hint and retires it without altering t
   notifications.queue.push(hint)
   expect(facts().idleReturnHint).toBeUndefined()
   expect(facts().fingerprint).not.toBe(shown.fingerprint)
+})
+
+
+it('renders the mounted idle list and advertises its original Global toggle while collapsed', async () => {
+  const f = fixture()
+  const input = { surface: 'terminal', component: 'PromptHint', requestId: 'prompt-hint', props: { isWorking: false } }
+  const tasks = [{ id: '1', subject: 'Review migration notes', status: 'pending' }]
+  const taskStore = { type: f.n.privateTasks.$nr, memoizedProps: { value: { getSnapshot: () => tasks } } }
+  const standalone = { type: f.n.privateTaskDrawing.ktr, return: taskStore, memoizedProps: { hidden: false } }
+  Object.assign(f.fiber, { type: f.vY, return: taskStore, sibling: standalone, memoizedState: { memoizedState: input } })
+  let expandedView = 'tasks'
+  f.n.runtime.ey = () => ({
+    toolContext: () => ({ getAppState: () => ({ expandedView }) }),
+  })
+  const facts = () => f.api.facts(f.n, 'view', 'PromptHint', input.requestId)
+  const provider = { props: { handlerRegistryRef: { current: new Map([['app:toggleTodos', new Set([
+    { action: 'app:toggleTodos', context: 'Global', handler: vi.fn() },
+  ])]]) } } }
+  const actions = (client = 'view') => f.api.taskActions(f.n, client, provider)
+  const shown = facts()
+  expect(shown.taskList.tasks).toBe(tasks)
+  await expect(f.api.idleTasks(f.n, shown, {})).resolves.toBe('Original native engine')
+  expect(actions()).toEqual([expect.objectContaining({ action: 'app:toggleTodos' })])
+  const shownAction = actions()[0]
+  expandedView = 'none'
+  expect(facts().taskList).toBeUndefined()
+  expect(actions()[0].revision).not.toBe(shownAction.revision)
+  expect(actions('detached')).toEqual([])
+  expandedView = 'tasks'
+  standalone.memoizedProps.hidden = true
+  expect(facts().taskList).toBeUndefined()
+  standalone.memoizedProps.hidden = false
+  input.props.isWorking = true
+  expect(facts().taskList).toBeUndefined()
 })

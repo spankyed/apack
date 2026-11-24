@@ -4331,6 +4331,7 @@ type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
     instanceRevision: number;
     nativeHint?: boolean;
     idleReturnHint?: string;
+    idleTaskOutput?: string;
     groupExpanded?: boolean;
     displayText: string;
     outputRewritten?: boolean;
@@ -13335,6 +13336,7 @@ declare const renderResult: z.ZodObject<{
     }, z.core.$strict>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
     idle_return_hint: z.ZodOptional<z.ZodString>;
+    idle_task_output: z.ZodOptional<z.ZodString>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;

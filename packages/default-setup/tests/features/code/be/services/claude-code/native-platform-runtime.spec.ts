@@ -226,7 +226,7 @@ it('renders the current private task snapshot without lending the original task 
   const privateTaskContext = { Provider: 'Native task provider' }
   const provider = { type: privateTaskContext, memoizedProps: { value: { getSnapshot: () => tasks, subscribe: originalSubscribe } } }
   const input = {
-    fingerprint: 'producer', fiber: { return: provider }, input: { surface: 'terminal' },
+    component: 'Spinner', fingerprint: 'producer', fiber: { return: provider }, input: { surface: 'terminal' },
     factory: vi.fn(() => 'original spinner'), props: { word: 'Working' },
   }
   const inputs = new Map([['["Spinner","main"]', input], ['["Spinner","worker"]', input]])

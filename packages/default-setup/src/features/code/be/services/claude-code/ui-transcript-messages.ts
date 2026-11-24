@@ -21,6 +21,7 @@ type Entry = {
   engineOutput?: string
   nativeHint?: boolean
   idleReturnHint?: string
+  idleTaskOutput?: string
   groupExpanded?: boolean
   drawing?: ClaudeUiDrawing
   fields?: ClaudeUiDrawing
@@ -74,6 +75,7 @@ export function createClaudeTranscriptMessageHost(options: {
     if (clientSnapshot) return
     entry.drawing = undefined
     entry.idleReturnHint = undefined
+    entry.idleTaskOutput = undefined
     entry.body = entry.fields && (entry.row.component === 'ToolGroup' || composerRow(entry.row) || entry.fields.fields.size || entry.fields.clientInstances.size) ? { status: 'live', tree: inert(entry.fields.tree) } : { status: 'rendering' }
   }
   function release(entry: Entry): Promise<void> {
@@ -184,6 +186,7 @@ export function createClaudeTranscriptMessageHost(options: {
           }
           entry.nativeHint = entry.row.component==='PromptHint' && result.native_hint===true
           entry.idleReturnHint = entry.row.component==='PromptHint' ? result.idle_return_hint : undefined
+          entry.idleTaskOutput = entry.row.component==='PromptHint' ? result.idle_task_output : undefined
           entry.outputRewritten = entry.row.component === 'ToolResult' && result.output_rewritten === true
           entry.engineOutput = entry.row.component === 'ToolGroup' || composerRow(entry.row) || entry.row.component === 'ToolResult' || (entry.row.component === 'ToolUse' || entry.row.component === 'ToolProgress') ? result.engine_output : undefined
           if (entry.outputRewritten && !result.output_in_native_process) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
@@ -222,7 +225,7 @@ export function createClaudeTranscriptMessageHost(options: {
   function refresh() { if (!current()) return; sync(); if ([...entries.values()].some(entry => entry.dirty)) schedule() }
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
-    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, instanceRevision: entry.instanceRevision, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.idleReturnHint && entry.body.status==='live'?{idleReturnHint:entry.idleReturnHint}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
+    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, instanceRevision: entry.instanceRevision, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.idleReturnHint && entry.body.status==='live'?{idleReturnHint:entry.idleReturnHint}:{}), ...(entry.idleTaskOutput && entry.body.status==='live'?{idleTaskOutput:entry.idleTaskOutput}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
     get managedSettingsRevision() { return current() ? managedSettingsRevision : 0 },
     get managedSettingsDiagnostics(){return current()?managedSettingsDiagnostics:[]} ,
     get diagnostics() {

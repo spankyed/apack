@@ -88,7 +88,7 @@ export function bindNativeHelperObservationReader(reader){
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,sequenceSession=config.sessionId,sequenceEpoch=config.transportEpoch,sessionTransition,inFlight=0,highestSequence=0;
 const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const actionKeys=createNativeActionKeyBridge({
- nativeActions:(n,client,p)=>nativeInlineModelActions(n,client,p),
+ nativeActions:(n,client,p)=>[...nativeInlineModelActions(n,client,p),...nativeComposerTaskActions(n,client,p)],
  knownClients:()=>clients,
  current:(n,scope)=>clients.has(scope.client_id)&&clientViewCurrent(n,scope.client_id)&&(scope.component!=='Pane'||paneRoster(n).shown_id===scope.instance_id)&&(scope.instance_revision===undefined||instanceLifetimes.active(scope,scope.instance_revision)),
  view:n=>clientViewKey(n),
@@ -374,7 +374,7 @@ async function initialize(){
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const themeStore=await import('/$bunfs/root/chunk-5feck2gp.js'),themeStorageKeys=await import('/$bunfs/root/chunk-r1ydygv8.js'),themeStorageGate=await import('/$bunfs/root/chunk-gc95262s.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
-  const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js'),privateTasks=await import('/$bunfs/root/chunk-s5erk9wy.js');
+  const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js'),privateTasks=await import('/$bunfs/root/chunk-s5erk9wy.js'),privateTaskDrawing=await import('/$bunfs/root/chunk-w5063paj.js');
   const taskOutput=await import('/$bunfs/root/chunk-nbvvw59m.js');
   const taskOutputText=await import('node:util');
   const workflowTasks=await import('/$bunfs/root/chunk-tkvjaryv.js');
@@ -413,7 +413,7 @@ async function initialize(){
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   observeNativeManagedSettings(settingsDetector.Ta);
-  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -1676,7 +1676,7 @@ async function control(request,abort){
    return {...result,_apack_action_keys:actionKeys.snapshot(n,clientId)};
   }
   const question=boundQuestion;
-  let commandFacts,toolFacts,useFacts,progressFacts,groupFacts,composerFacts,engineOutput;
+  let commandFacts,toolFacts,useFacts,progressFacts,groupFacts,composerFacts,engineOutput,idleTaskOutput;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
   if(value.component==='AbovePrompt'||value.component==='Pane'){
    const selected=nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view;
@@ -1719,7 +1719,7 @@ async function control(request,abort){
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
   if(!clientViewCurrent(n,clientId))throw Error('Native UI selection changed while rendering');
   if(instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native UI instance expired while rendering');
-  if(composerFacts){if(nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while rendering');composerFrames.set(JSON.stringify([clientId,value.component,value.instance_id]),{clientId,component:value.component,id:value.instance_id,fingerprint:composerFacts.fingerprint});if(nativeDrawingUsesEngine(result.tree))engineOutput=await formatNativeComposer(n,composerFacts,result.props,{columns:value.viewport?.columns,signal:abort.signal});if(nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while formatting');if(!clientViewCurrent(n,clientId)||instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native composer lifetime expired while formatting');}
+  if(composerFacts){if(nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while rendering');composerFrames.set(JSON.stringify([clientId,value.component,value.instance_id]),{clientId,component:value.component,id:value.instance_id,fingerprint:composerFacts.fingerprint});if(nativeDrawingUsesEngine(result.tree))engineOutput=await formatNativeComposer(n,composerFacts,result.props,{columns:value.viewport?.columns,signal:abort.signal});idleTaskOutput=await formatNativeIdleTasks(n,composerFacts,{columns:value.viewport?.columns,signal:abort.signal});if(nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while formatting');if(!clientViewCurrent(n,clientId)||instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native composer lifetime expired while formatting');}
   if(commandFacts){
    if(commandOutputFacts(n,value.instance_id)?.fingerprint!==commandFacts.fingerprint)throw Error('Native command output changed while rendering');
    const key=JSON.stringify([clientId,value.instance_id]);commandOutputFrames.delete(key);commandOutputFrames.set(key,{clientId,fingerprint:commandFacts.fingerprint});
@@ -1793,7 +1793,7 @@ async function control(request,abort){
   recordDrawing(n,value,drawingTree);
   actionKeys.capture(n,{...value,instance_revision:instanceRevision},documentTree);
   const wire=toolFacts?nativeToolResultWireProps(result.props):{props:result.props};
-  return {...(value.component==='AbovePrompt'?{_apack_ide:nativeIdeContext(n,clientId)}:{}),_apack_action_keys:actionKeys.snapshot(n,clientId),...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint,...(composerFacts.idleReturnHint&&!engineOutput?.includes(composerFacts.idleReturnHint)?{idle_return_hint:composerFacts.idleReturnHint}:{})}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,documentTree),...wire,props:questionFrame?{...wire.props,questions:questionFrame.shownInput.questions}:wire.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(value.component==='AbovePrompt'?{_apack_ide:nativeIdeContext(n,clientId)}:{}),_apack_action_keys:actionKeys.snapshot(n,clientId),...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint,...(composerFacts.idleReturnHint&&!engineOutput?.includes(composerFacts.idleReturnHint)?{idle_return_hint:composerFacts.idleReturnHint}:{})}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(idleTaskOutput?{idle_task_output:idleTaskOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,documentTree),...wire,props:questionFrame?{...wire.props,questions:questionFrame.shownInput.questions}:wire.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);

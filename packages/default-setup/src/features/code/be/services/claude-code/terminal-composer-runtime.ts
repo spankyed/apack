@@ -11,9 +11,11 @@ const composerSignatures={
 function isComposerComponent(component){return component==='Spinner'||component==='SessionMode'||component==='PromptHint';}
 function nativeComposerInputs(n,signatures=composerSignatures,maxIdLength=256,maxInstances=32){
  const root=n.themeRoots.ai().get(process.stdout)?.container?.current,pending=root?[root]:[],seen=new Set(),result=new Map();
+ const standaloneTaskLists=[];
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native composer traversal exceeded bound');seen.add(fiber);
   const type=fiber.type,spec=typeof type==='function'&&Object.hasOwn(signatures,type.name)?signatures[type.name]:undefined;
+  if(type===n.privateTaskDrawing?.ktr&&fiber.memoizedProps?.hidden===false)standaloneTaskLists.push(fiber);
   if(spec){
    let hash=composerFunctionHashes.get(type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(type)).digest('hex');composerFunctionHashes.set(type,hash);}
    if(hash===spec.hash){
@@ -37,6 +39,7 @@ function nativeComposerInputs(n,signatures=composerSignatures,maxIdLength=256,ma
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
+ if(standaloneTaskLists.length===1)for(const input of result.values())if(input.component==='PromptHint')input.standaloneTasks=standaloneTaskLists[0];
  return result;
 }
 function nativeIdleReturnHint(n){
@@ -65,12 +68,18 @@ function nativeComposerTasks(n,fiber,state){
 function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n)){
  const source=inputs.get(JSON.stringify([component,id]));if(!source)return;
  let taskList;
- if(component==='Spinner'){
+ if(component==='Spinner'||source.standaloneTasks&&!source.props.isWorking){
   const binding=originalContext??n.runtime.ey(),abort=new AbortController();
   const view=nativeViewFacts(n,binding,abort).view;
-  const expected=view.kind==='main'?n.questionOptions.Ze():view.taskId;
-  if(id!==expected&&!(view.kind==='main'&&id==='main'))return;
-  if(view.kind==='main')taskList=nativeComposerTasks(n,source.fiber,binding.toolContext(abort).getAppState());
+  if(component==='Spinner'){
+   const expected=view.kind==='main'?n.questionOptions.Ze():view.taskId;
+   if(id!==expected&&!(view.kind==='main'&&id==='main'))return;
+  }
+  if(view.kind==='main'){
+   const fiber=component==='Spinner'?source.fiber:source.standaloneTasks;
+   const snapshot=nativeComposerTasks(n,fiber,binding?.toolContext?.(abort)?.getAppState());
+   if(component==='Spinner'||snapshot?.expanded)taskList=snapshot;
+  }
  }
  const props={...source.props};
  if(component==='Spinner'&&props.mode==='tool-input')props.mode='tool-use';
@@ -81,6 +90,17 @@ function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n
 }
 function nativeComposerList(n,client,inputs=nativeComposerInputs(n)){
  const result=[];for(const source of inputs.values()){const facts=nativeComposerFacts(n,client,source.component,source.id,inputs);if(facts)result.push({component:facts.component,id:facts.id,revision:facts.fingerprint});}return result;
+}
+function nativeComposerTaskActions(n,client,provider){
+ if(!clients.has(client)||!clientViewCurrent(n,client))return [];
+ const action='app:toggleTodos',entries=provider.props.handlerRegistryRef.current.get(action);
+ if(!(entries instanceof Set)||![...entries].some(entry=>entry.action===action&&entry.context==='Global'&&entry.fallback!==true&&typeof entry.handler==='function'))return [];
+ const binding=originalContext??n.runtime.ey(),abort=new AbortController();
+ if(nativeViewFacts(n,binding,abort).view.kind!=='main')return [];
+ const hint=[...nativeComposerInputs(n).values()].find(source=>source.component==='PromptHint');
+ if(!hint)return [];
+ const list=nativeComposerTasks(n,hint.fiber,binding?.toolContext?.(abort)?.getAppState());
+ return list?[{action,revision:JSON.stringify([list.revision,list.expanded])}]:[];
 }
 function currentComposerAction(n,request){
  if(!isComposerComponent(request.component))return;
@@ -128,9 +148,15 @@ async function formatNativeComposer(n,facts,props,options){
  const element=facts.component==='PromptHint'
   ? n.jsx.e(n.terminalComponents.n,{dimColor:true,children:typeof props.hint==='string'?props.hint:''})
   : facts.factory({...facts.input,surface:'desktop',props});
- // Give the original Spinner a read-only task snapshot. Its export provider must never subscribe to the live store.
+ return drawNativeComposer(n,element,facts.component==='Spinner'?facts.taskList:undefined,options);
+}
+async function formatNativeIdleTasks(n,facts,options){
+ if(facts.component!=='PromptHint'||!facts.taskList)return;
+ return drawNativeComposer(n,n.jsx.e(n.privateTaskDrawing.ktr,{hidden:false}),facts.taskList,options);
+}
+async function drawNativeComposer(n,element,taskList,options){
+ // Export the mounted task snapshot without subscribing to the live store.
  if(element===null||element===false)return '';const theme=nativeThemeProvider(n);
- const taskList=facts.taskList;
  const children=taskList?n.jsx.e(n.privateTasks.$nr.Provider,{value:{getSnapshot:()=>taskList.tasks,subscribe:()=>()=>{}},children:element}):element;
  const initialState=taskList?{...n.documentDefaults.$Et(),expandedView:taskList.expanded?'tasks':'none'}:undefined;
  const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState,children:n.jsx.e(theme.type,{value:theme.value,children})});
