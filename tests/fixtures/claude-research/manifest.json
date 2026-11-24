@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "5c18e7ee0996bba4689858a53fcc6449f70e2b72",
+  "researchCommit": "a40c057212bc6b8cf4703567ad34e8b0242bcc05",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -338,7 +338,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "8d0437aa872f3744c8584297df0f4a1f22f6113fe40051821bcbd54ec00d7c1c",
+    "src/integration/run-apack-controls.mjs": "37a69ae1f80018f764f23c15cbfaa2fc6e65631d61031fdcf0e32f4d18fb2239",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/safe-theme-profile.mjs": "4ffeef56d1f6023bf7ef47b88698b5efae8d8952d1149a1858b6330cde303be7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
@@ -642,5 +642,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "215682acb64b487b6c3ec8618209fcf6855fb331e9888708e62ebb98ec8b6dec"
+  "archiveSha256": "816c67fd3d68979fd9823afd6d9068b72fdcaed7cdb4a5559264ff735d868bb0"
 }
