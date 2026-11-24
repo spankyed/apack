@@ -183,6 +183,10 @@ original shortcut-triggered question through human deliberation, checks normal/c
 and restored shortcut use, then requires same-session recovery and owned shutdown.
 `native-action-keys` and `native-action-contexts` run only the original terminal configured-action discovery baseline,
 skipping both app builds. It does not establish ordinary-composer support.
+`native-status-host` runs the original terminal against private user settings, the quoted legacy
+shell prefix, and a loopback fixture. It skips dependency installation and both app builds.
+The artifact records system Python, native helper calls and both caption lines. Its scope is the
+hosted native status producer. Run the desktop journey separately for composer acceptance.
 `agent-and-fields` runs the Agent baseline and field milestone sequentially from one candidate build. These replay existing scoped journeys;
 they do not establish full feature parity or replace final F1–F5 acceptance. CI retains original
 run records, proofs, synthetic model requests, screenshots and traces. Download and inspect the

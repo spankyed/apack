@@ -85,6 +85,7 @@ CASES = {
     'config-model-app': {'CLAUDE_RESEARCH_CONFIG_MODEL': '1'},
     'native-action-keys': {},
     'native-action-contexts': {},
+    'native-status-host': {},
     'action-keys-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1'},
     'action-contexts-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS': '1'},
     'action-dialog-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_DIALOG': '1'},
@@ -265,6 +266,19 @@ def run(case, linux_container=False):
     console.log(JSON.stringify(result,null,2));
     if(result.status!=='complete')process.exitCode=1;
     """.replace('__scenario__', json.dumps('contexts' if case == 'native-action-contexts' else 'baseline'))
+        if case == 'native-status-host':
+            script = """import {probePtyStatusOwner} from './src/protocol/pty-status-owner.mjs';
+    const [,binary,root]=process.argv.slice(1);
+    const result=await probePtyStatusOwner(binary,root+'/workspaces',root+'/output',{privateUserSettings:true});
+    console.log(JSON.stringify(result,null,2));
+    if(result.status!=='complete')process.exitCode=1;
+    """
+            output = root / 'output'
+            output.mkdir()
+            python = subprocess.run(['/usr/bin/python3', '--version'], env=env, capture_output=True, text=True, timeout=15)
+            (output / 'native-status-host-tools.json').write_text(json.dumps({
+                'python': {'path': '/usr/bin/python3', 'exit': python.returncode, 'stdout': python.stdout, 'stderr': python.stderr},
+            }, indent=2) + '\n')
         (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target, 'suppliedNativeArchive': str(Path(supplied_archive).resolve()) if supplied_archive else None}, indent=2) + '\n')
         subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
@@ -273,6 +287,6 @@ if __name__ == '__main__':
     linux_container = sys.argv[1:2] == ['--linux-container']
     args = sys.argv[2:] if linux_container else sys.argv[1:]
     if len(args) != 1:
-        raise SystemExit('Usage: python3 scripts/claude-research-ci.py <native-action-keys|native-action-contexts|action-keys-app|action-contexts-app|action-dialog-app|action-panes-app|policy-held-client-app|prompt-timeout-app|tool-width-app|agent-ime-lifetime-app|agent-caret-app|agent-caret-fast-app|agent-source|field-bounds|agent-and-fields|source-fill|everyday>')
+        raise SystemExit('Usage: python3 scripts/claude-research-ci.py <native-action-keys|native-action-contexts|native-status-host|action-keys-app|action-contexts-app|action-dialog-app|action-panes-app|policy-held-client-app|prompt-timeout-app|tool-width-app|agent-ime-lifetime-app|agent-caret-app|agent-caret-fast-app|agent-source|field-bounds|agent-and-fields|source-fill|everyday>')
     for case in (['agent-source', 'field-bounds'] if args[0] == 'agent-and-fields' else [args[0]]):
         run(case, linux_container=linux_container)

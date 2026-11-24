@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "a40c057212bc6b8cf4703567ad34e8b0242bcc05",
+  "researchCommit": "0571aed5957ef7a7fcad22fa6deb474491c2f43d",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -591,7 +591,7 @@
     "src/protocol/pty-plan.mjs": "a6b0fb364cb2407068738a64715e08c1a32e291dfe490560566cf3e13587379e",
     "src/protocol/pty-question-clarification.mjs": "eff80fdf4296f80bcbce8d18af5fb533f21ab6fcecf49a83d5fab5a1de1e5e7b",
     "src/protocol/pty-startup.mjs": "b18b593b84b34906c4d08db41c1bf094c7144d14705ffc11c5284dbfeaa0c82f",
-    "src/protocol/pty-status-owner.mjs": "fd184562eec93c728a87d7e8f372408df436c7f4944d7c7a500c9ef447f9f7ed",
+    "src/protocol/pty-status-owner.mjs": "1346fab97ce2ba3469b2a208ff1dc94624ed5d116ec093a41369c6da2a738fda",
     "src/protocol/pty_bridge.py": "abbc8224a0204f5112c11571a86accf18318f917007992d7ed0ed6d69ad36722",
     "src/protocol/record.mjs": "13a92d3e45ac4e30c6774a59308a28313ce8c700262d85ece8c3a41a0ce631ad",
     "src/protocol/refusal-dialog.mjs": "58000f00e70f3748c9a06d7e250db46da84a3a280436dd379b053794f085ca6f",
@@ -642,5 +642,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "816c67fd3d68979fd9823afd6d9068b72fdcaed7cdb4a5559264ff735d868bb0"
+  "archiveSha256": "4648b21ecf70527fdd91dacc44a151321be9d18ca416d7f86492365a6029285b"
 }

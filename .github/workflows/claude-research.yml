@@ -25,8 +25,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
-          cache: npm
+          cache: ${{ inputs.case != 'native-status-host' && 'npm' || '' }}
       - name: Install pinned npm
+        if: inputs.case != 'native-status-host'
         run: npm install -g npm@11.21.1
       - name: Record platform and candidate
         run: |
@@ -35,15 +36,16 @@ jobs:
           sysctl -n hw.memsize
           node -p 'JSON.stringify({platform:process.platform,arch:process.arch})'
       - name: Install dependencies
+        if: inputs.case != 'native-status-host'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build candidate pack
-        if: inputs.case != 'native-action-keys' && inputs.case != 'native-action-contexts'
+        if: ${{ !startsWith(inputs.case, 'native-') }}
         shell: bash
         run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
       - name: Build matching app runtime
-        if: inputs.case != 'native-action-keys' && inputs.case != 'native-action-contexts'
+        if: ${{ !startsWith(inputs.case, 'native-') }}
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         shell: bash
