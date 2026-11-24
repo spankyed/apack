@@ -117,6 +117,12 @@ CASES = {
         'CLAUDE_RESEARCH_SYSTEM_POLICY_UNREADABLE': '1',
         'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
     },
+    'darwin-system-policy-installed-app': {
+        'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
+        'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
+    },
     'darwin-system-policy-live-app': {
         'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
         'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
@@ -192,6 +198,43 @@ def prepare_native_package(target, package, supplied_archive=None):
             shutil.copyfileobj(response, output)
     if digest(package) != target['tarballSha256']:
         raise ValueError('Official native package integrity changed')
+
+
+def stage_installed_mac(checkout, root):
+    if validate_host() != 'darwin-arm64':
+        raise RuntimeError('The installer may only be opened on a disposable macOS runner')
+    (image,) = sorted((checkout / 'dist').glob('*.dmg'))
+    mount = root / 'installer'
+    mount.mkdir()
+    installed = root / 'Applications' / 'apack.app'
+    installed.parent.mkdir()
+    subprocess.run(['hdiutil', 'attach', str(image), '-readonly', '-nobrowse', '-mountpoint', str(mount)], check=True, timeout=60)
+    try:
+        source = mount / installed.name
+        subprocess.run(['ditto', str(source), str(installed)], check=True, timeout=90)
+        contents = installed / 'Contents'
+        with (contents / 'Info.plist').open('rb') as plist:
+            info = plistlib.load(plist)
+        executable = contents / 'MacOS' / info['CFBundleExecutable']
+        files = ['MacOS/' + executable.name, 'Resources/app/build-manifest.json',
+                 'Resources/app/packages/default-setup/dist/runtime/index.cjs',
+                 'Resources/app/packages/default-setup/dist/runtime/fe.js']
+        hashes = {file: digest(contents / file) for file in files}
+        if any(digest(source / 'Contents' / file) != expected for file, expected in hashes.items()):
+            raise ValueError('Copied app differs from its installer')
+    finally:
+        subprocess.run(['hdiutil', 'detach', str(mount)], check=True, timeout=60)
+    executable = executable.resolve(strict=True)
+    if executable.parent != (installed / 'Contents' / 'MacOS').resolve() or not os.access(executable, os.X_OK):
+        raise ValueError('Installer did not provide an executable inside its app bundle')
+    signature = subprocess.run(['codesign', '--verify', '--deep', '--strict', str(installed)],
+                               capture_output=True, text=True, timeout=60)
+    (root / 'installed-mac-host.json').write_text(json.dumps({
+        'image': image.name, 'imageSha256': digest(image), 'bundleId': info['CFBundleIdentifier'],
+        'executable': str(executable), 'files': hashes,
+        'signature': {'exitCode': signature.returncode, 'details': signature.stderr.strip()},
+    }, indent=2) + '\n')
+    return executable
 
 
 @contextmanager
@@ -361,6 +404,8 @@ def run(case, linux_container=False):
         binary.chmod(0o700)
         env = {key: value for key, value in os.environ.items() if not key.startswith('CLAUDE_RESEARCH_')}
         env.update(CASES[case])
+        if case == 'darwin-system-policy-installed-app':
+            env['CLAUDE_RESEARCH_INSTALLED_MAC_EXECUTABLE'] = str(stage_installed_mac(checkout, root))
         if case == 'system-policy-transition-app':
             control = Path(os.environ['CLAUDE_RESEARCH_SYSTEM_POLICY_CONTROL'])
             if control.parent != Path('/work/.claude-research') or not control.name.startswith('policy-transition-') or control.resolve() != control or not (control / 'ready.json').is_file():
@@ -420,7 +465,7 @@ def run(case, linux_container=False):
         else:
             policy = nullcontext()
         with policy:
-            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'completion-navigation-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'darwin-system-policy-unreadable-app', 'darwin-system-policy-live-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
+            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'completion-navigation-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'darwin-system-policy-installed-app', 'darwin-system-policy-unreadable-app', 'darwin-system-policy-live-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
 if __name__ == '__main__':

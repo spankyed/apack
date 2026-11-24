@@ -41,15 +41,24 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build candidate pack
-        if: ${{ !startsWith(inputs.case, 'native-') }}
+        if: ${{ !startsWith(inputs.case, 'native-') && inputs.case != 'darwin-system-policy-installed-app' }}
         shell: bash
         run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
       - name: Build matching app runtime
-        if: ${{ !startsWith(inputs.case, 'native-') }}
+        if: ${{ !startsWith(inputs.case, 'native-') && inputs.case != 'darwin-system-policy-installed-app' }}
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         shell: bash
         run: npm run build:runtime -- --cores 2 2>&1 | tee "$RUNNER_TEMP/claude-research-runtime-build.log"
+      - name: Build macOS installer
+        if: inputs.case == 'darwin-system-policy-installed-app'
+        env:
+          APACK_DEPENDENCIES_INSTALLED: '1'
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          PUBLISH_TO_GITHUB: 'false'
+          NODE_OPTIONS: --max-old-space-size=4096
+        shell: bash
+        run: npm run build:production 2>&1 | tee "$RUNNER_TEMP/claude-research-installer-build.log"
       - name: Replay pinned native journey
         env:
           CLAUDE_RESEARCH_CASE: ${{ inputs.case }}
@@ -64,6 +73,7 @@ jobs:
           path: |
             ${{ runner.temp }}/claude-research-*-build.log
             ${{ runner.temp }}/claude-research-*/provenance.json
+            ${{ runner.temp }}/claude-research-*/installed-mac-host.json
             ${{ runner.temp }}/claude-research-*/output/**
             ${{ runner.temp }}/claude-research-*/workspaces/**/electron-results/**
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-proof.json

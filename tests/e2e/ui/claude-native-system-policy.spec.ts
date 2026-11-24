@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, rename } from 'node:fs/promises'
+import { readFile, writeFile, readdir, realpath, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -11,6 +11,17 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   expect(process.env.HOME).toBe(workspace)
   const darwinPolicy = process.env.CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY === '1'
   expect(process.platform === 'darwin').toBe(darwinPolicy)
+  const installedExecutable = process.env.APACK_HOST_EXECUTABLE
+  const installedHost = installedExecutable ? await electronApp.evaluate(({ app }) => ({
+    executable: process.execPath, appPath: app.getAppPath(), profile: app.getPath('userData'), packaged: app.isPackaged,
+  })) : undefined
+  if (installedExecutable && installedHost) {
+    expect(darwinPolicy).toBe(true)
+    expect(installedHost.packaged).toBe(true)
+    expect(await realpath(installedHost.executable)).toBe(await realpath(installedExecutable))
+    expect(await realpath(installedHost.appPath)).toBe(await realpath(join(installedExecutable, '../../Resources/app')))
+    expect(await realpath(installedHost.profile)).toBe(await realpath(join(workspace!, 'app-data')))
+  }
   const darwinUnreadable = darwinPolicy && unreadable
   const linuxUnreadable = !darwinPolicy && unreadable
   const expectedCaption = linuxUnreadable ? undefined : darwinUnreadable ? 'Device policy fallback' : 'Managed OS policy ready'
@@ -246,7 +257,7 @@ test('honors OS-managed policy before user settings in the everyday composer', a
     warningText = (await warningDetails.textContent())?.trim()
   }
   await writeFile(join(workspace!, 'native-system-policy-app-proof.json'), JSON.stringify({
-    sessionId, boundNativePid, captures, liveTransitions, darwinTransitions, draftRetained: true,
+    sessionId, boundNativePid, captures, liveTransitions, darwinTransitions, installedHost, draftRetained: true,
     privateControlsSuppressed: !!expectedCaption, userStatusOverridden: !!expectedCaption,
     managedPreferencePriority: darwinPolicy && !unreadable, nativeManagedWarning: unreadable,
     darwinDeviceFallback: darwinUnreadable, sawSettingsError,
