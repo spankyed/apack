@@ -1,5 +1,5 @@
 <template>
-  <div class="@container flex items-center justify-between gap-4 px-3 py-3 sm:px-6 border-b border-neutral-800">
+  <div class="threads-header flex items-center justify-between gap-4 px-3 py-3 sm:px-6 border-b border-neutral-800">
     <!-- Left section: Title and subtitle -->
     <div class="hidden @4xl:flex items-center gap-6">
       <div class="flex items-center gap-2">
@@ -65,10 +65,10 @@
             variant="transparent"
             aria-label="Filter"
             title="Filter"
-            class="!text-sm !px-2 !py-1.5 @md:!px-3"
+            class="!text-sm !px-2 !py-1.5"
           >
             <Filter :size="14" aria-hidden="true" />
-            <span class="hidden @md:inline">Filter</span>
+            <span class="primary-label">Filter</span>
           </Button>
         </FilterPopover>
         <Button
@@ -77,11 +77,11 @@
           variant="transparent"
           aria-label="Clear filters"
           :title="`Clear filters (${activeFilterCount})`"
-          class="!gap-1 !text-sm !px-2 !py-1.5 @2xl:!px-3"
+          class="!gap-1 !text-sm !px-2 !py-1.5"
           @click="send({ type: 'CLEAR_FILTERS' })"
         >
-          <FilterX :size="14" aria-hidden="true" class="@2xl:hidden" />
-          <span class="hidden @2xl:inline">Clear filters</span>
+          <FilterX :size="14" aria-hidden="true" class="clear-filter-icon" />
+          <span class="clear-filter-label">Clear filters</span>
           <span class="text-neutral-400" aria-hidden="true">{{ activeFilterCount }}</span>
         </Button>
       </div>
@@ -112,13 +112,13 @@
         @click="send({ type: 'SHOW_CREATE_FORM' })"
         type="button"
         variant="primary"
-        class="shrink-0 whitespace-nowrap !px-2 @md:!px-4"
+        class="new-thread shrink-0 whitespace-nowrap"
         aria-label="New Thread"
         title="New Thread"
         data-onboarding-id="thread-create-button"
       >
-        <Plus :size="16" aria-hidden="true" class="@md:hidden" />
-        <span class="hidden @md:inline">New Thread</span>
+        <Plus :size="16" aria-hidden="true" class="new-thread-icon" />
+        <span class="primary-label">New Thread</span>
       </Button>
     </div>
   </div>
@@ -184,3 +184,42 @@ watch(() => threads.value.data.filters.search, (val) => {
   }
 })
 </script>
+
+<style scoped>
+.threads-header {
+  container: threads-header / inline-size;
+}
+
+.primary-label,
+.clear-filter-label {
+  display: none;
+}
+
+.new-thread {
+  padding-inline: 0.5rem;
+}
+
+@container threads-header (min-width: 34rem) {
+  .primary-label {
+    display: inline;
+  }
+
+  .new-thread {
+    padding-inline: 1rem;
+  }
+
+  .new-thread-icon {
+    display: none;
+  }
+}
+
+@container threads-header (min-width: 44rem) {
+  .clear-filter-label {
+    display: inline;
+  }
+
+  .clear-filter-icon {
+    display: none;
+  }
+}
+</style>
