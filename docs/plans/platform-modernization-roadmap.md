@@ -14,8 +14,8 @@
 |---|---|---|---|
 | 1 | ~~**Merge PR #632 & PR #633**~~ *(Done — merged on `master`)* — Node 24 / `erasableSyntaxOnly` follow-ups (`#632`) and [singleton-free-test-harness.md](singleton-free-test-harness.md) (`#633`). | S | `monorepo` |
 | 2 | **Run full gate on `master`** — `npm run chain` / CI (Linux `test:native`, full `test:integration`, `test:e2e`) to baseline post-#628/#632. | S | `monorepo` |
-| 3 | **Split `@apackdev/sdk` along the runtime vs. format/compiler seam** (workspace packages in `monorepo` first; builds on in-flight PRs `#634` & `#635`):<br>• **`@apackdev/sdk`**: zero Zod, zero Ajv, zero compilers — plain TS interfaces + runtime APIs + tiny zero-dep authoring helpers (`entry`, `on`, `ActionMeta`, `PromptMeta`, `FlowDSL`, pure `_settingsJsonProblems`).<br>• **`@apackdev/pack-format`** *(Workers-safe, pure JS — no `node:fs`, no `ajv`)*: Zod manifest & snapshot schemas (`satisfies z.ZodType<...>`), `PACK_LAYOUT`, `semver` host compatibility, `apack.schema.json`.<br>• **`@apackdev/pack-build`** *(or inside `@apackdev/cli`)*: codegen (`generate-entries`), content compilers, settings types, `json-schema-to-typescript`, `mdast-*`, `yaml`, `esbuild`, `typescript`.<br>• Keep `settings-validation.ts` (`ajv`) in `@apackdev/host` (inlined into `@apackdev/cli`), and remove static host re-validation from renderer's [pack-catalog.ts](../../packages/apack-host/src/fe/pack-catalog.ts) — drops 96.6 KiB Zod from the renderer bundle and ~8s / 22.9% of types from `typecheck`. | M | `monorepo` |
-| 4 | **Extract root `tsconfig.base.json` (+ `node`/`dom` presets) & drop `baseUrl`** in [packages/main/tsconfig.json](../../packages/main/tsconfig.json) and [packages/preload/tsconfig.json](../../packages/preload/tsconfig.json) — eliminates 15-file drift and preps for TypeScript 7. | S | `monorepo` |
+| 3 | **Split `@apackdev/sdk` along the runtime vs. format/compiler seam** (workspace packages in `monorepo` first; builds on in-flight PRs `#634` & `#635`):<br>• **`@apackdev/sdk`**: zero Zod, zero Ajv, zero compilers — plain TS interfaces + runtime APIs + tiny zero-dep authoring helpers (`entry`, `on`, `ActionMeta`, `PromptMeta`, `FlowDSL`, pure `_settingsJsonProblems`).<br>• **`@apackdev/pack-format`** *(Workers-safe, pure JS — no `node:fs`, no `ajv`)*: Zod manifest & snapshot schemas, `PACK_LAYOUT`, `semver` host compatibility, `apack.schema.json`.<br>• **`@apackdev/pack-build`** *(or inside `@apackdev/cli`)*: codegen (`generate-entries`), content compilers, settings types, `json-schema-to-typescript`, `mdast-*`, `yaml`, `esbuild`, `typescript`.<br>• Move `settings-validation.ts` (`ajv`) into `@apackdev/host` (inlined into `@apackdev/cli`) and remove static host re-validation from renderer's [pack-catalog.ts](../../packages/apack-host/src/fe/pack-catalog.ts). Splitting Zod out of `@apackdev/sdk` eliminates ~8.0s of aggregate cold `tsc`/`vue-tsc` time across 18 programs and 22.9% of instantiated types (measured 2026-11-24, PR `#634`); removing renderer re-validation drops the remaining 94.3 KiB minified / 26.7 KiB gzip Zod from the renderer bundle (Vite prod build, 2026-11-24). | M | `monorepo` |
+| 4 | **Extract root `tsconfig.base.json` (+ `node`/`dom` presets) & drop `baseUrl`** in [packages/main/tsconfig.json](../../packages/main/tsconfig.json) and [packages/preload/tsconfig.json](../../packages/preload/tsconfig.json) — eliminates per-package tsconfig drift and preps for TypeScript 7. | S | `monorepo` |
 | 5 | *(Optional pre-cutover win)* **Enable Vitest 4 `test.projects` + `isolate: false`** on already-pure, non-XState, non-`bindHost` suites (`apack-cli` unit, `apack-sdk/tests/{utils,build}`, pure `internal-repo-checks` / `apack-host`), verified with `--shuffle`. | S | `monorepo` |
 
 ---
@@ -24,7 +24,7 @@
 
 | # | Work Item | Size | Scope |
 |---|---|---|---|
-| 6 | **Finalize & pin external kernels:** merge `apack-link#25` (`accept` owners) + `review-fixes`, merge `apack-state` CI fix + switch `apack-state`'s `src/schedule.ts` onto `@apackdev/orderings` + bump its `@apackdev/link` pin; add `apack-state`, `apack-link`, and `apack-orderings` to [external-packages.mjs](../../scripts/lib/external-packages.mjs) and `SHARED_INSTANCE_PACKAGES`. | S–M | 4 repos |
+| 6 | **Finalize & pin external kernels:** merge `apack-state`'s `ci-kernel-boundaries` fix and bump its `@apackdev/link` pin (`apack-link` `#25`/`#26`/`#27` and `apack-state` `#31` on `@apackdev/orderings` are already merged on `master`); add `apack-state`, `apack-link`, and `apack-orderings` to [external-packages.mjs](../../scripts/lib/external-packages.mjs), and add `@apackdev/state` and `@apackdev/link` to `SHARED_INSTANCE_PACKAGES` (only packages shared between host and packs; keep test-only `@apackdev/orderings` out of the production bridge). | S–M | 4 repos |
 | 7 | **Spike `utilityProcess` + `MessageChannelMain` (1 day) & lock `packages/main` ↔ `packages/server` window-owner lifecycle** — if the spike passes, land `utilityProcess` as a standalone pre-cutover PR and hand each window a `MessageChannelMain` at cutover (authority by possession — no HMAC, watermark, `window:gone`, or loopback window port); if it fails, fall back to the reconciled HMAC design (no `apiToken` in windows, preload-owned single link, spawn-env watermark, IPC disconnect invariant). Both paths keep `link.onEnd`-bound subscriptions, `@apackdev/orderings` every-ordering verification, and a dedicated local-tool path covering `apack pack drive --channel beta`. See [Window-Owner Lifecycle & Deferred Transport Architecture](#window-owner-lifecycle--deferred-transport-architecture-7). | S–M | `monorepo` |
 | 8 | **Run a throwaway 1-feature spike** against the released tarballs porting the hardest real slice (**commit surface + one live brain flow touching `runHistory`**) to validate the non-EARS transaction boundary and benchmark TS 5.9 compile time extrapolated to 49 machines. | M | `monorepo` |
 | 9 | **Write the feature-by-feature cutover order/size table** and lock the **singleton-free `using`-disposable test harness** contract (`@apackdev/testing` + `@apackdev/sdk/testing` driving `@apackdev/state` + `@apackdev/link` on one `@apackdev/orderings` schedule). | S | `monorepo` |
@@ -45,14 +45,14 @@
 
 | # | Work Item | Size | Scope |
 |---|---|---|---|
-| 13 | **Roll Vitest 4 `isolate: false` across the rewritten runtime/feature suites** — cashes in `#11` on the ~841s import/setup CPU tax (`333s` host + `508s` pack); keep only global-mutating specs in `isolate: true`. | M | `monorepo` |
+| 13 | **Roll Vitest 4 `isolate: false` across the rewritten runtime/feature suites** — cashes in `#11` on the ~841s import/setup CPU tax (`333s` host + `508s` pack, 10-core `npm run test:unit` across 866 files, 2026-11-23, [singleton-free-test-harness.md](singleton-free-test-harness.md)); keep only global-mutating specs in `isolate: true`. | M | `monorepo` |
 | 14 | **Enable `oxlint --type-aware` repo-wide + add `oxlint` `jsPlugins` rule enforcing `errorMessage()` at boundaries** (bans raw `instanceof Error ? e.message : ...` that swallows `SuppressedError`s). | S | `monorepo` |
 | 15 | **Replace `tsup` with `tsdown` in `packages/server` & unify duplicate `esbuild` (`0.25`/`0.28`) / `vite` (`7`/`8`) trees.** | S–M | `monorepo` |
 | 16 | **Make codegen'd pack `ears.ts` (`emitEARS`) erasable** (`export const EARS` + type-only `export namespace EARS`), unlocking `erasableSyntaxOnly: true` for packs and eventual `tsx`-free pack builds. | M | `monorepo` |
 | 17 | **Enable selective `isolatedDeclarations: true`** on `@apackdev/sdk` + `@apackdev/host` (unblocked once Zod `z.infer` and tRPC `AppRouter` are gone). | M | `monorepo` |
 | 18 | **Evaluate `rolldown-plugin-dts`** to replace `rollup` + `rollup-plugin-dts` in [types-bundler.ts](../../packages/apack-cli/src/build/types-bundler.ts) (verify determinism specs). | M | `monorepo` |
-| 19 | **Upgrade to TypeScript 7 (native Go `tsc`)** for 8–12× faster typechecks once TS 7.1 programmatic API / `vue-tsc` / `@microsoft/api-extractor` support lands. | M | `monorepo` |
-| 20 | **Sweep minor leftovers** — bump `@tsconfig/node22` in [packages/renderer/tsconfig.node.json](../../packages/renderer/tsconfig.node.json), optionally silence cosmetic esbuild CJS `[empty-import-meta]` warnings, and decide on `@standard-schema/spec` if validator-agnostic pack tool schemas are wanted. | S | `monorepo` |
+| 19 | **Upgrade to TypeScript 7 (native Go `tsc`)** for upstream-estimated 8–12× faster typechecks once TS 7.1 programmatic API / `vue-tsc` / `@microsoft/api-extractor` support lands. | M | `monorepo` |
+| 20 | **Sweep minor leftovers** — bump `@tsconfig/node22` in [packages/renderer/tsconfig.node.json](../../packages/renderer/tsconfig.node.json), optionally silence cosmetic esbuild CJS `[empty-import-meta]` warnings, and revisit direct `@standard-schema/spec` typing only if non-`ai` SDK APIs ever need it (PR `#634` already pins non-Zod Standard Schema support for `services.inference` and `tool()`). | S | `monorepo` |
 
 ---
 
@@ -61,7 +61,7 @@
 | # | Work Item | Size | Scope |
 |---|---|---|---|
 | 21 | **Promote `@apackdev/pack-format` to its own repo (`spankyed/apack-pack-format`)** once post-cutover `apack.json` settles, and wire `apack-community` onto it (deletes `scripts/vendor-manifest-schema.ts`). | M | New repo + `monorepo` + `apack-community` |
-| 22 | **Roll out Node `>=24.12.0` / `@types/node@^24.12.0` / `using` / `erasableSyntaxOnly` baseline** across sibling repos (`apack-community`, `elmdb`, `apack-state`, `apack-link`, `apack-orderings`, `apack-terminal`, `apack-git`). | M | Sibling repos |
+| 22 | **Finish rolling out Node `>=24.12.0` / `@types/node@^24.12.0` / `using` / `erasableSyntaxOnly` baseline** across sibling repos (`elmdb` and `apack-terminal/node` for `engines.node`, plus `@types/node` / `using` / `erasableSyntaxOnly` alignment across `apack-community`, `elmdb`, `apack-state`, `apack-link`, `apack-orderings`, `apack-terminal`, `apack-git`). | M | Sibling repos |
 | 23 | **Extract `apack-vault` (Rust, own repo):** OS keystores (Keychain / DPAPI / Secret Service) + `zeroize` memory wiping + encrypted secret envelope. | M–L | New repo + `monorepo` |
 | 24 | **Extract `apack-fs-tx` (`@apackdev/fs-tx`, TS, own repo):** crash-safe `private-file`, `replace-dir`, `exclusive-lock`, `process-liveness` with dedicated fault-injection / Windows-retry / Stryker suite. | M | New repo + `monorepo` |
 | 25 | **Extract `apack-agent-runners` (`@apackdev/agent-runners`, TS, own repo):** `claude-code` & `codex` subprocess/JSONL adapters decoupled from `default-setup` so external CLI wire-protocol changes ship independently. | M | New repo + `monorepo` |
@@ -134,7 +134,8 @@ Moving windows to `MessageChannelMain` (or removing `apiToken` from windows on t
 | `@apackdev/testing` | `monorepo` | Node (test) | Singleton-free, `using`-disposable test harness |
 | `@apackdev/host` *(private)* | `monorepo` | Node + FE host | Thin app composition + `ajv` settings compilation (inlined into `cli`) |
 | `@apackdev/state`, `@apackdev/link`, `@apackdev/orderings` | Own repos (TS) | Pure JS | State kernel, ordered stream, deterministic schedule runner |
-| `elmdb`, `@apackdev/terminal`, `@apackdev/git` | Own repos (Rust) | Native | EARS/LMDB store, PTY terminal broker, git engine |
+| `elmdb`, `@apackdev/terminal` (+ `@apackdev/terminal-view`) | Own repos (Rust + TS view) | Native + Browser | EARS/LMDB store, PTY terminal broker, terminal row renderer |
+| `@apackdev/git` | Own repo (TS) | Node | Pure-TS git engine bundled by `default-setup` |
 | `apack-vault` | Own repo (Rust) | Native | OS keystores + `zeroize` + encrypted secret envelope |
 | `apack-fs-tx` | Own repo (TS) | Node | Transactional local fs (`private-file`, `replace-dir`) & PID locks |
 | `apack-agent-runners` | Own repo (TS) | Node | External coding-agent CLI adapters (`claude-code`, `codex`) |
@@ -142,22 +143,25 @@ Moving windows to `MessageChannelMain` (or removing `apiToken` from windows on t
 
 ```mermaid
 flowchart TD
-  subgraph ExternalTS["External Pure-JS Kernels"]
+  subgraph ExternalPureJS["External Pure-JS Packages"]
     orderings["@apackdev/orderings"]
     link["@apackdev/link"]
     state["@apackdev/state"]
     packFormat["@apackdev/pack-format (Node + Workers)"]
-    fsTx["@apackdev/fs-tx"]
-    runners["@apackdev/agent-runners"]
     orderings --> link
     orderings --> state
     link --> state
   end
 
+  subgraph ExternalNodeTS["External Node TS Packages"]
+    git["@apackdev/git"]
+    fsTx["@apackdev/fs-tx"]
+    runners["@apackdev/agent-runners"]
+  end
+
   subgraph ExternalRust["External Rust Crates"]
     elmdb["elmdb / @elmdb/ears"]
     term["@apackdev/terminal"]
-    git["@apackdev/git"]
     vault["apack-vault"]
     sys["apack-sys (optional)"]
   end
@@ -173,23 +177,25 @@ flowchart TD
     defPack["default-setup"]
 
     sdk --> host
-    sdk --> packFormat
     packFormat --> host
     packFormat --> packBuild
     state --> host
     link --> host
     elmdb --> host
     term --> host
-    git --> host
     vault --> host
     fsTx --> host
+    sys -. optional .-> host
     packBuild --> cli
     host --> cli
     host --> app
     ui --> app
     sdk --> defPack
     ui --> defPack
+    git --> defPack
     runners --> defPack
+    sdk --> testing
+    host --> testing
     state --> testing
     link --> testing
     orderings --> testing
