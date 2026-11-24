@@ -15,7 +15,8 @@ function fixture() {
   const row = Array(46).fill(undefined)
   row[10] = 'Claude proposes a goal'; row[12] = item.payload.condition
   row[25] = 'Claude continues with the current work while you decide.'; row[27] = 'Approving replaces the current goal: previous goal'
-  row[35] = { props: panel }
+  row[35] = onCancel
+  row[36] = { props: panel }
   const root = { type: NCe, memoizedProps: { payload: item.payload, wouldTakeAnswer: () => true }, updateQueue: { memoCache: { data: [row] } }, child: { type: lr, memoizedProps: panel } }
   const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: { getState: () => ({ open }) } }) }
   const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) }, questionOptions: { q: () => sessionId } }

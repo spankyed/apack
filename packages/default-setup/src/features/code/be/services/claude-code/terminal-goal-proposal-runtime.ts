@@ -19,12 +19,13 @@ function nativeGoalProposal(n){
   if(typeof fiber.type==='function'&&fiber.type.name===nativeFunctionName('NCe')&&fiber.memoizedProps?.payload===payload){
    checked(fiber.type,'80f8248717365a251bf9b02027e39b4a73b036dec3ab6393ff9e42bc6fe6da75');
    if(typeof fiber.memoizedProps.wouldTakeAnswer==='function'&&fiber.memoizedProps.wouldTakeAnswer()!==true)return {store,sessionId};
-   const rows=fiber.updateQueue?.memoCache?.data?.filter(row=>Array.isArray(row)&&row.length===46&&row[35]?.props);
+   // Both pinned renderers store the cancel callback at 35 and the control element at 36.
+   const rows=fiber.updateQueue?.memoCache?.data?.filter(row=>Array.isArray(row)&&row.length===46&&row[36]?.props);
    if(rows?.length!==1)throw Error('Native goal proposal presentation changed');
    const row=rows[0],children=[fiber.child],visited=new Set();
    while(children.length){
     const child=children.pop();if(!child||visited.has(child))continue;if(visited.size>=2048)throw Error('Native goal proposal controls exceeded bound');visited.add(child);
-    if(typeof child.type==='function'&&child.type.name===nativeFunctionName('lr')&&child.memoizedProps===row[35].props){
+    if(typeof child.type==='function'&&child.type.name===nativeFunctionName('lr')&&child.memoizedProps===row[36].props){
      checked(child.type,'3b9100071fc0198132bcb81b4006df24fa2c5023055370b698bd4fc1ebae8a70');
      const panel=child.memoizedProps;
      if(panel.confirmLabel!=='Set this goal'||panel.cancelLabel!=='Not now'||typeof panel.refuseInput!=='function'||typeof panel.onConfirm!=='function'||typeof panel.onCancel!=='function')throw Error('Native goal proposal choices changed');
