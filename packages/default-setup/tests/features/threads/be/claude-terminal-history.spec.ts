@@ -127,12 +127,13 @@ it('projects only source-stamped inbound channels as inert transcript messages',
   expect(projectClaudeTerminalHistory({ sessionId, row: human })).toMatchObject({ sender: 'user', text: packet })
 })
 
-it('projects original informational notice rows as inert system text with native identity', () => {
-  const notice = { sessionId, uuid, type: 'system', subtype: 'informational', level: 'notice', entrypoint: 'cli',
+it.each(['notice', 'warning'])('projects original informational rows with level %s as inert system text', level => {
+  const notice = { sessionId, uuid, type: 'system', subtype: 'informational', level, entrypoint: 'cli',
     content: 'native-plugin: <b>literal review</b>', timestamp: '2026-10-25T02:13:07.922Z' }
   const value = projectClaudeTerminalHistory({ sessionId, row: notice })!
   expect(value).toMatchObject({ uuid, sessionId, sender: 'system', text: notice.content, blocks: [],
-    timestamp: Date.parse(notice.timestamp), context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId } } })
+    timestamp: Date.parse(notice.timestamp), context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId },
+      claudeNativeNotice: { subtype: 'informational', level } } })
   expect(value.context.claudeNativeUserMessage).toBeUndefined()
   expect(value.context.claudeNativeMessages).toBeUndefined()
   for (const changes of [{sessionId:'foreign'}, {entrypoint:'sdk'}, {isSidechain:true}, {agentId:'worker'},

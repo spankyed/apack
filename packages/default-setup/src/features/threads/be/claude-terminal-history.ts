@@ -95,8 +95,8 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
         ...(compaction === 'summary' && typeof source.parentUuid === 'string'
           ? { claudeNativeCompactionAnchor: source.parentUuid } : {}) } }
   }
-  // Original ui.log persists a transcript-only informational notice, outside model messages.
-  if (source.type === 'system' && source.subtype === 'informational' && source.level === 'notice') {
+  // Native transcript notices and warnings are system messages, outside model messages.
+  if (source.type === 'system' && source.subtype === 'informational' && (source.level === 'notice' || source.level === 'warning')) {
     if (source.sessionId !== entry.sessionId || source.entrypoint !== 'cli' || source.isSidechain === true
       || source.agentId !== undefined || source.parent_tool_use_id || source.isMeta === true
       || typeof source.content !== 'string' || !source.content || typeof source.uuid !== 'string'
