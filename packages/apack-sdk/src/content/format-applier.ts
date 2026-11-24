@@ -11,7 +11,7 @@ import { contentPackId } from '../utils/apply.ts';
 import { RECORD_KEYS, itemLabel, type CompiledContentFile, type ContentItem } from '../build/content/items.ts';
 import { _contentWriterRegistry, type ContentWriteContext, type ContentMatch, type ContentWriter } from './writers.ts';
 import { errorMessage } from '../utils/shared.ts';
-import type { ContentEditPolicy } from '../framework/declaration-schema.ts';
+import type { ContentEditPolicy } from '../framework/declaration-types.ts';
 
 export interface FormatApplierOptions {
   key: string;

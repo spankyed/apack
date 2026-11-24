@@ -1,6 +1,5 @@
-import type { z } from 'zod';
 import type { PackConsumption } from './service-consumption.ts';
-import type { ArtifactEntrySchema, BlockEntrySchema, DslEntrySchema, StepEntrySchema, MigrationsSchema } from './declaration-schema.ts';
+import type { ArtifactDeclaration, BlockDeclaration, DslDeclaration, PackMigrationsDeclaration, StepEntry } from './declaration-types.ts';
 import type { PackLifecycleDeclaration } from './lifecycle-declaration.ts';
 import type { PackDataDeclarations, PackEntityDeclaration } from './data-declaration.ts';
 import { boundHost } from '../runtime/host-runtime.ts';
@@ -16,17 +15,17 @@ export interface NativePackDeclaration extends PackDataDeclarations, FrontendDec
   /** This native pack's own version; required for pack-line migrations, independent of the app version. */
   version?: string;
   /** Versioned changes declared independently of their executable bindings. */
-  migrations?: z.infer<typeof MigrationsSchema>;
+  migrations?: PackMigrationsDeclaration;
   lifecycle?: PackLifecycleDeclaration;
   /** Native writers and explicitly applied content; compilation and automatic application belong to installed builds. */
   content?: {
     writers?: Record<string, string>;
     sources?: Record<string, { applier: string }>;
   };
-  steps?: Record<string, z.infer<typeof StepEntrySchema>>;
-  artifacts?: Record<string, z.infer<typeof ArtifactEntrySchema>>;
-  blocks?: Record<string, z.infer<typeof BlockEntrySchema>>;
-  dsl?: Record<string, DeclarationData<z.infer<typeof DslEntrySchema>>>;
+  steps?: Record<string, StepEntry>;
+  artifacts?: Record<string, ArtifactDeclaration>;
+  blocks?: Record<string, BlockDeclaration>;
+  dsl?: Record<string, DeclarationData<DslDeclaration>>;
   /** Compiled type data supplied by native composition, independently of frontend activation. */
   dslDefinitions?: Record<string, string>;
   /** Compiled entity wire name to local surface feature, supplied by native composition. */

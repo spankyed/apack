@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { HOST_PACK_ID, PACK_ID_PATTERN } from '../ids/refs.ts';
 import type { HostServices } from '../services/index.ts';
 import { satisfies } from 'semver';
@@ -18,22 +17,12 @@ export const _SERVICE_NAME_PATTERN = /^[A-Za-z_$][\w$]*$/;
 const packPattern = PACK_ID_PATTERN.source.slice(1, -1);
 const servicePattern = _SERVICE_NAME_PATTERN.source.slice(1, -1);
 const serviceRefPattern = new RegExp(`^(${packPattern})/(${servicePattern})$`);
-const dependencyServiceRefPattern = new RegExp(`^(?!${HOST_PACK_ID}/)${packPattern}/${servicePattern}$`);
-const hostRefs = _HOST_SERVICE_NAMES.map(name => `${HOST_PACK_ID}/${name}` as const);
 
 /** Service APIs requested in addition to the SDK baseline and a pack's own services. */
 export interface PackConsumption {
   /** Qualified provider/service refs; baseline and own services are implicit. */
   readonly services: readonly string[];
 }
-
-export const PackConsumptionSchema: z.ZodType<PackConsumption> = z.object({
-  services: z.array(z.union([
-    z.enum(hostRefs as [typeof hostRefs[number], ...typeof hostRefs[number][]]),
-    z.string().regex(dependencyServiceRefPattern, 'Must name a service as "<provider-pack>/<service>"'),
-  ])).refine(refs => new Set(refs).size === refs.length, 'Consumed service references must be unique')
-    .describe('Required service refs (provider-pack/service). Use the listed host refs for host APIs. Other providers must be this pack or direct dependencies, and must directly declare the service.'),
-}).strict().describe('Supported API dependencies. Logger, emitter, repository, caller-bound settings and this pack\'s own services are implicit. This is not a resource permission or security sandbox.');
 
 /** @internal Native and authored readers supply their pack-level service map explicitly. */
 export interface _PackServiceDeclarations {

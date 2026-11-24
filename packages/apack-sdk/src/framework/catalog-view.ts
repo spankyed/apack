@@ -1,15 +1,10 @@
-import type { StepEntry } from '../build/manifest.ts';
+import type { ArtifactDeclaration, BlockDeclaration, DslDeclaration, StepEntry } from './declaration-types.ts';
 import type { FeatureRef } from '../ids/refs.ts';
 import type { ReferenceDeclarations } from './reference-declaration.ts';
 import type { FrontendDeclaration } from './frontend-declaration.ts';
 import type { FeatureEventContract } from './event-contracts.ts';
-import type { z } from 'zod';
-import type { ArtifactEntrySchema, BlockEntrySchema, DslEntrySchema } from './declaration-schema.ts';
 
-export type DslDeclaration = z.infer<typeof DslEntrySchema>;
-
-export type ArtifactDeclaration = z.infer<typeof ArtifactEntrySchema>;
-export type BlockDeclaration = z.infer<typeof BlockEntrySchema>;
+export type { DslDeclaration, ArtifactDeclaration, BlockDeclaration };
 
 /** Declaration data is immutable independently of executable binding availability. */
 export type DeclarationData<T> = T extends object ? { readonly [K in keyof T]: DeclarationData<T[K]> } : T;

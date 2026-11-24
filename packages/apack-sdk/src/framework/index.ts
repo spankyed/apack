@@ -10,11 +10,21 @@ export { _surfaceTargets, _entityDestinationsProblem, type SurfaceDeclaration, t
 export { getPackHelp, type HelpDocument, type HelpArticle, type HelpProblem, type HelpCatalog, type HelpTarget } from './pack-help.ts';
 export { getSettingsCatalog, type SettingsCatalog } from './pack-settings.ts';
 export type { SettingsDefinition, SettingsSchema, SettingsProblem, SettingsValidator } from './settings-definition.ts';
-export { _packDeclarationProblem, _nativePackDeclarationProblem, _parseEventContracts } from './declaration-binding.ts';
-export { DECLARED_COMMANDS_KEY, declaredContentKeys } from './declaration-schema.ts';
-export { _compileSettingsDefinition, _settingsJsonProblems } from './settings-validation.ts';
+export { _packDeclarationProblem } from './declaration-binding.ts';
+export { DECLARED_COMMANDS_KEY, declaredContentKeys } from './declaration-types.ts';
+export type {
+  AllowablePackCheck, CommandsExtensionDeclaration, ContentConfig, ContentEditPolicy, ContentFieldDeclaration,
+  ContentFormatConfig, ContentSourceConfig, ContentTreeDeclaration, MigrationLine, PackBuildConfig, PackChecksDeclaration,
+  PackDataConfig, PackDependencySnapshot, PackEntityEntry, PackExtensionsDeclaration, PackFeatureEntry, PackFlowHelpers,
+  PackManifest, PackMigrationDeclaration, PackMigrationsDeclaration, PackPermission, PackProvenance,
+  PackRankEntry, PackRelationEntry, PackSnapshot, PackSystemEntry, PackTypeManifest, ProvenanceKind,
+  StepBuildDeclaration, StepDSLMeta, StepEntry, StepRuntimeDeclaration, StepTriggerDeclaration,
+} from './declaration-types.ts';
+export type { PackContentPreview, PackContentPreviewItem } from './preview-types.ts';
+export { _compileSettingsDefinition } from './settings-validation.ts';
+export { _settingsJsonProblems } from './settings-json.ts';
 export { onPackCatalogChanged, type NativePackDeclaration } from './pack-catalog.ts';
-export { _eventContractsProblem, type FeatureEventContract, type PackEventContracts } from './event-contracts.ts';
+export { _eventContractsProblem, _parseEventContracts, type FeatureEventContract, type PackEventContracts } from './event-contracts.ts';
 
 export { _referenceTargets, type ReferenceDeclarations, type ReferenceTypeDeclaration, type ReferenceCategoryDeclaration, type ReferenceSvgElement } from './reference-declaration.ts';
 

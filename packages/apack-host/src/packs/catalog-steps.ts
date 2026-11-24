@@ -1,6 +1,5 @@
-import type { PackCatalogSnapshot } from './catalog.ts';
-import type { StepCatalogEntry, DeclarationData } from '@apackdev/sdk/framework';
-import type { StepEntry } from '@apackdev/sdk/build';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
+import type { StepCatalogEntry, StepEntry, DeclarationData } from '@apackdev/sdk/framework';
 
 /** Declared steps across all origins, without reading source files or executable bindings. */
 export function stepCatalogEntries(snapshot: PackCatalogSnapshot): readonly StepCatalogEntry[] {

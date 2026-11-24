@@ -20,7 +20,7 @@ afterEach(() => {
 
 function writeManifest(name: string, manifest: Record<string, unknown>): string {
   const dir = path.join(packagesDir, name);
-  writeInstalledPackFixture(dir, manifest as PackManifest);
+  writeInstalledPackFixture(dir, manifest as unknown as PackManifest);
   return dir;
 }
 

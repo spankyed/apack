@@ -217,13 +217,28 @@ export type ContentFieldSpec = NonNullable<ContentFormatConfig['fields']>[string
 export function contentFile(name: string): string;
 
 // @public (undocumented)
-export type ContentFormatConfig = z.infer<typeof ContentFormatSchema>;
+export interface ContentFormatConfig {
+    // (undocumented)
+    compiler?: string;
+    // (undocumented)
+    entity?: string | string[];
+    // (undocumented)
+    fields?: Record<string, ContentFieldDeclaration>;
+    // (undocumented)
+    format?: 'markdown-tree' | 'json';
+    // (undocumented)
+    identity?: string[];
+    // (undocumented)
+    media?: string;
+    // (undocumented)
+    tree?: ContentTreeDeclaration;
+}
 
 // @public
 export const ContentFormatSchema: z.ZodObject<{
     format: z.ZodOptional<z.ZodEnum<{
-        "markdown-tree": "markdown-tree";
         json: "json";
+        "markdown-tree": "markdown-tree";
     }>>;
     compiler: z.ZodOptional<z.ZodString>;
     entity: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
@@ -330,7 +345,16 @@ export interface ContentReferenceInspection {
 }
 
 // @public (undocumented)
-export type ContentSourceConfig = z.infer<typeof ContentSourceSchema>;
+export interface ContentSourceConfig {
+    // (undocumented)
+    applier?: string;
+    // (undocumented)
+    format?: string;
+    // (undocumented)
+    onUserEdit?: ContentEditPolicy;
+    // (undocumented)
+    path?: string;
+}
 
 // @public
 export const ContentSourceSchema: z.ZodObject<{
@@ -606,11 +630,11 @@ export const ManifestSchema: z.ZodObject<{
     dependencies: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     consumes: z.ZodOptional<z.ZodType<PackConsumption, unknown, z.core.$ZodTypeInternals<PackConsumption, unknown>>>;
     permissions: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        filesystem: "filesystem";
+        terminal: "terminal";
         ears: "ears";
         llm: "llm";
-        filesystem: "filesystem";
         network: "network";
-        terminal: "terminal";
     }>>>;
     data: z.ZodOptional<z.ZodObject<{
         entities: z.ZodOptional<z.ZodType<Record<string, {
@@ -699,28 +723,28 @@ export const ManifestSchema: z.ZodObject<{
         ranks: z.ZodOptional<z.ZodType<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
@@ -1211,7 +1235,7 @@ export const ManifestSchema: z.ZodObject<{
             onUserEdit?: "theirs" | "offer" | undefined;
         }>>>>;
         formats: z.ZodOptional<z.ZodType<Record<string, {
-            format?: "markdown-tree" | "json" | undefined;
+            format?: "json" | "markdown-tree" | undefined;
             compiler?: string | undefined;
             entity?: string | string[] | undefined;
             identity?: string[] | undefined;
@@ -1227,7 +1251,7 @@ export const ManifestSchema: z.ZodObject<{
             }> | undefined;
             media?: string | undefined;
         }>, Record<string, {
-            format?: "markdown-tree" | "json" | undefined;
+            format?: "json" | "markdown-tree" | undefined;
             compiler?: string | undefined;
             entity?: string | string[] | undefined;
             identity?: string[] | undefined;
@@ -1243,7 +1267,7 @@ export const ManifestSchema: z.ZodObject<{
             }> | undefined;
             media?: string | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
-            format?: "markdown-tree" | "json" | undefined;
+            format?: "json" | "markdown-tree" | undefined;
             compiler?: string | undefined;
             entity?: string | string[] | undefined;
             identity?: string[] | undefined;
@@ -1259,7 +1283,7 @@ export const ManifestSchema: z.ZodObject<{
             }> | undefined;
             media?: string | undefined;
         }>, Record<string, {
-            format?: "markdown-tree" | "json" | undefined;
+            format?: "json" | "markdown-tree" | undefined;
             compiler?: string | undefined;
             entity?: string | string[] | undefined;
             identity?: string[] | undefined;
@@ -1371,7 +1395,7 @@ export const MigrationDeclarationSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
-export type MigrationLine = keyof typeof MigrationsSchema.shape;
+export type MigrationLine = 'app' | 'pack';
 
 // @public (undocumented)
 export const MigrationsSchema: z.ZodObject<{
@@ -1405,6 +1429,9 @@ export const MigrationsSchema: z.ZodObject<{
 
 // @internal
 export const _namingRefusedValue: z.core.$ZodErrorMap;
+
+// @internal
+export function _nativePackDeclarationProblem(declaration: unknown): string | undefined;
 
 // @public (undocumented)
 export const _NativePackDeclarationSchema: z.ZodObject<{
@@ -1544,28 +1571,28 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         ranks: z.ZodOptional<z.ZodType<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "in" | "out" | "both" | undefined;
+            direction?: "out" | "in" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
@@ -1874,8 +1901,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     appExtensions: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
-        references?: ReferenceDeclarations | undefined;
-        services?: Record<string, string> | undefined;
+        surface?: SurfaceDeclaration | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1893,7 +1919,6 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        designation?: string | undefined;
         settings?: {
             schema: Record<string, unknown>;
             defaults: Record<string, unknown>;
@@ -1902,12 +1927,13 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
-        surface?: SurfaceDeclaration | undefined;
+        services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
+        references?: ReferenceDeclarations | undefined;
+        designation?: string | undefined;
     }>, Record<string, {
         description: string;
-        references?: unknown;
-        services?: Record<string, string> | undefined;
+        surface?: unknown;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1925,14 +1951,14 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        designation?: string | undefined;
         settings?: unknown;
-        surface?: unknown;
+        services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
+        references?: unknown;
+        designation?: string | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
-        references?: ReferenceDeclarations | undefined;
-        services?: Record<string, string> | undefined;
+        surface?: SurfaceDeclaration | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1950,7 +1976,6 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        designation?: string | undefined;
         settings?: {
             schema: Record<string, unknown>;
             defaults: Record<string, unknown>;
@@ -1959,12 +1984,13 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
-        surface?: SurfaceDeclaration | undefined;
+        services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
+        references?: ReferenceDeclarations | undefined;
+        designation?: string | undefined;
     }>, Record<string, {
         description: string;
-        references?: unknown;
-        services?: Record<string, string> | undefined;
+        surface?: unknown;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1982,10 +2008,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        designation?: string | undefined;
         settings?: unknown;
-        surface?: unknown;
+        services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
+        references?: unknown;
+        designation?: string | undefined;
     }>>>>;
 }, z.core.$strict>;
 
@@ -2130,7 +2157,32 @@ export type PackFeature = PackFeatureEntry & {
 };
 
 // @public (undocumented)
-export type PackFeatureEntry = z.infer<typeof FeatureEntrySchema>;
+export interface PackFeatureEntry {
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    designation?: string;
+    // (undocumented)
+    entities?: Record<string, PackEntityEntry>;
+    // (undocumented)
+    projections?: string;
+    // (undocumented)
+    references?: ReferenceDeclarations;
+    // (undocumented)
+    repositories?: Record<string, string>;
+    // (undocumented)
+    services?: Record<string, string>;
+    // (undocumented)
+    settings?: SettingsDefinition;
+    // (undocumented)
+    surface?: SurfaceDeclaration;
+    // (undocumented)
+    system?: PackSystemEntry;
+    // (undocumented)
+    types?: string;
+    // (undocumented)
+    views?: string;
+}
 
 // @public
 export function packFeatures(manifest: {
@@ -2145,27 +2197,69 @@ export interface PackFlowHelpers {
 }
 
 // @public (undocumented)
-export type PackLifecycleConfig = z.infer<typeof LifecycleConfigSchema>;
+export type PackLifecycleConfig = PackLifecycleDeclaration;
 
 // @public (undocumented)
-export type PackManifest = z.infer<typeof ManifestSchema>;
+export interface PackManifest {
+    // (undocumented)
+    $schema?: string;
+    // (undocumented)
+    build?: PackBuildConfig;
+    // (undocumented)
+    checks?: PackChecksDeclaration;
+    // (undocumented)
+    consumes?: PackConsumption;
+    // (undocumented)
+    content?: ContentConfig;
+    // (undocumented)
+    data?: PackDataConfig;
+    // (undocumented)
+    dependencies?: Record<string, string>;
+    // (undocumented)
+    description?: string;
+    // (undocumented)
+    extensions?: PackExtensionsDeclaration;
+    // (undocumented)
+    features?: Record<string, PackFeatureEntry>;
+    // (undocumented)
+    hostVersion?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    license?: string;
+    // (undocumented)
+    lifecycle?: PackLifecycleDeclaration;
+    // (undocumented)
+    migrations?: PackMigrationsDeclaration;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    permissions?: PackPermission[];
+    // (undocumented)
+    version: string;
+}
 
 // @public (undocumented)
-export type PackMigrationDeclaration = z.infer<typeof MigrationDeclarationSchema>;
+export interface PackMigrationDeclaration {
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    up: string;
+}
 
 // @public
 export type PackModuleLoader = (file: string) => Promise<Record<string, unknown>>;
 
 // @public (undocumented)
-export type PackPermission = z.infer<typeof PackPermissionSchema>;
+export type PackPermission = 'ears' | 'llm' | 'filesystem' | 'network' | 'terminal';
 
 // @public (undocumented)
 export const PackPermissionSchema: z.ZodEnum<{
+    filesystem: "filesystem";
+    terminal: "terminal";
     ears: "ears";
     llm: "llm";
-    filesystem: "filesystem";
     network: "network";
-    terminal: "terminal";
 }>;
 
 // @public
@@ -2215,10 +2309,19 @@ export type PackSnapshotValidation = PackValidation & {
 };
 
 // @public (undocumented)
-export type PackSurfaceEntry = NonNullable<PackFeatureEntry['surface']>;
+export type PackSurfaceEntry = SurfaceDeclaration;
 
 // @public (undocumented)
-export type PackSystemEntry = NonNullable<PackFeatureEntry['system']>;
+export interface PackSystemEntry {
+    // (undocumented)
+    contract?: string;
+    // (undocumented)
+    entry: string;
+    // (undocumented)
+    events?: {
+        incoming?: string[];
+    };
+}
 
 // @public (undocumented)
 export interface PackTypeManifest {
@@ -2301,7 +2404,7 @@ export const PROVENANCE_KINDS: {
 };
 
 // @public (undocumented)
-export type ProvenanceKind = keyof typeof PROVENANCE_KINDS;
+export type ProvenanceKind = 'entities' | 'relKinds' | 'weightedKinds' | 'roles' | 'rankIndexes' | 'referenceTypes' | 'referenceCategories' | 'tiptapExtensions' | 'surfaces';
 
 // @public
 export interface ProvenanceManifest extends PackDataDeclarations {
@@ -2422,7 +2525,16 @@ export interface SpecialtyCompiler<T = unknown> {
 }
 
 // @public (undocumented)
-export type StepDSLMeta = z.infer<typeof StepDSLMetaSchema>;
+export interface StepDSLMeta {
+    // (undocumented)
+    defaultLabel?: string;
+    // (undocumented)
+    helpers?: string;
+    // (undocumented)
+    primaryField?: string;
+    // (undocumented)
+    references?: Record<string, string>;
+}
 
 // @public (undocumented)
 export const StepDSLMetaSchema: z.ZodObject<{
@@ -2433,7 +2545,28 @@ export const StepDSLMetaSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
-export type StepEntry = z.infer<typeof StepEntrySchema>;
+export interface StepEntry {
+    // (undocumented)
+    build?: StepBuildDeclaration;
+    // (undocumented)
+    dsl?: StepDSLMeta;
+    // (undocumented)
+    fe?: StepFrontendDeclaration;
+    // (undocumented)
+    kind?: 'step' | 'trigger';
+    // (undocumented)
+    node: {
+        label: string;
+        defaultLabel?: string;
+        defaults?: Record<string, unknown>;
+    };
+    // (undocumented)
+    runtime?: StepRuntimeDeclaration;
+    // (undocumented)
+    trigger?: StepTriggerDeclaration;
+    // (undocumented)
+    types?: string;
+}
 
 // @public
 export const StepEntrySchema: z.ZodObject<{

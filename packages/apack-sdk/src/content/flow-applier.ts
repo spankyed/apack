@@ -9,7 +9,7 @@ import { validate } from '../build/compilers/flow-dsl-validator.ts';
 import { isFlowConfig, type FlowDSL } from '../build/compilers/flow-types.ts';
 import { EARS } from '../types/entities.ts';
 import { SDK_SHORT_CODES, type FlowEntity } from '../types/sdk-entities.ts';
-import type { ContentEditPolicy } from '../framework/declaration-schema.ts';
+import type { ContentEditPolicy } from '../framework/declaration-types.ts';
 import { childContentKey, contentKeyOf, defineKey, hashValues, recordApplied, CONTENT_KEY, contentKeyPrefix, CONTENT_HASH } from './format-applier.ts';
 import { resolve, resolveRemoval, type LiveEntity } from './merge.ts';
 import { contentPackId } from '../utils/apply.ts';

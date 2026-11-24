@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PACK_ID_PATTERN } from '../ids/refs.ts';
-import type { ContentIndex } from './content-compiler.ts';
+import type { ContentIndex } from './content-index-types.ts';
 
 const target = z.object({ key: z.string().min(1), item: z.string() }).strict();
 const reference = z.discriminatedUnion('kind', [

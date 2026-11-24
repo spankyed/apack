@@ -5,7 +5,7 @@ import { type TrailClickEvent } from '@apackdev/sdk/fe'
 import type { OutgoingSettingsEvents } from '../be/types.ts'
 import type { SecretMetadata, SecretsStatus } from '@apackdev/sdk/services'
 import { tell } from '../../../events.ts'
-import type { PackContentPreview } from '@apackdev/sdk/build'
+import type { PackContentPreview } from '@apackdev/sdk/framework'
 import type { FeatureRef } from '@apackdev/sdk/ids';
 
 import { splitRef } from '@apackdev/sdk/ids';

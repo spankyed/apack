@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { build } from 'esbuild';
-import { _nativePackDeclarationProblem } from '../../src/framework/declaration-binding.ts';
+import { _nativePackDeclarationProblem } from '../../src/build/native-declarations.ts';
 import { ManifestSchema, _NativePackDeclarationSchema } from '../../src/framework/declaration-schema.ts';
+import { _parseEventContracts } from '../../src/framework/event-contracts.ts';
 import type { NativePackDeclaration } from '../../src/framework/pack-catalog.ts';
 
 const declaration = {
@@ -45,16 +46,50 @@ describe('native declaration admission', () => {
     expect(_nativePackDeclarationProblem(new Definition())).toContain('JSON data properties');
   });
 
-  it('bundles the public framework validator for the browser without Node tooling or pack modules', async () => {
+  it('bundles @apackdev/sdk/framework for the browser without zod, build tooling, or pack modules', async () => {
     const result = await build({
-      stdin: { contents: "export { _nativePackDeclarationProblem as problem } from '../../src/framework/index.ts'", resolveDir: import.meta.dirname },
+      stdin: { contents: "export * from '../../src/framework/index.ts'", resolveDir: import.meta.dirname },
       bundle: true, platform: 'browser', format: 'esm', write: false, metafile: true,
     });
     const inputs = Object.keys(result.metafile!.inputs);
-    expect(inputs.some(input => input.includes('/src/build/'))).toBe(false);
-    expect(inputs.some(input => input.includes('/default-setup/'))).toBe(false);
-    const { problem } = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
-    expect(problem(declaration)).toBeUndefined();
-    expect(problem({ ...declaration, blocks: { answer: { kind: 'unknown' } } })).toContain('blocks.answer.kind');
+    expect(inputs.some(input => /(?:^|\/)src\/framework\/index\.ts$/.test(input))).toBe(true);
+    expect(inputs.some(input => /(?:^|\/)src\/framework\/event-contracts\.ts$/.test(input))).toBe(true);
+    expect(inputs.some(input => /(?:^|\/)node_modules\/zod\//.test(input))).toBe(false);
+    expect(inputs.some(input => /(?:^|\/)src\/build\//.test(input))).toBe(false);
+    expect(inputs.some(input => /(?:^|\/)default-setup\//.test(input))).toBe(false);
+  });
+
+  it('validates event contracts in pure TypeScript without Zod', () => {
+    const features = { shell: { system: {}, surface: {} } };
+    const valid = { shell: { system: { incoming: ['START', 'QUERY'], outgoing: ['DONE'], asks: { QUERY: ['NOT_FOUND'] } }, surface: { receives: ['DONE'] } } };
+    const parsed = _parseEventContracts(valid, features);
+    expect(parsed).toStrictEqual(valid);
+    expect(Object.getPrototypeOf(parsed)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(parsed.shell.system!.asks)).toBe(Object.prototype);
+
+    // Rejects duplicate event names, empty names, unknown fields, asks not in incoming, bad feature IDs, non-objects, and accessors
+    expect(() => _parseEventContracts(null, features, true)).toThrow('Event contracts must be an object');
+    expect(() => _parseEventContracts([], features, true)).toThrow('Event contracts must be an object');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: ['A', 'A'], outgoing: [] }, surface: { receives: [] } } }, features)).toThrow('unique');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: [''], outgoing: [] }, surface: { receives: [] } } }, features)).toThrow('nonempty');
+    expect(() => _parseEventContracts({ shell: { system: { outgoing: [] }, surface: { receives: [] } } }, features)).toThrow('incoming');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: [] }, surface: { receives: [] } } }, features)).toThrow('outgoing');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: [], outgoing: [] }, surface: {} } }, features)).toThrow('receives');
+    expect(() => _parseEventContracts({ shell: { extra: {} } }, features, true)).toThrow('unknown field');
+    expect(() => _parseEventContracts({ shell: { surface: { receives: [], extra: 1 } } }, features, true)).toThrow('unknown field');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: ['A'], outgoing: [], extra: 1 }, surface: { receives: [] } } }, features)).toThrow('unknown field');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: ['A'], outgoing: [], asks: { '': [] } }, surface: { receives: [] } } }, features)).toThrow('empty ask name');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: ['A'], outgoing: [], asks: { MISSING: [] } }, surface: { receives: [] } } }, features)).toThrow('among the incoming');
+    expect(() => _parseEventContracts(JSON.parse('{"shell":{"system":{"incoming":["A"],"outgoing":[],"asks":{"__proto__":[]}}}}'), features, true)).toThrow('among the incoming');
+    const protoAsk = _parseEventContracts(JSON.parse('{"shell":{"system":{"incoming":["__proto__"],"outgoing":[],"asks":{"__proto__":["FAIL"]}}}}'), features, true);
+    expect(Object.getPrototypeOf(protoAsk.shell.system!.asks)).toBe(Object.prototype);
+    expect(Object.hasOwn(protoAsk.shell.system!.asks!, '__proto__')).toBe(true);
+    expect(() => _parseEventContracts({ 'Bad-Id': { surface: { receives: [] } } }, features, true)).toThrow('Invalid event contract feature id');
+    expect(() => _parseEventContracts(JSON.parse('{"__proto__": {"surface": {"receives": []}}}'), features, true)).toThrow('Invalid event contract feature id');
+    expect(() => _parseEventContracts({ shell: { system: { incoming: [], outgoing: [] } } }, features, false)).toThrow('Missing compiled event contract');
+    expect(() => _parseEventContracts({ shell: { surface: { receives: [] } } }, { shell: {} }, false)).toThrow('Undeclared event contract');
+    const getter = vi.fn(() => ({ surface: { receives: [] } }));
+    expect(() => _parseEventContracts(Object.defineProperty({}, 'shell', { get: getter, enumerable: true }), features, true)).toThrow('event contracts must contain finite, acyclic JSON data properties');
+    expect(getter).not.toHaveBeenCalled();
   });
 });

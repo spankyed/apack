@@ -3,6 +3,7 @@ import { createMachine } from 'xstate';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import type { PackFERegistration, SettingsPort } from '@apackdev/sdk/fe';
 import { createFePackRegistry } from '../../src/fe/pack-store.ts';
+import { nativeFrontendDeclarationProblem } from '../../src/fe/frontend-admission.ts';
 
 const settings = () => ({ port: {} as SettingsPort, dispose: vi.fn() });
 
@@ -184,4 +185,30 @@ it('blocks registry reentry from binding getters and retires both provisional re
   expect(registry.hasPackFE('outer')).toBe(false);
   expect(outer.dispose).toHaveBeenCalledOnce();
   expect(inner.dispose).toHaveBeenCalledOnce();
+});
+
+it('refuses impure or malformed native declarations before reading accessors or cloning', () => {
+  const getter = vi.fn(() => 'native');
+  expect(nativeFrontendDeclarationProblem(Object.defineProperty({}, 'id', { get: getter, enumerable: true })))
+    .toContain('JSON data properties');
+  expect(getter).not.toHaveBeenCalled();
+  class Custom { id = 'native'; }
+  expect(nativeFrontendDeclarationProblem(new Custom())).toContain('JSON data properties');
+  expect(nativeFrontendDeclarationProblem({ id: 'Bad-Id' })).toContain('pack id');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', entityDestinations: { Action: 'missing' } })).toContain('without a declared surface');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: { view: { description: 'V' } }, eventContracts: { view: { system: { incoming: ['A', 'A'], outgoing: [] } } } }))
+    .toContain('unique');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: { view: { surface: true } } })).toContain('features.view.surface');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: { view: { surface: { canvas: { routes: 'bad' } } } } })).toContain('canvas.routes');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: { view: { references: {} } } })).toContain('features.view.references');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', settings: { a: null } })).toContain('settings.a');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', steps: { a: {} } })).toContain('steps.a.node');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', artifacts: { a: null } })).toContain('artifacts.a');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', blocks: { a: null } })).toContain('blocks.a');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', textEditor: { a: { extensions: 'bad' } } })).toContain('textEditor.a.extensions');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', appExtensions: { a: 123 } })).toContain('appExtensions.a');
+  expect(nativeFrontendDeclarationProblem({
+    id: 'native',
+    features: { a: { surface: { label: 'A', state: 'a.ts', default: true } }, b: { surface: { label: 'B', state: 'b.ts', default: true } } },
+  })).toContain('Two features claim the default surface');
 });

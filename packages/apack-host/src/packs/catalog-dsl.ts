@@ -1,4 +1,4 @@
-import type { PackCatalogSnapshot } from './catalog.ts';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
 import type { DeclarationData, DslCatalogEntry, DslDeclaration } from '@apackdev/sdk/framework';
 
 /** Built type text and authoring metadata are data; discovery never imports DSL or runtime modules. */

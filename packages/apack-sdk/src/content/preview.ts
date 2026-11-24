@@ -1,10 +1,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseContentIndex } from '../build/content-index.ts';
-import type { PackContentPreview } from '../build/preview.ts';
+import type { PackContentPreview } from '../framework/preview-types.ts';
 import { registeredContentKeys, CONTENT_INDEX_FILE } from '../utils/apply.ts';
 
-export type { PackContentPreview, PackContentPreviewItem } from '../build/preview.ts';
+export type { PackContentPreview, PackContentPreviewItem } from '../framework/preview-types.ts';
 
 /**
  * What a compiled content directory would import: the keys it writes that the compiling pack registered

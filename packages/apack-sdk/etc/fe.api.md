@@ -35,7 +35,6 @@ import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
 import type { SnapshotFrom } from 'xstate';
 import { VNode } from 'vue';
-import { z } from 'zod';
 
 // @public
 export const ALL_COLORS: readonly ["blue", "orange", "purple", "green", "red", "teal", "yellow", "pink", "gray"];

@@ -1,27 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { PackSnapshot } from '@apackdev/sdk/build';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { PACK_LAYOUT, readBuiltPackSource } from './layout.ts';
+import type { AppPackSource, AppPackSourceProblem, AppPackSources } from './catalog-types.ts';
 
-/** An app's offered default, not an installed or active settings owner. */
-export interface AppPackSource {
-  readonly id: string;
-  readonly dir: string;
-  readonly snapshot: PackSnapshot;
-  readonly files: Readonly<Record<string, string>>;
-  readonly sourceRevision: string;
-}
-export interface AppPackSourceProblem {
-  readonly id: string;
-  readonly dir: string;
-  readonly message: string;
-}
-export interface AppPackSources {
-  readonly sources: readonly AppPackSource[];
-  readonly problems: readonly AppPackSourceProblem[];
-}
+export type { AppPackSource, AppPackSourceProblem, AppPackSources } from './catalog-types.ts';
 
 /** Read all app-shipped advertisements without activation or writes; ambiguous ids have no winner. */
 export function readAppPackSources(root: string): AppPackSources {
