@@ -296,6 +296,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'lsp_recommendation',pluginName:'review',marketplaceName:'local',fileExtension:'ts',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'never',label:'Never'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
  {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
+ {notice:{...identity,kind:'cost_threshold',helpUrl:'https://code.claude.com/docs/en/costs',choices:[{value:'cost_acknowledge',label:'Got it'}]},button:'Got it',decision:'cost_acknowledge'},
  {notice:{...identity,kind:'cold_resume_quota',trigger:'idle',preferredChoice:'quota_new_conversation',choices:[{value:'quota_resume',label:'Resume'},{value:'quota_new_conversation',label:'Start a new conversation',description:'Original pointer disclosure'}]},button:'Resume',decision:'quota_resume'},
  {notice:{...identity,kind:'effort_medium_nudge',model:'claude-opus-5-5',warning:'Original effort warning',preferredChoice:'effort_decline',choices:[{value:'effort_decline',label:'Keep high'},{value:'effort_accept',label:'Use medium'}]},button:'Use medium',decision:'effort_accept'},
  {notice:{...identity,kind:'auto_default_nudge',preferredChoice:'auto_nudge_decline',choices:[{value:'auto_nudge_accept',label:'Make default'},{value:'auto_nudge_decline',label:'Keep current mode'}]},button:'Keep current mode',decision:'auto_nudge_decline'},
@@ -397,7 +398,8 @@ it('cycles only the original resume choices with unmodified arrows', async () =>
  const card = f.root.querySelector('[data-native-notice="resume_return"]')!
  const choices = [...card.querySelectorAll<HTMLButtonElement>('button[data-native-choice]')]
  const [summary, continueSession, never] = choices
- await vi.waitFor(() => expect(document.activeElement).toBe(summary), {timeout:1000})
+ await nextTick()
+ expect(document.activeElement).toBe(summary)
  actor.send.mockClear()
  const arrow = (key: string, modifiers: KeyboardEventInit = {}) => document.activeElement!.dispatchEvent(
   new KeyboardEvent('keydown', {key, bubbles:true, cancelable:true, ...modifiers}),

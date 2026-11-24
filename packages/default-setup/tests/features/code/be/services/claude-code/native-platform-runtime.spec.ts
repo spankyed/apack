@@ -148,18 +148,28 @@ it('runs the original managed ConfigChange gate before notifying and refuses a s
   const source = claudeTerminalUiRuntime
   const ast: any = parse(source, {ecmaVersion: 'latest', sourceType: 'module'})
   const handler = ast.body.find((node: any) => node.type === 'FunctionDeclaration' && node.id.name === 'runNativeManagedSettingsRecheck')
+  const observer = ast.body.find((node: any) => node.type === 'FunctionDeclaration' && node.id.name === 'observeNativeManagedSettings')
   const file = '/etc/claude-code/managed-settings.json'
   const request = {session_id: 'session', view_revision: 2}
   const facts: {view: {kind: 'main' | 'agent'; taskId?: string}; sessionId: string; sequence: number} = {view: {kind: 'main'}, sessionId: 'session', sequence: 2}
   const context = {session: {}, storageV5: {}, credentials: {}}
   const hook = vi.fn(async () => false), producer = vi.fn(() => hook)
-  const notifyChange = vi.fn(), publish = vi.fn(), stamp = vi.fn(() => 'original')
+  let subscriber: ((source: string) => void) | undefined
+  const notifyChange = vi.fn((source: string) => subscriber?.(source))
+  const detector = {
+    isWatching: () => true,
+    notifyChange,
+    subscribe: (listener: (source: string) => void) => { subscriber = listener },
+  }
+  const publish = vi.fn(), stamp = vi.fn(() => 'original')
   const modules: Record<string, object> = {
     'chunk-1pjd7qsk.js': {D_: () => [{file, errno: 'EACCES'}]},
-    'chunk-ayzz9bjs.js': {Ta: {isWatching: () => true, notifyChange}},
+    'chunk-ayzz9bjs.js': {Ta: detector},
     'chunk-ne2pzqpv.js': {dAe: producer},
   }
-  const run = vm.runInNewContext(source.slice(handler.start, handler.end) + ';runNativeManagedSettingsRecheck', {
+  const runtime = [source.slice(observer.start, observer.end), source.slice(handler.start, handler.end)].join('\n')
+  const { run, observe } = vm.runInNewContext(runtime + ';({run:runNativeManagedSettingsRecheck,observe:observeNativeManagedSettings})', {
+    clients: new Set(['desktop']),
     process: {platform: 'linux'},
     importClaudeNativeModule: async (name: string) => modules[name],
     originalContext: {surface: 'terminal', toolContext: () => context},
@@ -168,6 +178,7 @@ it('runs the original managed ConfigChange gate before notifying and refuses a s
     nativeManagedFileStamp: stamp,
     publish,
   })
+  observe(detector)
   const native = {gate: {_Jo: async () => {}}}
   hook.mockImplementationOnce(async () => { facts.sequence++; return false })
   await expect(run(native, request, new AbortController())).rejects.toThrow('owner changed')
