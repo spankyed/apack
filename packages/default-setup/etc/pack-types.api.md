@@ -1813,7 +1813,7 @@ type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | '
     credit: ClaudeCreditRequest;
 } | {
     selectedValues?: string[];
-    decision: 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'cost_acknowledge' | 'disable' | 'edit_prompt' | 'effort_accept' | 'effort_decline' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'goal_accept' | 'goal_decline' | 'ide_welcome_dismiss' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'peer_cancel' | 'peer_deliver' | 'peer_deny' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'remote_dismiss' | 'remote_enable' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'ultraplan_cancel' | 'ultraplan_fresh' | 'ultraplan_here' | 'ultraplan_launch_cancel' | 'ultraplan_launch_escape' | 'ultraplan_launch_run' | 'yes';
+    decision: 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'cost_acknowledge' | 'disable' | 'edit_prompt' | 'effort_accept' | 'effort_decline' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'goal_accept' | 'goal_decline' | 'ide_welcome_dismiss' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'peer_cancel' | 'peer_deliver' | 'peer_deny' | 'policy_approve' | 'policy_reject' | 'publish_plugin_confirm' | 'publish_plugin_decline' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'remote_dismiss' | 'remote_enable' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'ultraplan_cancel' | 'ultraplan_fresh' | 'ultraplan_here' | 'ultraplan_launch_cancel' | 'ultraplan_launch_escape' | 'ultraplan_launch_run' | 'yes';
 });
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
@@ -2377,6 +2377,25 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     }, z.core.$strip>>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"permission_publish_plugin">;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    previewFiles: z.ZodArray<z.ZodString>;
+    files: z.ZodArray<z.ZodString>;
+    choices: z.ZodUnion<readonly [z.ZodTuple<[z.ZodObject<{
+        value: z.ZodLiteral<"publish_plugin_decline">;
+        label: z.ZodString;
+    }, z.core.$strip>], null>, z.ZodTuple<[z.ZodObject<{
+        value: z.ZodLiteral<"publish_plugin_confirm">;
+        label: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        value: z.ZodLiteral<"publish_plugin_decline">;
+        label: z.ZodString;
+    }, z.core.$strip>], null>]>;
     id: z.ZodString;
     revision: z.ZodString;
     sessionId: z.ZodString;
@@ -12752,8 +12771,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
