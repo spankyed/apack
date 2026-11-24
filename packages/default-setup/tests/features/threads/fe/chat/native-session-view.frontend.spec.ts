@@ -391,12 +391,13 @@ it('cycles only the original resume choices with unmodified arrows', async () =>
  const notice = ownedNoticeCases.find(row => row.notice.kind === 'resume_return')!.notice
  f.publish({...f.snapshot, state:{...f.snapshot.state!,status:'exited'}})
  await nextTick(); f.back.click(); await nextTick()
+ f.root.querySelector<HTMLButtonElement>('button')!.focus()
  f.publish({...f.snapshot, state:{...f.snapshot.state!,notice}})
  await nextTick()
  const card = f.root.querySelector('[data-native-notice="resume_return"]')!
  const choices = [...card.querySelectorAll<HTMLButtonElement>('button[data-native-choice]')]
  const [summary, continueSession, never] = choices
- await vi.waitFor(() => expect(document.activeElement).toBe(summary))
+ await vi.waitFor(() => expect(document.activeElement).toBe(summary), {timeout:1000})
  actor.send.mockClear()
  const arrow = (key: string, modifiers: KeyboardEventInit = {}) => document.activeElement!.dispatchEvent(
   new KeyboardEvent('keydown', {key, bubbles:true, cancelable:true, ...modifiers}),
