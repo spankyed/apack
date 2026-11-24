@@ -158,7 +158,7 @@ function normalizedClaudePromptOffsets(source: string, canonical: string, offset
   return mapped.size === requested.length ? mapped : undefined
 }
 
-/** Expose visible boundaries when list serialization changes only the markers. */
+/** Expose visible list boundaries while leaving other Markdown offsets for the verified parse. */
 function listPaintBoundaries(source: string, canonical: string, offsets: readonly number[]): Map<number, number> | undefined {
   const rawLines = source.split('\n'), canonicalLines = canonical.split('\n')
   if (rawLines.length !== canonicalLines.length) return
@@ -166,18 +166,19 @@ function listPaintBoundaries(source: string, canonical: string, offsets: readonl
   let start = 0, index = 0, moved = false
   for (const [lineIndex, raw] of rawLines.entries()) {
     const normalized = canonicalLines[lineIndex]!
+    const end = start + raw.length
     let visibleStart = start
-    if (raw !== normalized) {
+    if (raw !== normalized && index < requested.length && requested[index]! <= end) {
       const marker = /^( *)([*+-]|[0-9]{1,9}[.)])[ \t]+(?=\S)/
       const before = marker.exec(raw), after = marker.exec(normalized)
-      if (!before || !after || raw.slice(before[0].length) !== normalized.slice(after[0].length)) return
-      const ordered = before[2]!.length > 1
-      if (ordered !== (after[2]!.length > 1)) return
-      // The ordered-list serializer right-aligns the numbers. The marked parse below verifies nesting.
-      if (!ordered && before[1] !== after[1]) return
-      visibleStart += before[0].length
+      if (before && after && raw.slice(before[0].length) === normalized.slice(after[0].length)) {
+        const ordered = before[2]!.length > 1
+        // The ordered-list serializer right-aligns the numbers. The marked parse below verifies nesting.
+        if (ordered === (after[2]!.length > 1) && (ordered || before[1] === after[1])) {
+          visibleStart += before[0].length
+        }
+      }
     }
-    const end = start + raw.length
     while (index < requested.length && requested[index]! <= end) {
       const offset = requested[index++]!
       const visible = Math.max(offset, visibleStart)
@@ -249,7 +250,7 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
     let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
     if (!located && !canonicalSource && offsets.length) {
       // A global diff is quadratic across many normalized list markers. Probe the visible
-      // boundaries directly after proving the normalization preserved each line's content.
+      // list boundaries directly, then verify the marked parse preserves the entire document.
       const boundaries = listPaintBoundaries(frame.text, canonicalText, offsets)
       if (boundaries) {
         located = locate([...new Set([frame.cursor, ...boundaries.values()])].sort((a, b) => a - b))

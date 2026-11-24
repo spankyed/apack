@@ -539,6 +539,29 @@ it.each([
   bridge.dispose()
 })
 
+it('preserves list paint when the same native rewrite also normalizes a heading', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const items = Array.from({ length: 1100 }, (_, index) => `Review item ${Math.floor(index / 2) + 1}`)
+    const text = '# Release #\n\n' + items.map(item => '1.   ' + item).join('\n')
+    const start = text.lastIndexOf('\n') + 1
+    bridge.receive({
+      revision: bridge.revision, status: 'applied',
+      frame: { text, cursor: text.length, decorations: [
+        { start: 2, end: 9, bold: true },
+        { start, end: start + '1.   Review'.length, underline: true },
+      ] },
+    })
+    const rows = editor.view.dom.querySelectorAll('li')
+    expect(editor.view.dom.querySelector('h1 .claude-prompt-decoration')?.textContent).toBe('Release')
+    expect(rows).toHaveLength(items.length)
+    expect(rows[rows.length - 2]?.querySelector('.claude-prompt-decoration')).toBeNull()
+    expect(rows[rows.length - 1]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+    expect(bridge.readDraft()?.cursor).toBe(bridge.readDraft()?.text.length)
+  } finally { bridge.dispose() }
+})
+
 it('reports the actual host-fill text change, excluding no-ops and stale fills', () => {
   editor.commands.setContent('initial draft')
   const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
