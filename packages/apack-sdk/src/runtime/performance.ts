@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { _isHostBound, boundHost } from './host-runtime.ts';
 import { _isFeHostBound, boundFeHost } from './fe-host.ts';
 
@@ -6,17 +5,50 @@ import { _isFeHostBound, boundFeHost } from './fe-host.ts';
 export interface PerformanceCarrier { traceparent?: string; tracestate?: string }
 
 /** @internal Shared process/window admission vocabulary. */
-export const _recordingModeSchema = z.enum(['disabled', 'lightweight', 'detailed']);
-/** @internal Portable mode inferred from the shared admission schema. */
-export type _RecordingMode = z.infer<typeof _recordingModeSchema>;
-const startupConfiguration = z.object({
-  mode: _recordingModeSchema,
-  carrier: z.object({ traceparent: z.string().max(512).optional(), tracestate: z.string().max(512).optional() }).strict().optional(),
-}).strict();
+export const _RECORDING_MODES = ['disabled', 'lightweight', 'detailed'] as const;
+/** @internal Portable mode derived from the shared admission vocabulary. */
+export type _RecordingMode = (typeof _RECORDING_MODES)[number];
+
+const MAX_CARRIER_FIELD_LENGTH = 512;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCarrier(value: unknown): PerformanceCarrier {
+  if (!isPlainRecord(value)) throw new Error('Startup recording carrier must be an object');
+  const carrier: PerformanceCarrier = {};
+  for (const key of Object.keys(value)) {
+    if (key !== 'traceparent' && key !== 'tracestate') {
+      throw new Error(`Unexpected startup recording carrier field: ${key}`);
+    }
+    const field = value[key];
+    if (typeof field !== 'string' || field.length > MAX_CARRIER_FIELD_LENGTH) {
+      throw new Error(`Invalid startup recording carrier field: ${key}`);
+    }
+    carrier[key] = field;
+  }
+  return carrier;
+}
+
 /** @internal Parse the bounded test-owned startup handoff identically in each process. */
-export function _parseStartupPerformance(input: string) {
+export function _parseStartupPerformance(input: string): { mode: _RecordingMode; carrier?: PerformanceCarrier } {
   if (input.length > 2048) throw new Error('Startup recording configuration is too large');
-  return startupConfiguration.parse(JSON.parse(input));
+  const parsed: unknown = JSON.parse(input);
+  if (!isPlainRecord(parsed)) throw new Error('Startup recording configuration must be an object');
+  for (const key of Object.keys(parsed)) {
+    if (key !== 'mode' && key !== 'carrier') {
+      throw new Error(`Unexpected startup recording configuration field: ${key}`);
+    }
+  }
+  const mode = Object.hasOwn(parsed, 'mode') ? parsed.mode : undefined;
+  const carrier = Object.hasOwn(parsed, 'carrier') ? parsed.carrier : undefined;
+  if (typeof mode !== 'string' || !(_RECORDING_MODES as readonly string[]).includes(mode)) {
+    throw new Error('Invalid startup recording mode');
+  }
+  return carrier === undefined
+    ? { mode: mode as _RecordingMode }
+    : { mode: mode as _RecordingMode, carrier: parseCarrier(carrier) };
 }
 
 /** Execution context owned by a development recording, separate from message return addresses. */

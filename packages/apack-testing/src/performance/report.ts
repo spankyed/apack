@@ -1,5 +1,7 @@
-import { _recordingModeSchema } from '@apackdev/sdk/runtime';
+import { _RECORDING_MODES } from '@apackdev/sdk/runtime';
 import { z } from 'zod';
+
+const recordingModeSchema = z.enum(_RECORDING_MODES);
 
 const count = z.number().int().nonnegative();
 const hrTime = z.tuple([count, count.max(999_999_999)]);
@@ -49,7 +51,7 @@ export const processReportSchema = z.object({
   }).optional(),
   processStatisticsFailures: count.optional(),
   observations: z.array(z.string().max(16 * 1024 * 1024)).max(10_000), bytes: count.max(16 * 1024 * 1024), dropped: count, truncated: z.boolean(),
-  rejected: count, droppedMetadata: count, mode: _recordingModeSchema,
+  rejected: count, droppedMetadata: count, mode: recordingModeSchema,
   active: count, unfinished: count, droppedStarts: count, invalidCarriers: count, detachFailures: count,
   droppedEvents: count, contextFailures: count, rejectedStarts: count, invalidAttributes: count, complete: z.boolean(),
 }).superRefine((report, ctx) => {
@@ -73,7 +75,7 @@ export const manifestSchema = z.object({
   fixture: z.object({ generator: z.string(), seed: count, sha256: z.string(), distribution: z.record(z.string(), count) }),
   native: z.object({ resolved: z.string(), integrity: z.string() }),
   runtime: z.record(z.string(), z.string()), machine: z.object({ platform: z.string(), arch: z.string(), cpus: count, memoryBytes: count, identity: z.string() }),
-  mode: _recordingModeSchema,
+  mode: recordingModeSchema,
   cache: z.enum(['warm-process', 'fresh-process-warm-filesystem']), warmups: count,
   clock: z.literal('Local monotonic durations; cross-process epoch alignment is approximate'),
 });
