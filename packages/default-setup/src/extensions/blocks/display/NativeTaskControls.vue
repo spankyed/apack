@@ -10,7 +10,7 @@
       <button v-if="workflow && task.canResume && controls.foregroundAvailable.value" type="button" :disabled="pending || !!state?.resume?.requested" class="rounded border border-white/10 px-2 py-1 text-[11px] text-blue-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'resume_workflow')">{{ state?.resume?.requested ? 'Resume requested' : 'Resume Workflow' }}</button>
       <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || !canStop" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : mcp ? 'Stop task' : 'Stop Agent' }}</button>
     </div>
-    <p v-if="state?.status === 'error' && !mcpDialog" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
+    <p v-if="state?.status === 'error' && state.operation !== 'background' && !mcpDialog" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
     <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
     <p v-if="state?.status === 'done' && state.operation === 'input' && state.input" role="status" class="mt-2 text-[11px] text-neutral-400">{{ state.input.mode === 'resumed' ? 'Agent resumed with your reply' : 'Reply queued for Agent' }}</p>
     <section v-if="!workflow && !shell && !mcp && shown && state?.details" aria-label="Agent conversation" tabindex="0" class="mt-2 rounded border border-white/10 p-2 text-xs">
