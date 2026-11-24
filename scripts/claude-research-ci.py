@@ -93,7 +93,7 @@ CASES = {
     'action-keys-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1'},
     'action-contexts-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS': '1'},
     'action-dialog-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_DIALOG': '1'},
-    'completion-navigation-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_COMPLETION_NAVIGATION': '1'},
+    'completion-navigation-app': {'CLAUDE_RESEARCH_COMPLETION_NAVIGATION': '1'},
     'agent-structured-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_AGENT_STRUCTURED': '1'},
     'composer-wrap-app': {'CLAUDE_RESEARCH_STATUS_STARTUP': '1', 'CLAUDE_RESEARCH_COMPOSER_WRAP': '1'},
     'status-startup-app': {'CLAUDE_RESEARCH_STATUS_STARTUP': '1'},
