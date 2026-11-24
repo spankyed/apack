@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "a0ea0d5421391bd7cbc253a3d682403e8244f94a",
+  "researchCommit": "09da9d008c54241f2e7c9b0443f0c2ee157044f2",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -190,7 +190,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "b76f48f8cb0e4f5dc721723fba39395d0db59a030675adcd25ff98d7b6441cf5",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "ea23a56cb88ac9c7889ea4c6ad3666ea71767368bd1923fc1938874042c2740e",
+    "src/integration/apack-terminal-owner-app.mjs": "1168aace6fad94962aca72325e41d05893ca56b51dfcba7dfda4bee8986af816",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -643,5 +643,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "e7fab142c7ee377cc942c63b60f40a539b33a33fbe74de235d5cd3831a8d52e4"
+  "archiveSha256": "492a6221f1d96edbb108d138d94279436d25529082bc3eeb9e416284528ad40f"
 }
