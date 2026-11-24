@@ -909,6 +909,38 @@ it('carries a prepared pending nonce on an existing main-view heartbeat after na
  expect((await request('/poll',{sessionId:session,agents:[]})).value.reportEveryMs).toBe(0)
 })
 
+it('waits for a stored skill invocation through native Chrome setup', async () => {
+  await create()
+  let setupOpen = true
+  const read = vi.spyOn(bridge!.uiTransport, 'request').mockImplementation(async request => {
+    if (request.subtype === 'apack_prepare_prompt') return { filled: true }
+    if (request.subtype === 'apack_prompt_outcome') return setupOpen ? { waitingForChromeSetup: true } : {}
+    return { control: null, turn: null }
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const submitted = bridge!.submit('/claude-in-chrome')
+  const { value: poll } = await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: false, turn: null })
+  const submission = { sessionId: session, id: poll.id }
+  expect((await request('/result', { ...submission, filled: true })).status).toBe(200)
+  expect((await request('/submission', { ...submission, accepted: true })).status).toBe(200)
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(read).toHaveBeenCalledWith({ subtype: 'apack_prompt_outcome', submission_id: poll.id })
+  expect((await request('/owner-pending', { sessionId: session })).value).toEqual({ pending: true, id: poll.id })
+
+  setupOpen = false
+  await vi.advanceTimersByTimeAsync(5000)
+  const uuid = '33333333-3333-4333-8333-333333333333'
+  const text = '<command-message>claude-in-chrome</command-message>\n<command-name>/claude-in-chrome</command-name>\n'
+  const row = { sessionId: session, uuid, door: 'prompt', origin: { kind: 'human' }, message: { type: 'user', content: [{ type: 'text', text }] } }
+  expect((await request('/append', { ...row, submissionId: 'retired-submission' })).status).toBe(200)
+  expect((await request('/submission', { ...submission, accepted: true })).status).toBe(200)
+  expect((await request('/owner-pending', { sessionId: session })).value).toEqual({ pending: true, id: poll.id })
+
+  expect((await request('/append', { ...row, submissionId: poll.id })).status).toBe(200)
+  expect((await request('/submission', { ...submission, accepted: true })).status).toBe(200)
+  await expect(submitted).resolves.toEqual({ sessionId: session, uuid, text })
+})
+
 it('settles a busy parent submission only after an addressed native queue receipt', async () => {
   const enter = vi.fn()
   await create(enter)

@@ -678,7 +678,9 @@ function cancelNativeQueuedPrompt(n,request,abort){
 async function promptOutcome(n,id){
  const interruptions=await nativeInterruptionModule();
  if(!preparedPrompt||preparedPrompt.id!==id)return {};
- const messages=(originalContext??n.runtime.ey())?.messages?.()??[];
+ const context=originalContext??n.runtime.ey();
+ const messages=context?.messages?.()??[];
+ const chromeCommand=n.commandInput.IS(preparedPrompt.text.trimEnd())?.commandName==='claude-in-chrome';
  const message=messages.findLast(row=>row.promptSubmitEnding&&!preparedPrompt.before.has(row.uuid));
  if(!message){
   const candidates=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!interruptions.Sh(row)&&!preparedPrompt.before.has(row.uuid)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result')));
@@ -693,10 +695,21 @@ async function promptOutcome(n,id){
     return {queued};
    }
   }
-  if(candidates.length===0){const reason=nativeUnknownCommandRefusal(n,messages);return reason===undefined?{}:{drop:reason};}
+  if(candidates.length===0){
+   const reason=nativeUnknownCommandRefusal(n,messages);
+   if(reason!==undefined)return {drop:reason};
+   if(chromeCommand){
+    const open=context?.toolContext(new AbortController()).dialogStore.getState().open;
+    if(open?.length===1&&['chrome_install_upsell','chrome_install_setup'].includes(open[0].kind))return {waitingForChromeSetup:true};
+   }
+   return {};
+  }
   if(candidates.length!==1)return {};
   const row=candidates[0],content=typeof row.message.content==='string'?[{type:'text',text:row.message.content}]:row.message.content;
-  return {accepted:{uuid:row.uuid,door:'prompt',origin:row.origin??{kind:'native'},message:{type:'user',content}}};
+  // The recorded skill invocation is the human row, before the generated meta prompt.
+  const chromeInvocation=chromeCommand&&row.origin?.kind==='human'&&content.some(block=>block.type==='text'
+   &&typeof block.text==='string'&&block.text.startsWith('<command-message>claude-in-chrome</command-message>\n<command-name>/claude-in-chrome</command-name>'));
+  return {accepted:{uuid:row.uuid,door:'prompt',origin:row.origin??{kind:'native'},message:{type:'user',content}},chromeInvocation};
  }
  const ending=message.promptSubmitEnding.ending;
  return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
@@ -1865,12 +1878,12 @@ async function followNativeOwnerSession(gate){
  await ownerPost('/poll',{...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true});
  ownerIndependent=true;
 }
-async function reportPendingPromptOutcome(id,includeAccepted=false){
+async function reportPendingPromptOutcome(id,includeAccepted){
  if(typeof id!=='string'||!id)return;
  const outcome=await control({subtype:'apack_prompt_outcome',submission_id:id},new AbortController());
  if(typeof outcome?.drop==='string')await ownerPost('/submission',{id,drop:outcome.drop});
  else if(typeof outcome?.queued==='string')await ownerPost('/submission',{id,queued:outcome.queued,pid:process.pid});
- else if(includeAccepted&&outcome?.accepted){
+ else if(outcome?.accepted&&(includeAccepted||outcome.chromeInvocation===true)){
   await ownerPost('/append',{...outcome.accepted,submissionId:id});
   await ownerPost('/submission',{id,accepted:true});
  }
@@ -1937,12 +1950,7 @@ const ownerTimer=setInterval(async()=>{
    await ownerPost('/result',{id:command.id,filled});
   }
   const pending=await ownerPost('/owner-pending',{});
-  if(pending.id){
-   const outcome=await control({subtype:'apack_prompt_outcome',submission_id:pending.id},new AbortController());
-   if(outcome.drop)await ownerPost('/submission',{id:pending.id,drop:outcome.drop});
-   else if(outcome.queued)await ownerPost('/submission',{id:pending.id,queued:outcome.queued,pid:process.pid});
-   else if(outcome.accepted){await ownerPost('/append',{...outcome.accepted,submissionId:pending.id});await ownerPost('/submission',{id:pending.id,accepted:true});}
-  }
+  await reportPendingPromptOutcome(pending.id,true);
  }catch(error){if(error?.apackPlanRestore===true)await ownerPost('/observer-error',{message:error.message}).catch(()=>{});}finally{ownerReading=false;}
 },250);ownerTimer.unref();
 `, 'terminal')

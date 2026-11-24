@@ -152,16 +152,19 @@ export async function createClaudeTerminalBridge(options: {
     if (!current) return
     if (current.entered) {
       try {
-        if (current.queue) {
+        let waitingForChromeSetup = false
+        if (current.prepared) {
           const outcome = object(await uiTransport.request({ subtype: 'apack_prompt_outcome', submission_id: current.id }))
           if (closed || pending !== current || projection.sessionId !== current.sessionId) return
+          if (typeof outcome?.drop === 'string') { settle(new Error('Native prompt refused: ' + outcome.drop)); return }
           if (acceptQueuedSubmission(current.id, outcome?.queued)) return
+          waitingForChromeSetup = outcome?.waitingForChromeSetup === true
         }
         const state = pendingControlSchema.parse(await uiTransport.request({ subtype: 'apack_pending_control' }))
         if (closed || pending !== current || projection.sessionId !== current.sessionId) return
         if (state.turn?.cancelled || state.control && state.control.dialog.sessionId !== current.sessionId) throw new Error('Native interaction owner changed')
-        // The original prompt hook cannot acknowledge until its native question or approval returns.
-        if (state.control) {
+        // A native question, approval or Chrome setup can delay the stored prompt.
+        if (state.control || waitingForChromeSetup) {
           current.waitingForInteraction = true
           current.timer = submissionTimer()
           return
@@ -551,8 +554,9 @@ export async function createClaudeTerminalBridge(options: {
         else if (value.queued !== undefined) {
           if (observerPid === undefined || value.pid !== observerPid || !acceptQueuedSubmission(value.id, value.queued)) return reply(409, {})
         } else if (value.accepted === true && pending.accepted) settle(undefined, pending.accepted)
-        // The original prompt hook can finish screening before a waiting command has a user row.
-        else if (!pending.queue || value.accepted !== true) settle(new Error('Native prompt did not produce a stored user message'))
+        // The hook can finish screening before a command stores its user row.
+        // The prepared prompt's native observer can still confirm the same submission.
+        else if (!pending.prepared || value.accepted !== true) settle(new Error('Native prompt did not produce a stored user message'))
         return reply(200, {})
       }
       if (request.url === '/native-status') {
