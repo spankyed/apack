@@ -200,12 +200,12 @@ function nativeReferenceRows(n,context,files,query,listed){
   ...matches.map(({item,score})=>({item,score:(score??0.5)+(item.type==='resource'?0.15:0)}))]
   .sort((a,b)=>a.score-b.score).slice(0,15).map(row=>row.item);
 }
-async function nativeFileCompletions(n,clientId,token,abort){
- if(!token||token.query.length>4096||!n.fileSuggestions||abort.signal.aborted||!clientViewCurrent(n,clientId))return [];
+async function nativeFileCompletions(n,clientId,token,abort,fileScopeCurrent){
+ if(!token||token.query.length>4096||!n.fileSuggestions||abort.signal.aborted||!clientViewCurrent(n,clientId)||!fileScopeCurrent())return [];
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')return [];
  const context=binding.toolContext(abort),{storageV5}=context;
- const current=()=>!abort.signal.aborted&&clientViewCurrent(n,clientId)&&(originalContext??n.runtime.ey())===binding;
+ const current=()=>!abort.signal.aborted&&clientViewCurrent(n,clientId)&&(originalContext??n.runtime.ey())===binding&&fileScopeCurrent();
  const addresses=await nativeAddressCompletions(n,context,token,current);
  if(!current()||addresses.length)return current()?addresses:[];
  let listed={},templateRows;
@@ -223,6 +223,7 @@ async function nativeFileCompletions(n,clientId,token,abort){
  if(!rows){
   const index=n.fileSuggestions.RSe;
   rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
+  if(!current())return [];
   const tracked=index.fileListRefreshPromise,untracked=index.untrackedFetchPromise;
   if(tracked||untracked){
    await tracked;

@@ -294,6 +294,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-hqtnbrjd.js": {
       "module": "chunk-a7b8k0bt.js",
       "exports": {
+        "bgr": "Zmr",
         "fse": "ise",
         "igr": "Umr",
         "Xps": "ups",

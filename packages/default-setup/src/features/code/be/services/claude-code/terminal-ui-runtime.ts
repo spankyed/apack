@@ -385,7 +385,7 @@ async function initialize(){
   const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
   const mcpControls=await import('/$bunfs/root/chunk-aen4nr7w.js');
   const {Cot:channelPolicyBlocked}=await import('/$bunfs/root/chunk-9ah6nahr.js');
-  const {me:readSettingsSource}=await import('/$bunfs/root/chunk-1pjd7qsk.js');
+  const {me:readSettingsSource,ut:readEffectiveSettings}=await import('/$bunfs/root/chunk-1pjd7qsk.js');
   const mcpChannelBlocked=()=>channelPolicyBlocked(readSettingsSource('policySettings'));
   const managedPermissionRulesOnly=()=>readSettingsSource('policySettings')?.allowManagedPermissionRulesOnly===true;
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
@@ -410,6 +410,12 @@ async function initialize(){
   const planProactivity=await import('/$bunfs/root/chunk-ck4jw7jw.js');
 
   const settingsDetector=await import('/$bunfs/root/chunk-ayzz9bjs.js');
+  let fileSuggestionPolicyRevision=0;
+  settingsDetector.Ta.subscribe(source=>{if(source==='policySettings')fileSuggestionPolicyRevision++;});
+  const fileSuggestionScope=()=>{
+   try{return JSON.stringify([fileSuggestionPolicyRevision,runtime.bgr(readEffectiveSettings().fileSuggestion)?.command??null]);}
+   catch{return undefined;}
+  };
   await import('/$bunfs/root/chunk-rpe8kh25.js');
   const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
   engine.I9e.onInvalidate(instances=>{nativeClients.suspend(instances);for(const[client,frame]of questionFrames)if(!instances||instances.some(item=>item.surface==='desktop'&&item.component==='AskUserQuestion'&&item.requestId===frame.requestId))questionFrames.delete(client);try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
@@ -417,7 +423,7 @@ async function initialize(){
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   observeNativeManagedSettings(settingsDetector.Ta);
-  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskTeamContext,taskAppState,taskSessionGlobals,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,fileSuggestions,fileSuggestionScope,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskTeamContext,taskAppState,taskSessionGlobals,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -845,14 +851,17 @@ function drainCompletion(n,clientId,state){
  const token=nativeFileCompletionToken(next.box),args=n.session.rwt(next.box);
  if(!args&&!token){next.answer({suggestions:[]});drainCompletion(n,clientId,state);return;}
  const abort=new AbortController();state.active=abort;
- const original=nativeFileCompletions(n,clientId,token,abort).catch(()=>[]);
+ const fileScope=token===undefined?undefined:n.fileSuggestionScope?.();
+ const fileScopeCurrent=()=>token===undefined||!n.fileSuggestionScope||(fileScope!==undefined&&n.fileSuggestionScope()===fileScope);
+ const original=nativeFileCompletions(n,clientId,token,abort,fileScopeCurrent).catch(()=>[]);
  const plugin=Promise.resolve().then(()=>args?n.session.r_n(args,abort.signal):undefined)
   .then(result=>result?n.session.n_n(result.suggestions):[]).catch(()=>[]);
  Promise.all([original,plugin]).then(([files,rows])=>{
   state.active=undefined;
   // Plugin completion can finish after an original native view switch, before desktop detaches.
   if(completions.get(clientId)===state&&!clientViewCurrent(n,clientId))clearCompletion(clientId);
-  next.answer(abort.signal.aborted||completions.get(clientId)!==state?{suggestions:[],superseded:true}:{suggestions:[...files,...rows],start:args?.start??token?.start});
+  if(abort.signal.aborted||completions.get(clientId)!==state)next.answer({suggestions:[],superseded:true});
+  else next.answer({suggestions:[...(fileScopeCurrent()?files:[]),...rows],start:args?.start??token?.start});
   if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
  });
 }

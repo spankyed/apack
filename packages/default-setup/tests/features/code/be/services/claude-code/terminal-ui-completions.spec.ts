@@ -94,6 +94,39 @@ it('keeps original indexed file rows distinct from plugin replacement ranges', a
   expect(files).toHaveBeenCalledOnce()
 })
 
+it('withdraws results from a file suggestion provider retired by managed policy', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  const originalContext = { surface: 'terminal', toolContext: () => ({}) }
+  const autocomplete = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';autocomplete', {
+    AbortController, originalContext, clientViewCurrent: () => true,
+  }) as (native: unknown, client: string, box: { text: string; cursor: number }) => Promise<unknown>
+  let scope = 'user command'
+  let finish!: (result: { displayText: string }[]) => void
+  const suggestions = vi.fn(() => new Promise<{ displayText: string }[]>(resolve => { finish = resolve }))
+  const native = {
+    fileSuggestions: { s5t: suggestions, RSe: {} },
+    fileSuggestionScope: () => scope,
+    session: { rwt: () => undefined },
+  }
+  const draft = { text: '@release', cursor: 8 }
+
+  const held = autocomplete(native, 'current', draft)
+  await Promise.resolve()
+  expect(suggestions).toHaveBeenCalledOnce()
+  scope = 'current managed command'
+  finish([{ displayText: 'retired-user-provider.md' }])
+  expect(await held).toEqual({ suggestions: [], start: 0 })
+
+  suggestions.mockResolvedValueOnce([{ displayText: 'current-managed-provider.md' }])
+  expect(await autocomplete(native, 'current', draft)).toEqual({
+    start: 0,
+    suggestions: [{
+      label: 'current-managed-provider.md', text: '@current-managed-provider.md ', replacement: { start: 0, end: 8 },
+    }],
+  })
+})
+
 it('offers native Agent definitions and visible MCP resources with the native reference spelling', async () => {
   const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
   const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
