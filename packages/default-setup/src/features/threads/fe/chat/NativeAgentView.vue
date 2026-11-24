@@ -281,6 +281,14 @@ function stopAgent() {
   stopRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
   sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
 }
+// A different window can retire the source view before the breadcrumb request reaches native.
+watch(selectedOwner, owner => {
+  if (owner || !ancestorTarget) return
+  ancestorTarget = undefined
+  returning.value = false
+  emit('returning', false)
+  emit('pending', false)
+})
 watch(terminal, view => {
   const result = view?.task
   if (stopping.value && result?.revision === stopRevision && result.ownerId === props.target.ownerId && result.taskId === props.target.taskId && result.operation === 'stop' && result.status !== 'pending') {

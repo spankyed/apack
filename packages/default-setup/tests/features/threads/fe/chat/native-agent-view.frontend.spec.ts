@@ -59,6 +59,21 @@ it('addresses ancestor navigation from the current view and preserves the draft 
   expect(f.root.querySelector('[aria-label="Agent ancestry"]')).toBeNull()
 })
 
+it('releases a pending breadcrumb when another window retires its source selection', async () => {
+  const f = await mount()
+  context.nativeUiViews[f.ui].state.agent.ancestors = [{ taskId: 'parent', name: 'Completed parent' }]
+  await nextTick()
+  f.button('Completed parent').click()
+  await nextTick()
+  expect(f.pending).toHaveBeenLastCalledWith(true)
+  context.nativeTerminalViews[f.terminal].state!.view = { kind: 'main', revision: 4 }
+  await nextTick()
+  expect(f.pending).toHaveBeenLastCalledWith(false)
+  expect(f.root.querySelector('[aria-label="Agent ancestry"]')).toBeNull()
+  expect(f.returned).not.toHaveBeenCalled()
+  expect(f.draftChange).not.toHaveBeenCalled()
+})
+
 it('keeps the Agent editor mounted while a native approval owns input', async () => {
   const f = await mount(), draft = f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!
   draft.value = 'Keep the in-progress draft'
