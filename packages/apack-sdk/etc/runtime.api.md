@@ -183,11 +183,8 @@ export interface PackRegistryView extends PackExtensionsView {
 
 // @internal
 export function _parseStartupPerformance(input: string): {
-    mode: "disabled" | "lightweight" | "detailed";
-    carrier?: {
-        traceparent?: string | undefined;
-        tracestate?: string | undefined;
-    } | undefined;
+    mode: _RecordingMode;
+    carrier?: PerformanceCarrier;
 };
 
 // @public
@@ -260,14 +257,10 @@ export interface ProjectionRunner {
 }
 
 // @internal
-export type _RecordingMode = z.infer<typeof _recordingModeSchema>;
+export const _RECORDING_MODES: readonly ["disabled", "lightweight", "detailed"];
 
 // @internal
-export const _recordingModeSchema: z.ZodEnum<{
-    disabled: "disabled";
-    lightweight: "lightweight";
-    detailed: "detailed";
-}>;
+export type _RecordingMode = (typeof _RECORDING_MODES)[number];
 
 // @internal
 export function _recordPerformance(name: string, attributes: () => Record<string, string | number | boolean>): void;

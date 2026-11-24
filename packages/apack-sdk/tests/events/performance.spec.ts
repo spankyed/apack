@@ -60,13 +60,32 @@ it('restores explicitly carried event causes and clears missing inbound context'
 
 it('shares strict bounded startup configuration across process owners', () => {
   for (const mode of ['disabled', 'lightweight', 'detailed']) {
+    expect(_parseStartupPerformance(JSON.stringify({ mode }))).toEqual({ mode });
+    expect(_parseStartupPerformance(JSON.stringify({ mode, carrier: {} }))).toEqual({ mode, carrier: {} });
     const config = { mode, carrier: { traceparent: 'parent', tracestate: 'state' } };
     expect(_parseStartupPerformance(JSON.stringify(config))).toEqual(config);
   }
-  for (const config of [{ mode: 'unknown' }, { mode: 'lightweight', payload: 'private' },
+  const maxCarrier = { mode: 'lightweight', carrier: { traceparent: 'x'.repeat(512), tracestate: 'y'.repeat(512) } };
+  expect(_parseStartupPerformance(JSON.stringify(maxCarrier))).toEqual(maxCarrier);
+  for (const config of [
+    null,
+    [],
+    'lightweight',
+    {},
+    { mode: 'unknown' },
+    { mode: 1 },
+    { mode: 'lightweight', payload: 'private' },
+    { mode: 'lightweight', carrier: null },
+    { mode: 'lightweight', carrier: [] },
+    { mode: 'lightweight', carrier: { traceparent: null } },
+    { mode: 'lightweight', carrier: { traceparent: 123 } },
     { mode: 'lightweight', carrier: { traceparent: 'x'.repeat(513) } },
-    { mode: 'lightweight', carrier: { extra: true } }]) {
+    { mode: 'lightweight', carrier: { tracestate: 'x'.repeat(513) } },
+    { mode: 'lightweight', carrier: { extra: true } },
+  ]) {
     expect(() => _parseStartupPerformance(JSON.stringify(config))).toThrow();
   }
+  expect(() => _parseStartupPerformance('{"mode":"lightweight","__proto__":{"polluted":true}}')).toThrow();
+  expect(() => _parseStartupPerformance('{"mode":"lightweight","carrier":{"__proto__":{"polluted":true}}}')).toThrow();
   expect(() => _parseStartupPerformance('x'.repeat(2049))).toThrow(/too large/);
 });
