@@ -710,6 +710,7 @@ type ClaudeBackgroundApproval = Exclude<ClaudeBackgroundControl, {
 
 interface ClaudeBackgroundAttachment {
     readonly snapshot: ClaudeBackgroundAttachmentSnapshot;
+    readonly endedTeammate?: boolean;
     subscribe(listener: () => void): () => void;
     input(id: string, text: string): boolean;
     resize(id: string, columns: number, rows: number, cell?: {
