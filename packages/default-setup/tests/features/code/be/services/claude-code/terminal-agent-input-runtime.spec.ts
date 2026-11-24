@@ -18,13 +18,23 @@ function fixture(main = false) {
     attribute: vi.fn((_origin: { kind: string }, write: () => Promise<void>) => write()),
   }
   const module = { call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ type: 'text', value: '' })) }, commands = new Map<string, { name: string; type: string; load(): Promise<typeof module> }>()
-  const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: name === 'context' ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
+  const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: ['context', 'ultraplan'].includes(name) ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
   const binding = { messages: () => parentRows, commands: () => [...commands.values()], composer, toolContext: () => context, savedAgentMessages: async () => [] }
-  const native = { commandTags: { Ms: () => null }, questionOptions: { q: () => sessionId }, commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: command, Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
+  const parseCommand = (text: string) => {
+    if (!text.startsWith('/')) return null
+    const [name, ...args] = text.slice(1).split(' ')
+    return { commandName: name, args: args.join(' ') }
+  }
+  const native = { commandTags: { Ms: () => null }, questionOptions: { q: () => sessionId }, commandInput: { IS: parseCommand }, engine: { Rs: command, Cie: (command: { name: string }, args = '') => ({ command: command.name, args }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
   const enter = vi.fn(async () => {
     if (draft === '/compact') localJsx.show({ props: { title: 'Original parent confirmation', confirmLabel: 'Original confirm', onConfirm: confirm, onCancel: cancel } }, { commandName: 'compact' })
     else if (draft === '/usage') localJsx.show({ type: () => {}, props: {} }, { commandName: 'usage' })
     else if (draft === '/model haiku') notices.current = { key: 'agent-view-command-notice', segments: [{ text: 'Original block notice' }] }
+    else if (draft.startsWith('/ultraplan ')) {
+      const args = draft.slice('/ultraplan '.length)
+      const implementation = await command('ultraplan').load()
+      await implementation.call((_text: unknown, options: { nextInput?: string }) => { draft = options.nextInput ?? '' }, {}, args)
+    }
     else if (draft === '/context') { parentRows.push({ uuid: messageId, type: 'system', subtype: 'local_command', content: 'Native Context usage', commandRun: { command: 'context', args: '' } }); draft = '' }
     else if (draft === '/cost') { parentRows.push({ uuid: messageId, type: 'system', subtype: 'local_command', content: 'Original cost output', commandRun: { command: 'cost', args: '' } }); draft = '' }
     else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
@@ -248,4 +258,30 @@ it('expires unused tickets before Enter and does not authorize unrelated session
     f.changeSession(randomUUID())
     await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).rejects.toThrow('session or selection changed')
   } finally { vi.useRealTimers() }
+})
+
+it.each([true, false])('settles an original Ultraplan callback with draft return %s and no transcript result', async (returnsDraft) => {
+  const f = fixture(true)
+  const text = 'Review the release notes.'
+  f.module.call.mockImplementationOnce(async (done, _context, args) => {
+    expect(args).toBe(text)
+    expect(f.draft()).toBe('/ultraplan ' + text)
+    const onDone = done as (message: undefined, options: { display: string; nextInput?: string }) => void
+    onDone(undefined, { display: 'skip', nextInput: returnsDraft ? text : undefined })
+    return null
+  })
+  const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/ultraplan ' + text })
+  expect(prepared.kind).toBe('prepared')
+  const ticket = { client_id: 'client', command_id: prepared.id }
+  await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
+  try {
+    await expect.poll(() => f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({
+      kind: 'finished', result: returnsDraft ? { kind: 'ultraplan_settled', draft: text } : { kind: 'ultraplan_settled' },
+    })
+    expect(f.draft()).toBe('')
+    expect(f.parentRows).toHaveLength(0)
+    expect(f.module.call).toHaveBeenCalledOnce()
+  } finally {
+    f.move()
+  }
 })

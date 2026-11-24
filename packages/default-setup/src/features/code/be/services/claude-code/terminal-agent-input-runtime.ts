@@ -112,7 +112,7 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
   return composer.attribute?composer.attribute({kind:'composer'},write):write();
  };
  const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await writeDraft(original.text);}catch{} };
- if(parentTicket&&command?.type==='local')observeNativeParentCommand(command);
+ if(parentTicket&&(command?.type==='local'||command?.type==='local-jsx'&&command.name==='ultraplan'))observeNativeParentCommand(command);
  const operation={native:n,parentTicket,commandDefinition:command,clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
  try{
@@ -127,6 +127,18 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
     if(run?.failed)throw Error('Original native command failed after dispatch; do not retry automatically');
     if(run?.reset&&!run.returned){await new Promise(resolve=>setTimeout(resolve,20));continue;}
     parentCommandScope(n,parentTicket,true);
+    if(run?.returned&&run.ultraplan){
+     const draft=run.ultraplan.draft;
+     if(!draft)return {kind:'ultraplan_settled'};
+     const nativeDraft=await composer.read();current();
+     if(nativeDraft.text===draft){
+      // Transfer the exact returned draft out of the hidden native composer.
+      await writeDraft(original.text);current();
+      return {kind:'ultraplan_settled',draft};
+     }
+     if(Date.now()>=run.ultraplanDeadline)throw Error('Claude did not return the expected Ultraplan draft');
+    }
+
     if(run?.returned&&run.commandMessageId){
      if(run.reset&&run.sessionAfter!==facts.sessionId)return {kind:'command_complete',commandName:expectedRun.command,messageId:run.commandMessageId,sessionId:run.sessionAfter,conversationId:run.reset.conversationId};
      if(run.resultType==='compact'&&run.boundaryId&&(binding.messages?.()??[]).some(row=>row.uuid===run.boundaryId&&row.type==='system'&&row.subtype==='compact_boundary'))return {kind:'command_complete',commandName:expectedRun.command,messageId:run.commandMessageId,boundaryId:run.boundaryId};
@@ -149,6 +161,7 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
     const inline=inlineParentCommandOutput(n,binding.messages?.()??[],parentBefore,expectedRun);
     if(inline)return inline;
    }
+   if(parentTicket?.lifecycle?.ultraplanDeadline&&Date.now()>=parentTicket.lifecycle.ultraplanDeadline)throw Error('Claude did not report the Ultraplan command outcome');
    if(addressed){
     const receipt=notices().find(value=>!priorNotices.has(value)&&(
      value.key==='direct-message-sent'&&value.text==='Sent to @'+addressed.name||

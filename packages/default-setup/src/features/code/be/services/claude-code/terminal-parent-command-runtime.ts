@@ -28,12 +28,27 @@ function observeNativeParentCommand(command){
    if(!entry||operation.commandDefinition!==command||entry.lifecycle)return Reflect.apply(original,this===proxy?module:this,args);
    const run=entry.lifecycle={started:true},context=args[1],query=context&&Object.getOwnPropertyDescriptor(context,'onQueryEvent');
    run.commandMessageId=typeof context?.commandMessageUuid==='string'?context.commandMessageUuid:undefined;
+   if(command.type==='local-jsx'&&command.name==='ultraplan'){
+    const done=args[0];
+    if(typeof done!=='function')throw Error('Native Ultraplan completion callback is unavailable');
+    // The original command calls onDone with display:skip for both Cancel and Run.
+    // A Cancel may carry nextInput without inserting a transcript row.
+    args[0]=function(value,options,...rest){
+     const result=Reflect.apply(done,this,[value,options,...rest]);
+     if(value===undefined&&options?.display==='skip'&&(options.nextInput===undefined
+      ||typeof options.nextInput==='string'&&options.nextInput.length<=32768)){
+      run.ultraplan={draft:options.nextInput};
+     }
+     return result;
+    };
+   }
+
    let restore=()=>{};
    if(query?.writable&&typeof query.value==='function'){
     const originalQuery=query.value,observe=function(event,...rest){if(event?.type==='conversation_reset'&&typeof event.newConversationId==='string')run.reset={conversationId:event.newConversationId};return Reflect.apply(originalQuery,this,[event,...rest]);};
     context.onQueryEvent=observe;restore=()=>{if(context.onQueryEvent===observe)Object.defineProperty(context,'onQueryEvent',query);};
    }
-   const returned=value=>{restore();run.returned=true;const after=nativeViewFacts(operation.native,originalContext??operation.native.runtime.ey(),new AbortController());run.sessionAfter=after.sessionId;run.sequenceAfter=after.sequence;run.resultType=value?.type;run.emptyText=value?.type==='text'&&value.value==='';const boundary=value?.compactionResult?.boundaryMarker;if(boundary?.type==='system'&&boundary.subtype==='compact_boundary'&&boundary.compactMetadata?.trigger==='manual')run.boundaryId=boundary.uuid;return value;};
+   const returned=value=>{restore();run.returned=true;if(command.type==='local-jsx'&&command.name==='ultraplan')run.ultraplanDeadline=Date.now()+2000;const after=nativeViewFacts(operation.native,originalContext??operation.native.runtime.ey(),new AbortController());run.sessionAfter=after.sessionId;run.sequenceAfter=after.sequence;run.resultType=value?.type;run.emptyText=value?.type==='text'&&value.value==='';const boundary=value?.compactionResult?.boundaryMarker;if(boundary?.type==='system'&&boundary.subtype==='compact_boundary'&&boundary.compactMetadata?.trigger==='manual')run.boundaryId=boundary.uuid;return value;};
    const failed=error=>{restore();run.failed=true;throw error;};
    try{const result=Reflect.apply(original,this===proxy?module:this,args);return result&&typeof result.then==='function'?result.then(returned,failed):returned(result);}catch(error){return failed(error);}
   };

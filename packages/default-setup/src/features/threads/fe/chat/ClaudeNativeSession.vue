@@ -449,6 +449,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); unmountView('CLAUDE_
 :global(.claude-native-lsp-details header button) { color: #aaa59e; font-size: 11px; cursor: pointer; }
 :global(.claude-native-lsp-details p) { margin: 0 0 8px; }
 .native-notice[data-native-notice='peer_inbound_approval'] .native-notice__body { max-height: min(15rem, 32vh); }
+.native-notice[data-native-notice='ultraplan_launch'] .native-notice__body { max-height: min(16rem, 30vh); }
 .native-notice__launch-prompt { white-space: pre-wrap; unicode-bidi: plaintext; margin-block: 0.5rem; }
 .native-notice__plan { margin-block: 0.5rem; white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; }
 .native-notice__peer-message { white-space: pre-wrap; unicode-bidi: plaintext; border-inline-start: 2px solid currentColor; padding-inline-start: 0.625rem; margin-block: 0.5rem; }

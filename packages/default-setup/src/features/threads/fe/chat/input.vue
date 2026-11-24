@@ -1072,6 +1072,14 @@ const handleSubmit = async () => {
         if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').setContent(result.review.text).run(); submissionProblem.value = `Removed ${result.review.removed} invisible characters. Review and send again.` }
         return
       }
+      if (result && 'returnedDraft' in result) {
+        if (editor.state.doc === doc) {
+          editor.chain().setMeta('claude-prompt-by', 'app').setContent({
+            type: 'doc', content: [{ type: 'claudePromptSource', content: [{ type: 'text', text: result.returnedDraft }] }],
+          }).setTextSelection(result.returnedDraft.length + 1).run()
+        }
+        return
+      }
       if (result && 'commandPending' in result) {
         pendingNativeCommand = { revision: result.revision, accept() {
           if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return

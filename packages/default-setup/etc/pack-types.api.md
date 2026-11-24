@@ -12020,6 +12020,9 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
         confirmLabel: string;
         commandName?: string | undefined;
     } | {
+        kind: "ultraplan_settled";
+        draft?: string | undefined;
+    } | {
         kind: "command_complete";
         commandName: string;
         messageId: string;
@@ -12072,6 +12075,9 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
             title: string;
             confirmLabel: string;
             commandName?: string | undefined;
+        } | {
+            kind: "ultraplan_settled";
+            draft?: string | undefined;
         } | {
             kind: "command_complete";
             commandName: string;
@@ -13138,6 +13144,9 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<[z.ZodObject<{
     title: z.ZodString;
     confirmLabel: z.ZodString;
     commandName: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>, z.ZodObject<{
+    kind: z.ZodLiteral<"ultraplan_settled">;
+    draft: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"command_complete">;
     commandName: z.ZodString;

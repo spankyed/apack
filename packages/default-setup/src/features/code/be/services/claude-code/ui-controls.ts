@@ -134,6 +134,7 @@ const parentCommandResult = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('command_output'), messageId: z.string().uuid(), commandName: z.string().max(256), text: z.string().min(1).max(65536), isErrored: z.boolean(), outcome: z.string().max(128).optional() }).strict(),
   z.object({ kind: z.literal('blocked'), message: z.string().max(16384) }).strict(),
   z.object({ kind: z.literal('confirmation'), id: z.string().uuid(), title: z.string().max(16384), confirmLabel: z.string().max(16384), commandName: z.string().max(256).optional() }).strict(),
+  z.object({ kind: z.literal('ultraplan_settled'), draft: z.string().min(1).max(32768).optional() }).strict(),
   z.object({ kind: z.literal('command_complete'), commandName: z.string().max(256), messageId: z.string().uuid(), boundaryId: z.string().uuid().optional(), sessionId: z.string().uuid().optional(), conversationId: z.string().uuid().optional() }).strict(),
 ])
 export type ClaudeParentCommandResult = z.infer<typeof parentCommandResult>

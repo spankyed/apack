@@ -973,6 +973,7 @@ watch(nativeComposerView, view => {
     if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.threadId, pending.stageRevision)
     if (result.command?.kind === 'review') pending.resolve({ review: result.command })
     else if (result.command?.kind === 'confirmation') pending.resolve({ commandPending: true, revision: result.revision })
+    else if (result.command?.kind === 'ultraplan_settled' && result.command.draft) pending.resolve({ returnedDraft: result.command.draft })
     else pending.resolve(result.receipt || result.command?.kind === 'direct_message' ? { queued: result.receipt?.queued === true } : undefined)
   }
   else pending.reject(new Error(result.problem ?? 'Claude did not accept the message'))
