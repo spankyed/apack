@@ -112,8 +112,9 @@ it('advances MCP template parameters through the original connected client and r
   const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
   const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const template = { uriTemplate:'resource://release/{branch}/{section}', name:'Release sections' }
+  const adjacent = { uriTemplate:'resource://artifacts/{name}{variant}{locale}/manifest', name:'Artifact manifest' }
   const connection = { type:'connected',name:'docs',client:{} }
-  const state = { mcp:{ clients:[connection], resourceTemplates:{ docs:[template] } } }
+  const state = { mcp:{ clients:[connection], resourceTemplates:{ docs:[template,adjacent] } } }
   const originalContext = { surface:'terminal',toolContext:()=>({ getAppState:()=>state, session:{} }) }
   const autocomplete = vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';autocomplete',{
     AbortController,originalContext,clientViewCurrent:()=>true,
@@ -135,6 +136,9 @@ it('advances MCP template parameters through the original connected client and r
   completeResourceTemplate.mockResolvedValueOnce(['notes'])
   expect((await query('@docs:resource://release/main/no')).suggestions[0]?.text).toBe('@docs:resource://release/main/notes ')
   expect(completeResourceTemplate).toHaveBeenLastCalledWith(connection,template.uriTemplate,'section','no',{branch:'main'})
+  completeResourceTemplate.mockResolvedValueOnce(['release bundle'])
+  expect((await query('@docs:resource://artifacts/re')).suggestions[0]?.text).toBe('@"docs:resource://artifacts/release bundle/manifest" ')
+  expect(completeResourceTemplate).toHaveBeenLastCalledWith(connection,adjacent.uriTemplate,'name','re',{})
   completeResourceTemplate.mockImplementationOnce(async()=>{
     state.mcp.clients=[{...connection,client:{}}]
     return ['retired']

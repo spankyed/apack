@@ -110,7 +110,13 @@ function nativeTemplateSlot(template,uri){
   const arg=parts[i+1].replace(/^[+#./;?&]/u,'').replace(/\*$|:\d+$/u,'').split(',',1)[0];
   const following=parts[i+2]??'';
   const next=following?uri.indexOf(following,offset):-1;
-  if(next<0)return {template,args,arg,value:uri.slice(offset),offset,following,partial:!!following&&i+3<parts.length,variables:(parts.length-1)/2};
+  if(next<0){
+   // Adjacent variables have no separator. Claude skips them to find the next literal.
+   let suffixIndex=i+2;
+   while(suffixIndex+1<parts.length&&!parts[suffixIndex])suffixIndex+=2;
+   return {template,args,arg,value:uri.slice(offset),offset,suffix:parts[suffixIndex]??'',
+    partial:!!following&&i+3<parts.length,variables:(parts.length-1)/2};
+  }
   args[arg]=uri.slice(offset,next);
   offset=next;
  }
@@ -152,7 +158,7 @@ async function nativeTemplateCompletions(n,context,listed,query,transport,curren
  if(!stillConnected())return [];
  return values.slice(0,15).flatMap(value=>{
   if(!validNativeMention(value))return [];
-  const suffix=value+slot.following,mention=server+':'+uri.slice(0,slot.offset)+suffix;
+  const suffix=value+slot.suffix,mention=server+':'+uri.slice(0,slot.offset)+suffix;
   return [{displayText:suffix,mention,description:slot.template.description||slot.template.name,partial:slot.partial}];
  });
 }
