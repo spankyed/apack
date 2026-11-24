@@ -284,8 +284,8 @@ export function createClaudeTerminalViews(dependencies: {
         const survivor = survivingTeammateCurrent(view, target.taskId)?.target
         if (survivor?.recoveryId !== target.recoveryId || survivor.taskId !== target.taskId) return false
         const client = view.attachmentOwner?.snapshot
-        return view.attachment?.status !== 'ready' || client?.status === 'live' && client.inputBlocked !== true
-          && client.jobId === survivor.taskId && client.sessionId === survivor.sessionId
+        return view.attachment?.status !== 'ready' || client?.jobId === survivor.taskId && client.sessionId === survivor.sessionId
+          && (client.status === 'live' && !client.inputBlocked || view.attachmentOwner?.endedTeammate === true)
       }
       if (state?.ownerId !== target.ownerId || state.sessionId !== view.attachment?.sessionId) return false
       const currentOwner = dependencies.get(view.threadId)
@@ -296,10 +296,23 @@ export function createClaudeTerminalViews(dependencies: {
       if (view.attachment?.status !== 'ready')
         return view.teammateReconnects.has(target.taskId)
       const client = view.attachmentOwner?.snapshot
-      return client?.status === 'live' && client.inputBlocked !== true && client.jobId === target.taskId && client.sessionId === state.sessionId
+      return client?.jobId === target.taskId && client.sessionId === state.sessionId
+        && (client.status === 'live' && !client.inputBlocked || view.attachmentOwner?.endedTeammate === true)
     }
     const continuation = dependencies.continuation?.(view.threadId)
     return !!view.attachment && continuation?.sessionId === view.attachment.sessionId && continuation.continuedInSessionId === view.attachment.continuedInSessionId
+  }
+  function retireEndedTeammateOffers(key: string, threadId: string, taskId: string, ownerId: string, sessionId: string) {
+    for (const [id, view] of views) {
+      if (view.threadId !== threadId) continue
+      const survivor = view.survivingTeammates.get(taskId)
+      const retireSurvivor = survivor?.target.ownerId === ownerId && survivor.target.sessionId === sessionId && !survivor.ended
+      if (retireSurvivor) survivor.ended = true
+      const reconnect = view.teammateReconnects.get(taskId)
+      const retireReconnect = reconnect?.target.ownerId === ownerId && reconnect.target.sessionId === sessionId
+      if (retireReconnect) view.teammateReconnects.delete(taskId)
+      if (id !== key && (retireSurvivor || retireReconnect)) publish(id, view)
+    }
   }
   function openAttachment<Client extends ClaudeBackgroundAttachment>(key: string, view: View, operation: ClaudeBackgroundAttachmentView,
     open: (signal: AbortSignal) => Promise<Client>, fallback: string,
@@ -316,7 +329,13 @@ export function createClaudeTerminalViews(dependencies: {
       connected?.(client)
       operation.status = 'ready'
       view.attachmentUnsubscribe = client.subscribe(() => {
-        if (views.get(key) === view && view.attachment === operation) publish(key, view)
+        if (views.get(key) !== view || view.attachment !== operation) return
+        if (client.endedTeammate && operation.teammate && !operation.problem) {
+          const { taskId, ownerId } = operation.teammate
+          retireEndedTeammateOffers(key, view.threadId, taskId, ownerId, operation.sessionId)
+          operation.problem = 'The native teammate process ended'
+        }
+        publish(key, view)
       })
       publish(key, view)
     }, error => {
@@ -577,14 +596,7 @@ export function createClaudeTerminalViews(dependencies: {
           try { return await survivor.open(signal) }
           catch (error) {
             if (error instanceof ClaudeTeammateEnded && !signal.aborted) {
-              // Keep the failed operation visible until dismissal, but retire its action in every window.
-              for (const [id, candidate] of views) {
-                if (candidate.threadId !== target.threadId) continue
-                const offer = candidate.survivingTeammates.get(event.taskId)
-                if (!offer || offer.target.ownerId !== event.ownerId || offer.target.sessionId !== event.sessionId) continue
-                offer.ended = true
-                if (id !== key) publish(id, candidate)
-              }
+              retireEndedTeammateOffers(key, target.threadId, event.taskId, event.ownerId, event.sessionId)
             }
             throw error
           }
@@ -637,9 +649,12 @@ export function createClaudeTerminalViews(dependencies: {
         return
       }
       if (event.type === 'CLAUDE_BACKGROUND_INPUT' || event.type === 'CLAUDE_BACKGROUND_RESIZE') {
-        if (!attachmentCurrent(target) || target.attachmentOwner?.snapshot.id !== event.attachmentId) return
-        if (event.type === 'CLAUDE_BACKGROUND_INPUT') target.attachmentOwner.input(event.attachmentId,event.text)
-        else target.attachmentOwner.resize(event.attachmentId,event.columns,event.rows,event.cell)
+        if (!attachmentCurrent(target)) return
+        const client = target.attachmentOwner
+        const attachment = client?.snapshot
+        if (!client || attachment?.id !== event.attachmentId || attachment.status !== 'live' || attachment.inputBlocked) return
+        if (event.type === 'CLAUDE_BACKGROUND_INPUT') client.input(event.attachmentId,event.text)
+        else client.resize(event.attachmentId,event.columns,event.rows,event.cell)
         return
       }
       if (event.type === 'CLAUDE_TERMINAL_OPEN') {

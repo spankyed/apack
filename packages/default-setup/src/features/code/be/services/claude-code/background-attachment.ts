@@ -13,6 +13,7 @@ import type {ClaudeBackgroundAttachmentSnapshot} from '../../../common/native-ba
 
 export interface ClaudeBackgroundAttachment {
   readonly snapshot: ClaudeBackgroundAttachmentSnapshot
+  readonly endedTeammate?: boolean
   subscribe(listener: () => void): () => void
   input(id: string, text: string): boolean
   resize(id: string, columns: number, rows: number, cell?: {width:number;height:number}): boolean
@@ -36,7 +37,7 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
 }
 
 export async function openClaudeTerminalAttachment(executable: string, args: string[],
-  session: { id: string; sessionId: string; cwd: string }, options: SubcommandOptions = {}): Promise<ClaudeBackgroundAttachment> {
+  session: { id: string; sessionId: string; cwd: string }, options: SubcommandOptions & { output?(text: string): void } = {}): Promise<ClaudeBackgroundAttachment> {
   if (options.signal?.aborted) throw new Error('Terminal attachment cancelled')
   const env: Record<string,string> = {}
   for (const [key,value] of Object.entries(buildChildEnv(options.env))) if (typeof value === 'string') env[key] = value
@@ -59,6 +60,7 @@ export async function openClaudeTerminalAttachment(executable: string, args: str
     {
       onOutput: text => {
         if (ended) return
+        options.output?.(text)
         const raw = Buffer.from(text), tail = raw.subarray(Math.max(0, raw.length - 262144))
         let start = 0; while (start < tail.length && (tail[start]! & 0xc0) === 0x80) start++
         const value = tail.subarray(start).toString('utf8')

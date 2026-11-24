@@ -1,12 +1,14 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
+import { once } from 'node:events'
+import { createServer, type Socket } from 'node:net'
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
 import { z } from 'zod'
-import { openClaudeTerminalAttachment } from './background-attachment.ts'
+import { openClaudeTerminalAttachment, type ClaudeBackgroundAttachment } from './background-attachment.ts'
 
 const execute = promisify(execFile)
 const decimal = z.string().regex(/^\d{1,24}$/)
@@ -95,10 +97,10 @@ export function createClaudeTeammateRecovery(pane: ClaudeRecoveryPane, env: Node
     if (process.platform !== 'linux' || await bootId() !== pane.bootId
       || !same(await executableIdentity(pane.executable), pane.executableIdentity)) throw Error('The teammate recovery host changed')
     if (pane.writer && await readProcessStart(pane.writer[0], signal) === pane.writer[1]) throw Error('The original Claude writer is still active')
+    if (await readProcessStart(pane.worker[0], signal) !== pane.worker[1]) throw new ClaudeTeammateEnded()
     const file = await lstat(pane.socket, { bigint: true })
     if (!file.isSocket() || file.uid !== BigInt(process.getuid!()) || !same(fileIdentity(file), pane.socketIdentity)
       || await processStart(pane.server[0], signal) !== pane.server[1]) throw Error('The original teammate pane is unavailable')
-    if (await readProcessStart(pane.worker[0], signal) !== pane.worker[1]) throw new ClaudeTeammateEnded()
     const current = await inspectPane(pane, address, env, signal)
     if (!current.activeWindow || current.socket !== pane.socket || !same(current.socketIdentity, pane.socketIdentity)
       || !same(current.server, pane.server) || !same(current.worker, pane.worker)) throw Error('The original teammate pane is unavailable')
@@ -110,21 +112,155 @@ export function createClaudeTeammateRecovery(pane: ClaudeRecoveryPane, env: Node
       const current = await verify(signal)
       const ready = `apack-${randomUUID()}`
       // Only the new client's selection changes. Wait for pane selection before forwarding anything.
-      const client = await openClaudeTerminalAttachment(pane.executable, [...address, 'attach-session', '-E', '-f', 'ignore-size,active-pane', '-t', pane.tmuxSession,
-        ';', 'select-pane', '-Z', '-t', `${pane.tmuxSession}:.${pane.paneId}`, ';', 'wait-for', '-S', ready],
-        { id: pane.taskId, sessionId: pane.sessionId, cwd: pane.cwd }, { env, signal })
-      try {
-        await current.probe(['wait-for', ready])
-        await verify(signal)
-        signal.throwIfAborted()
-        if (client.snapshot.status !== 'live') throw Error('The teammate terminal disconnected')
-        return client
-      } catch (error) {
-        await client.close()
-        throw error
-      }
+      return openRecoveredTeammate(pane, env, signal, verify, current.probe, ready)
     },
   }
+}
+
+// The broker interprets the tmux drawing and encodes input on this PTY. Keep tmux itself read-only:
+// an active-pane client silently falls back to another worker when its original pane disappears.
+const teammateTerminalRelay = `
+const connection = require('node:net').createConnection(process.argv[1]);
+const finish = () => { process.stdin.destroy(); };
+connection.once('connect', () => {
+  process.stdin.setRawMode(true);
+  process.stdin.pipe(connection);
+  connection.pipe(process.stdout);
+});
+connection.on('error', () => { process.exitCode = 1; connection.destroy(); });
+connection.once('close', finish);
+`
+
+async function openRecoveredTeammate(
+  pane: ClaudeRecoveryPane, env: NodeJS.ProcessEnv, signal: AbortSignal,
+  verify: (signal: AbortSignal) => Promise<unknown>,
+  probe: (args: string[]) => Promise<string>, ready: string,
+): Promise<ClaudeBackgroundAttachment> {
+  const directory = await mkdtemp(join('/tmp', 'apack-teammate-'))
+  const socketPath = join(directory, 'terminal.sock')
+  const listener = createServer()
+  const lifetime = new AbortController()
+  const childSignal = AbortSignal.any([signal, lifetime.signal])
+  const session = { id: pane.taskId, sessionId: pane.sessionId, cwd: pane.cwd }
+  let wire: Socket | undefined
+  let display: ClaudeBackgroundAttachment | undefined
+  let tmux: ClaudeBackgroundAttachment | undefined
+  let endedTeammate = false
+  let checking = false
+  let checkTimer: NodeJS.Timeout | undefined
+  let closing: Promise<void> | undefined
+
+  function close() {
+    return closing ??= Promise.resolve().then(async () => {
+      clearInterval(checkTimer)
+      lifetime.abort()
+      listener.close()
+      wire?.destroy()
+      await Promise.allSettled([display?.close(), tmux?.close()])
+      await rm(directory, { recursive: true, force: true })
+    })
+  }
+  function ended(error: unknown) {
+    if (error instanceof ClaudeTeammateEnded) endedTeammate = true
+    void close().catch(() => {})
+  }
+  async function acceptInput(connection: Socket) {
+    childSignal.throwIfAborted()
+    for await (const data of connection) {
+      childSignal.throwIfAborted()
+      if (await readProcessStart(pane.worker[0], childSignal) !== pane.worker[1]) throw new ClaudeTeammateEnded()
+      try {
+        await pasteExactTeammateInput(pane, env, Buffer.from(data), childSignal)
+      } catch (error) {
+        await verify(childSignal)
+        throw error
+      }
+    }
+  }
+
+  try {
+    listener.listen(socketPath)
+    await once(listener, 'listening', {signal: childSignal})
+    // This private socket waits for its owned relay process, independent of the tmux server.
+    const connected = once(listener, 'connection', { signal: AbortSignal.any([childSignal, AbortSignal.timeout(5000)]) })
+    void connected.catch(() => {})
+    display = await openClaudeTerminalAttachment(process.execPath, ['--eval', teammateTerminalRelay, socketPath], session,
+      { env: {...env, ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: ''}, signal: childSignal })
+    const [connection] = await connected as [Socket]
+    wire = connection
+    listener.close()
+    display.subscribe(() => { if (display?.snapshot.status === 'exited') void close().catch(() => {}) })
+    void acceptInput(connection).then(() => close(), error => ended(error)).catch(() => {})
+
+    tmux = await openClaudeTerminalAttachment(pane.executable, ['-S', pane.socket,
+      'attach-session', '-E', '-f', 'ignore-size,active-pane', '-t', pane.tmuxSession,
+      ';', 'select-pane', '-Z', '-t', `${pane.tmuxSession}:.${pane.paneId}`, ';', 'refresh-client', '-f', 'read-only', ';', 'wait-for', '-S', ready],
+    session, { env, signal: childSignal, output(text) {
+      if (closing) return
+      if (connection.writableLength + Buffer.byteLength(text) > 1024 * 1024) { void close().catch(() => {}); return }
+      connection.write(text)
+    } })
+    tmux.subscribe(() => {
+      if (tmux?.snapshot.status === 'exited' && !closing) void verify(childSignal).then(close, ended).catch(() => {})
+    })
+    await probe(['wait-for', ready])
+    await verify(childSignal)
+    if (tmux.snapshot.status !== 'live' || display.snapshot.status !== 'live') throw Error('The teammate terminal disconnected')
+    const terminal = display, reader = tmux
+    // Input is pinned independently. This timer notices a dead pane when the user is idle.
+    checkTimer = setInterval(() => {
+      if (checking || closing) return
+      checking = true
+      void verify(childSignal).catch(ended).finally(() => { checking = false })
+    }, 500)
+    checkTimer.unref()
+    return {
+      get snapshot() { return terminal.snapshot },
+      get endedTeammate() { return endedTeammate },
+      subscribe: terminal.subscribe,
+      input: terminal.input,
+      resize(id, columns, rows, cell) {
+        if (!terminal.resize(id, columns, rows, cell)) return false
+        return reader.resize(reader.snapshot.id, columns, rows, cell)
+      },
+      close,
+    }
+  } catch (error) {
+    await close()
+    throw error
+  }
+}
+
+async function pasteExactTeammateInput(pane: ClaudeRecoveryPane, env: NodeJS.ProcessEnv, data: Buffer, signal: AbortSignal) {
+  // An explicit pane target never follows the display client's selection. Raw paste writes directly to
+  // that pane's PTY, including if the window has synchronize-panes enabled.
+  const buffer = 'apack-' + randomUUID()
+  const condition = `#{&&:#{==:#{pid},${pane.server[0]}},#{&&:#{==:#{pane_pid},${pane.worker[0]}},#{==:#{pane_dead},0}}}`
+  const command = `paste-buffer -d -r -b ${buffer} -t ${pane.paneId}`
+  const discard = `delete-buffer -b ${buffer} ; display-message -p refused`
+  const address = ['-S', pane.socket]
+  const child = spawn(pane.executable, [...address, 'load-buffer', '-b', buffer, '-', ';',
+    'if-shell', '-F', '-t', pane.paneId, condition, command, discard],
+    { env, cwd: pane.cwd, signal: AbortSignal.any([signal, AbortSignal.timeout(2000)]), stdio: ['pipe', 'pipe', 'ignore'] })
+  let refused = false
+  child.stdout.resume()
+  child.stdout.on('data', () => { refused = true })
+  child.stdin.on('error', () => { refused = true })
+  try {
+    const closed = once(child, 'close')
+    child.stdin.end(data)
+    const [code] = await closed
+    if (code === 0 && !refused) return
+  } catch (error) {
+    if (!signal.aborted) throw error
+  } finally {
+    // The buffer normally disappears in the same tmux command queue. A failed target lookup can
+    // bypass that command, so make one bounded cleanup attempt using its unique name.
+    if (refused || child.exitCode !== 0)
+      await execute(pane.executable, [...address, 'delete-buffer', '-b', buffer], {env, cwd:pane.cwd, timeout:2000}).catch(() => {})
+  }
+  signal.throwIfAborted()
+  throw Error('The original teammate pane is unavailable')
 }
 
 type RecoveryScope = { profile: string; threadId: string; sessionId: string }
