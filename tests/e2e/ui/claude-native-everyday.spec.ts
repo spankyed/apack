@@ -12,9 +12,12 @@ test('completes an everyday native review across Agent, approval, question and i
   const modelPolicyNotice = process.env.CLAUDE_RESEARCH_MODEL_POLICY_NOTICE === '1'
   expect(!modelPolicyNotice || combinedAcceptance).toBe(true)
   const restriction = false
-  async function replaceDraft(editor:import('@playwright/test').Locator,text:string){
-    if(combinedAcceptance){await editor.click();await editor.press('ControlOrMeta+A');await appPage.keyboard.insertText(text);await expect(editor).toHaveText(text)}
-    else await editor.fill(text)
+  async function replaceDraft(editor: import('@playwright/test').Locator, text: string) {
+    await editor.click()
+    await editor.press('ControlOrMeta+A')
+    if (text) await appPage.keyboard.insertText(text)
+    else await editor.press('Backspace')
+    await expect(editor).toHaveText(text)
   }
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -98,7 +101,10 @@ test('completes an everyday native review across Agent, approval, question and i
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   if (restriction) await expect(status).toHaveCount(0)
-  else await expect(status).toContainText('Release review')
+  else {
+    await expect(status).toContainText('Release review')
+    await expect(status).toContainText('Workspace notes and checklist')
+  }
   const composer = card.locator('[contenteditable="true"]')
   if(!combinedAcceptance){
   for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toBeDisabled();await expect(channelDialog.getByRole('button',{name:'Save channels',exact:true})).toBeDisabled();await captureChannels('locked',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
@@ -432,8 +438,7 @@ test('completes an everyday native review across Agent, approval, question and i
   }
   const nativeCost = (await ledger()).filter((row: any) => row.type === 'cost-state').at(-1)?.totalCostUSD
   expect(nativeCost).toBeGreaterThan(0); await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
-  await composer.click();await appPage.keyboard.press('ControlOrMeta+A');await appPage.keyboard.type('Continue the same release review after the interruption.')
-  await expect(composer).toHaveText('Continue the same release review after the interruption.')
+  await replaceDraft(composer, 'Continue the same release review after the interruption.')
   await send.click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
