@@ -11,6 +11,9 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   expect(process.env.HOME).toBe(workspace)
   const darwinPolicy = process.env.CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY === '1'
   expect(process.platform === 'darwin').toBe(darwinPolicy)
+  const darwinUnreadable = darwinPolicy && unreadable
+  const linuxUnreadable = !darwinPolicy && unreadable
+  const expectedCaption = linuxUnreadable ? undefined : darwinUnreadable ? 'Device policy fallback' : 'Managed OS policy ready'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -40,13 +43,14 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   const terminalRows = section.locator('[data-terminal-text]')
-  let settingsConsent = false, settingsChoice = 0
+  let settingsConsent = false, settingsChoice = 0, sawSettingsError = false
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
     const native = (await context()).native
     const text = await terminalRows.innerText({ timeout: 500 }).catch(() => '')
-    if (native?.state?.status === 'live') return unreadable||native.state.mainStatus?.includes('Managed OS policy ready') === true
-    if(unreadable&&text.includes('Settings Error')&&text.includes('/etc/claude-code/managed-settings.json')&&text.includes('Continue without these settings')){
+    if (text.includes('Settings Error')) sawSettingsError = true
+    if (native?.state?.status === 'live') return !expectedCaption || native.state.mainStatus?.includes(expectedCaption) === true
+    if(linuxUnreadable&&text.includes('Settings Error')&&text.includes('/etc/claude-code/managed-settings.json')&&text.includes('Continue without these settings')){
       if(/❯\s*1\. Fix with Claude/.test(text)&&settingsChoice===0){settingsChoice=1;await input.press('ArrowDown')}
       else if(/❯\s*2\. Exit and fix manually/.test(text)&&settingsChoice===1){settingsChoice=2;await input.press('ArrowDown')}
       else if(/❯\s*3\. Continue without these settings/.test(text)&&!settingsConsent){settingsConsent=true;await input.press('Enter')}
@@ -59,28 +63,28 @@ test('honors OS-managed policy before user settings in the everyday composer', a
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
-    return native?.state?.status === 'live' && (unreadable || native.state.mainStatus?.includes('Managed OS policy ready') === true)
+    return false
   }, { timeout: 25000, intervals: [250] }).toBe(true)
-  if(unreadable)expect(settingsConsent).toBe(true)
+  if (linuxUnreadable) expect(settingsConsent).toBe(true)
+  if (darwinUnreadable) expect(sawSettingsError).toBe(false)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
-  if (unreadable) { /* Native helper eligibility is not inferred from an unreadable policy. */ }
-  else {
-    await expect(main).toContainText('Managed OS policy ready')
+  if (expectedCaption) {
+    await expect(main).toContainText(expectedCaption)
     await expect(main).toContainText('Managed source has priority')
-    if (darwinPolicy) await expect(main).not.toContainText('Device policy fallback')
   }
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
-  if (unreadable) { /* Warning display and continuation are separate from helper acceptance. */ }
-  else await expect(status).toContainText('Managed OS policy ready')
-  const warning=appPage.locator('[data-native-managed-settings]')
-  if(unreadable){await expect(warning).toBeVisible({timeout:15000});await warning.locator('summary').click();await expect(warning).toContainText('/etc/claude-code/managed-settings.json');await expect(warning).toContainText('EACCES')}
-
-
-
-
+  if (expectedCaption) await expect(status).toContainText(expectedCaption)
+  const warning = appPage.locator('[data-native-managed-settings]')
+  const warningDetails = warning.getByRole('region', { name: 'Settings warning details' })
+  if (unreadable) {
+    await expect(warning).toBeVisible({ timeout: 15000 })
+    await warning.locator('summary').click()
+    await expect(warningDetails).toContainText(darwinUnreadable ? 'per-user managed preferences' : '/etc/claude-code/managed-settings.json')
+    await expect(warningDetails).toContainText('EACCES')
+  }
 
   const nativeWindow=await electronApp.browserWindow(appPage)
   const draft='Keep my policy review draft while checking managed settings.'
@@ -89,14 +93,20 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   const captures:string[]=[]
   for(const [width,height] of [[1100,900],[680,600]]){
     await appPage.setViewportSize({width,height});await expect(composer).toHaveText(draft)
-    for(const item of [composer,...(unreadable?[warning]:[status]),card.getByRole('button',{name:'Send',exact:true})])await expect(item).toBeInViewport({ratio:1})
-    if (!unreadable) {
-      await expect(status).toContainText('Managed OS policy ready')
+    for (const item of [composer, ...(unreadable ? [warning] : []), ...(expectedCaption ? [status] : []), card.getByRole('button', { name: 'Send', exact: true })]) {
+      await expect(item).toBeInViewport({ ratio: 1 })
+    }
+    if (darwinUnreadable) {
+      await expect(warningDetails).toBeInViewport({ ratio: 1 })
+      expect(await warningDetails.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
+    }
+    if (expectedCaption) {
+      await expect(status).toContainText(expectedCaption)
       await expect(status).toContainText('Managed source has priority')
       await expect(status).not.toContainText('Session ready')
-      if (darwinPolicy) await expect(status).not.toContainText('Device policy fallback')
+      if (darwinPolicy) await expect(status).not.toContainText(darwinUnreadable ? 'Managed OS policy ready' : 'Device policy fallback')
     }
-    if(!unreadable){await expect(card.getByRole('button',{name:'Session tools',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Read current draft',exact:true})).toHaveCount(0)}
+    if(expectedCaption){await expect(card.getByRole('button',{name:'Session tools',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Read current draft',exact:true})).toHaveCount(0)}
     expect((await context()).native.state.nativePid).toBe(boundNativePid);expect((await context()).native.state.status).toBe('live');expect((await context()).turns).toBe(1)
     const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height})
     const name='native-system-policy-'+(unreadable?'unreadable-':'')+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
@@ -211,7 +221,7 @@ test('honors OS-managed policy before user settings in the everyday composer', a
     return uuid!
   }
   const nativeHumanUuid = await originalInput(sent)
-  await replaceDraft(draft);if(!unreadable)await expect(status).toContainText('Managed OS policy ready')
+  await replaceDraft(draft);if(expectedCaption)await expect(status).toContainText(expectedCaption)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
@@ -232,8 +242,9 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   if(unreadable){await expect(warning).toBeVisible();await expect(warning).toContainText('EACCES')}
   await writeFile(join(workspace!, 'native-system-policy-app-proof.json'), JSON.stringify({
     sessionId, boundNativePid, captures, liveTransitions, darwinTransitions, draftRetained: true,
-    privateControlsSuppressed: !unreadable, userStatusOverridden: !unreadable,
-    managedPreferencePriority: darwinPolicy, nativeManagedWarning: unreadable,
+    privateControlsSuppressed: !!expectedCaption, userStatusOverridden: !!expectedCaption,
+    managedPreferencePriority: darwinPolicy && !unreadable, nativeManagedWarning: unreadable,
+    darwinDeviceFallback: darwinUnreadable, sawSettingsError,
     originalSettingsConsent: settingsConsent, successfulContinuation: unreadable,
     warningText: unreadable ? await warning.innerText() : undefined,
     nativeHumanUuid, sent, nativeResumeHumanUuid, continuation,

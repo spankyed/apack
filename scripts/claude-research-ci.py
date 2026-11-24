@@ -109,6 +109,13 @@ CASES = {
         'CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY': '1',
         'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
     },
+    'darwin-system-policy-unreadable-app': {
+        'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
+        'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_SYSTEM_POLICY_UNREADABLE': '1',
+        'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
+    },
     'darwin-system-policy-live-app': {
         'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
         'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
@@ -216,7 +223,7 @@ def replay_directory(case, linux_container=False):
 
 
 @contextmanager
-def darwin_managed_preferences(run_root, control=None):
+def darwin_managed_preferences(run_root, control=None, *, unreadable=False):
     """Stage only absent, root-owned default policy files in a disposable macOS runner."""
     if validate_host() != 'darwin-arm64' or os.geteuid() == 0:
         raise RuntimeError('Policy replay requires an unprivileged hosted desktop session')
@@ -270,12 +277,22 @@ def darwin_managed_preferences(run_root, control=None):
                 raise ValueError('Unexpected managed preference owner or mode: ' + str(target))
             if digest(target) != digest(stage):
                 raise ValueError('Managed preference changed during setup: ' + str(target))
+        path = user_directory / domain
+        if unreadable:
+            privileged('/bin/chmod', '0000', path)
+            if stat.S_IMODE(path.lstat().st_mode) != 0:
+                raise ValueError('Unreadable fixture did not retain the expected mode')
+            try:
+                path.read_bytes()
+            except PermissionError:
+                pass
+            else:
+                raise ValueError('Hosted desktop user can still read the per-user plist')
         if control is None:
             yield
             return
 
         control.mkdir(mode=0o700)
-        path = user_directory / domain
         installed = path.lstat()
         finished = Event()
         errors = []
@@ -396,11 +413,13 @@ def run(case, linux_container=False):
             control = root / 'managed-policy-control' if case == 'darwin-system-policy-live-app' else None
             if control is not None:
                 env['CLAUDE_RESEARCH_DARWIN_POLICY_CONTROL'] = str(control)
-            policy = darwin_managed_preferences(root, control)
+            policy = darwin_managed_preferences(
+                root, control, unreadable=case == 'darwin-system-policy-unreadable-app',
+            )
         else:
             policy = nullcontext()
         with policy:
-            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'darwin-system-policy-live-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
+            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'darwin-system-policy-unreadable-app', 'darwin-system-policy-live-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
 if __name__ == '__main__':
