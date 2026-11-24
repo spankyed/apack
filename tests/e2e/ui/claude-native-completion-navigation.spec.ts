@@ -167,7 +167,10 @@ test('uses original native completion rows with keyboard navigation in main and 
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   expect(await snapshot(composer)).toEqual(parent)
-  await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');await expect(composer).toHaveText('')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => (await context()).claude.chatState).toBe('success')
+  // The original CLI can paint a new suggestion on the empty draft after the reply.
+  await expect.poll(() => composer.evaluate(element => (element as HTMLElement & { editor: import('@tiptap/core').Editor }).editor.isEmpty)).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-completion-navigation-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,captures,interactions,parentText,agentText,parent,agentHumanUuid:nativeAgentHuman[0].uuid,before,final:await context()},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCompletionNavigation:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
