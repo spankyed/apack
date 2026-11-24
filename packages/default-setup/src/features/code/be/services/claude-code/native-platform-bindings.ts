@@ -39,6 +39,7 @@ export const claudeNativeLinuxBindings: {
         "d_": "l_"
       }
     },
+    "chunk-s5erk9wy.js": { "module": "chunk-nz0exf6r.js", "exports": { "$nr": "vnr" } },
     "chunk-0xdgy4bd.js": {
       "module": "chunk-25pk6nzd.js",
       "exports": {

@@ -374,7 +374,7 @@ async function initialize(){
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const themeStore=await import('/$bunfs/root/chunk-5feck2gp.js'),themeStorageKeys=await import('/$bunfs/root/chunk-r1ydygv8.js'),themeStorageGate=await import('/$bunfs/root/chunk-gc95262s.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
-  const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js');
+  const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js'),privateTasks=await import('/$bunfs/root/chunk-s5erk9wy.js');
   const taskOutput=await import('/$bunfs/root/chunk-nbvvw59m.js');
   const taskOutputText=await import('node:util');
   const workflowTasks=await import('/$bunfs/root/chunk-tkvjaryv.js');
@@ -413,7 +413,7 @@ async function initialize(){
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   observeNativeManagedSettings(settingsDetector.Ta);
-  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }

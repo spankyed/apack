@@ -1,8 +1,10 @@
 import { it, expect, vi } from 'vitest'
 import vm from 'node:vm'
+import { createHash } from 'node:crypto'
 import { parse } from 'acorn'
 import { claudeNativeLinuxBindings } from '../../../../../../src/features/code/be/services/claude-code/native-platform-bindings.ts'
 import { claudeNativePlatformRuntime } from '../../../../../../src/features/code/be/services/claude-code/native-platform-runtime.ts'
+import { claudeTerminalComposerRuntime } from '../../../../../../src/features/code/be/services/claude-code/terminal-composer-runtime.ts'
 import { claudeTerminalUiRuntime } from '../../../../../../src/features/code/be/services/claude-code/terminal-ui-runtime.ts'
 import { createClaudePrintClientRuntime } from '../../../../../../src/features/code/be/services/claude-code/print-client-runtime.ts'
 
@@ -207,4 +209,56 @@ it('runs the original managed ConfigChange gate before notifying and refuses a s
   facts.view = {kind: 'agent', taskId: 'selected'}
   await expect(run(native, selected, new AbortController())).resolves.toEqual({rechecked: true})
   expect(notifyChange).toHaveBeenCalledTimes(2)
+})
+
+
+it('renders the current private task snapshot without lending the original task store to the export', async () => {
+  const api = vm.runInNewContext(claudeTerminalComposerRuntime + ';({nativeComposerFacts,formatNativeComposer})', {
+    AbortController, createHash, edits: new Map(), process: { stdout: { columns: 80 } },
+    nativeThemeProvider: () => ({ type: 'Theme', value: 'dark' }),
+    nativeViewFacts: () => ({ view }),
+    originalContext: { toolContext: () => ({ getAppState: () => state }) },
+  })
+  let view: { kind: string; taskId?: string } = { kind: 'main' }
+  let state: { expandedView: string; teamContext?: object } = { expandedView: 'tasks' }
+  let tasks = [{ id: '1', subject: 'Review migration notes', status: 'in_progress' }]
+  const originalSubscribe = vi.fn()
+  const privateTaskContext = { Provider: 'Native task provider' }
+  const provider = { type: privateTaskContext, memoizedProps: { value: { getSnapshot: () => tasks, subscribe: originalSubscribe } } }
+  const input = {
+    fingerprint: 'producer', fiber: { return: provider }, input: { surface: 'terminal' },
+    factory: vi.fn(() => 'original spinner'), props: { word: 'Working' },
+  }
+  const inputs = new Map([['["Spinner","main"]', input], ['["Spinner","worker"]', input]])
+  const staticRender = vi.fn(async (_tree: unknown) => 'native output')
+  const native = {
+    privateTasks: { $nr: privateTaskContext },
+    questionOptions: { Ze: () => 'main', j: () => 'session' },
+    documentDefaults: { $Et: () => ({ expandedView: 'none' }) },
+    appProvider: { d_: 'App state provider' },
+    jsx: { e: (type: string, props: unknown) => ({ type, props }) },
+    staticRender: { v6e: staticRender },
+  }
+
+  const expanded = api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs)
+  await expect(api.formatNativeComposer(native, expanded, expanded.props, {})).resolves.toBe('native output')
+  const appTree = staticRender.mock.calls[0]![0] as { props: { initialState: unknown; children: { props: { children: { type: string; props: { value: { getSnapshot(): unknown; subscribe(): () => void } } } } } } }
+  expect(appTree.props.initialState).toEqual({ expandedView: 'tasks' })
+  const taskTree = appTree.props.children.props.children
+  expect(taskTree.type).toBe(privateTaskContext.Provider)
+  expect(taskTree.props.value.getSnapshot()).toBe(tasks)
+  taskTree.props.value.subscribe()()
+  expect(originalSubscribe).not.toHaveBeenCalled()
+
+  state = { expandedView: 'none' }
+  const collapsed = api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs)
+  expect(collapsed.taskList.expanded).toBe(false)
+  expect(collapsed.fingerprint).not.toBe(expanded.fingerprint)
+  tasks = [{ ...tasks[0]!, status: 'completed' }]
+  expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs).fingerprint).not.toBe(collapsed.fingerprint)
+  state = { expandedView: 'tasks', teamContext: {} }
+  expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs).taskList).toBeUndefined()
+  state = { expandedView: 'tasks' }
+  view = { kind: 'agent', taskId: 'worker' }
+  expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'worker', inputs).taskList).toBeUndefined()
 })

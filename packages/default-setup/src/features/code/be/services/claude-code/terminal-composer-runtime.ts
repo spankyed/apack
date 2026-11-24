@@ -1,6 +1,8 @@
 /** Source-bound composer inputs from the pinned original producers, never inferred from app labels. */
 export const claudeTerminalComposerRuntime = String.raw`const composerFrames=new Map(),composerSeen=new Map(),composerClocks=new Map(),composerFunctionHashes=new WeakMap(),composerFactoryIds=new WeakMap();
 let composerFactorySequence=0;
+const composerTaskSnapshotIds=new WeakMap();
+let composerTaskSnapshotSequence=0;
 const composerSignatures={
  vtr:{component:'Spinner',hash:'303032488d6858b55a00a4718644628955b5beadbdf79e9161609313fe9ee5e2',slot:21},
  OH:{component:'SessionMode',hash:'102949adbd5d8849d10b15d5d7bc64d7e98466e46a23fa0ad704c86ae02b8b8a',slot:4},
@@ -48,19 +50,34 @@ function nativeIdleReturnHint(n){
  const text=notice.segments.map(segment=>segment.text).join('');
  return text.length<=256?text:undefined;
 }
+function nativeComposerTasks(n,fiber,state){
+ // The terminal's task-store provider scopes the snapshot to this mounted conversation.
+ if(!state||state.teamContext)return;
+ const context=n.privateTasks.$nr;
+ for(let depth=0;fiber&&depth<128;fiber=fiber.return,depth++){
+  if(fiber.type!==context&&fiber.type!==context.Provider)continue;
+  const tasks=fiber.memoizedProps?.value?.getSnapshot?.();
+  if(!Array.isArray(tasks)||!tasks.length)return;
+  if(!composerTaskSnapshotIds.has(tasks))composerTaskSnapshotIds.set(tasks,++composerTaskSnapshotSequence);
+  return {tasks,revision:composerTaskSnapshotIds.get(tasks),expanded:state.expandedView==='tasks'};
+ }
+}
 function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n)){
  const source=inputs.get(JSON.stringify([component,id]));if(!source)return;
+ let taskList;
  if(component==='Spinner'){
-  const view=nativeViewFacts(n,originalContext??n.runtime.ey(),new AbortController()).view;
+  const binding=originalContext??n.runtime.ey(),abort=new AbortController();
+  const view=nativeViewFacts(n,binding,abort).view;
   const expected=view.kind==='main'?n.questionOptions.Ze():view.taskId;
   if(id!==expected&&!(view.kind==='main'&&id==='main'))return;
+  if(view.kind==='main')taskList=nativeComposerTasks(n,source.fiber,binding.toolContext(abort).getAppState());
  }
  const props={...source.props};
  if(component==='Spinner'&&props.mode==='tool-input')props.mode='tool-use';
  if(component==='PromptHint'&&edits.has(client))props.isDraft=edits.get(client).box.text.length>0;
  const idleReturnHint=component==='PromptHint'&&!props.isWorking?nativeIdleReturnHint(n):undefined;
- const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props,idleReturnHint])).digest('hex');
- return {...source,props,fingerprint,idleReturnHint};
+ const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props,idleReturnHint,taskList?.revision,taskList?.expanded])).digest('hex');
+ return {...source,props,fingerprint,idleReturnHint,taskList};
 }
 function nativeComposerList(n,client,inputs=nativeComposerInputs(n)){
  const result=[];for(const source of inputs.values()){const facts=nativeComposerFacts(n,client,source.component,source.id,inputs);if(facts)result.push({component:facts.component,id:facts.id,revision:facts.fingerprint});}return result;
@@ -111,9 +128,12 @@ async function formatNativeComposer(n,facts,props,options){
  const element=facts.component==='PromptHint'
   ? n.jsx.e(n.terminalComponents.n,{dimColor:true,children:typeof props.hint==='string'?props.hint:''})
   : facts.factory({...facts.input,surface:'desktop',props});
- // The other placements delegate to their source-verified JSX factories. The export store owns no live tasks.
+ // Give the original Spinner a read-only task snapshot. Its export provider must never subscribe to the live store.
  if(element===null||element===false)return '';const theme=nativeThemeProvider(n);
- const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,children:n.jsx.e(theme.type,{value:theme.value,children:element})});
+ const taskList=facts.taskList;
+ const children=taskList?n.jsx.e(n.privateTasks.$nr.Provider,{value:{getSnapshot:()=>taskList.tasks,subscribe:()=>()=>{}},children:element}):element;
+ const initialState=taskList?{...n.documentDefaults.$Et(),expandedView:taskList.expanded?'tasks':'none'}:undefined;
+ const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState,children:n.jsx.e(theme.type,{value:theme.value,children})});
  const text=await n.staticRender.v6e(tree,{columns:Math.max(20,Math.min(240,options.columns??process.stdout.columns??80))});
  options.signal?.throwIfAborted();if(typeof text!=='string'||text.length>65536)throw Error('Native composer drawing exceeds limit');return text;
 }`
