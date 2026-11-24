@@ -562,6 +562,35 @@ it('preserves list paint when the same native rewrite also normalizes a heading'
   } finally { bridge.dispose() }
 })
 
+it('keeps native paint on the addressed rows of a long quoted ordered list', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const items = Array.from({ length: 1100 }, (_, index) => `Review item ${Math.floor(index / 2) + 1}`)
+    const prefix = '> 1.   '
+    const text = items.map(item => prefix + item).join('\n')
+    const last = text.lastIndexOf('\n') + 1
+    bridge.receive({
+      revision: bridge.revision,
+      status: 'applied',
+      frame: { text, cursor: text.length, decorations: [
+        { start: 0, end: prefix.length + 6, color: 'red' },
+        { start: last + 2, end: last + prefix.length + 6, underline: true },
+      ] },
+    })
+    const rows = editor.view.dom.querySelectorAll('blockquote li')
+    expect(rows).toHaveLength(items.length)
+    expect(rows[0]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+    expect(rows[1]?.querySelector('.claude-prompt-decoration')).toBeNull()
+    expect(rows[rows.length - 2]?.querySelector('.claude-prompt-decoration')).toBeNull()
+    expect(rows[rows.length - 1]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+    const draft = bridge.readDraft()!
+    const canonical = items.map((item, index) => '> ' + String(index + 1).padStart(4) + '. ' + item).join('\n')
+    expect(draft.text === canonical).toBe(true)
+    expect(draft.cursor).toBe(canonical.length)
+  } finally { bridge.dispose() }
+})
+
 it('reports the actual host-fill text change, excluding no-ops and stale fills', () => {
   editor.commands.setContent('initial draft')
   const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())

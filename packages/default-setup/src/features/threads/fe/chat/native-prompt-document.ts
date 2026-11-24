@@ -169,12 +169,14 @@ function listPaintBoundaries(source: string, canonical: string, offsets: readonl
     const end = start + raw.length
     let visibleStart = start
     if (raw !== normalized && index < requested.length && requested[index]! <= end) {
-      const marker = /^( *)([*+-]|[0-9]{1,9}[.)])[ \t]+(?=\S)/
+      const marker = /^(?<quote>(?: {0,3}>[ \t]?)*)(?<indent> *)(?<list>[*+-]|[0-9]{1,9}[.)])[ \t]+(?=\S)/
       const before = marker.exec(raw), after = marker.exec(normalized)
-      if (before && after && raw.slice(before[0].length) === normalized.slice(after[0].length)) {
-        const ordered = before[2]!.length > 1
-        // The ordered-list serializer right-aligns the numbers. The marked parse below verifies nesting.
-        if (ordered === (after[2]!.length > 1) && (ordered || before[1] === after[1])) {
+      if (before?.groups && after?.groups && raw.slice(before[0].length) === normalized.slice(after[0].length)) {
+        const ordered = before.groups.list!.length > 1
+        const quoteDepth = (prefix: string) => prefix.replace(/[ \t]/g, '').length
+        // The serializer right-aligns ordered markers even within quotes. The marked parse still verifies nesting.
+        if (quoteDepth(before.groups.quote!) === quoteDepth(after.groups.quote!)
+          && ordered === (after.groups.list!.length > 1) && (ordered || before.groups.indent === after.groups.indent)) {
           visibleStart += before[0].length
         }
       }
