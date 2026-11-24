@@ -15,6 +15,11 @@ journeys use the broker terminal and do not restore the removed xterm implementa
 Historical launcher selectors below are not a claim that every archived journey runs against the
 current app. This archive records authored tools, not combined F1–F5 acceptance.
 
+The source bundle includes the pinned desktop drivers for MCP task reconnect and recovery, retired
+HTTP polls, successive native forms, and answer retry exhaustion. The run-specific controllers,
+patches and saved evidence for MCP URL replacement and held-completion IME replays are linked from
+the research handoff. Their saved verifiers can run without launching the app.
+
 Regenerate from the research checkout after committing its tools:
 
 ```sh
