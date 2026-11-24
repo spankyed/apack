@@ -73,7 +73,9 @@ machine is across, and a feature is known to be across when its specs pass, unch
    `system.contract` and `surface.contract`, and the SDK's `ask`/`fromAsk`, `useState` and `fromView` are restated
    over states. The recorded API reports and the facade report move with them.
 5. **The test harness** (`@apackdev/testing`, `@apackdev/sdk/testing`), so that a feature's specs run against the
-   kernel, and a pack's spec can run a scenario under every ordering.
+   kernel, and a pack's spec can run a scenario under every ordering. See
+   [singleton-free-test-harness.md](singleton-free-test-harness.md) for the singleton-free `using` design that
+   also unlocks Vitest `isolate: false`.
 6. **The features, hardest first.** The commit surface and the code system it asks, then the brain, the surfaces
    with states, then the single-state surfaces and backend systems. The commit and pull-request surfaces are taken
    apart by concern as they are ported.
