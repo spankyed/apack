@@ -1,11 +1,14 @@
 """Replay a pinned Claude integration journey on a disposable GitHub Mac or the explicit local Linux container."""
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import platform
+import plistlib
+import re
+import stat
 import shutil
 import subprocess
 import sys
@@ -99,6 +102,12 @@ CASES = {
     'reset-upload-app': {'CLAUDE_RESEARCH_PENDING_DURATION': '1', 'CLAUDE_RESEARCH_RESET_TASK': '1', 'CLAUDE_RESEARCH_RESET_UPLOAD': '1'},
     'system-policy-unreadable-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_SYSTEM_POLICY': '1', 'CLAUDE_RESEARCH_SYSTEM_POLICY_UNREADABLE': '1'},
     'system-policy-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_SYSTEM_POLICY': '1'},
+    'darwin-system-policy-app': {
+        'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
+        'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
+    },
     'agent-ime-cancel-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_AGENT_IME': '1', 'CLAUDE_RESEARCH_AGENT_IME_CANCEL': '1'},
     'agent-ime-lifetime-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_AGENT_IME': '1', 'CLAUDE_RESEARCH_AGENT_IME_LIFETIME': '1'},
     'tool-width-app': {'CLAUDE_RESEARCH_TOOL_WIDTH': '1'},
@@ -198,6 +207,64 @@ def replay_directory(case, linux_container=False):
         yield root
 
 
+@contextmanager
+def darwin_managed_preferences(run_root):
+    """Stage only absent, root-owned default policy files in a disposable macOS runner."""
+    if validate_host() != 'darwin-arm64' or os.geteuid() == 0:
+        raise RuntimeError('Policy replay requires an unprivileged hosted desktop session')
+    import pwd
+
+    username = pwd.getpwuid(os.geteuid()).pw_name
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', username):
+        raise ValueError('Unexpected hosted macOS user name')
+    library = Path('/Library')
+    managed = library / 'Managed Preferences'
+    user_directory = managed / username
+    domain = 'com.anthropic.claudecode.plist'
+    captions = {
+        managed / domain: 'Device policy fallback',
+        user_directory / domain: 'Managed OS policy ready',
+    }
+    if any(os.path.lexists(path) for path in captions):
+        raise FileExistsError('Existing Claude managed preferences must be preserved')
+
+    def require_root_directory(directory):
+        details = directory.lstat()
+        if not stat.S_ISDIR(details.st_mode) or details.st_uid != 0 or details.st_mode & 0o022:
+            raise ValueError('Policy directory is not root-controlled: ' + str(directory))
+
+    def privileged(*argv):
+        subprocess.run(['/usr/bin/sudo', '-n', *map(str, argv)], check=True, timeout=15)
+
+    require_root_directory(library)
+    with ExitStack() as cleanup:
+        for directory in (managed, user_directory):
+            if not os.path.lexists(directory):
+                privileged('/bin/mkdir', '-m', '0755', directory)
+                cleanup.callback(privileged, '/bin/rmdir', directory)
+            require_root_directory(directory)
+        for index, (target, caption) in enumerate(captions.items()):
+            stage = run_root / ('managed-policy-' + str(index) + '.plist')
+            stage.write_bytes(plistlib.dumps({
+                'allowManagedHooksOnly': True,
+                'statusLine': {
+                    'type': 'command',
+                    'command': "/usr/bin/printf '" + caption + r"\nManaged source has priority\n" + "'",
+                },
+            }))
+            subprocess.run(['/usr/bin/plutil', '-lint', str(stage)], check=True, timeout=15)
+            if os.path.lexists(target):
+                raise FileExistsError('Existing managed preference must be preserved: ' + str(target))
+            privileged('/usr/bin/install', '-o', 'root', '-g', 'wheel', '-m', '0644', stage, target)
+            cleanup.callback(privileged, '/bin/rm', target)
+            details = target.lstat()
+            if not stat.S_ISREG(details.st_mode) or details.st_uid != 0 or stat.S_IMODE(details.st_mode) != 0o644:
+                raise ValueError('Unexpected managed preference owner or mode: ' + str(target))
+            if digest(target) != digest(stage):
+                raise ValueError('Managed preference changed during setup: ' + str(target))
+        yield
+
+
 def run(case, linux_container=False):
     if (case.startswith('lsp-recommendation-') or case in ['config-desktop-app', 'status-desktop-app', 'status-diagnostics-app', 'settings-editors-app']) and not linux_container:
         raise ValueError('This native probe requires the reviewed owned Linux route')
@@ -280,7 +347,9 @@ def run(case, linux_container=False):
                 'python': {'path': '/usr/bin/python3', 'exit': python.returncode, 'stdout': python.stdout, 'stderr': python.stderr},
             }, indent=2) + '\n')
         (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target, 'suppliedNativeArchive': str(Path(supplied_archive).resolve()) if supplied_archive else None}, indent=2) + '\n')
-        subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
+        policy = darwin_managed_preferences(root) if case == 'darwin-system-policy-app' else nullcontext()
+        with policy:
+            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
 if __name__ == '__main__':

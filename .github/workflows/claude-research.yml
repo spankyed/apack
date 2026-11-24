@@ -69,6 +69,7 @@ jobs:
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-proof.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-initial.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-capability-onboarding.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-system-policy-install.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/helper-bun-options.txt
             ${{ runner.temp }}/claude-research-*/workspaces/**/prefix-calls.jsonl
             ${{ runner.temp }}/claude-research-*/workspaces/**/prefix-exits.jsonl
