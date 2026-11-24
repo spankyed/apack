@@ -1,14 +1,10 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
-import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('completes an everyday native review across Agent, approval, question and interruption recovery', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(150000)
   expect(process.env.HOME).toBe(workspace)
@@ -56,29 +52,15 @@ test('completes an everyday native review across Agent, approval, question and i
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator("textarea[aria-label=\"Terminal input\"]")
-  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
-  ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const resize = async () => {
-    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
-    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
-    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1)
-    const cols=row?.match(/columns:\s*(\d+)/)?.[1],rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined
-  }
-  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!
-  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
-  terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
-  let lastSequence = 0
+  const terminalRows = section.locator('[data-terminal-text]')
+  const readTerminalScreen = () => terminalRows.innerText({ timeout: 500 }).catch(() => '')
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
     const current = await context(), native = current.native
-    const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
-    if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
-    const buffer = terminalScreen!.buffer.active
-    const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
     if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Release review') === true
+    const text = await readTerminalScreen()
     const screen = recognizeOnboardingPrompt(text, workspace)
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
+    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
@@ -333,21 +315,23 @@ test('completes an everyday native review across Agent, approval, question and i
   const toolNotice=process.env.CLAUDE_RESEARCH_QUESTION_TOOL_NOTICE==='1'
   let questionNoticeReceipt: any, missingCallRefusal: any
   const questionNoticeLiveUpdates: any[]=[]
-  async function readQuestionNoticeScreen(){
-    const native=(await context()).native,chunks=native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
-    if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
-    const buffer=terminalScreen!.buffer.active
-    const screen=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
-    await writeFile(join(workspace!,'native-question-tool-notice-screen.json'),JSON.stringify({receipt:questionNoticeReceipt,screen}))
-    return screen
+  async function expectNativeQuestionNotice(matches: (screen: string) => boolean) {
+    await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+    await expect(input).toBeVisible()
+    try {
+      await expect.poll(async () => {
+        const screen = await readTerminalScreen()
+        await writeFile(join(workspace!, 'native-question-tool-notice-screen.json'), JSON.stringify({ receipt: questionNoticeReceipt, screen }))
+        return screen.length > 0 && matches(screen)
+      }).toBe(true)
+    } finally {
+      await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+    }
   }
   if(toolNotice){
     questionNoticeReceipt=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-native.json'),'utf8'))
     expect(questionNoticeReceipt.accepted).toBe(true)
-    await expect.poll(async()=>{
-      const screen=await readQuestionNoticeScreen()
-      return screen.includes(questionNoticeReceipt.text)
-    }).toBe(true)
+    await expectNativeQuestionNotice(screen => screen.includes(questionNoticeReceipt.text))
     await expect(question.getByText(questionNoticeReceipt.text,{exact:false})).toBeVisible()
   }
   await capture(toolNotice?'question-notice':'question', toolNotice?question.getByText(questionNoticeReceipt.text,{exact:false}):question.locator('h2'), [question.getByRole('button', { name: 'Submit answers', exact: true })], question.getByLabel('Question details', { exact: true }))
@@ -361,7 +345,9 @@ test('completes an everyday native review across Agent, approval, question and i
       const receipt=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-command-result.json'),'utf8'))
       expect(receipt.accepted).toBe(true);expect(receipt.toolUseId).toBe(questionNoticeReceipt.toolUseId)
       const updated='Release policy updated this question.'
-      await expect.poll(async()=>{const screen=await readQuestionNoticeScreen();return action==='clear'?!screen.includes(updated)&&!screen.includes(questionNoticeReceipt.text):screen.includes(action==='restore'?questionNoticeReceipt.text:updated)}).toBe(true)
+      await expectNativeQuestionNotice(screen => action === 'clear'
+        ? !screen.includes(updated) && !screen.includes(questionNoticeReceipt.text)
+        : screen.includes(action === 'restore' ? questionNoticeReceipt.text : updated))
       const notice=question.getByRole('note')
       if(action==='clear')await expect(notice).toHaveCount(0)
       else await expect(notice).toContainText(action==='restore'?questionNoticeReceipt.text:updated)
