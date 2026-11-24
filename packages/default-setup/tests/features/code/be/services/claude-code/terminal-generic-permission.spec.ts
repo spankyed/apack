@@ -5,10 +5,10 @@ import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services
 import { claudeTerminalGenericPermissionRuntime } from '#features/code/be/services/claude-code/terminal-generic-permission-runtime.ts'
 
 /** Mock native contracts prove adapter guards, never original CLI or app acceptance. */
-function fixture(card = false) {
-  function ozr() {} function qJ() {} function Box() {} function Dialog() {}
-  const payload = { toolName: 'mcp__research__echo', isMcp: true }
-  const item = { id: 'original', kind: 'permission_prompt', payload }, open = [item]
+function fixture(card = false, monitor = false) {
+  function ozr() {} function LCe() {} function qJ() {} function Box() {} function Dialog() {}
+  const payload = { toolName: monitor ? 'Monitor' : 'mcp__research__echo', isMcp: !monitor }
+  const item = { id: 'original', kind: monitor ? 'permission_monitor' : 'permission_prompt', payload }, open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
   let current = dialog, ready = true, refuse = false, syntaxDisabled = false
   const select = vi.fn(() => { if (refuse) return false; open.splice(0); return true })
@@ -20,22 +20,33 @@ function fixture(card = false) {
   ]
   const cancel = vi.fn(() => { if (refuse) return false; open.splice(0); return true })
   // eslint-disable-next-line unicorn/no-new-array -- Sparse slots model the original native memo cache.
-  const control: { options: typeof options; onSelect: typeof select; onCancel?: typeof cancel; defaultFocusValue?: string } = { options, onSelect: select, onCancel: cancel }, cache = new Array(155)
-  cache[65] = 'Original full description\nwith a second line'
-  cache[123] = 'echo Tool: (MCP)'
-  cache[129] = 'message: "Release notes"'
-  cache[151] = { props: { title: 'Tool use' } }
-  cache[154] = { type: Box, props: {} }
-  cache[107] = { type: Dialog, props: { title: 'Original permission card?' } }
-  cache[90] = 'Original native card rows'
-  const root = card ? cache[107] : cache[154]
-  const fiber = { type: ozr, memoizedProps: { payload, wouldTakeAnswer: () => ready }, updateQueue: { memoCache: { data: [cache] } }, child: { type: root.type, memoizedProps: root.props, child: { type: qJ, memoizedProps: control } } }
+  const control: { options: typeof options; onSelect: typeof select; onCancel?: typeof cancel; defaultFocusValue?: string } = { options, onSelect: select, onCancel: cancel }, cache = new Array(monitor ? 46 : 155)
+  if (monitor) {
+    options.splice(1, 2, { value: 'yes-apply-suggestions', label: 'Original session grant' })
+    cache[19] = 'Watch the release notes'
+    cache[26] = 'Native source is withheld'
+    cache[28] = 'Original network scope'
+    cache[31] = 'Original permission explanation'
+    cache[36] = { type: qJ, props: control }
+    cache[45] = { type: Dialog, props: { title: 'Monitor' } }
+  } else {
+    cache[65] = 'Original full description\nwith a second line'
+    cache[123] = 'echo Tool: (MCP)'
+    cache[129] = 'message: "Release notes"'
+    cache[151] = { props: { title: 'Tool use' } }
+    cache[154] = { type: Box, props: {} }
+    cache[107] = { type: Dialog, props: { title: 'Original permission card?' } }
+    cache[90] = 'Original native card rows'
+  }
+  const root = monitor ? cache[45] : card ? cache[107] : cache[154]
+  const fiber = { type: monitor ? LCe : ozr, memoizedProps: { payload, wouldTakeAnswer: () => ready }, updateQueue: { memoCache: { data: [cache] } }, child: { type: root.type, memoizedProps: root.props, child: { type: qJ, memoizedProps: control } } }
   const session = { id: 'original-session' }, render = vi.fn(async (_tree: unknown, _options: unknown) => 'Original rendered parameter table')
   function AppStateProvider() {} function ThemeProvider() {}
   const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render, v6e: render }, documentDefaults: { $Et: () => ({ tasks: { stale: true }, taskDecorations: { stale: true }, settings: { fixtureSetting: 'retained' } }) }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const hash = (text: string) => createHash('sha256').update(text).digest('hex')
   const fingerprints = new Map([
     ['063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73', hash(ozr.toString())],
+    ['b62d24f21168192002d9caef081f5e48a1c98782d1e6723646766349a4872b70', hash(LCe.toString())],
     ['5602da1d16eb7bb040b568afe7012d87d13436e6ffeef266609a9ae1d127b51b', hash(qJ.toString())],
   ])
   const runtime = vm.runInNewContext(rewriteClaudeNativePlatformSelectors(claudeTerminalGenericPermissionRuntime) + ';({choices:nativeGenericPermissionChoices,answer:answerNativeGenericPermissionChoice})', {
@@ -173,5 +184,29 @@ it('uses the live syntax preference without borrowing tasks and refuses a change
   expect(f.render.mock.calls[0][0]).toMatchObject({ props: { initialState: { tasks: {}, taskDecorations: {}, settings: { syntaxHighlightingDisabled: true } } } })
   f.render.mockImplementation(async () => { f.setSyntaxDisabled(false); return 'Stale colored preview' })
   await expect(f.runtime.choices(f.n, f.dialog)).rejects.toThrow('syntax setting changed')
+  expect(f.select).not.toHaveBeenCalled()
+})
+
+
+it('projects the native Monitor preview and sends the captured session grant to Claude', async () => {
+  const f = fixture(false, true), shown = await f.runtime.choices(f.n, f.dialog)
+  expect(shown.ready).toBe(true)
+  expect(shown.title).toBe('Monitor')
+  expect(shown.details).toEqual([
+    { label: 'Description', value: 'Watch the release notes' },
+    { label: 'Source', value: 'Native source is withheld' },
+    { label: 'Network access', value: 'Original network scope' },
+    { label: 'Permission', value: 'Original permission explanation' },
+  ])
+  await f.runtime.answer(f.n, f.dialog, response(f, shown.token, 'yes-apply-suggestions'))
+  expect(f.select).toHaveBeenCalledExactlyOnceWith('yes-apply-suggestions', undefined)
+})
+
+it('refuses Monitor after its mounted choice or native source changes', async () => {
+  const f = fixture(false, true), shown = await f.runtime.choices(f.n, f.dialog)
+  f.cache[26] = 'Replaced native source'
+  await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token))).rejects.toThrow('changed')
+  f.cache[36] = { ...f.cache[36], props: { ...f.control } }
+  expect((await f.runtime.choices(f.n, f.dialog)).ready).toBe(false)
   expect(f.select).not.toHaveBeenCalled()
 })

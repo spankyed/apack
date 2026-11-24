@@ -1,13 +1,17 @@
-/** Original mounted permission_prompt contract; all decisions and policy effects stay native. */
+/** Project native generic and Monitor permission controls with original decision authority. */
 export const claudeTerminalGenericPermissionRuntime = String.raw`
 function nativeGenericPermissionControl(n,d){
- if(d.item?.kind!=='permission_prompt')throw Error('Unsupported generic permission kind');
+ const monitor=d.item?.kind==='permission_monitor';
+ if(!monitor&&d.item?.kind!=='permission_prompt')throw Error('Unsupported generic permission kind');
+ const renderer=monitor?nativeFunctionName('LCe'):nativeFunctionName('ozr');
+ const rendererHash=monitor?'b62d24f21168192002d9caef081f5e48a1c98782d1e6723646766349a4872b70':
+  '063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73';
  const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native generic permission traversal exceeded bound');seen.add(fiber);
-  if(typeof fiber.type==='function'&&fiber.type.name===nativeFunctionName('ozr')&&fiber.memoizedProps?.payload===d.payload){
+  if(typeof fiber.type==='function'&&fiber.type.name===renderer&&fiber.memoizedProps?.payload===d.payload){
    let hash=composerFunctionHashes.get(fiber.type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fiber.type)).digest('hex');composerFunctionHashes.set(fiber.type,hash);}
-   if(hash!=='063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73')throw Error('Native generic permission renderer changed');
+   if(hash!==rendererHash)throw Error('Native generic permission renderer changed');
    const children=[fiber.child],visited=new Set();
    while(children.length){
     const child=children.pop();if(!child||visited.has(child))continue;if(visited.size>=2048)throw Error('Native generic permission controls exceeded bound');visited.add(child);
@@ -15,7 +19,7 @@ function nativeGenericPermissionControl(n,d){
     if(typeof child.type==='function'&&child.type.name===nativeFunctionName('qJ')&&Array.isArray(control?.options)&&typeof control.onSelect==='function'){
      let controlHash=composerFunctionHashes.get(child.type);if(!controlHash){controlHash=createHash('sha256').update(Function.prototype.toString.call(child.type)).digest('hex');composerFunctionHashes.set(child.type,controlHash);}
      if(controlHash!=='5602da1d16eb7bb040b568afe7012d87d13436e6ffeef266609a9ae1d127b51b')throw Error('Native generic permission control changed');
-     matches.push({fiber,control,ready:typeof fiber.memoizedProps.wouldTakeAnswer==='function'&&fiber.memoizedProps.wouldTakeAnswer()===true});
+     matches.push({fiber,control,controlFiber:child,ready:typeof fiber.memoizedProps.wouldTakeAnswer==='function'&&fiber.memoizedProps.wouldTakeAnswer()===true});
     }
     if(child.sibling)children.push(child.sibling);if(child.child)children.push(child.child);
    }
@@ -43,8 +47,29 @@ async function nativeGenericPermissionDetail(n,label,node){
  const ansi=await nativeGenericPermissionText(n,node,true);
  return {label,value:stripVTControlCharacters(ansi).trim(),ansi};
 }
+async function nativeMonitorPermissionPreview(n,source){
+ const {fiber,control,controlFiber}=source;
+ const caches=fiber.updateQueue?.memoCache?.data?.filter(row=>Array.isArray(row)&&row.length===46&&
+  row[36]?.props===control&&row[36].type===controlFiber.type&&row[45]?.props);
+ if(caches?.length!==1)return;
+ const [row]=caches,root=fiber.child,panel=row[45],title=panel.props.title;
+ if(root?.type!==panel.type||root.memoizedProps!==panel.props||typeof title!=='string'||!title||title.length>4000)return;
+ const details=[],sourceRows=[['Description',19],['Source',26],['Network access',28],['Permission',31]];
+ // These rows already carry native truncation and withholding for shell, MCP, and WebSocket inputs.
+ const nodes=sourceRows.map(([,index])=>row[index]);
+ for(const [offset,[label]] of sourceRows.entries()){
+  const node=nodes[offset];
+  const detail=await nativeGenericPermissionDetail(n,label,node);
+  if(detail.value)details.push(detail);
+ }
+ if(fiber.child!==root||root.memoizedProps!==panel.props||row[45]!==panel||
+  sourceRows.some(([,index],offset)=>row[index]!==nodes[offset]))throw Error('Native Monitor permission changed while formatting');
+ if(!details.some(row=>row.label==='Source'))return;
+ return {title,details};
+}
 async function nativeGenericPermissionPreview(n,d,source){
  if(!source)return;
+ if(d.item.kind==='permission_monitor')return nativeMonitorPermissionPreview(n,source);
  const caches=source.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===155);
  if(caches?.length!==1)return;
  const cache=caches[0],root=source.fiber.child;
@@ -63,9 +88,11 @@ async function nativeGenericPermissionPreview(n,d,source){
 }
 async function nativeGenericPermissionChoices(n,d){
  const source=nativeGenericPermissionControl(n,d),choices=[],choiceDescriptions={};
+ const allowed=d.item.kind==='permission_monitor'?['yes','yes-apply-suggestions','no']:
+  ['yes','yes-dont-ask-again','yes-enable-auto-mode','no'];
  if(source)for(const option of source.control.options){
   if(option.disabled===true)continue;
-  if(!['yes','yes-dont-ask-again','yes-enable-auto-mode','no'].includes(option.value))throw Error('Unknown original generic permission choice');
+  if(!allowed.includes(option.value))throw Error('Unknown original generic permission choice');
   const label=await nativeGenericPermissionText(n,option.label);if(!label||label.length>4000)throw Error('Invalid native generic permission label');
   if(option.description!==undefined){const description=await nativeGenericPermissionText(n,option.description);if(description.length>4000)throw Error('Native generic permission choice description exceeded bound');choiceDescriptions[option.value]=description;}
   choices.push({value:option.value,label,decision:option.value==='no'?'deny':'allow',feedback:['accept','reject'].includes(option.feedbackConfig?.type)});
@@ -86,7 +113,7 @@ async function answerNativeGenericPermissionChoice(n,d,request){
  if(request.prefix!==undefined)throw Error('Unsupported generic permission prefix');
  if(request.toolName!==d.payload.toolName||(cancelling?(!shown.canCancel||request.choice!==''||request.feedback!==undefined):(!choice||request.decision!==choice.decision)))throw Error('Invalid native generic permission choice');
  if(request.feedback!==undefined&&(!choice?.feedback||typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Unsupported native generic permission feedback');
- const current=nativeDialog(n,'permission_prompt');
+ const current=nativeDialog(n,d.item.kind);
  if(current.item!==d.item||current.payload!==d.payload||current.revision!==d.revision||current.sessionId!==d.sessionId)throw Error('Native generic permission expired');
  const source=nativeGenericPermissionControl(n,current);
  if(!source?.ready||source.control!==shown.source.control)throw Error('Native generic permission controls changed');

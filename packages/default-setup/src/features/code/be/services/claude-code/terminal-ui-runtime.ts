@@ -889,7 +889,7 @@ function nativeDialog(n,kind){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- const supported=kind==='permission_powershell'?payload?.toolName==='PowerShell'&&typeof payload.input?.command==='string':kind==='permission_prompt'?typeof payload?.toolName==='string'&&payload.toolName.length>0&&payload.toolName.length<=256:kind==='permission_webfetch'?payload?.toolName==='WebFetch'&&typeof payload.hostname==='string':kind==='permission_skill'?payload?.toolName==='Skill'&&typeof payload.skill==='string':kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)||payload?.toolName==='NotebookEdit'&&payload.operationType==='write'&&typeof payload.input?.notebook_path==='string'&&['notebook-edit-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ const supported=kind==='permission_monitor'?payload?.toolName==='Monitor'&&typeof payload.intervalMs==='number':kind==='permission_powershell'?payload?.toolName==='PowerShell'&&typeof payload.input?.command==='string':kind==='permission_prompt'?typeof payload?.toolName==='string'&&payload.toolName.length>0&&payload.toolName.length<=256:kind==='permission_webfetch'?payload?.toolName==='WebFetch'&&typeof payload.hostname==='string':kind==='permission_skill'?payload?.toolName==='Skill'&&typeof payload.skill==='string':kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)||payload?.toolName==='NotebookEdit'&&payload.operationType==='write'&&typeof payload.input?.notebook_path==='string'&&['notebook-edit-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
  if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
   dialogRevisions.delete(kind);return {store,sessionId};
  }
@@ -1274,6 +1274,12 @@ async function control(request,abort){
    const shown=await nativePowerShellPresentation(n,shell);if(!shown)return {dialogs:[]};
    return {dialogs:[{id:shell.item.id,revision:shell.revision,sessionId:shell.sessionId,requestId:shell.payload.requestId,toolName:'PowerShell',presentation:shown.presentation,reason:shown.reason||undefined,input:shown.withheld?{}:shell.payload.input}]};
   }
+  const monitor=nativeDialog(n,'permission_monitor');
+  if(monitor.item){
+   const {source,...presentation}=await nativeGenericPermissionChoices(n,monitor);
+   if(!source||presentation.details.length===0)return {dialogs:[]};
+   return {dialogs:[{id:monitor.item.id,revision:monitor.revision,sessionId:monitor.sessionId,requestId:monitor.payload.requestId,toolName:'Monitor',presentation,input:{}}]};
+  }
   const d=nativeDialog(n,'permission_prompt');if(!d.item)return {dialogs:[]};
   const shown=await nativeGenericPermissionChoices(n,d),{source,...presentation}=shown;
   return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:d.payload.toolName,presentation,...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
@@ -1285,9 +1291,9 @@ async function control(request,abort){
    if(request.id!==shell.item.id||request.revision!==shell.revision||request.session_id!==shell.sessionId)throw Error('Native PowerShell permission changed or expired');
    await answerNativePowerShellPermission(n,shell,request,abort.signal);dialogRevisions.delete('permission_powershell');return {answered:true};
   }
-  const d=nativeDialog(n,'permission_prompt');
+  const monitor=nativeDialog(n,'permission_monitor'),d=monitor.item?monitor:nativeDialog(n,'permission_prompt');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native generic permission changed or expired');
-  await answerNativeGenericPermissionChoice(n,d,request);dialogRevisions.delete('permission_prompt');return {answered:true};
+  await answerNativeGenericPermissionChoice(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_tool_permission_dialogs'){
   let d=nativeDialog(n,'permission_webfetch');if(!d.item)d=nativeDialog(n,'permission_skill');if(!d.item)return {dialogs:[]};
@@ -1326,13 +1332,13 @@ async function control(request,abort){
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
   const store=binding.toolContext(abort).dialogStore,open=store.getState().open;
   if(open.length!==1)return {control:null,turn};
-  const item=open[0],routes={permission_ask_user_question:['question','apack_question_dialogs'],permission_bash:['bash','apack_bash_dialogs'],permission_file:['file','apack_file_dialogs'],permission_workflow:['workflow','apack_workflow_dialogs'],permission_prompt:['generic','apack_generic_tool_permission_dialogs'],permission_powershell:['generic','apack_generic_tool_permission_dialogs'],permission_webfetch:['tool','apack_tool_permission_dialogs'],permission_skill:['tool','apack_tool_permission_dialogs'],permission_enter_plan_mode:['plan','apack_plan_dialogs'],permission_exit_plan_mode_v2:['plan','apack_plan_dialogs']};
+  const item=open[0],routes={permission_ask_user_question:['question','apack_question_dialogs'],permission_bash:['bash','apack_bash_dialogs'],permission_file:['file','apack_file_dialogs'],permission_workflow:['workflow','apack_workflow_dialogs'],permission_prompt:['generic','apack_generic_tool_permission_dialogs'],permission_powershell:['generic','apack_generic_tool_permission_dialogs'],permission_monitor:['generic','apack_generic_tool_permission_dialogs'],permission_webfetch:['tool','apack_tool_permission_dialogs'],permission_skill:['tool','apack_tool_permission_dialogs'],permission_enter_plan_mode:['plan','apack_plan_dialogs'],permission_exit_plan_mode_v2:['plan','apack_plan_dialogs']};
   const route=Object.hasOwn(routes,item.kind)?routes[item.kind]:undefined;if(!route)return {control:null,turn};
   const result=await control({subtype:route[1]},abort),dialog=result.dialogs?.length===1?result.dialogs[0]:undefined;
   abort.signal.throwIfAborted();
   const fresh=nativeDialog(n,item.kind);
   if(n.runtime.lpe()!==activeTurn||activeTurn?.cancelled())throw Error('Native turn changed while reading its control');
-  if(!dialog&&item.kind==='permission_powershell'&&fresh.item===item)return {control:null,turn};
+  if(!dialog&&['permission_powershell','permission_monitor'].includes(item.kind)&&fresh.item===item)return {control:null,turn};
   if(!dialog||fresh.item!==item||fresh.revision!==dialog.revision||store.getState().open.length!==1||store.getState().open[0]!==item||dialog.sessionId!==String(n.questionOptions.q())||dialog.sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native control changed while reading');
   return {control:{kind:route[0],dialog},turn};
  }
