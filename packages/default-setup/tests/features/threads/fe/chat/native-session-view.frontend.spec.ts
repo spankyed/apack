@@ -261,10 +261,14 @@ it('keeps a goal proposal nonblocking, routes native decisions and returns focus
 })
 
 it('shows native autocompact sizes and routes step/keep/dismiss without writing settings', async () => {
-  const f = await fixture()
+  const composerIdle = ref(false)
+  const f = await fixture(undefined, () => composerIdle.value)
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
   const notice = { id: 'offer', revision: 'offer-revision', sessionId: 'session', kind: 'autocompact_offer' as const, title: 'Autocompact sooner?', paragraphs: ['Original summary tradeoff', 'Will summarize on your next message'], selectedTokens: 400000, canPrevious: false, canNext: true, choices: [{ value: 'compact_keep' as const, label: 'Keep auto' }, { value: 'compact_accept' as const, label: 'Autocompact at 400k tokens' }] }
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  expect(f.root.querySelector('[data-native-notice="autocompact_offer"]')).toBeNull()
+  composerIdle.value = true
+  await nextTick()
   const card = f.root.querySelector('[aria-label="Claude autocompact offer"]')!
   expect(card.textContent).toContain('Will summarize on your next message')
   expect(card.querySelector('[aria-label="Selected token limit"]')?.textContent).toContain('400,000')
@@ -274,7 +278,16 @@ it('shows native autocompact sizes and routes step/keep/dismiss without writing 
   expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('compact_next')
   buttons.find(button => button.textContent === 'Keep auto')!.click()
   expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('compact_keep')
-  card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  composerIdle.value = false
+  const beforeHiddenClick = actor.send.mock.calls.length
+  buttons.find(button => button.textContent === 'Keep auto')!.click()
+  expect(actor.send.mock.calls.length).toBe(beforeHiddenClick)
+  await nextTick()
+  expect(card.isConnected).toBe(false)
+  composerIdle.value = true
+  await nextTick()
+  const restored = f.root.querySelector('[data-native-notice="autocompact_offer"]')!
+  restored.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({ id: 'offer', revision: 'offer-revision', sessionId: 'session', decision: 'compact_dismiss' })
 })
 
@@ -353,7 +366,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'permission_browser',toolName:'mcp__claude-in-chrome__navigate',requestId:'browser-tool',choices:[{value:'browser_allow',label:'Allow'},{value:'browser_domain',label:'Allow domain for this session'},{value:'browser_deny',label:'Deny'}]},button:'Allow',decision:'browser_allow'},
 ]
 it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
- const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const f=await fixture(undefined, () => true);f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
  const card=f.root.querySelector('[data-native-notice]')!,stale=[...card.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent===button)!
  expect(stale).toBeTruthy()
@@ -372,7 +385,7 @@ it('does not transfer notice consent between owners with an unchanged replayed n
 })
 
 it('keeps keyboard focus when the same autocompact dialog publishes a fresh size revision',async()=>{
- const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='autocompact_offer')!.notice
+ const f=await fixture(undefined, () => true),notice=ownedNoticeCases.find(row=>row.notice.kind==='autocompact_offer')!.notice
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
  const larger=[...f.root.querySelectorAll<HTMLButtonElement>('[data-native-notice] button')].find(button=>button.textContent==='Larger')!;larger.focus();expect(document.activeElement).toBe(larger)
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'fresh-size'}}});await nextTick()

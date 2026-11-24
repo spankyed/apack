@@ -226,9 +226,13 @@ function answerLeftArrow(panel: NonNullable<typeof leftArrowPanel.value>, reques
   if (panel !== leftArrowPanel.value || !state || noticePending.value || panel.ownerId !== state.ownerId || request.panelId !== panel.id || request.revision !== panel.revision) return
   send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
 }
+function canPresentNotice(kind: (typeof noticePanels.value)[number]['kind']) {
+  const needsIdleComposer = kind === 'remote_callout' || kind === 'ultraplan_choice' || kind === 'autocompact_offer'
+  return !needsIdleComposer || props.canPresentIdleComposerNotice?.() === true
+}
 function answerNotice(panel: (typeof noticePanels.value)[number], decision: Exclude<ClaudeNativeNoticeResponse['decision'],'credit'>, selectedValues?: string[]) {
   const state = view.value?.state, notice = state?.notice
-  if (!state || !notice || active.value || noticePending.value || ((notice.kind === 'remote_callout' || notice.kind === 'ultraplan_choice') && props.canPresentIdleComposerNotice?.() !== true) || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
+  if (!state || !notice || active.value || noticePending.value || !canPresentNotice(notice.kind) || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
   send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
 }
 function selectAutoRule(panel: (typeof noticePanels.value)[number], value: string, checked: boolean) {
@@ -291,7 +295,7 @@ const noticePanels = computed(() => {
   if (active.value) return []
   const state = view.value?.state, notice = state?.notice
   if (!state || !notice || notice.kind === 'fable_overage_consent_prompt' || notice.kind === 'credit_consent_result' || notice.kind === 'newer_model_inline' || notice.kind === 'effort_preference_result' || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
-  if ((notice.kind === 'remote_callout' || notice.kind === 'ultraplan_choice') && props.canPresentIdleComposerNotice?.() !== true) return []
+  if (!canPresentNotice(notice.kind)) return []
   return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
 })
 const noticeElements = ref<HTMLElement[]>([])
