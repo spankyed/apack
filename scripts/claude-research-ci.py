@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from threading import Event, Thread
 from urllib.request import urlopen
 
 CASES = {
@@ -106,6 +107,13 @@ CASES = {
         'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
         'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
         'CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
+    },
+    'darwin-system-policy-live-app': {
+        'CLAUDE_RESEARCH_PROMPT_THEME': 'agent',
+        'CLAUDE_RESEARCH_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_DARWIN_SYSTEM_POLICY': '1',
+        'CLAUDE_RESEARCH_DARWIN_POLICY_LIVE': '1',
         'CLAUDE_RESEARCH_ISOLATE_TURN_COST': '1',
     },
     'agent-ime-cancel-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_AGENT_IME': '1', 'CLAUDE_RESEARCH_AGENT_IME_CANCEL': '1'},
@@ -208,7 +216,7 @@ def replay_directory(case, linux_container=False):
 
 
 @contextmanager
-def darwin_managed_preferences(run_root):
+def darwin_managed_preferences(run_root, control=None):
     """Stage only absent, root-owned default policy files in a disposable macOS runner."""
     if validate_host() != 'darwin-arm64' or os.geteuid() == 0:
         raise RuntimeError('Policy replay requires an unprivileged hosted desktop session')
@@ -262,7 +270,44 @@ def darwin_managed_preferences(run_root):
                 raise ValueError('Unexpected managed preference owner or mode: ' + str(target))
             if digest(target) != digest(stage):
                 raise ValueError('Managed preference changed during setup: ' + str(target))
-        yield
+        if control is None:
+            yield
+            return
+
+        control.mkdir(mode=0o700)
+        path = user_directory / domain
+        installed = path.lstat()
+        finished = Event()
+        errors = []
+
+        def handle_policy_requests():
+            try:
+                for sequence, mode in enumerate((0o000, 0o644), start=1):
+                    request = control / ('request-' + str(sequence))
+                    while not request.exists():
+                        if finished.wait(0.1):
+                            return
+                    details = path.lstat()
+                    if (details.st_dev, details.st_ino, details.st_uid) != (installed.st_dev, installed.st_ino, 0):
+                        raise ValueError('Managed preference no longer belongs to this replay')
+                    privileged('/bin/chmod', format(mode, '04o'), path)
+                    if stat.S_IMODE(path.lstat().st_mode) != mode:
+                        raise ValueError('Managed preference mode did not change')
+                    temp = control / 'writing-receipt.json'
+                    temp.write_text(json.dumps({'sequence': sequence, 'mode': mode, 'path': str(path)}))
+                    temp.rename(control / ('receipt-' + str(sequence) + '.json'))
+            except Exception as error:
+                errors.append(error)
+
+        worker = Thread(target=handle_policy_requests, name='claude-managed-preferences')
+        worker.start()
+        try:
+            yield
+        finally:
+            finished.set()
+            worker.join()
+        if errors:
+            raise errors[0]
 
 
 def run(case, linux_container=False):
@@ -347,9 +392,15 @@ def run(case, linux_container=False):
                 'python': {'path': '/usr/bin/python3', 'exit': python.returncode, 'stdout': python.stdout, 'stderr': python.stderr},
             }, indent=2) + '\n')
         (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target, 'suppliedNativeArchive': str(Path(supplied_archive).resolve()) if supplied_archive else None}, indent=2) + '\n')
-        policy = darwin_managed_preferences(root) if case == 'darwin-system-policy-app' else nullcontext()
+        if case.startswith('darwin-system-policy-'):
+            control = root / 'managed-policy-control' if case == 'darwin-system-policy-live-app' else None
+            if control is not None:
+                env['CLAUDE_RESEARCH_DARWIN_POLICY_CONTROL'] = str(control)
+            policy = darwin_managed_preferences(root, control)
+        else:
+            policy = nullcontext()
         with policy:
-            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
+            subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=270 if case == 'lsp-lifecycle-app' else 240 if case in ['file-image-lifetime-app', 'file-images-app', 'theme-preview-app', 'resume-upload-app', 'reset-upload-app', 'prompt-reconnect-app', 'system-policy-transition-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'darwin-system-policy-app', 'darwin-system-policy-live-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
 if __name__ == '__main__':

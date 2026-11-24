@@ -100,6 +100,60 @@ test('honors OS-managed policy before user settings in the everyday composer', a
     const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height})
     const name='native-system-policy-'+(unreadable?'unreadable-':'')+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
   }
+  let darwinTransitions: Array<{ mode: number; caption: string; diagnostic?: string; screenshots: string[] }> | undefined
+  if (process.env.CLAUDE_RESEARCH_DARWIN_POLICY_LIVE === '1') {
+    expect(darwinPolicy).toBe(true)
+    const control = process.env.CLAUDE_RESEARCH_DARWIN_POLICY_CONTROL!
+    expect(control).toMatch(/\/claude-research-darwin-system-policy-live-app\/managed-policy-control$/)
+    const initial = await context()
+    darwinTransitions = []
+    for (const [sequence, mode, caption] of [
+      [1, 0o000, 'Device policy fallback'],
+      [2, 0o644, 'Managed OS policy ready'],
+    ] as const) {
+      await writeFile(join(control, 'request-' + sequence), '', { flag: 'wx' })
+      await expect.poll(async () => {
+        try {
+          return JSON.parse(await readFile(join(control, 'receipt-' + sequence + '.json'), 'utf8'))
+        } catch (error: any) {
+          if (error.code !== 'ENOENT') throw error
+        }
+      }).toMatchObject({ sequence, mode })
+      await expect(status).toContainText(caption, { timeout: 15000 })
+      await expect(status).not.toContainText(mode === 0o000 ? 'Managed OS policy ready' : 'Device policy fallback')
+      let diagnostic: string | undefined
+      if (mode === 0o000) {
+        await expect(warning).toBeVisible({ timeout: 15000 })
+        await warning.locator('summary').click()
+        const details = warning.getByRole('region', { name: 'Settings warning details' })
+        await expect(details).toContainText('per-user managed preferences')
+        await expect(details).toContainText('EACCES')
+        diagnostic = await details.innerText()
+      } else {
+        await expect(warning).toBeHidden({ timeout: 15000 })
+      }
+      const screenshots: string[] = []
+      for (const [width, height] of [[1100,900], [680,600]]) {
+        await appPage.setViewportSize({ width, height })
+        await expect(composer).toHaveText(draft)
+        expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
+        await expect(status).toBeInViewport({ ratio: 1 })
+        await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
+        await expect(card.getByRole('button', { name: 'Session tools', exact: true })).toHaveCount(0)
+        const current = await context()
+        expect(current.sessionId).toBe(sessionId)
+        expect(current.turns).toBe(initial.turns)
+        expect(current.native.state.ownerId).toBe(initial.native.state.ownerId)
+        expect(current.native.state.nativePid).toBe(boundNativePid)
+        const png = await nativeWindow.evaluate(async (window, size) =>
+          (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
+        const name = 'native-darwin-policy-' + sequence + '-' + width + '.png'
+        await writeFile(testInfo.outputPath(name), Buffer.from(png, 'base64'))
+        screenshots.push(name)
+      }
+      darwinTransitions.push({ mode, caption, diagnostic, screenshots })
+    }
+  }
   let liveTransitions:any
   if(process.env.CLAUDE_RESEARCH_SYSTEM_POLICY_TRANSITIONS==='1'){
     expect(unreadable).toBe(false)
@@ -171,7 +225,7 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   expect(errors).toEqual([])
   if(unreadable){await expect(warning).toBeVisible();await expect(warning).toContainText('EACCES')}
   await writeFile(join(workspace!, 'native-system-policy-app-proof.json'), JSON.stringify({
-    sessionId, boundNativePid, captures, liveTransitions, draftRetained: true,
+    sessionId, boundNativePid, captures, liveTransitions, darwinTransitions, draftRetained: true,
     privateControlsSuppressed: !unreadable, userStatusOverridden: !unreadable,
     managedPreferencePriority: darwinPolicy, nativeManagedWarning: unreadable,
     originalSettingsConsent: settingsConsent, successfulContinuation: unreadable,

@@ -70,6 +70,8 @@ jobs:
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-initial.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-capability-onboarding.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-system-policy-install.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-darwin-policy-poll.jsonl
+            ${{ runner.temp }}/claude-research-*/managed-policy-control/receipt-*.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/helper-bun-options.txt
             ${{ runner.temp }}/claude-research-*/workspaces/**/prefix-calls.jsonl
             ${{ runner.temp }}/claude-research-*/workspaces/**/prefix-exits.jsonl
