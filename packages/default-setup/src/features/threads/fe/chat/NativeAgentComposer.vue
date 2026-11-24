@@ -3,7 +3,7 @@
     <div class="flex min-h-0 flex-1 flex-col overflow-clip" :class="{ 'native-agent-body--background-tools': audience === 'background' && toolsExpanded }">
     <StatusLine ref="statusLineRef" :class="{ 'shrink-0': audience === 'background' }" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <div class="native-agent-draft-scroll min-h-10 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
-    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
+    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor composer-list-markers min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <p v-if="(problem || nativeProblem) && !agentDraftTooLong" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     </div>
     <NativePromptCompletions :anchor-el="composerRef" :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
@@ -25,6 +25,7 @@ import type { ClaudeAgentComposerSubmitResult } from './native-submit.ts'
 import { trackNativeSubmittedDraft, waitForSubmittedDraftComposition } from './native-submitted-draft.ts'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Settings2 } from 'lucide-vue-next'
+import './composer-list-markers.css'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
 import NativePromptCompletions from './NativePromptCompletions.vue'
