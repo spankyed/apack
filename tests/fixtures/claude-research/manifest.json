@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "73edc4522a66faa027f074e4c541c2b93d1d1253",
+  "researchCommit": "5c18e7ee0996bba4689858a53fcc6449f70e2b72",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -43,7 +43,7 @@
     "src/analysis/native-help-contracts.mjs": "df59564c2e6fc697fd279a756d2ce23566c208aff399449190f16916cb28652a",
     "src/analysis/native-platform-map.mjs": "5314bcc93beab93d815da1589d0e0a4d1b7957408fecdbbeba12c79cec607e4b",
     "src/analysis/native-return-dialogs.mjs": "96d6241a51a3cd7ee27c94ec3d285c5eb99ae6761fb929e5a121879c1c7ea246",
-    "src/analysis/native-sandbox-consent.mjs": "8849e6defcec8edbe0c6f8eac646305703a786897cfea3cbbea6b64561534aed",
+    "src/analysis/native-sandbox-consent.mjs": "a82ae7e251885eea1661d4287409f4fa7361b6ade07418d79e4e185ccdfab738",
     "src/analysis/nested-settings-schema.mjs": "18b7325340e055a4ff21818199b0ecf69035c8dd7553526818fbef5e17f63ea0",
     "src/analysis/protocol-schemas.mjs": "024b56f98bf53d4fa99f85cac31af0f8fddeab91410b920727f0cb94126dc6b4",
     "src/analysis/provenance.mjs": "ce01d2cd167a9421828457caab0505453f8e5a8d9a07421db28b7d0784deb046",
@@ -117,7 +117,7 @@
     "src/integration/apack-fresh-native-background-drive.mjs": "9501734a08ea83563414aca9b159e6e2aac6732993dfec6963f2ebd1f7d039f4",
     "src/integration/apack-fresh-native-background-navigation-drive.mjs": "07ef4fa50efad552721727f0e67563675b409596af6ebe7317a6817ed15c775a",
     "src/integration/apack-fresh-native-clipboard-drive.mjs": "6808b28f1dd49823cad8fe3e438a53f67ef26f9646ac294f4f498137c287311f",
-    "src/integration/apack-fresh-native-command-drive.mjs": "d30faab3c03ea08640055536b890760c7041b74b762764d4a5527a8ce1b03ff2",
+    "src/integration/apack-fresh-native-command-drive.mjs": "778a6b381c34495d6a2aa3556f06cf16d2890a81d0d5c0a1849e7f721d003f8a",
     "src/integration/apack-fresh-native-drive.mjs": "7d40a8a26b580830ea11a9818c39e8a33ac10bd23a20af9018404a069d460dbf",
     "src/integration/apack-fresh-native-glyph-drive.mjs": "b846fad2135b27ae8b9fa10fb682b3b0be7518401fd5e809b74d000b1d8dadfd",
     "src/integration/apack-fresh-native-navigation-drive.mjs": "256c68021052e20f23ed98cf8c08370ba221e6a5b27252b99dba50832d548552",
@@ -190,7 +190,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "b76f48f8cb0e4f5dc721723fba39395d0db59a030675adcd25ff98d7b6441cf5",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "c5a86ff55c4bbd1a7e7f2fba80a50a2851326397db225c4b5f1587595d8d8b2c",
+    "src/integration/apack-terminal-owner-app.mjs": "12bd66925ab1724bf1fcb2b63721aa53f7f0135373fbf0fd9fcbbceda0587687",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -281,7 +281,7 @@
     "src/integration/native-main-document-paste.mjs": "bd6890a462acd43ce026cb6d763f8e89bd03576f3565d514ba04b4f843715f33",
     "src/integration/native-managed-rule-journey.mjs": "4fd50374e0c4165dfd42993080960a5fa54b702a63ac6c5544df7a90a6cb5b92",
     "src/integration/native-managed-scan-journey.mjs": "7f4d11e8ffdafa25acfc2603ce554bf993767144c9fa086cc906f89325c7e1ff",
-    "src/integration/native-mcp-task-journey.mjs": "63c8dcc985544926d4a748586f5e4ab8364113032e18c50a19d1e05d92b62959",
+    "src/integration/native-mcp-task-journey.mjs": "54dcd0445a7db57f4b8fbfed8b017c21062059a34dfc44b1626dd0f67b4e68ad",
     "src/integration/native-mid-session-credit-admission.mjs": "7193db8a7ae0703945d5283394254f13d44f3d79434a65d98302aab367dcd7a0",
     "src/integration/native-os-policy-discovery.mjs": "70766dd350e4041f020a069e221068758e209a4fd0c8998c48faa81f24eaba1a",
     "src/integration/native-owned-launcher-audit.mjs": "2a8c92959ceb1226a7e2f25dcf0a37b6865f105384997d143be00a38948977d1",
@@ -338,7 +338,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "046eb7f18dbfeea4ce3b0d572a5c3de679075133d30d4e3776c45e89b651bc2d",
+    "src/integration/run-apack-controls.mjs": "8d0437aa872f3744c8584297df0f4a1f22f6113fe40051821bcbd54ec00d7c1c",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/safe-theme-profile.mjs": "4ffeef56d1f6023bf7ef47b88698b5efae8d8952d1149a1858b6330cde303be7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
@@ -490,7 +490,7 @@
     "src/protocol/native-mcp-form-app-fixture.mjs": "77f2a5127575771404d2f7dba5c775eb2e3fc7b99d0b1395ed1945925a6bb938",
     "src/protocol/native-mcp-pdf-scenario.mjs": "ee61c26316578643cd21d0b4a07ec0904564483bb27b44a1aeb7488c46d6c9d6",
     "src/protocol/native-mcp-renderer-inspector.mjs": "3f49da84d9b2861412f989b1b0a14c28a2aabbca1ace1af507dc6d6a34a49c29",
-    "src/protocol/native-mcp-url-app-fixture.mjs": "fe08e89c73578735d7e481edc97573877e22a61e9532b1a1f0abb13ea01a4651",
+    "src/protocol/native-mcp-url-app-fixture.mjs": "77fef030201f786b6eb195889ae00fef610bff6ea692bd8df3441139229b8158",
     "src/protocol/native-model-panel-fixture.mjs": "ec1a191ff5daf0a13b5266a5620f94a89b6c2cc8960bddcfd8ad61824f495635",
     "src/protocol/native-module-access.mjs": "1550dd126a3dd1b7130103729aa48d21ea3dc5efcda34d9480b717c98508bc5b",
     "src/protocol/native-monitor-admission-probe.mjs": "26d4e5a1df2fd0e8b6f75e325e401cf8f002a5865cc2e12c1215367cc2117f75",
@@ -573,7 +573,7 @@
     "src/protocol/owned-managed-mcp-task-http-server.mjs": "0a6e21249484cf16dcca48b45ced6f10e2db7d66f773d07a62ff3c7a223cd25d",
     "src/protocol/owned-mcp-channel-server.mjs": "296c0641b8a84b8b12eac76649c18fb141380decfcfad15a5d8dd020abdb2338",
     "src/protocol/owned-mcp-oauth-server.mjs": "5f1daabee758df7f11d040dab3fb142e9a94ca1ec78a17a86e99fcb03cb1d4a3",
-    "src/protocol/owned-mcp-task-server.mjs": "da16df41a8c7cf3476677ff9aa190836833f5c6faae4377cdac7c3914faf016b",
+    "src/protocol/owned-mcp-task-server.mjs": "b2d4e73ee06ccb62800b983d5d444ce03f0825f4380b480d99d5dbb7cf316662",
     "src/protocol/owned-mcp-url-browser.mjs": "d10d411a45706d50381c2a108fe3ce751f1700ad1e3b2f7aad38925fc8af2435",
     "src/protocol/owned-playwright-window-focus.mjs": "972cd44bb9c40ca4550b8a0527d30ca3009489af5139b34ebb93789f5f023f7a",
     "src/protocol/owned-turn-control-observer.mjs": "8d86ffc4817c2e8fc1b66db7d6a46dd72cd4bed1f426f8a8065c2d469b7c4814",
@@ -642,5 +642,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "f7bd16e9b4a3eac96e463e3258ae47b8088076a90773fe3cc00e437b9da89f38"
+  "archiveSha256": "215682acb64b487b6c3ec8618209fcf6855fb331e9888708e62ebb98ec8b6dec"
 }

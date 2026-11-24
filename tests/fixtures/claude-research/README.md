@@ -156,6 +156,13 @@ npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh pdf-pages
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh system-policy-app
 ```
 
+The retry-browser profile completes the owned browser page while Claude is still working.
+Pause must abort the original turn without retrying the tool or closing the browser. The replay
+checks exact model input, the retained draft and selection, and same-session recovery. If the
+locked terminal release lacks its Linux ARM64 platform package, pass the read-only, verified broker
+path inside the container as `APACK_TERMINAL_BINARY`. Record the release and binary hash with the
+replay evidence.
+
 The Linux runner already prepares published packages and the platform-specific default pack.
 The fixture launcher installs missing display prerequisites and uses the build-chain cache to refresh
 only the app runtime. Research replay uses one locked directory at `/work/.claude-research/current`.
