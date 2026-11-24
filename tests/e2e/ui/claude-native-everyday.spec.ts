@@ -47,38 +47,47 @@ test('completes an everyday native review across Agent, approval, question and i
   await openChannels();await channelDialog.getByRole('textbox').fill('');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click();await expect.poll(selectedChannels).toEqual([])
   await expect(card.locator('[contenteditable="true"]')).toHaveText('Help me review the release notes and checklist.');await appPage.setViewportSize({width:1100,height:900})
   }
-  const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
+  const { threadId, sessionId } = await context(); expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   const terminalRows = section.locator('[data-terminal-text]')
+  const main = section.getByTestId('native-main-status')
   const readTerminalScreen = () => terminalRows.innerText({ timeout: 500 }).catch(() => '')
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
-  async function writeStartupEvidence(native: Awaited<ReturnType<typeof context>>['native'], output: string) {
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({
-      screen: recognizeOnboardingPrompt(output, workspace),
-      theme, security, navigated, trusted, trustAttempts, output,
-      status: native?.state?.status,
-      nativePid: native?.state?.nativePid,
-      mainStatus: native?.state?.mainStatus,
-    }))
+  async function terminalStates() {
+    return appPage.evaluate(threadId => {
+      const { nativeTerminalViews } = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+      const views = nativeTerminalViews as Record<string, {
+        threadId: string
+        state?: { status: string; nativePid?: number; mainStatus?: string }
+      }>
+      return Object.entries(views).filter(([, view]) => view.threadId === threadId).map(([mountId, { state }]) => ({
+        mountId, status: state?.status, nativePid: state?.nativePid, mainStatus: state?.mainStatus,
+      }))
+    }, threadId)
   }
   await expect.poll(async () => {
-    const current = await context(), native = current.native
     const text = await readTerminalScreen()
-    await writeStartupEvidence(native, text)
-    if (native?.state?.status === 'live') return restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Release review') === true
     const screen = recognizeOnboardingPrompt(text, workspace)
+    const [caption = ''] = await main.allTextContents()
+    const views = await terminalStates()
+    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({
+      screen, theme, security, navigated, trusted, trustAttempts, output: text, caption, views,
+    }))
+    const ready = restriction
+      ? !caption && views.some(view => view.status === 'live')
+      : caption.includes('Release review') && caption.includes('Workspace notes and checklist') && await main.isVisible()
+    if (ready) return true
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
-    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Release review'))
+    return false
   }, { timeout: 25000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
-  const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
   else {
     await expect(main).toContainText('Release review')
