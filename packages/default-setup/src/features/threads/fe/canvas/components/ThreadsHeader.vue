@@ -98,10 +98,13 @@
         />
         <button
           v-if="searchKeyword"
-          @click="searchKeyword = ''"
-          class="absolute -translate-y-1/2 right-2.5 top-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
+          type="button"
+          aria-label="Clear search"
+          title="Clear search"
+          @click="clearSearch"
+          class="absolute right-0.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-neutral-400 hover:text-neutral-200"
         >
-          <X :size="14" />
+          <X :size="14" aria-hidden="true" />
         </button>
       </div>
 
