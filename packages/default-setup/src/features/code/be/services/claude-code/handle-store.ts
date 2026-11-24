@@ -240,8 +240,9 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
       if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
       const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
       if (resume && (resume.sessionId !== previous.owner.sessionId || resume.cwd !== (previous.owner.sessionCwd ?? prior.cwd))) throw new Error('Staged native launch no longer matches the active session')
+      // Pass explicit model choices only. Claude resolves the current default during resume.
       // Print-only flags (notably worktree) do not belong to a resumed native launch.
-      launch = { ...claudeProfileOptions(prior as {profile?: import('../../../common/native-profile.ts').ClaudeNativeProfile}), ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
+      launch = { ...claudeProfileOptions(prior as {profile?: import('../../../common/native-profile.ts').ClaudeNativeProfile}), ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: previous.owner.modelSelection ?? prior.model, permissionMode,
         allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: resume?.addDir === undefined ? prior.addDir : [...new Set([...(prior.addDir ?? []), ...resume.addDir])], pluginDir: prior.pluginDir, channels: resume?.channels === undefined ? prior.channels : resume.channels }
     } else {
       const intent = { ...resume!, ...overrides }

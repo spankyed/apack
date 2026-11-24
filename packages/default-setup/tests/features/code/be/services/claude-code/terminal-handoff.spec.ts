@@ -5,10 +5,10 @@ import type { QueryHandle } from '#features/code/be/services/claude-code/query.t
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mocks = { prepare: vi.fn() }
 const session = '11111111-1111-4111-8111-111111111111'
-async function printOwner(configDir?: string) {
+async function printOwner(configDir?: string, model: string | null = 'native-model') {
   const events = new PassThrough({ objectMode: true })
   const handle = { events, close: vi.fn(async () => { events.end() }), kill: vi.fn(() => events.end()), getPermissionMode: vi.fn(async () => 'plan'), getSettings: vi.fn(async () => ({ effective: {}, sources: [] })) } as unknown as QueryHandle
-  const owner = await openConversation('thread', JSON.stringify({ profile:configDir?{configDir}:undefined, cwd: '/fixture', model: 'native-model', worktree: false }), async () => handle, async () => {})
+  const owner = await openConversation('thread', JSON.stringify({ profile:configDir?{configDir}:undefined, cwd: '/fixture', model: model ?? undefined, worktree: false }), async () => handle, async () => {})
   events.write({ type: 'system', subtype: 'init', session_id: session, cwd: '/native-cwd' })
   await vi.waitFor(() => expect(owner.sessionId).toBe(session))
   return { handle, owner }
@@ -32,6 +32,13 @@ it('prepares before close, starts after print exit, and refuses a second owner',
   expect(first.handle.kill).toHaveBeenCalledOnce()
   clearHandle('thread'); expect(getNativeTerminal('thread')).toBe(native)
   runThreadTeardown('thread'); expect(native.kill).toHaveBeenCalledOnce(); expect(getNativeTerminal('thread')).toBeUndefined()
+})
+it.each([null, 'configured-model'])('resumes with only an explicit launch model (%s)', async model => {
+  const first = await printOwner(undefined, model), native = terminal()
+  vi.mocked(first.handle.getSettings).mockResolvedValueOnce({ effective: {}, sources: [], applied: { model: 'effective-print-model' } })
+  mocks.prepare.mockResolvedValueOnce({ start: async () => native, dispose: async () => {} })
+  await openNativeTerminal('thread', {}, mocks.prepare)
+  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({ model: model ?? undefined }), undefined, 'thread')
 })
 it('keeps the print process available when preparation fails', async () => {
   const first = await printOwner()
