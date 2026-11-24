@@ -105,7 +105,6 @@ const PACKAGE_JSON_TEMPLATE = (name: string) => JSON.stringify({
   },
   dependencies: {
     '@apackdev/sdk': SDK_RANGE(),
-    zod: '^4.6.7',
   },
   devDependencies: {
     // Pinned per project: a global, Homebrew or app-bundled `apack` hands off to this one
@@ -311,7 +310,7 @@ export async function init(args: string[]) {
   console.log(`\nCreated pack "${name}" at ./${name}/`);
   console.log(`\nImport types in your content code:`);
   console.log(`  import type { ActionMeta } from '@apackdev/sdk/build';`);
-  console.log(`  import type { Services, Z } from '#generated/services.ts';`);
+  console.log(`  import type { Services } from '#generated/services.ts';`);
   console.log(`\nNext steps:`);
   console.log(`  cd ${name}`);
   const upgrade = npmUpgradeStep();

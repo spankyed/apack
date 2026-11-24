@@ -3,7 +3,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { EntityId, Services, Z } from '#generated/services.ts';
+import type { EntityId, Services } from '#generated/services.ts';
 import { getCodexState, persistCodexState, updateChatState } from './_helpers/thread-context.ts';
 
 export const meta: ActionMeta = {
@@ -37,8 +37,6 @@ const handlers: Record<string, Handler> = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { command, text, threadId } = params;
   const name = (command as string).replace(/^cdx-/, '');

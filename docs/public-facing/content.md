@@ -53,7 +53,8 @@ Creates `src/content/actions/analysis/analyze-text.ts`.
 
 ```typescript
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
+import type { z as Zod } from 'zod';
 
 export const meta: ActionMeta = {
   label: 'Analyze Text',
@@ -72,7 +73,7 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  z: Z,
+  z: typeof Zod,
   flowId: string,
 ) {
   const { text } = params;
@@ -184,7 +185,7 @@ The function's return value is the step's result (`$.lastStep.result`).
 
 The build bundles each action file with esbuild and extracts its `meta` and the body of `action`:
 
-- **Imports**: a relative import is bundled into the action. The only package import allowed is `@apackdev/sdk/actions` (`formatProviderError(error, provider, alternatives?)`, `buildTranscript(messages, { maxMessages?, maxChars? })`); any other package, `node:` modules included, fails the build. Type-only imports (`ActionMeta`, `Services`, `Z`) are erased and always allowed.
+- **Imports**: a relative import is bundled into the action. The only package import allowed is `@apackdev/sdk/actions` (`formatProviderError(error, provider, alternatives?)`, `buildTranscript(messages, { maxMessages?, maxChars? })`); any other package, `node:` modules included, fails the build. Type-only imports (`ActionMeta`, `Services`, or `import type { z as Zod } from 'zod'`) are erased and always allowed.
 - **Node globals** (`require`, `process`, `__dirname`, `__filename`, `Buffer`, `global`) in the bundled code only produce a build warning, but the action runs in the app's backend without them.
 - **`meta` is evaluated on its own**: write it as an object literal that references no imports or other variables.
 - **Top-level helpers** (functions and constants next to `action`) are inlined into the action. A helper function whose only uses are direct calls can declare a `services` parameter: the build removes it and the helper uses the action's `services`.

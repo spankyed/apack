@@ -7,7 +7,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 import {
   getClaudeState,
   persistClaudeState,
@@ -33,8 +33,6 @@ const MAX_CONDITION_LENGTH = 4000;
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { text, threadId } = params;
   const args = text?.trim() ? text.trim() : '';
