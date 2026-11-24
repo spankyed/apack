@@ -9,7 +9,13 @@ function fixture() {
 const user = (uuid: string, content: unknown = 'Admitted native text') => ({ uuid, type: 'user', origin: { kind: 'human' }, message: { role: 'user', content } })
 it('retains the native UUID, admitted text and origin without an append hook', async () => {
   const read = fixture()
-  expect(await read([user('existing'), user('original-uuid')])).toEqual({ accepted: { uuid: 'original-uuid', door: 'prompt', origin: { kind: 'human' }, message: { type: 'user', content: [{ type: 'text', text: 'Admitted native text' }] } } })
+  expect(await read([user('existing'), user('original-uuid')])).toEqual({
+    accepted: {
+      uuid: 'original-uuid', door: 'prompt', origin: { kind: 'human' },
+      message: { type: 'user', content: [{ type: 'text', text: 'Admitted native text' }] },
+    },
+    chromeInvocation: false,
+  })
   expect(await read([user('original-uuid')], 'stale-submission')).toEqual({})
 })
 it('never turns metadata, virtual messages or tool results into a human submission receipt', async () => {
