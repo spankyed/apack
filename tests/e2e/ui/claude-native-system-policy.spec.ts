@@ -157,8 +157,13 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await expect(composer).toHaveText(draft)
   const continuation = 'Continue this saved policy review.'
-  await replaceDraft(continuation)
-  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  const send = card.getByRole('button', { name: 'Send', exact: true })
+  await send.focus()
+  await expect(send).toBeFocused()
+  // Selecting the retained draft before focus must survive the composer focus handler.
+  await composer.fill(continuation)
+  await expect(composer).toHaveText(continuation)
+  await send.click()
   await expect.poll(async () => (await context()).turns).toBe(3)
   expect((await context()).sessionId).toBe(sessionId)
   const nativeResumeHumanUuid = await originalInput(continuation)

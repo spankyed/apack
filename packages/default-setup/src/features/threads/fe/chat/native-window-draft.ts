@@ -73,6 +73,9 @@ export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void
   const focus = () => {
     const fromPointer = pointerFocus; pointerFocus = false
     if (fromPointer || editor.isDestroyed || editor.view.composing) return
+    const selection = dom.ownerDocument.getSelection()
+    // A caller can select text before focusing, for example when replacing the draft.
+    if (selection && !selection.isCollapsed && dom.contains(selection.anchorNode) && dom.contains(selection.focusNode)) return
     const retained = editor.state
     // Chromium may install a default DOM caret after programmatic focus on a previously hidden input.
     queueMicrotask(() => {

@@ -210,6 +210,27 @@ it('retains parent selection and typing marks after programmatic focus installs 
  expect(editor.state.selection.toJSON()).toEqual(selection);expect(editor.state.storedMarks?.map(mark=>mark.type.name)).toEqual(['bold'])
  stop();editor.view.dom.remove()
 })
+it('keeps an explicit parent draft range when focus arrives before replacement', async () => {
+  const editor = create('retained parent draft')
+  const dom = editor.view.dom
+  document.body.append(dom)
+  dom.tabIndex = 0
+  editor.commands.setTextSelection(8)
+  const stop = bindClaudeWindowDraft(editor, 'focus-parent-explicit-range')
+  const selection = document.getSelection()!
+  const range = document.createRange()
+  range.selectNodeContents(dom)
+  selection.removeAllRanges()
+  selection.addRange(range)
+  dom.addEventListener('focus', () => editor.commands.setTextSelection({ from: 1, to: 22 }), { once: true })
+  dom.focus()
+  await Promise.resolve()
+  expect(editor.state.selection.from).toBe(1)
+  expect(editor.state.selection.to).toBe(22)
+  stop()
+  dom.remove()
+})
+
 it('leaves pointer-selected parent positions and disposed focus work untouched',async()=>{
  const editor=create('retained parent draft');document.body.append(editor.view.dom);editor.view.dom.tabIndex=0
  editor.commands.setTextSelection(8);const stop=bindClaudeWindowDraft(editor,'focus-parent-pointer')
