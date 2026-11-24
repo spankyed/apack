@@ -679,7 +679,7 @@ export async function createClaudeTerminalBridge(options: {
         if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(new Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
         if (closed || !ready || !text.trim() && !images.length) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
         const queue = busy && !!activeTurnId && !endingTurnId && nativeView?.kind === 'main'
-          && !/^[!\/]/.test(text.trimStart())
+          && !/^[!/]/.test(text.trimStart())
         if (pending || busy && !queue || nativeEditor?.active) return Promise.reject(new Error(CLAUDE_BUSY_DRAFT_MESSAGE))
         if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {

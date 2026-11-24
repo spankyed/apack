@@ -37,7 +37,7 @@ async function executableIdentity(executable: string) {
   return [...fileIdentity(file), String(file.ctimeNs)] as [string, string, string]
 }
 
-async function readProcessStart(pid: string, signal: AbortSignal) {
+async function readProcessStart(pid: string, signal?: AbortSignal) {
   try {
     const source = await readFile(`/proc/${pid}/stat`, { encoding: 'utf8', signal })
     const fields = source.slice(source.lastIndexOf(') ') + 2).split(' ')
@@ -176,15 +176,26 @@ function updateCheckpoint(scope: RecoveryScope, update: (records: ClaudeRecovery
   })
 }
 
-export async function saveClaudeTeammateCheckpoint(scope: RecoveryScope, panes: ClaudeRecoveryPane[], env: NodeJS.ProcessEnv) {
-  if (process.platform !== 'linux' || !panes.length) return
+async function isSameProcess([pid, savedStart]: ClaudeRecoveryPane['worker']) {
+  try {
+    return await readProcessStart(pid) === savedStart
+  } catch {
+    // A failed read cannot establish that the process ended.
+    return true
+  }
+}
+
+export async function saveClaudeTeammateCheckpoint(scope: RecoveryScope, panes: ClaudeRecoveryPane[]) {
+  const first = panes[0]
+  if (process.platform !== 'linux' || !first) return
   await updateCheckpoint(scope, async previous => {
-    const signal = AbortSignal.timeout(10_000)
     const current = new Map(panes.map(pane => [pane.taskId, pane]))
     const kept: ClaudeRecoveryPane[] = []
     for (const pane of previous) {
-      if (signal.aborted) break
-      if (!current.has(pane.taskId) && await createClaudeTeammateRecovery(pane, env).canReconnect(signal)) kept.push(pane)
+      if (current.has(pane.taskId) || pane.bootId !== first.bootId) continue
+      // The writer or active window can change before recovery. Only a retired process invalidates its saved identity here.
+      const [serverAlive, workerAlive] = await Promise.all([isSameProcess(pane.server), isSameProcess(pane.worker)])
+      if (serverAlive && workerAlive) kept.push(pane)
     }
     return [...kept, ...current.values()].slice(-maxPanes)
   })

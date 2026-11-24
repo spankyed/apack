@@ -626,7 +626,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (teammateCheckpoint) {
           teammateCheckpointSessions.add(sessionId)
           const panes = [...verifiedPanes.values()].filter(pane => pane.sessionId === sessionId)
-          await saveClaudeTeammateCheckpoint(teammateCheckpoint(sessionId), panes, env)
+          await saveClaudeTeammateCheckpoint(teammateCheckpoint(sessionId), panes)
             .catch(error => logger.warn('Claude teammate checkpoint could not be saved', { error: error instanceof Error ? error.message : String(error) }))
         }
         const recovery = createClaudeTeammateRecovery(verified, env)
