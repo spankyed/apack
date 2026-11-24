@@ -14,5 +14,10 @@ const props = defineProps<{ node: Extract<ClaudeUiNode, { kind: 'svg' }> }>()
 const drawing = computed(() => prepareClaudeSvg(props.node.source))
 const image = computed(() => drawing.value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawing.value.source)}` : undefined)
 const frame = computed(() => drawing.value ? `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"><style>html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}svg{display:block}</style>${drawing.value.frameSource}` : undefined)
-const dimensions = computed(() => ({ width: props.node.width === undefined ? undefined : `${props.node.width}px`, height: props.node.height === undefined ? 'auto' : `${props.node.height}px`, aspectRatio: drawing.value?.ratio?.toString() }))
+const dimensions = computed(() => ({
+  width: props.node.width === undefined ? undefined : `${props.node.width}px`,
+  height: props.node.height === undefined ? 'auto' : `${props.node.height}px`,
+  // The viewBox describes drawing coordinates. Prefer the decoded image's intrinsic ratio.
+  aspectRatio: drawing.value?.ratio === undefined ? undefined : `auto ${drawing.value.ratio}`,
+}))
 </script>

@@ -380,7 +380,7 @@ it('keeps static SVG in an image and interactive SVG in an opaque scriptless fra
   expect(sizingImage.getAttribute('aria-hidden')).toBe('true')
   expect(sizingImage.alt).toBe('')
   expect(sizingImage.style.width).toBe('100px')
-  expect(sizingImage.style.aspectRatio).toBe('2')
+  expect(sizingImage.style.aspectRatio).toBe('auto 2')
   expect(frame.style.width).toBe('')
   expect(frame.srcdoc).toContain('width: 100% !important')
   expect(frame.srcdoc).toContain('height: 100% !important')
