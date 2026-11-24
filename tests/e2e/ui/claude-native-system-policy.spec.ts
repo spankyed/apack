@@ -78,7 +78,7 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   const status = card.getByTestId('composer-native-status')
   if (expectedCaption) await expect(status).toContainText(expectedCaption)
   const warning = appPage.locator('[data-native-managed-settings]')
-  const warningDetails = warning.getByRole('region', { name: 'Settings warning details' })
+  const warningDetails = warning.getByRole('region', { name: 'Settings warning details', includeHidden: true })
   if (unreadable) {
     await expect(warning).toBeVisible({ timeout: 15000 })
     await warning.locator('summary').click()
@@ -239,14 +239,19 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   const nativeResumeHumanUuid = await originalInput(continuation)
   expect(nativeResumeHumanUuid).not.toBe(nativeHumanUuid)
   expect(errors).toEqual([])
-  if(unreadable){await expect(warning).toBeVisible();await expect(warning).toContainText('EACCES')}
+  let warningText: string | undefined
+  if (unreadable) {
+    await expect(warning).toBeVisible()
+    await expect(warningDetails).toContainText('EACCES')
+    warningText = (await warningDetails.textContent())?.trim()
+  }
   await writeFile(join(workspace!, 'native-system-policy-app-proof.json'), JSON.stringify({
     sessionId, boundNativePid, captures, liveTransitions, darwinTransitions, draftRetained: true,
     privateControlsSuppressed: !!expectedCaption, userStatusOverridden: !!expectedCaption,
     managedPreferencePriority: darwinPolicy && !unreadable, nativeManagedWarning: unreadable,
     darwinDeviceFallback: darwinUnreadable, sawSettingsError,
     originalSettingsConsent: settingsConsent, successfulContinuation: unreadable,
-    warningText: unreadable ? await warning.innerText() : undefined,
+    warningText,
     nativeHumanUuid, sent, nativeResumeHumanUuid, continuation,
   }))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSystemPolicy:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
