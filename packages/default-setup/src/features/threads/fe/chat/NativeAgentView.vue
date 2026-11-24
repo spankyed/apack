@@ -16,7 +16,7 @@
     <NativeSettingsPanel v-show="!panelDecisionPending" v-else-if="panelActive && state?.agentInput?.panel && ['config','model','status','usage','theme'].includes(state.agentInput.panel.commandName)" :key="state.agentInput.panel.id" :subject="state.agentInput.panel.commandName === 'model' ? 'model' : state.agentInput.panel.commandName === 'theme' ? 'theme' : 'settings'" :owner-label="`Agent · ${displayName}`" :state="state.agentInput.settings" @operate="settings" @close="panelInput()" />
     <NativeCommandPanel v-show="!panelDecisionPending" v-else-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${displayName}`" :owner-id="selectedOwner.ownerId" :terminal-session="terminal?.state?.terminalSession" :input-blocked="terminal?.state?.inputBlocked" @input="panelInput" @close="panelInput()" @resize="panelResize" />
     <div v-show="!panelActive && !outputActive && !panelDecisionPending" class="native-agent-messages flex min-h-[6.5rem] flex-1">
-    <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full min-w-0 flex-1 overflow-y-auto overscroll-contain py-3 pl-4 pr-1" role="region" tabindex="0" aria-label="Agent transcript">
+    <div ref="transcriptViewport" style="overflow-anchor: none" class="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain py-3 pl-4 pr-1" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
       <article v-for="{ message, teammate } in transcript" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-5 min-w-0 last:mb-0">
@@ -313,8 +313,8 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
   .native-agent-view > header > div:first-child { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .native-agent-view > header > div:first-child > p { margin-top: 0; }
   .native-agent-view > details { margin-bottom: 0; }
-  /* In a short split, the transcript scrolls in the space left by the composer. */
-  .native-agent-messages { min-height: 0; }
+  /* Leave room for the speaker label and one complete message line in a short split. */
+  .native-agent-messages { min-height: clamp(0px, calc(100cqh - 10rem), 4rem); }
   .native-agent-details[open] ~ .native-agent-messages {
     min-height: clamp(0px, calc(100cqh - 13rem), 6.5rem);
   }
