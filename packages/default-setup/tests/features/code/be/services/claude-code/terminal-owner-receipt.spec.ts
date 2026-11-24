@@ -37,11 +37,42 @@ it('refuses stale, ambiguous, unrelated or path-like warnings as command outcome
  expect(await read([warning('Unknown command: /tmp/file')],'submission','/tmp/file')).toEqual({})
  expect(await read([warning('Unknown command: /missing-review')],'stale-submission',text)).toEqual({})
 })
-it('reports only original refusals on an existing pending heartbeat, leaving ordinary acceptance alone',async()=>{
- const start=claudeTerminalUiRuntime.indexOf('async function reportPendingPromptRefusal('),end=claudeTerminalUiRuntime.indexOf('const ownerTimer=',start)
- const control=vi.fn(async()=>({drop:'Unknown command: /missing'})),post=vi.fn(async()=>({}))
- const report=vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';reportPendingPromptRefusal',{control,ownerPost:post,AbortController})
- await report(undefined);expect(control).not.toHaveBeenCalled()
- await report('submission');expect(control).toHaveBeenCalledExactlyOnceWith({subtype:'apack_prompt_outcome',submission_id:'submission'},expect.any(AbortController));expect(post).toHaveBeenCalledExactlyOnceWith('/submission',{id:'submission',drop:'Unknown command: /missing'})
- control.mockResolvedValueOnce({accepted:{uuid:'original'}} as any);await report('another');expect(post).toHaveBeenCalledOnce()
+it('reports refusal and queue outcomes on a pending heartbeat and only acknowledges acceptance when requested', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('async function reportPendingPromptOutcome(')
+  const end = claudeTerminalUiRuntime.indexOf('const ownerTimer=', start)
+  const reason = 'Unknown command: /missing'
+  type Outcome = { drop?: string; queued?: string; accepted?: { uuid: string } }
+  const control = vi.fn(async (): Promise<Outcome> => ({ drop: reason }))
+  const post = vi.fn(async (_path: string, _body: unknown) => ({}))
+  const pid = 123
+  const report = vm.runInNewContext(
+    claudeTerminalUiRuntime.slice(start, end) + ';reportPendingPromptOutcome',
+    { control, ownerPost: post, AbortController, process: { pid } },
+  ) as (id?: string, includeAccepted?: boolean) => Promise<void>
+
+  await report(undefined)
+  expect(control).not.toHaveBeenCalled()
+  await report('refused')
+  expect(control).toHaveBeenCalledExactlyOnceWith(
+    { subtype: 'apack_prompt_outcome', submission_id: 'refused' },
+    expect.any(AbortController),
+  )
+  expect(post).toHaveBeenCalledExactlyOnceWith('/submission', { id: 'refused', drop: reason })
+
+  control.mockResolvedValueOnce({ queued: 'waiting-in-claude' })
+  await report('queued')
+  expect(post).toHaveBeenLastCalledWith('/submission', { id: 'queued', queued: 'waiting-in-claude', pid })
+
+  const accepted = { uuid: 'original' }
+  control.mockResolvedValue({ accepted })
+  await report('ordinary')
+  expect(post).toHaveBeenCalledTimes(2)
+
+  await report('confirmed', true)
+  expect(post.mock.calls).toEqual([
+    ['/submission', { id: 'refused', drop: reason }],
+    ['/submission', { id: 'queued', queued: 'waiting-in-claude', pid }],
+    ['/append', { ...accepted, submissionId: 'confirmed' }],
+    ['/submission', { id: 'confirmed', accepted: true }],
+  ])
 })

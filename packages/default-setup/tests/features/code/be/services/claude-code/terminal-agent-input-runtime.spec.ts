@@ -1,3 +1,4 @@
+import { claudeTerminalFileCompletionRuntime } from '#features/code/be/services/claude-code/terminal-file-completion-runtime.ts'
 import { claudeTerminalParentCommandRuntime } from '#features/code/be/services/claude-code/terminal-parent-command-runtime.ts'
 import { randomUUID } from 'node:crypto'
 import { claudeTerminalAgentInputRuntime } from '#features/code/be/services/claude-code/terminal-agent-input-runtime.ts'
@@ -29,7 +30,7 @@ function fixture(main = false) {
     else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
     return { entered: true }
   })
-  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', 'nativeUiTextMaxLength', claudeTerminalAgentInputRuntime + claudeTerminalParentCommandRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parentOperation:nativeParentCommand };')
+  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', 'nativeUiTextMaxLength', claudeTerminalFileCompletionRuntime + claudeTerminalAgentInputRuntime + claudeTerminalParentCommandRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parentOperation:nativeParentCommand };')
   const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId, sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }, CLAUDE_UI_TEXT_MAX_LENGTH) as {
     dispatch(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<{ kind: string; id: string; messageId: string; message: string }>
     parentOperation(n: unknown, request: { client_id: string; operation: string; text?: string; command_id?: string }): Promise<{ kind: string; id: string; result?: Record<string, unknown> }>

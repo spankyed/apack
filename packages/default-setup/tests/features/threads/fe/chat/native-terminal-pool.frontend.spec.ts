@@ -4,30 +4,18 @@ const f = vi.hoisted(() => ({
   streams: [] as any[],
   sources: [] as any[],
 }))
-vi.mock('@apackdev/sdk/fe', () => ({
-  terminalViews: vi.fn((target?: string) => {
-    const listeners: (() => void)[] = []
-    const data: ((bytes: Uint8Array) => void)[] = []
-    const stream = {
-      target,
-      onData: (callback: (bytes: Uint8Array) => void) => {
-        data.push(callback)
-        return () => {}
-      },
-      hear: () => data.forEach((callback) => callback(new Uint8Array([1]))),
-      onClose: (callback: () => void) => {
-        listeners.push(callback)
-        return () => {}
-      },
-      close: () => listeners.forEach((callback) => callback()),
-    }
-    f.streams.push(stream)
-    return stream
-  }),
-}))
-vi.mock('apack-terminal-view', () => ({
-  Modifier: { control: 2, alt: 4, super: 8 },
-  xtermPalette: (colors: number[]) => colors,
+vi.mock('@apackdev/sdk/fe', async () => {
+  const { fakeStream } = await import('../../../code/fe/_support/terminal-view.ts')
+  return {
+    terminalViews: vi.fn((target?: string) => {
+      const stream = fakeStream(target)
+      f.streams.push(stream)
+      return stream
+    }),
+  }
+})
+vi.mock('@apackdev/terminal-view', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@apackdev/terminal-view')>(),
   BrokerViews: class {
     sources: any[] = []
     open = vi.fn((id: string) => {
@@ -43,8 +31,19 @@ vi.mock('apack-terminal-view', () => ({
       this.sources.push(source); f.sources.push(source)
       return source
     })
-    onClose = vi.fn()
-    close = vi.fn(() => this.sources.forEach(source => source.end()))
+    private readonly closing = new Set<() => void>()
+    private closed = false
+    onClose(listener: () => void) {
+      this.closing.add(listener)
+      return () => this.closing.delete(listener)
+    }
+    close = vi.fn(() => {
+      if (this.closed) return
+      this.closed = true
+      for (const source of this.sources) source.end()
+      for (const listener of this.closing) listener()
+      this.closing.clear()
+    })
     constructor(public stream: unknown) {
       f.connections.push(this)
     }
@@ -78,6 +77,7 @@ vi.mock('apack-terminal-view', () => ({
     }
   },
 }))
+import { Modifier } from '@apackdev/terminal-view'
 import { mountNativeTerminal, observeNativeTerminalImage } from '#extensions/terminal/pool.ts'
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -185,7 +185,7 @@ it('shares a target connection and reconnects on an explicit mount after that st
     vi.fn()
   )
   expect(f.connections.at(-1)).toBe(broker)
-  stream.close()
+  stream.drop()
   const again = mountNativeTerminal(
     'connection-a',
     { id: 'a', target: 'remote-fixture' },
@@ -219,14 +219,14 @@ it('keeps transition input gated, permits cancellation and retires detached inpu
   expect(raw.key).not.toHaveBeenCalled()
   expect(raw.text).not.toHaveBeenCalled()
   expect(raw.pointer).not.toHaveBeenCalled()
-  view.source.key({ code: 'KeyC', modifiers: 2 })
+  view.source.key({ code: 'KeyC', modifiers: Modifier.control })
   expect(raw.key).toHaveBeenCalledOnce()
   mounted.setInputBlocked(false)
   view.source.text('current')
   expect(raw.text).toHaveBeenCalledExactlyOnceWith('current')
   mounted.detach()
   view.source.text('retired')
-  view.source.key({ code: 'KeyC', modifiers: 2 })
+  view.source.key({ code: 'KeyC', modifiers: Modifier.control })
   expect(raw.text).toHaveBeenCalledTimes(1)
   expect(raw.key).toHaveBeenCalledTimes(1)
 })
@@ -252,8 +252,8 @@ it('recovers mounted drawings once on a previously working shared connection and
   const oldB = f.views.at(-1)!,
     stream = f.streams.at(-1)!,
     count = f.connections.length
-  stream.hear()
-  stream.close()
+  stream.answer()
+  stream.drop()
   expect(f.connections.length).toBe(count + 1)
   const nextA = f.views.at(-2)!,
     nextB = f.views.at(-1)!
@@ -263,7 +263,7 @@ it('recovers mounted drawings once on a previously working shared connection and
   expect(oldB.dispose).toHaveBeenCalledOnce()
   const raw = f.connections.at(-1)!.open.mock.results[0].value
   oldA.source.text('retired')
-  oldA.source.key({ code: 'KeyC', modifiers: 2 })
+  oldA.source.key({ code: 'KeyC', modifiers: Modifier.control })
   expect(
     f.connections.at(-2)!.open.mock.results[0].value.text
   ).not.toHaveBeenCalled()
@@ -279,8 +279,8 @@ it('recovers mounted drawings once on a previously working shared connection and
   expect(nextA.focus).toHaveBeenCalledOnce()
   expect(oldA.focus).not.toHaveBeenCalled()
   const retried = f.streams.at(-1)!
-  retried.hear()
-  retried.close()
+  retried.answer()
+  retried.drop()
   expect(f.connections.length).toBe(count + 1)
   nextA.source.text('disconnected')
   expect(raw.text).toHaveBeenCalledTimes(1)
@@ -297,7 +297,7 @@ it('does not reconnect an unanswered connection or a detached drawing', () => {
     vi.fn()
   )
   const count = f.connections.length
-  f.streams.at(-1)!.close()
+  f.streams.at(-1)!.drop()
   expect(f.connections.length).toBe(count)
   unanswered.detach()
   const detached = mountNativeTerminal(
@@ -309,8 +309,8 @@ it('does not reconnect an unanswered connection or a detached drawing', () => {
   const stream = f.streams.at(-1)!,
     before = f.connections.length
   detached.detach()
-  stream.hear()
-  stream.close()
+  stream.answer()
+  stream.drop()
   expect(f.connections.length).toBe(before)
 })
 
@@ -334,12 +334,12 @@ it('shares one read-only image channel per owner and releases it after its last 
 })
 it('reconnects an image observer once after a working connection fails, then clears on a second failure', async () => {
   const changed = vi.fn(), stop = observeNativeTerminalImage({ id: 'reconnect-image', target: 'image-reconnect-host' }, 9, changed)
-  const first = f.streams.at(-1); first.hear(); f.sources.at(-1).frame(1); await Promise.resolve()
-  const count = f.connections.length; first.close()
+  const first = f.streams.at(-1); first.answer(); f.sources.at(-1).frame(1); await Promise.resolve()
+  const count = f.connections.length; first.drop()
   expect(changed).toHaveBeenLastCalledWith(null); expect(f.connections.length).toBe(count + 1)
   expect(f.connections.at(-1).open).toHaveBeenCalledWith('reconnect-image')
-  const second = f.streams.at(-1); second.hear(); f.sources.at(-1).frame(2); await Promise.resolve()
+  const second = f.streams.at(-1); second.answer(); f.sources.at(-1).frame(2); await Promise.resolve()
   expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ generation: 1 }))
-  second.close(); expect(changed).toHaveBeenLastCalledWith(null); expect(f.connections.length).toBe(count + 1)
+  second.drop(); expect(changed).toHaveBeenLastCalledWith(null); expect(f.connections.length).toBe(count + 1)
   stop()
 })

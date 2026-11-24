@@ -621,8 +621,8 @@ const EMULATOR_PACKAGE = '@apackdev/terminal-view';
  * be driven without a canvas or a broker. Each names the package because it is replacing it, which is the
  * one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and mocking the
  * pool instead would turn every case here into "the component called `release()`" — the shape of a test
- * that restates the implementation instead of observing it. The stand-in itself is the fourth, since it is
- * typed by what it stands in for.
+ * that restates the implementation instead of observing it. The shared stand-in is also listed
+ * because it is typed by what it replaces.
  *
  * A listed path that has stopped naming the package is reported too, so this allowance cannot outlive the
  * stand-in it was added for.
@@ -633,6 +633,7 @@ const EMULATOR_STAND_INS = [
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view-drop.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
+  'packages/default-setup/tests/features/threads/fe/chat/native-terminal-pool.frontend.spec.ts',
 ] as const;
 
 /**
