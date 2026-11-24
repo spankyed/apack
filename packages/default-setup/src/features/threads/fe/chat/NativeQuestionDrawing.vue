@@ -1,5 +1,5 @@
 <template>
-  <div v-for="shown in [frame]" :key="JSON.stringify([shown?.messageId, shown?.id, shown?.revision, shown?.draftActionId])" class="question-drawing" :class="{ 'with-extension': wrapped }" :tabindex="wrapped ? 0 : -1" :role="wrapped ? 'region' : undefined" :aria-label="wrapped ? 'Claude Code question and context' : undefined" @keydown="key" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
+  <div v-for="shown in [frame]" :key="JSON.stringify([shown?.messageId, shown?.id, shown?.revision, shown?.draftActionId])" class="question-drawing" :class="{ 'with-extension': wrapped }" :tabindex="wrapped ? 0 : -1" :role="wrapped ? 'region' : undefined" :aria-label="wrapped ? 'Claude Code question and context' : undefined" @keydown="key" @focusin="revealAnswer" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
     <NativeUiNode v-if="shown?.body.status === 'live' && shown.shownInput && shown.token" :node="shown.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
       <template #engine><NativeQuestionPanel :key="JSON.stringify([shown.messageId, shown.id, shown.revision, shown.draftActionId])" :card="shown.shownInput" :presentation="shown.presentation" :render-token="shown.token" :cancel-label="cancelLabel" :can-reject="canReject" :can-clarify="canClarify" @reject="reject(shown)" :disabled="!!disabled || !!shown.pending" :pending="pending || !!shown.pending" :error="error ?? shown.problem" @started="token => started(shown, token)" @respond="(answer, decision, images) => respond(shown, answer, decision, images)" @pause="pause(shown)" /></template>
     </NativeUiNode>
@@ -34,6 +34,22 @@ function pause(shown?: ClaudeUiQuestionFrame) { const identity = rendered(shown)
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover)
 watch(() => props.frame?.body, () => hover.invalidate(), { flush: 'post' })
 function key(event: KeyboardEvent) { if (!event.isComposing && event.currentTarget instanceof HTMLElement) pressClaudeUiHotkey(event, event.currentTarget) }
+function revealAnswer(event: FocusEvent) {
+  if (!wrapped.value || !(event.currentTarget instanceof HTMLElement) || !(event.target instanceof HTMLInputElement)) return
+  const option = event.target.closest('.option')
+  const panel = option?.closest('.native-question-panel')
+  const header = panel?.querySelector(':scope > .question-context')
+  const footer = panel?.querySelector(':scope > footer')
+  if (!option || !header || !footer) return
+  // Browser focus scrolls the small input. Keep its label and description clear of the sticky edges.
+  const drawing = event.currentTarget
+  const viewport = drawing.getBoundingClientRect(), row = option.getBoundingClientRect()
+  const top = Math.max(viewport.top, header.getBoundingClientRect().bottom)
+  const bottom = Math.min(viewport.bottom, footer.getBoundingClientRect().top)
+  if (bottom <= top) return
+  if (row.top < top) drawing.scrollTop -= Math.ceil(top - row.top)
+  else if (row.bottom > bottom) drawing.scrollTop += Math.ceil(Math.min(row.bottom - bottom, row.top - top))
+}
 onBeforeUnmount(() => hover.dispose())
 </script>
 <style scoped>

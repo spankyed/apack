@@ -1,6 +1,47 @@
 import {createApp,h,reactive,ref,nextTick} from 'vue'
 import NativeQuestionDrawing from '#features/threads/fe/chat/NativeQuestionDrawing.vue'
 import type {ClaudeUiQuestionFrame} from '#features/code/be/services/claude-code/ui-presentation.ts'
+
+it('reveals the focused answer label between the sticky heading and actions', () => {
+  const frame: ClaudeUiQuestionFrame = {
+    messageId: 'question', id: 'dialog', revision: 'revision', draftActionId: 'draft', token: 'drawing',
+    shownInput: { questions: [{
+      question: 'Who should see the release notes?', header: 'Audience', multiSelect: false,
+      options: [{ label: 'Developers' }, { label: 'Operators' }],
+    }] },
+    body: { status: 'live', tree: { kind: 'box', children: [
+      { kind: 'text', text: 'Choose the audience for the migration notes.' },
+      { kind: 'unsupported', component: 'engine' },
+    ] } },
+  }
+  const root = document.body.appendChild(document.createElement('div'))
+  const app = createApp({ render: () => h(NativeQuestionDrawing, { frame }) })
+  app.mount(root)
+  try {
+    const drawing = root.querySelector<HTMLElement>('.question-drawing')!
+    const rows = [...drawing.querySelectorAll('.option')]
+    const rect = (element: Element, top: number, height: number) =>
+      vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, top, 400, height))
+    rect(drawing, 250, 300)
+    rect(drawing.querySelector('header')!, 250, 90)
+    rect(drawing.querySelector('footer')!, 500, 50)
+    rect(rows[0]!, 325, 70)
+    const second = rect(rows[1]!, 455, 70)
+    drawing.scrollTop = 100
+    rows[0]!.querySelector('input')!.focus()
+    expect(drawing.scrollTop).toBe(85)
+    rows[1]!.querySelector('input')!.focus()
+    expect(drawing.scrollTop).toBe(110)
+    second.mockReturnValue(new DOMRect(0, 410, 400, 70))
+    drawing.querySelector('footer button')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    rows[1]!.querySelector('input')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(drawing.scrollTop).toBe(110)
+  } finally {
+    app.unmount()
+    root.remove()
+  }
+})
+
 it('blocks decisions while its native frame is pending and exposes retry errors without caller duplication',async()=>{
  const frame=reactive<ClaudeUiQuestionFrame>({messageId:'question',id:'dialog',revision:'revision',draftActionId:'draft',token:'drawing',shownInput:{questions:[{question:'Who should the release address?',header:'Audience',options:[{label:'Developers',description:'People integrating the change'},{label:'Operators',description:'People deploying it'}],multiSelect:false}]},body:{status:'live',tree:{kind:'unsupported',component:'engine'}}})
  const root=document.createElement('div');document.body.append(root);const reject=vi.fn(),pause=vi.fn(),pending=ref(true),app=createApp({render:()=>h(NativeQuestionDrawing,{frame,pending:pending.value,canReject:true,onReject:reject,onPause:pause})});app.mount(root)
