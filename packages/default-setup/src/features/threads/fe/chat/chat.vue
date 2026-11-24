@@ -73,8 +73,8 @@
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :terminal-session="nativeComposerView?.state?.terminalSession" :input-blocked="nativeComposerView?.state?.inputBlocked" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @settings="mainSettings" @background="mainBackgroundReview" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'direct_message'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">Sent to @{{ nativeComposerView.submission.command.recipient }}</p>
-          <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
-          <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
+          <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" ref="nativeMcpUrlPanel" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
+          <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" ref="nativeMcpFormPanel" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
           <!-- Agent Chat Content -->
           <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript">
             <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" :style="{ overflowAnchor: currentThread?.context?.claudeCode ? 'none' : undefined }" ref="messagesContainer" @scroll="onScroll">
@@ -130,7 +130,7 @@
         <section v-if="!nativeTerminalActive && mcpTasks.length" aria-label="MCP tasks" class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in mcpTasks" :key="task.id" :data-native-mcp-task-id="task.id" class="py-2">
             <div class="flex items-start justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ claudeMcpTaskStatusLabel(task.mcp, task.status) }}</span></div>
-            <NativeTaskControls :task="task" />
+            <NativeTaskControls :task="task" :mcp-input-pending="!!(nativeComposerOwner?.mcpForm || nativeComposerOwner?.mcpUrl)" @yield-mcp-input-focus="focusNativeMcpInput" />
           </div>
         </section>
         <section v-if="!nativeTerminalActive && shellTasks.length" aria-label="Background commands" class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
@@ -481,6 +481,11 @@ const nativePermissionMode = computed(() => {
   const owner = nativeComposerOwner.value
   return owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === currentThread.value?.id && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId ? owner.session?.permissionMode : undefined
 })
+const nativeMcpFormPanel = ref<InstanceType<typeof NativeMcpForm>>()
+const nativeMcpUrlPanel = ref<InstanceType<typeof NativeMcpUrl>>()
+function focusNativeMcpInput() {
+  void nextTick(() => (nativeMcpFormPanel.value ?? nativeMcpUrlPanel.value)?.focus())
+}
 let nativeMcpSequence = 0
 function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, form = owner?.mcpForm

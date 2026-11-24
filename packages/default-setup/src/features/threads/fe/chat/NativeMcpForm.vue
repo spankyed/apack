@@ -1,5 +1,5 @@
 <template>
-  <section data-testid="native-mcp-form" aria-label="MCP server input" class="native-mcp-form">
+  <section ref="panel" tabindex="-1" data-testid="native-mcp-form" aria-label="MCP server input" class="native-mcp-form">
     <div class="content">
       <header>
         <h3>{{ form.serverName }} requests input</h3>
@@ -40,6 +40,8 @@ import type { ClaudeNativeMcpForm, ClaudeNativeMcpFormOperation } from '#feature
 import { parseMcpElicitationForm, type ClaudeMcpFormField, type ClaudeMcpFormValue } from '#features/code/common/mcp-elicitation-form.ts'
 const props = defineProps<{ form: ClaudeNativeMcpForm; operation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string } }>()
 const emit = defineEmits<{ operate: [operation: ClaudeNativeMcpFormOperation]; pending: [pending: boolean] }>()
+const panel = ref<HTMLElement>()
+defineExpose({ focus: () => panel.value?.focus({ preventScroll: true }) })
 const baseId = useId(), ids = (name: string) => baseId + '-' + props.form.propertyOrder.indexOf(name)
 const parsed = computed(() => { try { return { fields: parseMcpElicitationForm(props.form.schema, props.form.propertyOrder).fields } } catch { return { fields: [], problem: 'This form cannot be displayed here.' } } })
 const fields = computed(() => parsed.value.fields), schemaProblem = computed(() => parsed.value.problem)

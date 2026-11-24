@@ -4,7 +4,7 @@
       <button v-if="!workflow && !shell && !mcp && controls.foregroundAvailable.value" type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'foreground')">Open Agent</button>
       <NativeWorkflowDetails v-if="workflow" :details="state?.details" :pending="pending" :status="task.status" :problem="state?.status === 'error' ? state.problem : undefined" @inspect="controls.operate(task, 'inspect')" @worker="(operation, target) => controls?.operate(task, operation, undefined, target)" />
       <button v-else-if="!shell && !mcp" ref="toggle" type="button" :aria-expanded="expanded" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="showConversation">{{ workflow ? expanded ? 'Hide Workflow details' : 'Workflow details' : expanded ? 'Hide Agent conversation' : 'View Agent conversation' }}</button>
-      <button v-if="mcp" ref="toggle" type="button" :aria-expanded="expanded" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ expanded ? 'Hide task details' : 'Task details' }}</button>
+      <button v-if="mcp" ref="toggle" type="button" :aria-expanded="expanded" :disabled="pending || mcpInputPending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ expanded ? 'Hide task details' : 'Task details' }}</button>
       <button v-if="shell" ref="toggle" type="button" :aria-expanded="expanded" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ expanded ? 'Hide output' : 'View output' }}</button>
       <button v-if="workflow && task.canPause" type="button" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'pause_workflow')">Pause Workflow</button>
       <button v-if="workflow && task.canResume && controls.foregroundAvailable.value" type="button" :disabled="pending || !!state?.resume?.requested" class="rounded border border-white/10 px-2 py-1 text-[11px] text-blue-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'resume_workflow')">{{ state?.resume?.requested ? 'Resume requested' : 'Resume Workflow' }}</button>
@@ -86,8 +86,8 @@ import NativeMcpTaskDetails from './NativeMcpTaskDetails.vue'
 import NativeWorkflowDetails from './NativeWorkflowDetails.vue'
 import { computed, inject, ref, useId, watch } from 'vue'
 import { claudeTaskControls, type ClaudeTaskIdentity } from './native-task-controls.ts'
-const props = defineProps<{ task: ClaudeTaskIdentity & { status: string } }>()
-const emit = defineEmits<{ 'reveal-shell-output': [element: HTMLElement] }>()
+const props = defineProps<{ task: ClaudeTaskIdentity & { status: string }; mcpInputPending?: boolean }>()
+const emit = defineEmits<{ 'reveal-shell-output': [element: HTMLElement]; 'yield-mcp-input-focus': [] }>()
 const workflow = computed(() => props.task.kind === 'workflow')
 const shell = computed(() => props.task.kind === 'shell')
 const mcp = computed(() => props.task.kind === 'mcp')
@@ -116,9 +116,17 @@ watch(state, value => {
 }, { flush: 'post' })
 const mcpDialog = ref<HTMLDialogElement | null>(null)
 watch(mcpDialog, (dialog, previous) => {
-  previous?.close()
+  if (previous?.open) previous.close()
   dialog?.showModal()
 }, { flush: 'post' })
+watch(() => props.mcpInputPending, pending => {
+  if (!mcp.value || !pending) return
+  const dialog = mcpDialog.value
+  const hadFocus = dialog?.contains(document.activeElement)
+  dialog?.close()
+  shown.value = false
+  if (hadFocus) emit('yield-mcp-input-focus')
+})
 function closeDetails() {
   mcpDialog.value?.close()
   shown.value = false

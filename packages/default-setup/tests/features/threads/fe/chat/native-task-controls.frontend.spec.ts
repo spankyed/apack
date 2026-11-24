@@ -206,6 +206,49 @@ it('shows MCP task details and native refusal without offering Agent controls', 
 })
 
 
+it('closes focused MCP task details when the native task asks for input', async () => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+    this.open = true
+    this.querySelector<HTMLElement>('[autofocus]')?.focus()
+  })
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
+  const task = { kind: 'mcp' as const, id: 'mcp', ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const mcp: ClaudeNativeMcpTaskInfo = { status: 'working', startTime: Date.now(), truncated: false }
+  const state = computed<ClaudeTerminalTaskState>(() => ({
+    ownerId: task.ownerId, sessionId: task.sessionId, taskId: task.id, revision: 1, operation: 'inspect', status: 'done',
+    details: { mcp, taskId: task.id, name: 'Review', status: 'running', canInput: false, canMessage: false, messages: [], truncated: false },
+  }))
+  const mcpInputPending = ref(false), operate = vi.fn(() => 1), onYieldMcpInputFocus = vi.fn()
+  const root = document.createElement('div')
+  document.body.append(root)
+  app = createApp({
+    setup() {
+      provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state, operate })
+      return () => h(NativeTaskControls, { task, mcpInputPending: mcpInputPending.value, onYieldMcpInputFocus })
+    },
+  })
+  app.mount(root)
+  const toggle = root.querySelector<HTMLButtonElement>('button[aria-expanded]')!
+  toggle.click()
+  await nextTick()
+  expect(root.querySelector('dialog')?.contains(document.activeElement)).toBe(true)
+
+  mcpInputPending.value = true
+  await nextTick()
+  expect(root.querySelector('dialog')).toBeNull()
+  expect(toggle.disabled).toBe(true)
+  expect(onYieldMcpInputFocus).toHaveBeenCalledOnce()
+
+  mcpInputPending.value = false
+  await nextTick()
+  expect(toggle.disabled).toBe(false)
+  expect(root.querySelector('dialog')).toBeNull()
+  toggle.click()
+  await nextTick()
+  expect(root.querySelector('dialog')?.open).toBe(true)
+})
+
+
 it('updates opened MCP details when the native task is parked', async () => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
   HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })

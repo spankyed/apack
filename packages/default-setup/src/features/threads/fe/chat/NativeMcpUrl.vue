@@ -1,5 +1,5 @@
 <template>
-  <section data-testid="native-mcp-url" aria-label="MCP browser input" class="native-mcp-url">
+  <section ref="panel" tabindex="-1" data-testid="native-mcp-url" aria-label="MCP browser input" class="native-mcp-url">
     <div class="body">
       <h3>{{ url.title }}</h3>
       <p class="message">{{ url.message }}</p>
@@ -19,6 +19,8 @@ import { ref, watch } from 'vue'
 import type { ClaudeNativeMcpUrl, ClaudeNativeMcpUrlOperation } from '#features/code/common/native-mcp-url.ts'
 const props = defineProps<{ url: ClaudeNativeMcpUrl; operation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string } }>()
 const emit = defineEmits<{ operate: [operation: ClaudeNativeMcpUrlOperation] }>()
+const panel = ref<HTMLElement>()
+defineExpose({ focus: () => panel.value?.focus({ preventScroll: true }) })
 const pending = ref(false)
 let baseline = 0
 function decide(operation: ClaudeNativeMcpUrlOperation['operation']) {
