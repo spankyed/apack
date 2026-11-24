@@ -1,7 +1,7 @@
 import { deferred } from '../../../../_support/deferred.ts'
 import { SurfaceScope } from '@apackdev/sdk/fe'
 import { CommandSuggestion } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
-import { createApp, h, reactive, nextTick, type App } from 'vue'
+import { computed, createApp, h, reactive, ref, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import type { ClaudePromptReply, ClaudePromptCompletionReply, ClaudeUiMountState } from '#generated/types.ts'
 import type { Editor } from '@tiptap/core'
@@ -40,13 +40,31 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); app?.unmount(); docu
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
   const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeBackgrounded: false, nativeDecisionPending: false, nativeSendWaiting: false, isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const composer = ref<InstanceType<typeof ChatInput> | null>(null)
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(SurfaceScope, { surface: 'default-setup/threads' }, { default: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }) }); app.mount(root)
+  app = createApp({ render: () => h(SurfaceScope, { surface: 'default-setup/threads' }, { default: () => h(ChatInput, { ...state, ref: composer, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }) }); app.mount(root)
   editor.commands.setContent('first')
-  return { state, send, hostResponse, press, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
+  const idleNoticeReady = computed(() => composer.value?.canPresentIdleComposerNotice() === true)
+  return { idleNoticeReady, state, send, hostResponse, press, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
 }
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
+
+it('withdraws idle Claude offers at composition start before the document changes', async () => {
+  const f = mount(async () => undefined)
+  editor.commands.clearContent()
+  await nextTick()
+  expect(f.idleNoticeReady.value).toBe(true)
+
+  editor.view.dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+  await nextTick()
+  expect(editor.isEmpty).toBe(true)
+  expect(f.idleNoticeReady.value).toBe(false)
+
+  editor.view.dom.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+  await nextTick()
+  expect(f.idleNoticeReady.value).toBe(true)
+})
 
 it('keeps the draft editable while native input is busy and sends it once Claude is ready', async () => {
   const f = mount(vi.fn(async () => undefined))

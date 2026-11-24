@@ -549,14 +549,27 @@ watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => p
     setEditorCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
   } }, { viewport: editorAreaRef.value, canSuggest: () => !props.disabled && !props.nativeDecisionPending && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
 }, { flush: 'post' })
+const composerComposing = ref(false)
 watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
+  composerComposing.value = false
   if (!editor) { hostPopupActive.value = false; return }
+  const editorDom = editor.view.dom
+  const startComposition = () => { composerComposing.value = true }
+  const endComposition = () => { composerComposing.value = false }
+  editorDom.addEventListener('compositionstart', startComposition)
+  editorDom.addEventListener('compositionend', endComposition)
+  editorDom.addEventListener('blur', endComposition)
   const update = () => {
     const command = commandSuggestionKey.getState(editor.state)
     hostPopupActive.value = !!(command?.active && !command.selectedCommand) || referenceSuggestionKey.getState(editor.state)?.active === true
   }
   update(); editor.on('transaction', update)
-  onCleanup(() => { editor.off('transaction', update) })
+  onCleanup(() => {
+    editor.off('transaction', update)
+    editorDom.removeEventListener('compositionstart', startComposition)
+    editorDom.removeEventListener('compositionend', endComposition)
+    editorDom.removeEventListener('blur', endComposition)
+  })
 })
 const pageSelection = useClaudeUiSelection()
 function promptHostAvailable(expiresAt: number) {
@@ -682,7 +695,7 @@ const {
 } = useAttachments()
 function canPresentIdleComposerNotice() {
   const editor = tiptapRef.value?.editor
-  return !!editor && !hasTextContent.value && editor.isEmpty && !editor.view.composing && !hasAttachments.value && !hostPopupActive.value && !submitting.value
+  return !!editor && !hasTextContent.value && editor.isEmpty && !composerComposing.value && !hasAttachments.value && !hostPopupActive.value && !submitting.value
 }
 defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentIdleComposerNotice })
 watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {
