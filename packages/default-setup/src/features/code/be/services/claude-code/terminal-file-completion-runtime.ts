@@ -75,6 +75,15 @@ async function nativeAddressCompletions(n,context,token,current){
  return rows.slice(0,20);
 }
 const templateRefreshes=new WeakMap(),templateReconnectFailures=new WeakMap();
+const nativeTemplateOffers=new Map();
+function confirmNativeTemplate(clientId,box,ticket){
+ const offers=nativeTemplateOffers.get(clientId);
+ nativeTemplateOffers.delete(clientId);
+ const offer=offers?.get(ticket),token=nativeFileCompletionToken(box);
+ if(!offer||!token||token.start!==offer.token.start||token.end!==offer.token.end||
+    token.query!==offer.token.query||token.quoted!==offer.token.quoted||!offer.current())return {suggestions:[]};
+ return {start:token.start,suggestions:[offer.row]};
+}
 async function nativeResourceTemplates(transport,context,current){
  const mcp=context.getAppState().mcp;
  const listed=mcp?.resourceTemplates??{};
@@ -123,7 +132,7 @@ function nativeTemplateSlot(template,uri){
 }
 function nativeTemplateListing(server,template){
  return {type:'template',displayText:server+':'+nativeTemplatePrefix(template.uriTemplate),
-  server,uriTemplate:template.uriTemplate,name:template.name||template.uriTemplate,description:template.description||template.name||template.uriTemplate,
+  server,sourceTemplate:template,uriTemplate:template.uriTemplate,name:template.name||template.uriTemplate,description:template.description||template.name||template.uriTemplate,
   partial:true};
 }
 async function nativeTemplateCompletions(n,context,listed,query,transport,current){
@@ -159,7 +168,7 @@ async function nativeTemplateCompletions(n,context,listed,query,transport,curren
  return values.slice(0,15).flatMap(value=>{
   if(!validNativeMention(value))return [];
   const suffix=value+slot.suffix,mention=server+':'+uri.slice(0,slot.offset)+suffix;
-  return [{displayText:suffix,mention,description:slot.template.description||slot.template.name,partial:slot.partial}];
+  return [{displayText:suffix,mention,server,sourceTemplate:slot.template,sourceCurrent:stillConnected,description:slot.template.description||slot.template.name,partial:slot.partial}];
  });
 }
 function nativeReferenceRows(n,context,files,query,listed){
@@ -224,15 +233,24 @@ async function nativeFileCompletions(n,clientId,token,abort){
   if(!current())return [];
   rows=nativeReferenceRows(n,context,rows,token.query,listed);
  }
- return rows.flatMap(row=>{
+ const offers=new Map();
+ const suggestions=rows.flatMap(row=>{
   const label=row?.displayText,value=row?.mention??label;
   if(!validNativeMention(label)||!validNativeMention(value))return [];
   const template=row.type==='template'||row.mention!==undefined;
   const quoted=(!template&&token.quoted)||value.includes(' ');
   const description=typeof row.description==='string'&&row.description?row.description.slice(0,60):undefined;
   const text=(quoted?'@"'+value+(row.partial?'':'"'):'@'+value)+(row.partial?'':' ');
-  return [{label,text,...(description?{description}:{}),
-   replacement:{start:token.start,end:token.end}}];
+  const suggestion={label,text,...(description?{description}:{}),replacement:{start:token.start,end:token.end}};
+  if(row.sourceTemplate){
+   suggestion.templateOfferId=randomUUID();
+   offers.set(suggestion.templateOfferId,{row:suggestion,token,current:()=>
+    current()&&!n.referenceWorkspace.Ct()&&(row.sourceCurrent?.()??true)&&
+    context.getAppState().mcp?.resourceTemplates?.[row.server]?.includes(row.sourceTemplate)});
+  }
+  return [suggestion];
  });
+ if(offers.size)nativeTemplateOffers.set(clientId,offers);
+ return suggestions;
 }
 `

@@ -13103,6 +13103,7 @@ declare const promptAutocomplete: z.ZodObject<{
     }>;
     text: z.ZodString;
     cursor: z.ZodNumber;
+    templateOfferId: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 
 declare const promptCommands: {
@@ -13117,6 +13118,7 @@ declare const promptCompletions: z.ZodObject<{
         text: z.ZodString;
         label: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
+        templateOfferId: z.ZodOptional<z.ZodString>;
         replacement: z.ZodOptional<z.ZodObject<{
             start: z.ZodNumber;
             end: z.ZodNumber;

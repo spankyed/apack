@@ -25,16 +25,30 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   editor.registerPlugin(suggestion.plugin)
   let revision = initialRevision, applying = false, disposed = false
   let completionRevision = completion?.initialRevision ?? 0
-  let completionPending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection } | undefined
+  let completionPending: { revision: number; templateOfferId?: string; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection } | undefined
   let completionOffer: NonNullable<typeof completionPending> & { id: string; result: Extract<ClaudePromptCompletionReply, { status: 'ready' }>['result'] } | undefined
   function retireCompletions() { completionPending = undefined; completionOffer = undefined; completion?.update([]) }
-  function askCompletions() {
+  function askCompletions(templateOfferId?: string) {
     if (!completion || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus()) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
     if (!snapshot) return
     const revision = ++completionRevision
-    completionPending = { revision, snapshot, selection: editor.state.selection }
-    try { completion.request({ revision, text: snapshot.text, cursor: snapshot.cursor }) } catch { retireCompletions() }
+    completionPending = { revision, templateOfferId, snapshot, selection: editor.state.selection }
+    try { completion.request({ revision, text: snapshot.text, cursor: snapshot.cursor, ...(templateOfferId ? { templateOfferId } : {}) }) } catch { retireCompletions() }
+  }
+  function applyCompletion(snapshot: ClaudePromptDocument, start: number, row: ClaudePromptCompletionRow): boolean {
+    const range = row.replacement ?? { start, end: snapshot.cursor }
+    const next = rewriteClaudePromptDocument(snapshot, {
+      text: snapshot.text.slice(0, range.start) + row.text + snapshot.text.slice(range.end),
+      cursor: range.start + row.text.length,
+    }, serialize, parse)
+    retireCompletions()
+    if (!next) { onProblem('Claude completion cannot replace this token without changing editor structure'); return false }
+    const tr = rewriteTransaction(next)
+    tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', 'app')
+    editor.view.dispatch(tr)
+    editor.view.focus()
+    return true
   }
   let fillPaint: { revision: number; text: string; drawn: ReturnType<typeof drawClaudePromptDecorations> } | undefined
   let settled = false
@@ -322,6 +336,11 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (!pending || disposed || editor.isDestroyed || reply.revision !== pending.revision) return
       completionPending = undefined
       if (editor.view.composing || !dom.ownerDocument.hasFocus() || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
+      if (pending.templateOfferId) {
+        const [row] = reply.result.suggestions
+        if (row?.templateOfferId === pending.templateOfferId && reply.result.start !== undefined) applyCompletion(pending.snapshot, reply.result.start, row)
+        return
+      }
       completionOffer = { ...pending, id: crypto.randomUUID(), result: reply.result }
       completion?.update(reply.result.suggestions, completionOffer.id)
     },
@@ -329,16 +348,12 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     selectCompletion(index: number, offerId: string): boolean {
       const offer = completionOffer, row = offer?.result.suggestions[index]
       if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
-      const { snapshot, result } = offer
-      const { start, end } = row.replacement ?? { start: result.start!, end: snapshot.cursor }
-      const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(end), cursor: start + row.text.length }, serialize, parse)
-      retireCompletions()
-      if (!next) { onProblem('Claude completion cannot replace this token without changing editor structure'); return false }
-      const tr = rewriteTransaction(next)
-      tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', 'app')
-      editor.view.dispatch(tr)
-      editor.view.focus()
-      return true
+      if (row.templateOfferId) {
+        retireCompletions()
+        askCompletions(row.templateOfferId)
+        return true
+      }
+      return applyCompletion(offer.snapshot, offer.result.start, row)
     },
     dispose() {
       stopCaretReveal()

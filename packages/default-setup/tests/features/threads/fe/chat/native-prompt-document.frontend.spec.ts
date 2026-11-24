@@ -1033,6 +1033,34 @@ it('applies a native file replacement past the caret and preserves following tex
   } finally { bridge.dispose(); focused.mockRestore() }
 })
 
+it.each([false, true])('changes the draft only after MCP template selection is confirmed (%s)', confirmed => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const text = 'Review @research:file://template/re'
+  editor.commands.setContent(text)
+  editor.commands.setTextSelection(text.length + 1)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    const row = { text: '@research:file://template/release ', templateOfferId: crypto.randomUUID() }
+    bridge.receiveCompletions({ revision: request.mock.lastCall![0].revision, status: 'ready',
+      result: { start: 7, suggestions: [row] } })
+    const initialDoc = editor.state.doc, initialSelection = editor.state.selection
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    const confirmation = request.mock.lastCall![0]
+    expect(confirmation).toMatchObject({ text, cursor: text.length, templateOfferId: row.templateOfferId })
+    expect(editor.state.doc).toBe(initialDoc)
+    bridge.receiveCompletions({ revision: confirmation.revision, status: 'ready',
+      result: confirmed ? { start: 7, suggestions: [row] } : { suggestions: [] } })
+    if (confirmed) expect(serialize(editor.state.doc)).toBe('Review ' + row.text)
+    else {
+      expect(editor.state.doc).toBe(initialDoc)
+      expect(editor.state.selection.eq(initialSelection)).toBe(true)
+    }
+  } finally { bridge.dispose(); focused.mockRestore() }
+})
+
 it('reads a whole rich-document selection without losing its text or collapsing the range on acknowledgement', () => {
   editor.commands.setContent('# Release review\n\n```ts\nconst ready = true\n```\n\nReview changes.\n\n- Verify behavior\n- Document migration')
   editor.commands.selectAll()

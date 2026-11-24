@@ -801,11 +801,13 @@ function drainEdit(n,clientId,state){
 ${claudeTerminalFileCompletionRuntime}
 const completions=new Map();
 function clearCompletion(clientId){
+ nativeTemplateOffers.delete(clientId);
  const state=completions.get(clientId);if(!state)return;
  completions.delete(clientId);state.active?.abort();
  state.waiting?.answer({suggestions:[],superseded:true});state.waiting=undefined;
 }
 function autocomplete(n,clientId,box){
+ nativeTemplateOffers.delete(clientId);
  let state=completions.get(clientId);
  if(!state){state={};completions.set(clientId,state);}
  return new Promise(answer=>{
@@ -1569,7 +1571,7 @@ async function control(request,abort){
  if(request.subtype==='apack_ui_client'){if(!clients.has(request.client_id))throw Error('Native Client view is detached');const surface=n.nativeClients.surface(request.client_id,request.id);if(!surface)return{handled:false};if(surface==='desktop')await n.gate._Jo('desktop');return n.nativeClients.event(request.client_id,request.id,request.sequence,request.event);}
  const schema=schemaNames[request.subtype];
  if(!schema)throw Error('Native terminal UI operation is not integrated: '+request.subtype);
- const {instance_revision:instanceRevision,...originalRequest}=request;
+ const {instance_revision:instanceRevision,templateOfferId,...originalRequest}=request;
  const value=n.schemas[schema]().parse(originalRequest);
  if(value.surface!==undefined&&value.surface!=='desktop')throw Error('This app owns a desktop UI surface');
  const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};
@@ -1634,7 +1636,9 @@ async function control(request,abort){
  if(value.subtype==='ui_prompt_autocomplete'){
   const id=clientId??'desktop:default';
   if(!clients.has(id))throw Error('Native UI client is not attached to this owner');
-  return autocomplete(n,id,n.session.o_n({text:value.text,cursor:value.cursor}));
+  const box=n.session.o_n({text:value.text,cursor:value.cursor});
+  if(templateOfferId!==undefined)return confirmNativeTemplate(id,box,templateOfferId);
+  return autocomplete(n,id,box);
  }
  if(value.subtype==='ui_render'){
   actionKeys.invalidate(value);

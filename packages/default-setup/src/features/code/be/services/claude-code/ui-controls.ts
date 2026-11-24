@@ -76,8 +76,9 @@ const promptKey = z.object({ key: z.string().min(1).max(32), ctrl: z.literal(tru
 const promptEdit = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe(),
   by: z.enum(['person', 'app']), key: promptKey.optional(),
 }).strict().refine(value => value.by !== 'app' || value.key === undefined, 'programmatic draft adoption carries no key')
-const promptAutocomplete = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe() }).strict()
-const promptCompletions = z.object({ suggestions: z.array(z.object({ text: z.string().min(1), label: z.string().optional(), description: z.string().optional(), replacement: z.object({ start: z.number().int().nonnegative().safe(), end: z.number().int().nonnegative().safe() }).strict().optional() }).passthrough()),
+const templateOfferId = z.string().uuid().optional()
+const promptAutocomplete = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe(), templateOfferId }).strict()
+const promptCompletions = z.object({ suggestions: z.array(z.object({ text: z.string().min(1), label: z.string().optional(), description: z.string().optional(), templateOfferId, replacement: z.object({ start: z.number().int().nonnegative().safe(), end: z.number().int().nonnegative().safe() }).strict().optional() }).passthrough()),
   start: z.number().int().nonnegative().optional(), superseded: z.literal(true).optional(),
 }).passthrough()
 const promptDecoration = z.object({ start: z.number().int().nonnegative(), end: z.number().int(), color: z.string().optional(), backgroundColor: z.string().optional(),

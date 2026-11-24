@@ -1,4 +1,5 @@
 import vm from 'node:vm'
+import { randomUUID } from 'node:crypto'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 
 it('keeps only the latest native completion and cancels detached drafts', async () => {
@@ -116,9 +117,16 @@ it('advances MCP template parameters through the original connected client and r
   const connection = { type:'connected',name:'docs',client:{} }
   const state = { mcp:{ clients:[connection], resourceTemplates:{ docs:[template,adjacent] } } }
   const originalContext = { surface:'terminal',toolContext:()=>({ getAppState:()=>state, session:{} }) }
-  const autocomplete = vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';autocomplete',{
-    AbortController,originalContext,clientViewCurrent:()=>true,
-  }) as (native: unknown, client: string, box: { text: string; cursor: number }) => Promise<{ suggestions: { text: string }[] }>
+  type Draft = { text: string; cursor: number }
+  type Reply = { suggestions: { text: string; templateOfferId?: string }[] }
+  const { autocomplete, confirmNativeTemplate } = vm.runInNewContext(
+    claudeTerminalUiRuntime.slice(start,end)+';({autocomplete,confirmNativeTemplate})', {
+      AbortController,originalContext,clientViewCurrent:()=>true,randomUUID,
+    },
+  ) as {
+    autocomplete(native: unknown, client: string, draft: Draft): Promise<Reply>
+    confirmNativeTemplate(client: string, draft: Draft, ticket: string): Reply
+  }
   const completeResourceTemplate = vi.fn(async () => ['main'])
   const native = {
     fileSuggestions:{s5t:async()=>[{displayText:'local.md'}],RSe:{}},
@@ -139,6 +147,19 @@ it('advances MCP template parameters through the original connected client and r
   completeResourceTemplate.mockResolvedValueOnce(['release bundle'])
   expect((await query('@docs:resource://artifacts/re')).suggestions[0]?.text).toBe('@"docs:resource://artifacts/release bundle/manifest" ')
   expect(completeResourceTemplate).toHaveBeenLastCalledWith(connection,adjacent.uriTemplate,'name','re',{})
+  const text = '@docs:resource://release/main/no'
+  const draft = { text, cursor: text.length }
+  const offered = (await query(text)).suggestions[0]!
+  expect(offered.templateOfferId).toBeDefined()
+  expect(confirmNativeTemplate('other',draft,offered.templateOfferId!).suggestions).toEqual([])
+  const calls = completeResourceTemplate.mock.calls.length
+  expect(confirmNativeTemplate('selected',draft,offered.templateOfferId!).suggestions).toEqual([offered])
+  expect(confirmNativeTemplate('selected',draft,offered.templateOfferId!).suggestions).toEqual([])
+  expect(completeResourceTemplate).toHaveBeenCalledTimes(calls)
+  const withdrawn = (await query(text)).suggestions[0]!
+  state.mcp.resourceTemplates.docs = [adjacent]
+  expect(confirmNativeTemplate('selected',draft,withdrawn.templateOfferId!).suggestions).toEqual([])
+  state.mcp.resourceTemplates.docs = [template,adjacent]
   completeResourceTemplate.mockImplementationOnce(async()=>{
     state.mcp.clients=[{...connection,client:{}}]
     return ['retired']
