@@ -994,6 +994,50 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when c
 })
 
 
+it.each(['pending', 'pointer', 'keyboard'] as const)('retires %s completion ownership when the visible caret moves before selectionchange', state => {
+  editor.commands.setContent('#rel')
+  const dom = editor.view.dom
+  document.body.append(dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  const acknowledgeEdit = () => {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+  }
+  const completionReply = () => ({
+    revision: request.mock.lastCall![0].revision, status: 'ready' as const,
+    result: { start: 0, suggestions: [{ text: '#release', label: 'Release review', replacement: { start: 0, end: 4 } }] },
+  })
+  try {
+    acknowledgeEdit()
+    const original = completionReply()
+    if (state !== 'pending') bridge.receiveCompletions(original)
+    const offer = update.mock.lastCall?.[1]
+    const text = dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 2, text, 2)
+    expect(editor.state.selection.head).toBe(5)
+    if (state === 'pending') bridge.receiveCompletions(original)
+    else if (state === 'pointer') expect(bridge.selectCompletion(0, offer!)).toBe(false)
+    else expect(bridge.canFocusCompletion(offer!)).toBe(false)
+
+    expect(update).toHaveBeenLastCalledWith([])
+    expect(editor.state.selection.head).toBe(3)
+    expect(document.getSelection()!.focusOffset).toBe(2)
+    expect(serialize(editor.state.doc)).toBe('#rel')
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'person', cursor: 2 }))
+
+    acknowledgeEdit()
+    bridge.receiveCompletions(completionReply())
+    const fresh = update.mock.lastCall![1]
+    expect(fresh).toBeTruthy()
+    expect(bridge.canFocusCompletion(fresh)).toBe(true)
+    expect(bridge.selectCompletion(0, fresh)).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); dom.remove() }
+})
+
 it.each(['pending', 'offered'] as const)('retires %s completion ownership when the window loses focus', state => {
   const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   editor.commands.setContent('#rel')

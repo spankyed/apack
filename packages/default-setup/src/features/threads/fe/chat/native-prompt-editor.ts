@@ -103,6 +103,13 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const next = TextSelection.between(editor.state.doc.resolve(anchor), editor.state.doc.resolve(head))
     editor.view.dispatch(editor.state.tr.setSelection(next).setMeta('claude-prompt-by', 'person'))
   }
+  function currentCompletion(offerId: string) {
+    const offer = completionOffer
+    if (!offer || offer.id !== offerId || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection)) return
+    // Accepting the browser's newer caret retires the offer before focus or text can move.
+    synchronizeSelection()
+    if (completionOffer === offer) return offer
+  }
   // ProseMirror's deferred focus repair can paint an earlier range before Chromium
   // delivers selectionchange. Adopt the browser's navigation result at keyup.
   const navigationFinished = (event: KeyboardEvent) => {
@@ -334,8 +341,10 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     receiveCompletions(reply: ClaudePromptCompletionReply) {
       const pending = completionPending
       if (!pending || disposed || editor.isDestroyed || reply.revision !== pending.revision) return
-      completionPending = undefined
       if (editor.view.composing || !dom.ownerDocument.hasFocus() || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
+      synchronizeSelection()
+      if (completionPending !== pending) return
+      completionPending = undefined
       if (pending.templateOfferId) {
         const [row] = reply.result.suggestions
         if (row?.templateOfferId === pending.templateOfferId && reply.result.start !== undefined) applyCompletion(pending.snapshot, reply.result.start, row)
@@ -345,9 +354,10 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       completion?.update(reply.result.suggestions, completionOffer.id)
     },
     dismissCompletions() { retireCompletions() },
+    canFocusCompletion(offerId: string): boolean { return currentCompletion(offerId) !== undefined },
     selectCompletion(index: number, offerId: string): boolean {
-      const offer = completionOffer, row = offer?.result.suggestions[index]
-      if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
+      const offer = currentCompletion(offerId), row = offer?.result.suggestions[index]
+      if (!offer || !row || offer.result.start === undefined) return false
       if (row.templateOfferId) {
         retireCompletions()
         askCompletions(row.templateOfferId)

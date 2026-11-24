@@ -15,7 +15,7 @@ import type { Editor } from '@tiptap/core'
 import { commandSuggestionKey } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
 import { referenceSuggestionKey } from '#extensions/tiptap/reference-suggestion.ts'
 import type { ClaudePromptCompletionRow } from '#generated/types.ts'
-const props = defineProps<{ anchorEl: HTMLElement | null; editor?: Editor; rows: (ClaudePromptCompletionRow & { offerId: string })[]; disabled?: boolean }>()
+const props = defineProps<{ anchorEl: HTMLElement | null; editor?: Editor; rows: (ClaudePromptCompletionRow & { offerId: string })[]; disabled?: boolean; canFocus: (offerId: string) => boolean }>()
 const emit = defineEmits<{ select: [index: number, offerId: string]; dismiss: [] }>()
 const root = ref<HTMLElement>(), hostPopup = ref(false)
 // Keep the native status, draft and Send outside the portalled popup.
@@ -41,6 +41,8 @@ function navigate(event: KeyboardEvent) {
     event.preventDefault(); event.stopImmediatePropagation(); emit('dismiss'); editor.view.focus(); return
   }
   if (!(fromEditor ? ['ArrowUp', 'ArrowDown'] : ['ArrowUp', 'ArrowDown', 'Home', 'End']).includes(event.key)) return
+  const offerId = props.rows[0]?.offerId
+  if (fromEditor && (!offerId || !props.canFocus(offerId))) return
   const buttons = Array.from(root.value?.querySelectorAll('button') ?? [])
   if (!buttons.length) return
   const current = buttons.indexOf(editor.view.dom.ownerDocument.activeElement as HTMLButtonElement)

@@ -14,11 +14,11 @@ async function mount() {
   const editor = new Editor({ extensions: [StarterKit], content: 'Draft #release' }); editors.push(editor)
   const root = document.createElement('div'); document.body.append(root, editor.view.dom)
   const state = shallowReactive({ editor, anchorEl: root as HTMLElement | null, disabled: false, rows: [{ text: '#release-public', label: 'Public release', description: 'Notes for customers', offerId: 'offer-one' }, { text: '#release-internal', label: 'Internal release', description: 'Notes for teammates', offerId: 'offer-one' }] })
-  const select = vi.fn(), dismiss = vi.fn()
-  app = createApp({ render: () => h(NativePromptCompletions, { ...state, onSelect: select, onDismiss: dismiss }) }); app.mount(root); await nextTick()
+  const select = vi.fn(), dismiss = vi.fn(), canFocus = vi.fn(() => true)
+  app = createApp({ render: () => h(NativePromptCompletions, { ...state, canFocus, onSelect: select, onDismiss: dismiss }) }); app.mount(root); await nextTick()
   editor.view.dom.focus()
   const buttons = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[aria-label="Claude suggestions"] button'))
-  return { editor, root, state, select, dismiss, buttons }
+  return { editor, root, state, select, dismiss, canFocus, buttons }
 }
 const key = (target: HTMLElement, name: string, options: KeyboardEventInit = {}) => { const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...options }); target.dispatchEvent(event); return event }
 it('shows native labels and descriptions without selecting or changing the draft', async () => {
@@ -38,6 +38,14 @@ it('enters from the editor with arrows, navigates rows and dismisses back to the
 it('selects the exact current offer by pointer without submitting the form', async () => {
   const f = await mount(); f.buttons()[1]!.click()
   expect(f.select).toHaveBeenCalledExactlyOnceWith(1, 'offer-one'); expect(f.editor.state.doc.textContent).toBe('Draft #release')
+})
+it('leaves arrow navigation in the editor when its visible caret retires the offer', async () => {
+  const f = await mount()
+  f.canFocus.mockReturnValue(false)
+  expect(key(f.editor.view.dom, 'ArrowDown').defaultPrevented).toBe(false)
+  expect(f.canFocus).toHaveBeenCalledExactlyOnceWith('offer-one')
+  expect(document.activeElement).toBe(f.editor.view.dom)
+  expect(f.select).not.toHaveBeenCalled()
 })
 it.each([{ isComposing: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }])('preserves composition and modified editor keys %j', async options => {
   const f = await mount(); key(f.editor.view.dom, 'ArrowDown', options)

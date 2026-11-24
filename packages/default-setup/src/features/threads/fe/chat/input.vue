@@ -125,7 +125,7 @@
           />
         </div>
 
-        <NativePromptCompletions :anchor-el="inputCardRef" :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || nativeDecisionPending || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
+        <NativePromptCompletions :anchor-el="inputCardRef" :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || nativeDecisionPending || submitting" :can-focus="id => promptEditor?.canFocusCompletion(id) ?? false" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
         <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
           <NativeComposerPlacements class="min-w-0 flex-1" :frames="nativeUi.composer" location="hint" @height="nativeHintHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />

@@ -94,6 +94,7 @@ test('uses original native completion rows with keyboard navigation in main and 
     for(let row=0;row<3;row++){await expect(buttons.nth(row)).toContainText(labels[row]!);await expect(buttons.nth(row)).toContainText(descriptions[row]!)}
     const cdp=await appPage.context().newCDPSession(appPage)
     const composition=[]
+    const deferredSelection=[]
     try {
       for(const width of [1100,680]) {
         await appPage.setViewportSize({width,height:width===680?600:900})
@@ -111,8 +112,39 @@ test('uses original native completion rows with keyboard navigation in main and 
         expect(await snapshot(editor)).toEqual(before)
         await expect(buttons).toHaveCount(3)
         composition.push({width,preview,cancelled:await snapshot(editor),original:before,completionWithdrawn:true,noSubmittedTurn:true})
+
+        for (const action of ['pointer', 'keyboard'] as const) {
+          await replace(editor, prefix)
+          await expect(buttons).toHaveCount(3)
+          const observed = await editor.evaluate((element, action) => {
+            const editor = (element as HTMLElement & { editor: import('@tiptap/core').Editor }).editor
+            const textNodes = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+            const first = textNodes.nextNode()
+            if (!first?.textContent?.startsWith('Review')) throw new Error('Expected the release draft in the composer')
+            const earlierCaret = editor.state.selection.head
+            // Browser selectionchange is deferred. Dispatch the completion action in the same task.
+            window.getSelection()!.collapse(first, 1)
+            const modelBeforeAction = editor.state.selection.head
+            const offer = document.querySelector<HTMLButtonElement>('[aria-label="Claude suggestions"] button')
+            if (!offer) throw new Error('Expected an original completion offer')
+            if (action === 'pointer') offer.click()
+            else element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
+            return {
+              earlierCaret, modelBeforeAction, modelAfterAction: editor.state.selection.head,
+              browserOffset: window.getSelection()?.focusOffset,
+              editorFocused: document.activeElement === element,
+            }
+          }, action)
+          expect(observed).toEqual({ earlierCaret: prefix.length + 1, modelBeforeAction: prefix.length + 1, modelAfterAction: 2, browserOffset: 1, editorFocused: true })
+          await expect(editor).toHaveText(prefix)
+          await expect(list).toHaveCount(0)
+          expect((await context()).turns).toBe(beforeTurns)
+          deferredSelection.push({ width, action, ...observed })
+        }
       }
     } finally {await cdp.detach()}
+    await replace(editor, prefix)
+    await expect(buttons).toHaveCount(3)
     const original=await snapshot(editor)
     await editor.press('ArrowDown');await expect(buttons.nth(0)).toBeFocused()
     await buttons.nth(0).press('End');await expect(buttons.nth(2)).toBeFocused()
@@ -137,7 +169,7 @@ test('uses original native completion rows with keyboard navigation in main and 
     const text='Review '+['#release-public','#release-internal','#release-checklist'][index]
     await expect(editor).toHaveText(text);await expect(editor).toBeFocused();await expect(list).toHaveCount(0)
     expect((await context()).turns).toBe(beforeTurns)
-    interactions.push({owner,index,text,original,dismissed,composition,selected:await snapshot(editor),dismissPreservedDocumentAndCaret:true,descriptionsRetained:true,keyboardSelection:true,noSubmittedTurn:true})
+    interactions.push({owner,index,text,original,dismissed,composition,deferredSelection,selected:await snapshot(editor),dismissPreservedDocumentAndCaret:true,descriptionsRetained:true,keyboardSelection:true,noSubmittedTurn:true})
     return text
   }
   // The closure is used only after the Agent region is mounted below.
