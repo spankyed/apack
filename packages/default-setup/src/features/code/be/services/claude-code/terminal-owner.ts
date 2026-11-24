@@ -140,8 +140,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   if (!(await stat(options.cwd)).isDirectory()) throw new Error('Native terminal working directory is unavailable')
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
-  // Claude also recognizes iTerm2 by these markers. They describe the outer terminal, which does not own this PTY.
-  const unset = [...DENIED_TO_A_CHILD, 'ITERM_SESSION_ID', 'terminal']
+  // Claude uses these markers to select the teammate backend. The outer iTerm2 or tmux pane does not own this PTY.
+  const unset = [...DENIED_TO_A_CHILD, 'ITERM_SESSION_ID', 'terminal', 'TMUX', 'TMUX_PANE']
   for (const name of unset) delete terminalEnv[name]
   delete terminalEnv.TERM_PROGRAM // Inherit the broker's declared terminal identity.
   // Advertise app rendering capabilities only when the caller has not chosen an override.

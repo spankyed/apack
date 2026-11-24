@@ -58,6 +58,25 @@ it('uses the broker terminal identity even when apack was launched from iTerm2',
   } finally { await prepared.dispose() }
 })
 
+it('keeps the private tmux socket location without adopting an outer tmux pane', async () => {
+  vi.stubEnv('TMUX', '/tmp/outer-server,123,0')
+  vi.stubEnv('TMUX_PANE', '%3')
+  native.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
+  const prepared = await prepareClaudeNativeTerminal({
+    sessionId: '11111111-1111-1111-1111-111111111111', cwd: tmpdir(), cliPath: process.execPath,
+    permissionMode: 'default', settings: { effective: {}, sources: [] }, env: { TMUX_TMPDIR: '/private/fixture-tmux' },
+  })
+  try {
+    await prepared.start()
+    const { env, unset } = native.open.mock.calls[0][0]
+    expect(env).not.toHaveProperty('TMUX')
+    expect(env).not.toHaveProperty('TMUX_PANE')
+    expect(unset).toEqual(expect.arrayContaining(['TMUX', 'TMUX_PANE']))
+    expect(unset).not.toContain('TMUX_TMPDIR')
+    expect(env.TMUX_TMPDIR).toBe('/private/fixture-tmux')
+  } finally { await prepared.dispose() }
+})
+
 it.each([undefined, '2'])('honors native NO_COLOR precedence, explicit FORCE_COLOR: %s', async color => {
   vi.stubEnv('FORCE_COLOR', undefined); vi.stubEnv('FORCE_HYPERLINK', undefined); vi.stubEnv('NO_COLOR', '1')
   native.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
