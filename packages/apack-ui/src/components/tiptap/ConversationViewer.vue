@@ -17,6 +17,7 @@ import { createViewerClickHandler } from './composables/createEditorClickHandler
 import { useContributedEditor } from './internal/use-contributed-editor.ts'
 import ContributedEditorPopups from './internal/ContributedEditorPopups.vue'
 import { createConversationDocument, type ConversationMessage } from './internal/conversation-document.ts'
+import { transcriptMathExtensions } from './internal/transcript-math.ts'
 
 const props = defineProps<{
   messages: readonly ConversationMessage[]
@@ -77,6 +78,7 @@ const { editor, groups, generation, problem } = useContributedEditor(groups => (
   extensions: [
     ...createExtensions({ mode: 'viewer', variant: 'chat',
       injectedExtensions: groups.flatMap(group => Object.values(group.binding.extensions ?? {})) }),
+    ...transcriptMathExtensions(),
     Message,
   ],
   editorProps: { handleDOMEvents: { click: createViewerClickHandler({
@@ -95,7 +97,7 @@ async function notifyRendered() {
 watch(editor, (value, _previous, onCleanup) => {
   if (!value) return
   const update = createConversationDocument(value)
-  const stop = watch(() => props.messages.map(({ id, text }) => ({ id, text })), messages => {
+  const stop = watch(() => props.messages.map(({ id, text, renderMath }) => ({ id, text, renderMath })), messages => {
     try {
       update(messages)
       contentProblem.value = undefined

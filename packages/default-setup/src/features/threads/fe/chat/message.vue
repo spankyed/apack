@@ -214,7 +214,7 @@
               class="mb-1 block break-words text-xs text-neutral-400">{{ assistantTimestamps.get(part.frame.uuid)?.label }}</time>
             <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="presentTranscriptFrame(part.frame)"
               @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
-            <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
+            <TiptapEditor v-else mode="viewer" variant="chat" :render-math="isClaudeCodeThread && message.sender === 'assistant'" :model-value="part.text" />
           </template>
         </div>
 

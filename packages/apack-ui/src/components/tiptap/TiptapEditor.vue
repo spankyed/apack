@@ -26,6 +26,7 @@ import { ref, watch } from 'vue'
 import { EditorContent } from '@tiptap/vue-3'
 import { Selection } from '@tiptap/pm/state'
 import { createExtensions, type TiptapMode, type TiptapVariant } from './extensions.ts'
+import { transcriptMathExtensions } from './internal/transcript-math.ts'
 import { getEditorConfig } from './editor-config.ts'
 import { useContributedEditor } from './internal/use-contributed-editor.ts'
 import ContributedEditorPopups from './internal/ContributedEditorPopups.vue'
@@ -53,6 +54,8 @@ const props = withDefaults(defineProps<{
   pauseAvailable?: boolean
   /** Override navigation for links in the Markdown viewer. */
   openViewerLink?: (href: string) => void
+  /** Typeset LaTeX in read-only transcript Markdown. */
+  renderMath?: boolean
 }>(), {
   variant: 'full',
   modelValue: '',
@@ -178,7 +181,10 @@ const { editor, groups, generation, problem, resetDocument } = useContributedEdi
     mode: props.mode,
     variant: props.variant,
     placeholder: props.placeholder,
-    injectedExtensions: bindings.flatMap(group => Object.values(group.binding.extensions ?? {})),
+    injectedExtensions: [
+      ...bindings.flatMap(group => Object.values(group.binding.extensions ?? {})),
+      ...(props.mode === 'viewer' ? transcriptMathExtensions(() => props.renderMath === true) : []),
+    ],
   }),
   content: props.modelValue,
   editable: cfg.editable && !props.disabled,
@@ -205,7 +211,7 @@ const { editor, groups, generation, problem, resetDocument } = useContributedEdi
 // In viewer mode the editor is read-only — skip the getMarkdown() round-trip
 // comparison which can silently skip legitimate updates when the serializer
 // normalizes whitespace differently from the source markdown.
-watch(() => props.modelValue, (newVal) => {
+watch([() => props.modelValue, () => props.renderMath], ([newVal]) => {
   if (emittedValues.delete(newVal)) return
   if (!editor.value) { resetDocument(); return }
   if (!cfg.editable) { resetContent(newVal); return }

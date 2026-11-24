@@ -34,7 +34,7 @@
           <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field">
             <template v-if="teammate" #engine><TiptapEditor mode="viewer" variant="chat" :model-value="teammate.text" /></template>
           </NativeTranscriptMessage>
-          <TiptapEditor v-else mode="viewer" variant="chat" :model-value="teammate?.text ?? message.text" />
+          <TiptapEditor v-else mode="viewer" variant="chat" :render-math="!teammate && message.role === 'assistant'" :model-value="teammate?.text ?? message.text" />
         </template>
       </article>
       <NativeAgentHandback v-if="state?.agent?.handback" :report="state.agent.handback" />

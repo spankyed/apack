@@ -6,6 +6,8 @@ import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import type MarkdownIt from 'markdown-it'
 import type { TextEditorExtensionsBinding } from '@apackdev/sdk/fe'
 import ConversationViewer from '../../../src/components/tiptap/ConversationViewer.vue'
+import TiptapEditor from '../../../src/components/tiptap/TiptapEditor.vue'
+import type { ConversationMessage } from '../../../src/components/tiptap/internal/conversation-document.ts'
 
 let app: App | undefined
 afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime() })
@@ -22,7 +24,7 @@ async function fixture() {
   startFeTestRuntime({ packs: { textEditor: () => groups,
     onChanged(callback: () => void) { listeners.add(callback); return () => { listeners.delete(callback) } },
   } as never })
-  const messages = ref([{ id: 'a', text: '**first**' }, { id: 'b', text: '/help second' }])
+  const messages = ref<ConversationMessage[]>([{ id: 'a', text: '**first**' }, { id: 'b', text: '/help second' }])
   const root = document.createElement('div')
   document.body.appendChild(root)
   const rendered: string[][] = []
@@ -88,6 +90,75 @@ it('renders rich Markdown through the existing parser, including table container
   expect(f.root.querySelector('[role="status"]')).toBeNull()
   for (const selector of ['h2', 'strong', 'em', 'blockquote', 'ul', 'table', 'pre code']) {
     expect(f.root.querySelector(`[data-message="a"] ${selector}`)).not.toBeNull()
+  }
+})
+
+it('renders streamed assistant math without interpreting math in another message in the shared editor', async () => {
+  const f = await fixture()
+  const first = () => f.root.querySelector('[data-message="a"]')!
+  const second = () => f.root.querySelector('[data-message="b"]')!
+  const source = 'Price $5 and $10. Inline $x^2$ and ' + String.raw`\(y^2\)` + '.'
+    + '\n\n$$\nx^2\n$$\n\n' + ['\\[', 'y^2', '\\]'].join('\n')
+    + '\n\n`$code$`'
+  f.messages.value[0] = { id: 'a', renderMath: true, text: 'Inline $x^' }
+  f.messages.value[1].text = source
+  await settle()
+  expect(first().querySelector('math')).toBeNull()
+  expect(second().querySelector('math')).toBeNull()
+
+  f.messages.value[0].text = source
+  await settle()
+  expect(first().querySelectorAll('[data-transcript-math="inline"] math')).toHaveLength(2)
+  expect(first().querySelectorAll('[data-transcript-math="display"] math')).toHaveLength(2)
+  expect(first().querySelector('p')?.textContent).toContain('Price $5 and $10.')
+  expect(first().querySelector('code')?.textContent).toBe('$code$')
+  expect(second().querySelector('math')).toBeNull()
+  expect(second().textContent).toContain('$x^2$')
+
+  f.messages.value[0].renderMath = false
+  f.messages.value[1].renderMath = true
+  await settle()
+  expect(first().querySelector('math')).toBeNull()
+  expect(second().querySelectorAll('math')).toHaveLength(4)
+  expect(f.editors).toHaveLength(1)
+})
+
+it('preserves assistant formula delimiters when copying the transcript as Markdown', async () => {
+  const f = await fixture()
+  const inline = String.raw`A value of \(y^2\).`
+  const display = [String.raw`\[`, String.raw`\frac{1}{2}`, String.raw`\]`].join('\n')
+  const source = inline + '\n\n' + display
+  f.messages.value = [{ id: 'a', text: source, renderMath: true }]
+  await settle()
+  expect(f.root.querySelectorAll('math')).toHaveLength(2)
+  const editor = f.editors[0]
+  editor.commands.selectAll()
+  expect(editor.view.serializeForClipboard(editor.state.selection.content()).text).toBe(source)
+})
+
+it('updates the transcript fallback viewer when math presentation changes', async () => {
+  const f = await fixture()
+  const mount = document.createElement('div')
+  f.root.appendChild(mount)
+  const renderMath = ref(false)
+  const fallback = createApp({ render: () => h(TiptapEditor, {
+    mode: 'viewer', variant: 'chat', modelValue: 'Review $a^2$ and `$literal$`.',
+    renderMath: renderMath.value,
+  }) })
+  fallback.mount(mount)
+  try {
+    await settle()
+    expect(mount.querySelector('math')).toBeNull()
+    renderMath.value = true
+    await settle()
+    expect(mount.querySelectorAll('math')).toHaveLength(1)
+    expect(mount.querySelector('code')?.textContent).toBe('$literal$')
+    renderMath.value = false
+    await settle()
+    expect(mount.querySelector('math')).toBeNull()
+    expect(mount.textContent).toContain('$a^2$')
+  } finally {
+    fallback.unmount()
   }
 })
 

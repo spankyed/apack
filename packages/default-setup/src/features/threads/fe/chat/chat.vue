@@ -508,7 +508,11 @@ const conversationMessages = computed(() => visibleMessages.value
   .filter(message => message.id !== pendingNativeApproval.value?.messageId)
   .map(message => {
     const text = claudeUserMessageText(message)
-    return text === message.text ? message : { ...message, text }
+    return {
+      id: message.id,
+      text,
+      renderMath: !!currentThread.value?.context?.claudeCode && message.sender === 'assistant',
+    }
   }));
 const chatMessageCount = computed(() => threads.value.data.chatMessageIds.length);
 const messagePagination = computed(() => threads.value.data.messagePagination);

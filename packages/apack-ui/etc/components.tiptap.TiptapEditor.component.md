@@ -26,6 +26,7 @@ props {
   openViewerLink?: ((href: string) => void) | undefined;
   pauseAvailable?: boolean | undefined;
   placeholder?: string | undefined;
+  renderMath?: boolean | undefined;
   showGutter?: boolean | undefined;
   variant?: TiptapVariant | undefined;
 }
