@@ -36,7 +36,7 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'native-chat-column--padded': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" @background-composing="nativeBackgroundComposing = $event">
+        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :can-present-remote-callout="canPresentRemoteCallout" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" @background-composing="nativeBackgroundComposing = $event">
           <template #conversation-navigation>
             <button v-if="compactNavigationInHeader && nativeConversationNavigation && !isNearBottom"
               type="button" class="compact-conversation-navigation rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400"
@@ -777,6 +777,11 @@ provide(claudeTaskControls, {
   },
 })
 const mainComposer = ref<InstanceType<typeof ChatInput>>()
+function canPresentRemoteCallout() {
+  return !mainCommandActive.value && !focusedAgent.value && !agentSelection.value
+    && !pendingNativeApproval.value && !pendingNativeQuestion.value && !pendingNativePlan.value
+    && mainComposer.value?.canPresentRemoteCallout?.() === true
+}
 watch(nativeBackgroundReplyActive, (active, previous) => {
   if (active || !previous) return
   const editor = mainComposer.value, threadId = currentThread.value?.id

@@ -18,6 +18,7 @@ import { claudeTerminalGoalProposalRuntime } from './terminal-goal-proposal-runt
 import { claudeTerminalIdeOnboardingRuntime } from './terminal-ide-onboarding-runtime.ts'
 import { claudeTerminalFullscreenOfferRuntime } from './terminal-fullscreen-offer-runtime.ts'
 import { claudeTerminalResumeReturnRuntime } from './terminal-resume-return-runtime.ts'
+import { claudeTerminalRemoteCalloutRuntime } from './terminal-remote-callout-runtime.ts'
 import { claudeTerminalCostWarningRuntime } from './terminal-cost-warning-runtime.ts'
 import { claudeTerminalColdQuotaRuntime } from './terminal-cold-quota-runtime.ts'
 import { claudeTerminalRefusalRuntime } from './terminal-refusal-runtime.ts'
@@ -848,6 +849,7 @@ ${claudeTerminalFullscreenOfferRuntime}
 ${claudeTerminalResumeReturnRuntime}
 ${claudeTerminalColdQuotaRuntime}
 ${claudeTerminalCostWarningRuntime}
+${claudeTerminalRemoteCalloutRuntime}
 ${claudeTerminalLeftArrowRuntime}
 ${claudeTerminalSandboxNetworkRuntime}
 ${claudeTerminalBrowserPermissionRuntime}
@@ -1123,6 +1125,7 @@ async function readNativeNoticeSnapshot(n,signal){
   const ideWelcome=nativeIdeOnboarding(n);if(ideWelcome){const welcome=await projectNativeIdeOnboarding(n,ideWelcome);if(welcome)return {notice:welcome,retirements:refusal.retirements};}
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
+  const remoteCallout=nativeRemoteCallout(n);if(remoteCallout)return {notice:remoteCallout.notice,retirements:refusal.retirements};
   const costWarning=nativeCostWarning(n);if(costWarning)return {notice:costWarning.notice,retirements:refusal.retirements};
   const d=nativeBillingNotice(n);if(d.item)return {retirements:refusal.retirements,notice:{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}};
   const creditResult=nativeCreditConsentResult(n);if(creditResult)return {retirements:refusal.retirements,notice:creditResult};
@@ -1219,6 +1222,7 @@ async function control(request,abort){
   if(['newer_accept','newer_keep','newer_dismiss'].includes(request.decision)){answerNativeNewerModelOffer(n,request);return {answered:true};}
   if(['resume_compact','resume_continue','resume_never','resume_dismiss'].includes(request.decision)){answerNativeResumeReturn(n,request);return {answered:true};}
   if(request.decision==='fullscreen_accept'||request.decision==='fullscreen_dismiss'){answerNativeFullscreenOffer(n,request);return {answered:true};}
+  if(['remote_enable','remote_dismiss'].includes(request.decision)){answerNativeRemoteCallout(n,request);return {answered:true};}
   if(request.decision==='cost_acknowledge'){answerNativeCostWarning(n,request);return {answered:true};}
   if(request.decision==='ide_welcome_dismiss'){answerNativeIdeOnboarding(n,request);return {answered:true};}
   if(['peer_deny','peer_deliver','peer_cancel'].includes(request.decision)){answerNativePeerApproval(n,request);return {answered:true};}

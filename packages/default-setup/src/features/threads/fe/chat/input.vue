@@ -530,7 +530,6 @@ watch(() => props.nativeUi?.agentInput, state => {
   pendingNativeCommand = undefined
   if (state.status === 'command_done' && state.decision === 'confirm') pending.accept()
 })
-defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks') })
 const composerEpoch = ref(0)
 watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch.value++; submissionProblem.value = undefined; queuedNotice.value = false }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch.value++ })
@@ -681,6 +680,11 @@ const {
   handlePaste, handleFileDrop, addImageFromUrl, removeImage, restoreQueuedImages, openFilePicker, removeFile,
   captureAttachments, restoreFromReferences,
 } = useAttachments()
+function canPresentRemoteCallout() {
+  const editor = tiptapRef.value?.editor
+  return !!editor && editor.isEmpty && !editor.view.composing && !hasAttachments.value && !hostPopupActive.value && !submitting.value
+}
+defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentRemoteCallout })
 watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {
   if (values.some(Boolean)) paneFocusGrant.value = null
 })

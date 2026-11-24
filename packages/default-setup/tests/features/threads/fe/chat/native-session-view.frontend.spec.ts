@@ -13,10 +13,10 @@ vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ d
 let app: App | undefined
 beforeEach(() => { settingsStatus.value = 'ready'; actor.send.mockClear(); links.open.mockClear(); drawing.focus.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
-async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
+async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation, canPresentRemoteCallout?: () => boolean) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const flags = ref({ busy: false, inputPending: false })
-  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, ...flags.value, onActive: active }) }); app.mount(root)
+  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, canPresentRemoteCallout, ...flags.value, onActive: active }) }); app.mount(root)
   const mount = actor.send.mock.calls.find(([event]) => event.type === 'CLAUDE_TERMINAL_MOUNT')![0]
   const snapshot: ClaudeTerminalViewSnapshot = { opening: false, output: [], state: { ownerId: 'owner', sessionId: 'session', cwd: '/fixture', status: 'live', busy: false, tasks: [{ id: 'agent-a', name: 'Worker', status: 'running' }], view: { kind: 'agent', revision: 2, registryId: 'registry-a', taskId: 'agent-a' } } }
   function publish(value: ClaudeTerminalViewSnapshot) { state.value = { context: { nativeTerminalViews: { [mount.mountId]: { ...value, threadId: 'thread' } as ClaudeTerminalViewSnapshot } } } }
@@ -103,6 +103,38 @@ it('keeps IDE onboarding nonblocking and addresses both Continue and Escape to t
   expect(draft.value).toBe('A draft in progress')
   await nextTick()
   expect(document.activeElement).toBe(draft)
+})
+
+it('withdraws Remote Control while composing and routes Escape to the original Dismiss choice', async () => {
+  const draftEmpty = ref(false)
+  const f = await fixture(undefined, () => draftEmpty.value)
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick()
+  f.back.click(); await nextTick()
+  const notice = {
+    id: 'remote', revision: 'revision', sessionId: 'session', kind: 'remote_callout', title: 'Remote Control',
+    paragraphs: ['Original disclosure'], disabled: false,
+    choices: [
+      { value: 'remote_enable', label: 'Enable Remote Control', description: 'Original connection text' },
+      { value: 'remote_dismiss', label: 'Never mind', description: 'Original dismissal text' },
+    ],
+  } satisfies ClaudeNativeNotice
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const panel = () => f.root.querySelector('[data-native-notice="remote_callout"]')
+  expect(panel()).toBeNull()
+  draftEmpty.value = true
+  await nextTick()
+  const enable = panel()!.querySelector<HTMLButtonElement>('[data-native-choice="remote_enable"]')!
+  expect(panel()!.textContent).toContain('Original connection text')
+  draftEmpty.value = false
+  const before = actor.send.mock.calls.length
+  enable.click()
+  expect(actor.send.mock.calls.length).toBe(before)
+  await nextTick()
+  expect(panel()).toBeNull()
+  draftEmpty.value = true
+  await nextTick()
+  panel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ notice: { id: 'remote', revision: 'revision', sessionId: 'session', decision: 'remote_dismiss' } }))
 })
 
 it('exposes a scoped cancel action before owner state exists and keeps retry disabled while cleanup is pending', async () => {
