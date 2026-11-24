@@ -36,9 +36,12 @@ function fixture(review = true) {
 it('preserves the native disclosure and delegates approval to the original mounted control', async () => {
   const f = fixture()
   const notice = ClaudeNativeNoticeSchema.parse(f.runtime.project(f.n).notice)
-  expect(notice).toMatchObject({ kind: 'permission_publish_plugin', files: f.payload.everything, ...{
-    paragraphs: f.payload.card?.lines, previewFiles: f.payload.card?.values,
-  } })
+  expect(notice).toMatchObject({
+    kind: 'permission_publish_plugin',
+    files: f.payload.everything,
+    paragraphs: f.payload.card?.lines,
+    previewFiles: f.payload.card?.values,
+  })
   const request = f.request('publish_plugin_confirm')
   await f.runtime.answer(f.n, request, f.abort)
   expect(f.control.onConfirm).toHaveBeenCalledOnce()
