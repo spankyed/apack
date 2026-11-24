@@ -386,6 +386,36 @@ it.each(['escape', 'button'])('dismisses the current resume offer through its ca
  expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'resume_dismiss'}}))
 })
 
+it('cycles only the original resume choices with unmodified arrows', async () => {
+ const f = await fixture()
+ const notice = ownedNoticeCases.find(row => row.notice.kind === 'resume_return')!.notice
+ f.publish({...f.snapshot, state:{...f.snapshot.state!,status:'exited'}})
+ await nextTick(); f.back.click(); await nextTick()
+ f.publish({...f.snapshot, state:{...f.snapshot.state!,notice}})
+ await nextTick()
+ const card = f.root.querySelector('[data-native-notice="resume_return"]')!
+ const choices = [...card.querySelectorAll<HTMLButtonElement>('button[data-native-choice]')]
+ const [summary, continueSession, never] = choices
+ await vi.waitFor(() => expect(document.activeElement).toBe(summary))
+ actor.send.mockClear()
+ const arrow = (key: string, modifiers: KeyboardEventInit = {}) => document.activeElement!.dispatchEvent(
+  new KeyboardEvent('keydown', {key, bubbles:true, cancelable:true, ...modifiers}),
+ )
+ expect(arrow('ArrowUp')).toBe(false)
+ expect(document.activeElement).toBe(never)
+ expect(arrow('ArrowDown')).toBe(false)
+ expect(document.activeElement).toBe(summary)
+ expect(arrow('ArrowDown', {shiftKey:true})).toBe(true)
+ expect(document.activeElement).toBe(summary)
+ expect(arrow('ArrowDown')).toBe(false)
+ expect(document.activeElement).toBe(continueSession)
+ expect(actor.send).not.toHaveBeenCalled()
+ continueSession!.click()
+ expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+  ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'resume_continue'},
+ }))
+})
+
 it.each([false, true])('restores resume-offer focus only while its owner remains current (replacement=%s)', async replacement => {
  const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='resume_return')!.notice
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
