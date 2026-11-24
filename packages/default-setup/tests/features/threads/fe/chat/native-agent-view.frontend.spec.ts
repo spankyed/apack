@@ -74,6 +74,18 @@ it('releases a pending breadcrumb when another window retires its source selecti
   expect(f.draftChange).not.toHaveBeenCalled()
 })
 
+it('addresses Back to conversation to its displayed selection and releases an unacknowledged return on retirement', async () => {
+  const f = await mount()
+  f.button('Back to conversation').click()
+  const request = send.mock.calls.map(([value]) => value).find(value => value.type === 'CLAUDE_TERMINAL_TASK')
+  expect(request).toMatchObject({ operation: 'background', taskId: 'agent', fromAgent: { taskId: 'agent', revision: 3 } })
+  expect(f.pending).toHaveBeenLastCalledWith(true)
+  context.nativeTerminalViews[f.terminal].state!.view = { kind: 'main', revision: 4 }
+  await nextTick()
+  expect(f.pending).toHaveBeenLastCalledWith(false)
+  expect(f.draftChange).not.toHaveBeenCalled()
+})
+
 it('keeps the Agent editor mounted while a native approval owns input', async () => {
   const f = await mount(), draft = f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!
   draft.value = 'Keep the in-progress draft'

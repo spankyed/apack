@@ -12,7 +12,7 @@ import type { MessageReferences } from './types.ts'
 import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
-import { CLAUDE_STALE_DRAFT_MESSAGE, type ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
+import { CLAUDE_STALE_DRAFT_MESSAGE, matchesClaudeAgentView, type ClaudeNativeAgentViewSource, type ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 
 const queuedDraftImage = z.object({
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
@@ -32,7 +32,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; sessionId: string; revision: number; text: string; references?: MessageReferences; phase?: 'Plan' | 'Edit' }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
-  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'foreground'; fromAgent?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentViewSource } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
+  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'pause_workflow' | 'resume_workflow' } | { operation: 'foreground' | 'background'; fromAgent?: ClaudeNativeAgentViewSource } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | ({ ownerId: string; sessionId: string; viewRevision: number; turnId: string; queueRevision: string; sequence: number } & (
       { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_CANCEL'; itemId: string }
     ))
@@ -845,11 +845,9 @@ export function createClaudeTerminalViews(dependencies: {
       }
       if (event.type === 'CLAUDE_TERMINAL_TASK') {
         if (event.sessionId !== owner.state.sessionId) return
-        const fromAgent = event.operation === 'foreground' ? event.fromAgent : undefined
-        if (fromAgent !== undefined) {
-          const view = owner.state.view
-          if (!fromAgent || view?.kind !== 'agent' || view.taskId !== fromAgent.taskId || view.revision !== fromAgent.revision) return
-        }
+        const changesView = event.operation === 'foreground' || event.operation === 'background'
+        const fromAgent = changesView && 'fromAgent' in event ? event.fromAgent : undefined
+        if (event.operation === 'foreground' && fromAgent !== undefined && (!fromAgent || !matchesClaudeAgentView(owner.state.view, fromAgent))) return
         const previous = target.task?.sessionId === event.sessionId ? target.task : undefined
         if (typeof event.taskId !== 'string' || !event.taskId || event.taskId.length > 256 || !['inspect', 'stop', 'send', 'input', 'foreground', 'background', 'skip_worker', 'retry_worker', 'pause_workflow', 'resume_workflow'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (previous?.revision ?? 0) || previous?.status === 'pending' || event.operation !== 'background' && !fromAgent && !owner.state.tasks.some(task => task.id === event.taskId)) return
         if ((event.operation === 'send' || event.operation === 'input') && (typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384)) return
@@ -859,10 +857,20 @@ export function createClaudeTerminalViews(dependencies: {
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner
           && owner.state.sessionId === task.sessionId && target.task === task
         void Promise.resolve().then(async () => {
-          const resume = event.operation === 'foreground' || event.operation === 'background' ? await dependencies.beforeViewChange?.(target.client, event.threadId) : undefined
+          if (!current()) return undefined
+          if (event.operation === 'background') {
+            const view = owner.state.view
+            const matches = fromAgent
+              ? fromAgent.taskId === event.taskId && matchesClaudeAgentView(view, fromAgent)
+              : event.taskId === '@main-view' && view?.kind !== 'agent'
+            if (!matches) throw Error('The native view changed; return again')
+          }
+          const resume = changesView ? await dependencies.beforeViewChange?.(target.client, event.threadId) : undefined
           try {
             if (!current()) return undefined
-            if (fromAgent) return await owner.operateTask(event.taskId, 'foreground', undefined, undefined, fromAgent)
+            if (fromAgent && (event.operation === 'foreground' || event.operation === 'background')) {
+              return await owner.operateTask(event.taskId, event.operation, undefined, undefined, fromAgent)
+            }
             if (event.operation === 'skip_worker' || event.operation === 'retry_worker') return await owner.operateTask(event.taskId, event.operation, undefined, event.worker)
             return await ((event.operation === 'send' || event.operation === 'input') ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation))
           } finally { resume?.() }

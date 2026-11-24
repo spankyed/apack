@@ -29,7 +29,7 @@ it('keeps the native terminal visible until the exact main-view receipt is ackno
   const f = await fixture(); expect(f.root.textContent).toContain('Viewing Agent · Worker')
   f.back.click(); await nextTick()
   const request = actor.send.mock.calls.at(-1)![0]
-  expect(request).toMatchObject({ operation: 'background', taskId: 'agent-a', ownerId: 'owner', revision: 1 })
+  expect(request).toMatchObject({ operation: 'background', taskId: 'agent-a', ownerId: 'owner', revision: 1, fromAgent: { taskId: 'agent-a', revision: 2 } })
   expect(f.active).toHaveBeenLastCalledWith(true)
   const main = { ...f.snapshot.state!, view: { kind: 'main' as const, revision: 3 } }
   f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', sessionId: 'session', taskId: 'agent-a', revision: 2, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()

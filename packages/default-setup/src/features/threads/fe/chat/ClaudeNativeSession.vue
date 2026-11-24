@@ -267,8 +267,10 @@ function returnToConversation() {
   if (stopping.value || returning.value || view.value?.task?.status === 'pending') return
   const revision = (view.value?.task?.revision ?? 0) + 1
   returning.value = { ownerId: state.ownerId, sessionId: state.sessionId, revision }; returnProblem.value = undefined
-  const taskId = state.view?.kind === 'agent' ? state.view.taskId ?? state.view.registryId : '@main-view'
-  send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, sessionId: state.sessionId, taskId, revision, operation: 'background' })
+  const selected = state.view
+  const taskId = selected?.kind === 'agent' ? selected.taskId ?? selected.registryId : '@main-view'
+  send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, sessionId: state.sessionId,
+    taskId, revision, operation: 'background', ...(selected?.kind === 'agent' ? { fromAgent: { taskId, revision: selected.revision } } : {}) })
 }
 watch(view, value => {
   const request = returning.value

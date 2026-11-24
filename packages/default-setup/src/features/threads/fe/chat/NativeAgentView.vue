@@ -272,7 +272,9 @@ function returnToParent() {
   if (!owner || pending.value || returning.value || stopping.value || commandActive.value) return
   returning.value = true; emit('returning', true); emit('pending', true); problem.value = undefined
   returnRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
-  sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: returnRevision, operation: 'background' })
+  const { taskId, revision: viewRevision } = props.target
+  sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId,
+    taskId, revision: returnRevision, operation: 'background', fromAgent: { taskId, revision: viewRevision } })
 }
 function stopAgent() {
   const owner = selectedOwner.value
@@ -281,9 +283,10 @@ function stopAgent() {
   stopRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
   sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
 }
-// A different window can retire the source view before the breadcrumb request reaches native.
+// A different window can retire the source view before our navigation reaches native.
 watch(selectedOwner, owner => {
-  if (owner || !ancestorTarget) return
+  if (owner || !returning.value) return
+  if (!ancestorTarget && terminal.value?.task?.revision === returnRevision && terminal.value.task.operation === 'background') return
   ancestorTarget = undefined
   returning.value = false
   emit('returning', false)

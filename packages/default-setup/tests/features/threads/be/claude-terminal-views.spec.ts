@@ -369,11 +369,13 @@ it('drains a late published owner after cancellation without attaching it to the
 it.each(['foreground', 'background'] as const)('holds shared UI suspension until %s completes and resumes after native failure', async operation => {
   const resume = vi.fn(), release = vi.fn(async () => resume), f = fixture(undefined, release)
   f.owner.state.tasks.push({ id: 'agent', name: 'Worker', status: 'running' })
+  const fromAgent = operation === 'background' ? { taskId: 'agent', revision: 3 } : undefined
+  if (fromAgent) f.owner.state.view = { kind: 'agent', taskId: 'agent', registryId: 'registry-agent', revision: fromAgent.revision }
   let fail!: (error: Error) => void
   vi.mocked(f.owner.operateTask).mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
   try {
     f.views.handle(mount, 'window', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, taskId: 'agent', revision: 1, operation }, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, taskId: 'agent', revision: 1, operation, fromAgent }, 'window', f.send)
     await vi.waitFor(() => expect(f.owner.operateTask).toHaveBeenCalledOnce())
     expect(resume).not.toHaveBeenCalled()
     fail(Error('native view refused'))
@@ -382,6 +384,25 @@ it.each(['foreground', 'background'] as const)('holds shared UI suspension until
   } finally { f.views.clear() }
 })
 
+
+it('refuses a delayed return for a newly selected instance of the same Agent before suspending UI', async () => {
+  const suspend = vi.fn(async () => vi.fn()), f = fixture(undefined, suspend)
+  f.owner.state.view = { kind: 'agent', taskId: 'agent', registryId: 'registry-agent', revision: 5 }
+  vi.mocked(f.owner.operateTask).mockResolvedValue({ view: { taskId: null } })
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId,
+    sessionId: f.owner.state.sessionId, taskId: 'agent', revision: 1, operation: 'background' } as const
+  try {
+    f.views.handle(mount, 'window', f.send)
+    f.views.handle({ ...request, fromAgent: { taskId: 'agent', revision: 3 } }, 'window', f.send)
+    await vi.waitFor(() => expect(f.send.mock.lastCall?.[0].task).toMatchObject({ revision: 1, status: 'error' }))
+    expect(suspend).not.toHaveBeenCalled()
+    expect(f.owner.operateTask).not.toHaveBeenCalled()
+    const fromAgent = { taskId: 'agent', revision: 5 }
+    f.views.handle({ ...request, revision: 2, fromAgent }, 'window', f.send)
+    await vi.waitFor(() => expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('agent', 'background', undefined, undefined, fromAgent))
+    expect(suspend).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})
 
 it('routes a completed ancestor outside the ordinary roster only from its current selection', async () => {
   const resume = vi.fn(), suspend = vi.fn(async () => resume), f = fixture(undefined, suspend)

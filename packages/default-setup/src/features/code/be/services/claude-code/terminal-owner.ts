@@ -38,7 +38,7 @@ import { buildChildEnv, DENIED_TO_A_CHILD } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
 import type { PermissionMode } from './types.ts'
 import { ClaudeMemoryDialogSchema, type ClaudeMemoryDialog, ClaudeMcpStatusSchema, type ClaudeMcpStatus, ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
-import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
+import { matchesClaudeAgentView, type ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 
 const logger = createLogger('claude-code-terminal-owner')
 
@@ -647,7 +647,14 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const view = bridge.view
         const inspectingSelected = operation === 'inspect' && view?.kind === 'agent' && view.taskId === taskId
         if (closed || operation !== 'background' && !inspectingSelected && !fromAgent && !tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
-        if (fromAgent && (operation !== 'foreground' || view?.kind !== 'agent' || view.taskId !== fromAgent.taskId || view.revision !== fromAgent.revision)) throw new Error('Native Agent breadcrumb expired')
+        if (operation === 'background') {
+          const matches = fromAgent
+            ? fromAgent.taskId === taskId && matchesClaudeAgentView(view, fromAgent)
+            : taskId === '@main-view' && view?.kind !== 'agent'
+          if (!matches) throw Error('The native view changed; return again')
+        } else if (fromAgent && (operation !== 'foreground' || !matchesClaudeAgentView(view, fromAgent))) {
+          throw Error('Native Agent breadcrumb expired')
+        }
         const viewChange = operation === 'foreground' || operation === 'background'
         if (viewChange && (changingView || preparingParent)) throw new Error('Native view or parent input is changing')
         if (viewChange) { changingView = true; changed() }

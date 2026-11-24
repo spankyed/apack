@@ -21,18 +21,20 @@ function fixture() {
   let denied = false
   const message = vi.fn((value: unknown) => value)
   const runner = vi.fn(async function* (call: { id: string }, _assistant: unknown, _permission: unknown, _context: unknown, _clock: unknown) { yield { message: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: call.id, ...(denied ? { is_error: true, content: 'Native refusal' } : {}) }] }, toolUseResult: { success: !denied } } } })
+  let selectionRevision = 3
+  const retireCommands = vi.fn(async () => {})
   const nativeViewFacts = () => {
     const selected = registry.get(nativeState.viewingAgentTaskId ?? '')
-    return { sequence: 3, view: selected ? { kind: 'agent', registryId: selected.id, taskId: selected.agentId } : { kind: 'main' } }
+    return { sequence: selectionRevision, view: nativeState.viewingAgentTaskId === undefined ? { kind: 'main' } : { kind: 'agent', registryId: nativeState.viewingAgentTaskId, taskId: selected?.agentId } }
   }
   const transcriptState = {
     AE: () => true,
     Ldt: (task?: typeof tasks[number]) => task?.type === 'local_agent' && !task.forkWorker && task.evictAfter !== 0,
     xp: (task?: typeof tasks[number]) => task?.type === 'in_process_teammate',
   }
-  const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { nativeViewFacts, randomUUID: () => '12345678-1234-1234-1234-123456789abc', retireNativeAgentCommands: async () => {} }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
+  const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { nativeViewFacts, randomUUID: () => '12345678-1234-1234-1234-123456789abc', retireNativeAgentCommands: retireCommands }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
   const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction', fromAgent?: { taskId: string; revision: number }) => run({ transcriptState, workflowTasks:{UAe:pause}, runtime: { Jgr: (origin: { kind?: string } | undefined) => ({ kind: origin?.kind === 'human' ? 'composer' : 'unclassified' }), Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text, ...(fromAgent ? { from_agent: fromAgent } : {}) }, new AbortController(), current)
-  return { pause, show, nativeState, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
+  return { pause, show, nativeState, retireCommands, changeSelectionRevision(revision: number) { selectionRevision = revision }, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
 }
 it('stops the exact native registry task through the original user-stop callback', async () => {
   const f = fixture(); expect(await f.request('stop')).toEqual({ stopped: true })
@@ -246,7 +248,7 @@ it('uses original native view selection and returns only after exact registry se
   const f = fixture()
   expect(await f.request('foreground')).toEqual({ view: { taskId: 'agent-a' } })
   expect(f.show).toHaveBeenCalledWith({ agentId: 'agent-a' }); expect(f.nativeState.viewingAgentTaskId).toBe('registry-a')
-  expect(await f.request('background')).toEqual({ view: { taskId: null } })
+  expect(await f.request('background', 'agent-a', vi.fn(), '', { taskId: 'agent-a', revision: 3 })).toEqual({ view: { taskId: null } })
   expect(f.show).toHaveBeenLastCalledWith({}); expect(f.nativeState.viewingAgentTaskId).toBeUndefined()
 })
 it('refuses native selection denial, moved selection and foreign return requests', async () => {
@@ -254,7 +256,7 @@ it('refuses native selection denial, moved selection and foreign return requests
   await expect(f.request('foreground')).rejects.toThrow('unavailable')
   f.show.mockResolvedValueOnce('shown'); await expect(f.request('foreground')).rejects.toThrow('moved')
   f.nativeState.viewingAgentTaskId = 'registry-a'
-  await expect(f.request('background', 'other-agent')).rejects.toThrow('different native Agent')
+  await expect(f.request('background', 'other-agent', vi.fn(), '', { taskId: 'other-agent', revision: 3 })).rejects.toThrow('view changed')
   expect(f.show).toHaveBeenCalledTimes(2)
 })
 
@@ -262,7 +264,25 @@ it('returns from a retired native view safely but refuses empty task identity', 
   const f = fixture(); f.nativeState.viewingAgentTaskId = 'retired-task'
   await expect(f.request('background', '')).rejects.toThrow('Invalid native task operation')
   expect(f.show).not.toHaveBeenCalled()
-  expect(await f.request('background')).toEqual({ view: { taskId: null } })
+  const source = { taskId: 'retired-task', revision: 3 }
+  expect(await f.request('background', source.taskId, vi.fn(), '', source)).toEqual({ view: { taskId: null } })
+  expect(await f.request('background', '@main-view')).toEqual({ view: { taskId: null } })
+})
+
+it('never retires commands for a delayed return from an older selection of the same Agent', async () => {
+  const f = fixture()
+  f.nativeState.viewingAgentTaskId = 'registry-a'
+  const source = { taskId: 'agent-a', revision: 3 }
+  f.changeSelectionRevision(5)
+  await expect(f.request('background', source.taskId, vi.fn(), '', source)).rejects.toThrow('view changed')
+  await expect(f.request('background', '@main-view')).rejects.toThrow('view changed')
+  expect(f.retireCommands).not.toHaveBeenCalled()
+  expect(f.show).not.toHaveBeenCalled()
+
+  f.retireCommands.mockImplementationOnce(async () => f.changeSelectionRevision(7))
+  await expect(f.request('background', source.taskId, vi.fn(), '', { ...source, revision: 5 })).rejects.toThrow('view changed')
+  expect(f.show).not.toHaveBeenCalled()
+  expect(f.nativeState.viewingAgentTaskId).toBe('registry-a')
 })
 
 it('keeps Workflow identity and stop native without admitting Agent-only operations', async () => {

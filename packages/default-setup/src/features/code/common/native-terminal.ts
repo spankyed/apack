@@ -27,6 +27,10 @@ export interface ClaudeNativeAgentUiTarget {
 
 export type ClaudeNativeAgentViewSource = Pick<ClaudeNativeAgentUiTarget, 'taskId' | 'revision'>
 
+export function matchesClaudeAgentView(view: ClaudeNativeTerminalView | undefined, source: ClaudeNativeAgentViewSource): boolean {
+  return view?.kind === 'agent' && (view.taskId ?? view.registryId) === source.taskId && view.revision === source.revision
+}
+
 export interface ClaudeNativePauseScope {
   ownerId: string
   sessionId: string

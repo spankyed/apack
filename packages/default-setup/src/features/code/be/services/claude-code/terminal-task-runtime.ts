@@ -113,10 +113,15 @@ async function nativeTaskControl(n,binding,request,abort,current){
  if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background','skip_worker','retry_worker','pause_workflow','resume_workflow'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
  if(request.operation==='background'){
-  await retireNativeAgentCommands();current();
-  const selected=context.getAppState().viewingAgentTaskId;
-  const selectedTask=selected===undefined?undefined:registry.get(selected);
-  if(selectedTask&&(n.runtime.flt(selectedTask)?.id??selected)!==request.task_id)throw Error('A different native Agent is selected');
+  const requireSource=()=>{
+   const {view,sequence}=nativeViewFacts(n,binding,abort),source=request.from_agent;
+   const matches=source?view.kind==='agent'&&sequence===source.revision&&
+     (view.taskId??view.registryId)===source.taskId&&source.taskId===request.task_id:
+     view.kind==='main'&&request.task_id==='@main-view';
+   if(!matches)throw Error('The native view changed; return again');
+  };
+  requireSource();
+  await retireNativeAgentCommands();current();requireSource();
   if(typeof binding.view?.show!=='function'||await binding.view.show({})!=='shown')throw Error('Native main view is unavailable');
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};
