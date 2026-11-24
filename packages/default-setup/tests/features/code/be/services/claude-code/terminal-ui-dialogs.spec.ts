@@ -18,11 +18,17 @@ function fixture() {
   const answer = vi.fn((_id: unknown, _result: unknown) => { state.open = [] })
   const store = { getState: () => state, answer }
   let appState = { mcp: {clients:[] as {name:string,type:string}[],tools:[] as {name:string}[]}, settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
-  const context = { appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
+  let turnBusy = false
+  const activityListeners = new Set<() => void>()
+  const turnActivity = { getSnapshot: () => turnBusy, subscribe(listener: () => void) {
+    activityListeners.add(listener)
+    return () => activityListeners.delete(listener)
+  } }
+  const context = { turnActivity, appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
   const binding = { surface: 'terminal', toolContext: () => context }
   let disabled = false
   const reconnect = vi.fn(async (_name: string) => ({client:{type:'connected'}})), toggle = vi.fn(async (name: string) => {disabled = !disabled;const result={name,type:disabled?'disabled':'connected'};appState.mcp.clients=[result];return result}), isDisabled = vi.fn(() => disabled)
-  const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { lpe: () => null as {turnId:string;cancelled():boolean} | null, ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
+  const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, renameTiming: { tp: vi.fn(() => true) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { lpe: () => null as {turnId:string;cancelled():boolean} | null, ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
   let feedback = ''
   const setter = (value: string) => { feedback = value; fileFiber.memoizedState.memoizedState = value }
@@ -46,7 +52,7 @@ function fixture() {
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_file_dialogs' }, new AbortController())).dialogs[0]
   const reply = (dialog: any, overrides = {}) => control({ subtype: 'apack_answer_file_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...overrides }, new AbortController())
-  return { state, item, answer, snapshot, reply, control, native, context, replaceNativeSession() { nativeSessionId = randomUUID() }, replaceSession() { sessionId = randomUUID() } }
+  return { state, item, answer, snapshot, reply, control, native, context, activityListeners, setTurnBusy(busy: boolean) { turnBusy = busy; for (const listener of activityListeners) listener() }, replaceNativeSession() { nativeSessionId = randomUUID() }, replaceSession() { sessionId = randomUUID() } }
 }
 
 it('allows only the original native input once, ignoring arbitrary permission updates', async () => {
@@ -180,6 +186,22 @@ it('runs original native rename only for the current native and observer session
  f.replaceNativeSession();await expect(f.control(request,new AbortController())).rejects.toThrow('session changed')
  expect(f.native.rename.Qar).toHaveBeenCalledOnce()
 });
+
+it.each(['same session', 'replaced session', 'defer gate off'])('uses native busy rename reminder timing with %s', async scenario => {
+  const f = fixture()
+  f.setTurnBusy(true)
+  if (scenario === 'defer gate off') f.native.renameTiming.tp.mockReturnValue(false)
+  const response = await f.control({
+    subtype: 'apack_rename_session', session_id: '11111111-1111-4111-8111-111111111111', title: 'Requested',
+  }, new AbortController())
+  expect(response).toEqual({title: 'Native title', message: 'Renamed'})
+  expect(f.context.appendSystemMessage).toHaveBeenCalledTimes(scenario === 'defer gate off' ? 1 : 0)
+  if (scenario === 'replaced session') f.replaceNativeSession()
+  f.setTurnBusy(false)
+  await Promise.resolve()
+  expect(f.context.appendSystemMessage).toHaveBeenCalledTimes(scenario === 'replaced session' ? 0 : 1)
+  expect(f.activityListeners.size).toBe(0)
+})
 
 it('does not add a manual rename reminder for an original generated title',async()=>{
  const f=fixture();f.native.rename.Qar.mockResolvedValueOnce({newName:'Generated',requestedName:'Generated',isGenerated:true,message:'Generated title'})

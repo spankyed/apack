@@ -33,6 +33,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-kmv3514c.js": { "module": "chunk-tsw4ek67.js", "exports": { "xr": "xr" } },
     "chunk-zpkky5k1.js": { "module": "chunk-k8y71hwe.js", "exports": { "Kwn": "Own" } },
     "chunk-p22r2x2e.js": { "module": "chunk-mct2b85z.js", "exports": { "AM": "E0" } },
+    "chunk-2jyw98bz.js": { "module": "chunk-tm94jfk2.js", "exports": { "tp": "tp" } },
     "chunk-002p0hd2.js": {
       "module": "chunk-ztnrxvr2.js",
       "exports": {

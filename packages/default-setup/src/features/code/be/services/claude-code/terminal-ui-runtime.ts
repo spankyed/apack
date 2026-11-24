@@ -375,6 +375,7 @@ async function initialize(){
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const themeStore=await import('/$bunfs/root/chunk-5feck2gp.js'),themeStorageKeys=await import('/$bunfs/root/chunk-r1ydygv8.js'),themeStorageGate=await import('/$bunfs/root/chunk-gc95262s.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
+  const renameTiming=await import('/$bunfs/root/chunk-2jyw98bz.js');
   const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js'),privateTasks=await import('/$bunfs/root/chunk-s5erk9wy.js'),privateTaskDrawing=await import('/$bunfs/root/chunk-w5063paj.js');
   const taskOutput=await import('/$bunfs/root/chunk-nbvvw59m.js');
   const taskOutputText=await import('node:util');
@@ -423,7 +424,7 @@ async function initialize(){
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   observeNativeManagedSettings(settingsDetector.Ta);
-  return native={hookPresence,mcpInputTiming,fileSuggestions,fileSuggestionScope,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskTeamContext,taskAppState,taskSessionGlobals,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,renameTiming,fileSuggestions,fileSuggestionScope,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskTeamContext,taskAppState,taskSessionGlobals,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -1170,6 +1171,25 @@ async function readNativeNoticeSnapshot(n,signal){
   const inline=nativeInlineModelOffer(n);return {retirements:refusal.retirements,notice:inline?await projectNativeInlineModelOffer(n,inline):null};
  }
 ${claudeTerminalBackgroundReplyRuntime}
+// Claude's immediate /rename persists the title now but holds its meta row until the turn ends.
+async function appendNativeRenameReminder(n,binding,context,sessionId,message){
+ const activity=context.turnActivity;
+ if(!activity.getSnapshot()||!n.renameTiming.tp()){
+  await context.appendSystemMessage(message);
+  return;
+ }
+ const isCurrent=()=>String(n.questionOptions.q())===sessionId&&(originalContext??n.runtime.ey())===binding;
+ const release=()=>{
+  if(!isCurrent()){unsubscribe();return;}
+  if(activity.getSnapshot())return;
+  unsubscribe();
+  Promise.resolve().then(()=>{
+   if(isCurrent())return context.appendSystemMessage(message);
+  }).catch(error=>console.error('Could not append the native rename reminder',error));
+ };
+ const unsubscribe=activity.subscribe(release);
+ release();
+}
 async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_background_reply')return replyNativeBackground(request);
@@ -1529,7 +1549,7 @@ async function control(request,abort){
   const context=binding.toolContext(abort),result=await n.rename.Qar(request.title,context,true);
   current();if(typeof result.newName!=='string'||!result.newName)throw Error(result.message??'Native rename was refused');
   if(result.isGenerated!==true){
-   await context.appendSystemMessage(n.runtime.Ae({content:n.rename.G8s(result.newName,result.requestedName),isMeta:true}));
+   await appendNativeRenameReminder(n,binding,context,expected,n.runtime.Ae({content:n.rename.G8s(result.newName,result.requestedName),isMeta:true}));
    current();
   }
   return {title:result.newName,message:result.message};
