@@ -24,7 +24,7 @@ beforeEach(async()=>{
   mockService<Services,'emitter'>('emitter',{broadcast:vi.fn()});
 });
 afterEach(async()=>{vi.unstubAllEnvs();await rm(root,{recursive:true,force:true});});
-const run=(text='/added --remember')=>action({command:'cc-add-dir',threadId,text},services,{} as never,'directory-flow');
+const run=(text='/added --remember')=>action({command:'cc-add-dir',threadId,text},services);
 const directories=()=>repository.threadQueries.byId(threadId)?.context?.claudeCode?.additionalDirs;
 
 it('does not change thread roots when remembered settings cannot be parsed',async()=>{
@@ -81,7 +81,7 @@ it.each([
   ['"/folder with spaces"','/folder with spaces'],
   ['/','/'],
 ])('uses the same literal path for cc-set-dir %s',async(text,path)=>{
-  const result=await action({command:'cc-set-dir',threadId,text},services,{} as never,'directory-flow');
+  const result=await action({command:'cc-set-dir',threadId,text},services);
   expect(result.success).toBe(true);
   expect(getTestSettings().getOverrides().features?.['default-setup/code']).toHaveProperty('defaultBaseDirectory',path);
   expect(directories()).toEqual(['/kept']);

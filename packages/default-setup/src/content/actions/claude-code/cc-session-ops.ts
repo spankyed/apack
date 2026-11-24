@@ -8,7 +8,7 @@ import { claudeProfileOptions, sameClaudeProfile } from '../../../features/code/
 
 import { importedSessionMetadata } from './_helpers/session-import.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 import { getClaudeState, persistClaudeState, ensureSessionMarker, updateChatState } from './_helpers/thread-context.ts';
 
 export const meta: ActionMeta = {
@@ -38,8 +38,6 @@ const handlers: Record<string, Handler> = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { command, text, threadId, cwdOverride } = params;
   const name = (command as string).replace(/^cc-/, '');

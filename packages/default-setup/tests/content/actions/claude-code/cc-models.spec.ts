@@ -21,7 +21,7 @@ function setup(cwd?: string) {
  mockService<Services, 'chat'>('chat', { sendBlockMessage: vi.fn() });
  return { live, fresh, getNativeTerminal };
 }
-const run = (text?: string) => action({ command: 'cc-models', threadId: 'catalog-thread', text }, services, {} as never, 'catalog-flow');
+const run = (text?: string) => action({ command: 'cc-models', threadId: 'catalog-thread', text }, services);
 describe('native model catalog command', () => {
  it('uses the matching process and preserves native names and effort values', async () => {
   const f=setup('/selected'); const result=await run();

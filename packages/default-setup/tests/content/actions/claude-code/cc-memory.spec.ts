@@ -17,7 +17,7 @@ const memory = {
   auto_memory: { enabled: true, toggleable: true, status: 'on' },
   auto_dream: { shown: false, status: 'off', detail: '' },
 }
-const run = (text?: string) => action({ command: 'cc-memory', threadId: 'memory-thread', text }, services, {} as never, 'memory-flow')
+const run = (text?: string) => action({ command: 'cc-memory', threadId: 'memory-thread', text }, services)
 
 function setup(live = false) {
   let state = { cwd: '/saved', cwdOverride: '/picked', profile: { configDir: '/thread-profile' } }

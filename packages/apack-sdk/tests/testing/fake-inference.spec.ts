@@ -1,9 +1,28 @@
 // fakeInference runs the AI SDK's real calls on a scripted model and records what the model received
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { isStepCount, jsonSchema, Output, tool, type JSONSchema7 } from 'ai';
 import { z } from 'zod';
 import { fakeInference, startTestRuntime } from '../../src/testing/index.ts';
 import { boundHost } from '../../src/runtime/host-runtime.ts';
+
+/** Minimal Standard Schema v1 + Standard JSON Schema v1 implementation (non-Zod) to pin library neutrality. */
+function standardObjectSchema<T>(
+  json: JSONSchema7,
+  validate: (value: unknown) => { value: T } | { issues: readonly { message: string }[] },
+) {
+  return {
+    '~standard': {
+      version: 1 as const,
+      vendor: 'custom-standard-schema',
+      validate,
+      jsonSchema: {
+        input: () => json as Record<string, unknown>,
+        output: () => json as Record<string, unknown>,
+      },
+      types: undefined as unknown as { readonly input: T; readonly output: T },
+    },
+  };
+}
 
 describe('fakeInference', () => {
   it('answers generateText with its reply and records the call', async () => {
@@ -194,6 +213,96 @@ describe('fakeInference', () => {
     const { rerankedDocuments } = await inference.rerank({ model: 'cohere:rerank-v3.5', query: 'milk', documents: ['bread', 'milk', 'eggs'], topN: 2 });
     expect(rerankedDocuments[0]).toBe('milk');
     expect(inference.calls).toEqual([{ kind: 'reranking', model: 'cohere:rerank-v3.5', query: 'milk', documents: ['bread', 'milk', 'eggs'], topN: 2 }]);
+  });
+
+  describe('Standard Schema support (non-Zod)', () => {
+    const cityWeather = standardObjectSchema<{ city: string; celsius: number }>(
+      { type: 'object', properties: { city: { type: 'string' }, celsius: { type: 'number' } }, required: ['city', 'celsius'] },
+      (value) => {
+        if (typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>).city === 'string' && typeof (value as Record<string, unknown>).celsius === 'number') {
+          return { value: value as { city: string; celsius: number } };
+        }
+        return { issues: [{ message: 'Expected { city: string, celsius: number }' }] };
+      },
+    );
+
+    const searchInput = standardObjectSchema<{ query: string }>(
+      { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+      (value) => (typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>).query === 'string'
+        ? { value: value as { query: string } }
+        : { issues: [{ message: 'Expected { query: string }' }] }),
+    );
+
+    it('accepts a non-Zod Standard Schema for object and array OutputSpec and infers its output type', async () => {
+      const objectResult = await fakeInference(JSON.stringify({ city: 'Lyon', celsius: 19 }))
+        .generateText({ model: 'openai:gpt-5', prompt: 'x', output: { type: 'object', schema: cityWeather } });
+      expectTypeOf(objectResult.output).toEqualTypeOf<{ city: string; celsius: number }>();
+      expect(objectResult.output).toEqual({ city: 'Lyon', celsius: 19 });
+
+      const arrayResult = await fakeInference(JSON.stringify({ elements: [{ city: 'Lyon', celsius: 19 }] }))
+        .generateText({ model: 'openai:gpt-5', prompt: 'x', output: { type: 'array', element: cityWeather } });
+      expectTypeOf(arrayResult.output).toEqualTypeOf<Array<{ city: string; celsius: number }>>();
+      expect(arrayResult.output).toEqual([{ city: 'Lyon', celsius: 19 }]);
+
+      await expect(
+        fakeInference(JSON.stringify({ city: 'Lyon', celsius: 'warm' }))
+          .generateText({ model: 'openai:gpt-5', prompt: 'x', output: { type: 'object', schema: cityWeather } }),
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/response did not match schema/i),
+        cause: expect.objectContaining({
+          message: expect.stringContaining('Expected { city: string, celsius: number }'),
+        }),
+      });
+    });
+
+    it('streams partial output and runs tools/agents with non-Zod Standard Schemas', async () => {
+      const stream = await fakeInference(JSON.stringify({ city: 'Lyon', celsius: 19 }))
+        .streamText({ model: 'openai:gpt-5', prompt: 'x', output: { type: 'object', schema: cityWeather } });
+      const partials: unknown[] = [];
+      for await (const partial of stream.partialOutputStream) partials.push(partial);
+      expect(partials.at(-1)).toEqual({ city: 'Lyon', celsius: 19 });
+      const streamOutput = await stream.output;
+      expectTypeOf(streamOutput).toEqualTypeOf<{ city: string; celsius: number }>();
+      expect(streamOutput).toEqual({ city: 'Lyon', celsius: 19 });
+
+      const queries: string[] = [];
+      const search = tool({
+        description: 'Search',
+        inputSchema: searchInput,
+        execute: async ({ query }) => {
+          expectTypeOf(query).toEqualTypeOf<string>();
+          queries.push(query);
+          return ['hit'];
+        },
+      });
+      const agent = await fakeInference((call) => call.messages.some((m) => m.role === 'tool')
+        ? JSON.stringify({ city: 'Lyon', celsius: 19 })
+        : { toolCalls: [{ toolName: 'search', input: { query: 'weather' } }] })
+        .createAgent({
+          model: 'openai:gpt-5',
+          instructions: 'Check weather',
+          tools: { search },
+          output: { type: 'object', schema: cityWeather },
+        });
+      const result = await agent.generate({ prompt: 'Lyon?' });
+      expectTypeOf(result.output).toEqualTypeOf<{ city: string; celsius: number }>();
+      expect(queries).toEqual(['weather']);
+      expect(result.output).toEqual({ city: 'Lyon', celsius: 19 });
+    });
+
+    it('fails clearly when a Standard Schema lacks JSON Schema conversion', async () => {
+      const noJsonSchema = {
+        '~standard': {
+          version: 1 as const,
+          vendor: 'validator-only',
+          validate: (value: unknown) => ({ value }),
+        },
+      };
+      await expect(
+        fakeInference(JSON.stringify({ ok: true }))
+          .generateText({ model: 'openai:gpt-5', prompt: 'x', output: { type: 'object', schema: noJsonSchema } }),
+      ).rejects.toThrow(/does not support JSON Schema conversion/);
+    });
   });
 
   it("is what unmocked tests don't have: the test host's inference fails naming the fix", async () => {

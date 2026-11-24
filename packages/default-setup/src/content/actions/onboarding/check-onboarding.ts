@@ -1,5 +1,5 @@
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 
 export const meta: ActionMeta = {
   label: 'Check Onboarding',
@@ -8,6 +8,6 @@ export const meta: ActionMeta = {
   input: {},
 };
 
-export async function action(_params: Record<string, unknown>, services: Services, _z: Z, _flowId: string) {
+export async function action(_params: Record<string, unknown>, services: Services) {
   return { needed: !services.onboarding.isComplete() };
 }

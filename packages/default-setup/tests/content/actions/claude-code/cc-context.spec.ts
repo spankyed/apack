@@ -15,7 +15,7 @@ function setup(active?: { getContextUsage: ReturnType<typeof vi.fn> }) {
   mockService<Services, 'chat'>('chat', { sendBlockMessage });
   return { threadId: id, getContextUsage, query, sendBlockMessage };
 }
-const run = (threadId: string) => action({ threadId }, services, {} as never, 'context-flow');
+const run = (threadId: string) => action({ threadId }, services);
 
 describe('native context action and refresh', () => {
   it('uses the active process and renders native categories, memory and skill details', async () => {

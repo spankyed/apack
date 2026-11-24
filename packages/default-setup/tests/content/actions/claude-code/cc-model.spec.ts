@@ -12,7 +12,7 @@ function setup(owner?: object) {
   mockService<Services, 'chat'>('chat', { sendBlockMessage: vi.fn() });
   return { id, settings, getNativeTerminal, state: () => repository.threadQueries.byId(id)?.context?.claudeCode };
 }
-const run = (id: string, text?: string) => action({ command: 'cc-model', threadId: id, text }, services, {} as never, 'model-flow');
+const run = (id: string, text?: string) => action({ command: 'cc-model', threadId: id, text }, services);
 describe('thread model selection', () => {
   it('stages a selection without a fresh process or global settings edit', async () => {
     const f = setup();

@@ -5,7 +5,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 import { parseCommandArguments } from './_helpers/command-arguments.ts';
 import { getClaudeState, persistClaudeState, setProjectDirectory, updateClaudeState } from './_helpers/thread-context.ts';
 
@@ -46,8 +46,6 @@ const handlers: Record<string, Handler> = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { command, text, threadId } = params;
   const name = (command as string).replace(/^cc-/, '');

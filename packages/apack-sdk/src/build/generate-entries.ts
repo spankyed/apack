@@ -1878,7 +1878,6 @@ ${nodeEntity}`;
     });
 
     return `${HEADER}
-import type { z } from 'zod';
 import type { EARS } from '@apackdev/sdk';
 import type { HostServices, PackServiceAccess } from '@apackdev/sdk/services';
 import { runtimeServices } from './runtime-services.ts';
@@ -1931,7 +1930,6 @@ export function bindServices(source: PackServiceAccess): () => void {
     }
   };
 }
-export type Z = typeof z;
 export type EntityId = EARS.EntityId;
 `;
   }

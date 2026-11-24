@@ -16,7 +16,7 @@ for (const live of [false, true]) it(`reopens the represented session without du
  const read=vi.fn(),create=vi.fn(),open=vi.fn()
  mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),listSessions:vi.fn(async()=>[{id:'native-session',cwd:'/fixture'}]),viewSession:read,getNativeTerminal:vi.fn((id:string)=>live&&id===source.id?{state:{sessionId:'native-session'}}:undefined),getConversation:vi.fn()} as never})
  mockService<Services,'chat'>('chat',{createThread:create,sendBlockMessage:vi.fn(),showThread:open})
- await action({command:'cc-resume',text:'native-session',threadId:caller.id},services,{} as never,'')
+ await action({command:'cc-resume',text:'native-session',threadId:caller.id},services)
  expect(open).toHaveBeenCalledWith(source.id);expect(create).not.toHaveBeenCalled();expect(read).not.toHaveBeenCalled()
  expect(repository.chatQueries.threadData(source.id)?.messages?.map(m=>m.id)).toEqual([original.id])
 })
@@ -27,7 +27,7 @@ it('does not reopen a staged fork as the original saved session', async () => {
  mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),listSessions:vi.fn(async()=>[{id:'native-session',cwd:'/fixture'}]),viewSession:transcript,getNativeTerminal:vi.fn(),getConversation:vi.fn()} as never})
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
  mockService<Services,'chat'>('chat',{...chatService,sendBlockMessage:vi.fn(),showThread:open,createThread:create})
- await action({command:'cc-resume',text:'native-session',threadId:fork.id},services,{} as never,'')
+ await action({command:'cc-resume',text:'native-session',threadId:fork.id},services)
  expect(transcript).toHaveBeenCalledWith('native-session',{cwd:'/fixture',env:{CLAUDE_CONFIG_DIR:'/fixture/claude-profile'}})
  expect(create).toHaveBeenCalledOnce();const imported=create.mock.results[0]!.value.id
  expect(open).toHaveBeenCalledWith(imported)
@@ -41,7 +41,7 @@ it('bulk import retains native cumulative cost without charging a new turn', asy
  const transcript=[{type:'cost-state',totalCostUSD:0.5},{type:'cost-state',totalCostUSD:1.25},{type:'cost-state',totalCostUSD:-1},{type:'cost-state',totalCostUSD:Number.NaN}]
  mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),listSessions:vi.fn(async()=>[{id:'saved-native',cwd:'/fixture'}]),viewSession:vi.fn(async()=>transcript)} as never})
  mockService<Services,'chat'>('chat',{...chatService,sendBlockMessage:vi.fn(()=>({messageId:'Message-progress' as const})),updateMessageState:vi.fn()})
- await action({command:'cc-import',threadId:caller.id},services,{} as never,'')
+ await action({command:'cc-import',threadId:caller.id},services)
  const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='saved-native')
  expect(imported?.context?.claudeCode).toMatchObject({cwd:'/fixture',totalCostUsd:1.25})
 });
@@ -99,7 +99,7 @@ it('resumes identical native IDs only within the caller profile', async () => {
  mockService<Services,'cli'>('cli',{claudeCode:{profile:()=>({configDir:'/new-default'}),listSessions:vi.fn(async()=>[{id:'native-session',cwd:'/fixture'}]),viewSession:read,getNativeTerminal:vi.fn(),getConversation:vi.fn()} as never})
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
  mockService<Services,'chat'>('chat',{...chatService,sendBlockMessage:vi.fn(),showThread:open})
- const result=await action({command:'cc-resume',text:'native-session',threadId:caller.id},services,{} as never,'')
+ const result=await action({command:'cc-resume',text:'native-session',threadId:caller.id},services)
  expect(result.text).toContain('Session resumed:')
  expect(open).not.toHaveBeenCalled()
  expect(read).toHaveBeenCalledWith('native-session',{cwd:'/fixture',env:{CLAUDE_CONFIG_DIR:'/owned'}})

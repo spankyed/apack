@@ -4,7 +4,7 @@ import { claudeProfileOptions } from '../../../features/code/common/native-profi
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 import { getClaudeState, persistClaudeState, updateChatState, dequeueMessage } from './_helpers/thread-context.ts';
 import { replayQueuedMessage } from './_helpers/stream-consumer.ts';
 
@@ -23,8 +23,6 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { text, threadId } = params;
   const args = text?.trim() ? text.trim().split(/\s+/) : [];

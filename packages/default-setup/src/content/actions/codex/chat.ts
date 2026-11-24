@@ -7,7 +7,7 @@
 
 import type { AppSettings } from '@apackdev/sdk/types';
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z, EntityId } from '#generated/services.ts';
+import type { Services, EntityId } from '#generated/services.ts';
 import { createStreamWriter } from '../claude-code/_helpers/stream-writer.ts';
 import { createToolActivityWriter } from '../claude-code/_helpers/tool-activity-writer.ts';
 import { createThinkingWriter } from '../claude-code/_helpers/thinking-writer.ts';
@@ -36,7 +36,7 @@ export const meta: ActionMeta = {
   },
 };
 
-export async function action(params: Record<string, any>, services: Services, _z: Z, _flowId: string) {
+export async function action(params: Record<string, any>, services: Services) {
   const { threadId, text, phase, model, messageId: userMessageId, references } = params as {
     threadId: EntityId; text: string; mode?: string; phase?: string; model?: string; messageId?: string; references?: any;
   };

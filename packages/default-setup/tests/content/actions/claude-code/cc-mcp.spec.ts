@@ -8,7 +8,7 @@ function fixture() {
  const exec=vi.fn(async()=>({stdout:'configured server',stderr:''})),get=vi.fn(),conversation=vi.fn()
  mockService<Services,'cli'>('cli',{claudeCode:{getNativeTerminal:get,getConversation:conversation,exec} as never})
  mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()})
- return {id,exec,get,conversation,run:(text='')=>action({command:'cc-mcp',threadId:id,text},services,{} as never,'')}
+ return {id,exec,get,conversation,run:(text='')=>action({command:'cc-mcp',threadId:id,text},services)}
 }
 it('reads actual native status/tools without running the configuration CLI',async()=>{
  const f=fixture(),getMcpStatus=vi.fn(async()=>({mcpServers:[{name:'research',status:'connected',serverInfo:{name:'fixture',version:'1'},tools:[{name:'echo'}]}]}))

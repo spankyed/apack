@@ -6,7 +6,7 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
+import type { Services } from '#generated/services.ts';
 import { formatProviderError } from '../_helpers/format-provider-error.ts';
 
 export const meta: ActionMeta = {
@@ -22,8 +22,6 @@ export const meta: ActionMeta = {
 export async function action(
   params: Record<string, any>,
   services: Services,
-  _z: Z,
-  _flowId: string,
 ) {
   const { prompt: userPrompt, client } = params;
   // The window that asked: a flow run has no return address, so the ask carried its connection. With none, no

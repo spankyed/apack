@@ -23,7 +23,7 @@ function services() {
 describe('a generated query', () => {
   it('is answered to the connection the ask carried', async () => {
     const { sent, services: fakes } = services()
-    await action({ prompt: 'every id', client: 'c-main' }, fakes, {} as never, 'Flow-1')
+    await action({ prompt: 'every id', client: 'c-main' }, fakes)
     expect(sent).toEqual([
       { client: 'c-main', surface: 'default-setup/database', type: 'AI_QUERY_LOADING' },
       { client: 'c-main', surface: 'default-setup/database', type: 'AI_QUERY_GENERATED' },
@@ -32,7 +32,7 @@ describe('a generated query', () => {
 
   it('tells nobody, and asks no model, when no window asked', async () => {
     const { sent, services: fakes } = services()
-    expect(await action({ prompt: 'every id' }, fakes, {} as never, 'Flow-1')).toMatchObject({ success: false })
+    expect(await action({ prompt: 'every id' }, fakes)).toMatchObject({ success: false })
     expect(sent).toEqual([])
   })
 

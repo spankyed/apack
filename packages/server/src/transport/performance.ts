@@ -1,4 +1,4 @@
-import { _recordingModeSchema } from '@apackdev/sdk/runtime';
+import { _RECORDING_MODES } from '@apackdev/sdk/runtime';
 import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -47,7 +47,7 @@ function owned(client: string) {
 }
 
 export const performanceRouter = router({
-  start: procedure.input(z.object({ mode: _recordingModeSchema, startup: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
+  start: procedure.input(z.object({ mode: z.enum(_RECORDING_MODES), startup: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
     const performance = controller();
     if (owner) throw new TRPCError({ code: 'CONFLICT', message: 'A performance recording is already active' });
     if (ctx.closed.aborted) throw new TRPCError({ code: 'BAD_REQUEST', message: 'The connection is closed' });

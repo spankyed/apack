@@ -17,7 +17,7 @@ function fixture(validate = vi.fn(async () => {})) {
 it('rejects unavailable native history before creating or copying a thread', async () => {
   const f = fixture(vi.fn(async()=>{throw Error('No message found');}));
   const before = repository.chatQueries.threadData(f.id)?.messages;
-  const result = await action({threadId:f.id},services,{} as never,'');
+  const result = await action({threadId:f.id},services);
   expect(result.success).toBe(false);
   expect(f.create).not.toHaveBeenCalled();
   expect(repository.threadCommands.forkCount(f.id)).toBe(0);
@@ -26,7 +26,7 @@ it('rejects unavailable native history before creating or copying a thread', asy
 });
 it('validates the native boundary before creating a fork with matching session state', async () => {
   const f=fixture();
-  const result=await action({threadId:f.id},services,{} as never,'');
+  const result=await action({threadId:f.id},services);
   expect(result.success).toBe(true);
   expect(f.validate).toHaveBeenCalledWith({sessionId:'native-session',messageUuid:'native-assistant',cwd:'/fixture'});
   expect(f.validate.mock.invocationCallOrder[0]).toBeLessThan(f.create.mock.invocationCallOrder[0]);
@@ -39,7 +39,7 @@ it('validates the native boundary before creating a fork with matching session s
 it('rejects a source changed while native validation was pending', async () => {
   let release!:()=>void;
   const f=fixture(vi.fn(()=>new Promise<void>(resolve=>{release=resolve;})));
-  const pending=action({threadId:f.id},services,{} as never,'');
+  const pending=action({threadId:f.id},services);
  await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
   repository.chatCommands.addMessage({threadId:f.id,sender:'user',text:'A new turn'});
   release();
@@ -49,9 +49,9 @@ it('rejects a source changed while native validation was pending', async () => {
 it('requires an idle source and a known native session before creating a fork', async () => {
   const f=fixture();
   repository.threadCommands.update(f.id,{context:{claudeCode:{sessionId:'native-session',cwd:'/fixture',isRunning:true}}});
-  expect((await action({threadId:f.id},services,{} as never,'')).success).toBe(false);
+  expect((await action({threadId:f.id},services)).success).toBe(false);
   repository.threadCommands.update(f.id,{context:{claudeCode:{sessionId:undefined,cwd:'/fixture',isRunning:false}}});
-  expect((await action({threadId:f.id},services,{} as never,'')).success).toBe(false);
+  expect((await action({threadId:f.id},services)).success).toBe(false);
   expect(f.validate).not.toHaveBeenCalled();
   expect(f.create).not.toHaveBeenCalled();
 });

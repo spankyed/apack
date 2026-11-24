@@ -9,7 +9,7 @@ function fixture(rename=vi.fn(async()=>({title:'Native accepted title',message:'
  const native={state:{sessionId:'native-session'},renameSession:rename},get=vi.fn(()=>native),fallback=vi.fn()
  mockService<Services,'cli'>('cli',{claudeCode:{getNativeTerminal:get,getConversation:vi.fn(),renameSession:fallback} as never})
  mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()})
- return {id,native,get,fallback,rename,run:()=>action({command:'cc-rename',threadId:id,text:'Requested title'},services,{} as never,'')}
+ return {id,native,get,fallback,rename,run:()=>action({command:'cc-rename',threadId:id,text:'Requested title'},services)}
 }
 it('publishes the original native applied title instead of the requested spelling',async()=>{
  const f=fixture();expect((await f.run()).text).toBe('Native rename result')

@@ -71,7 +71,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
     await app.runFlow('Claude Code');
   }
   const invoke = async (text: string, messageId: string) => {
-    if (!app) return chat({ threadId: id, text, messageId }, services, {} as never, '');
+    if (!app) return chat({ threadId: id, text, messageId }, services);
     const run = await app.runFlow('Claude Code', { event: 'user.message', data: { threadId: id, text, messageId, mode: 'Claude Code' } });
     expect(run.steps.map(actionLabel)).toContain('Claude Code Chat');
     return { streaming: store.isConversationBusy(id) };
@@ -87,7 +87,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   expect(store.getHandle(id)).toBe(store.getConversation(id)?.owner.handle);
   expect(native.close).not.toHaveBeenCalled();
   if (mode === 'source') {
-    expect((await modelCommand({ command: 'cc-model', threadId: id, text: 'haiku' }, services, {} as never, '')).text).toContain('selection accepted');
+    expect((await modelCommand({ command: 'cc-model', threadId: id, text: 'haiku' }, services)).text).toContain('selection accepted');
     expect(native.setModel).toHaveBeenCalledWith('haiku');
     expect(repository.threadQueries.byId(id)?.context?.claudeCode?.modelOverride).toBe('haiku');
   }
@@ -158,7 +158,7 @@ it('preserves native assistant rows when one provider reply becomes several tran
   const emitted = vi.fn();
   mockService<Services, 'emitter'>('emitter', { tell: emitted, broadcast: vi.fn() });
   const user = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'paired reply' });
-  expect(await chat({ threadId: id, text: 'paired reply', messageId: user.id }, services, {} as never, '')).toMatchObject({ streaming: true });
+  expect(await chat({ threadId: id, text: 'paired reply', messageId: user.id }, services)).toMatchObject({ streaming: true });
   events.write({ type: 'command_lifecycle', state: 'started', command_uuid: 'input-paired' });
   events.write({ type: 'system', subtype: 'init', session_id: 'paired-session', cwd: '/fixture' });
   events.write({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'First' } } });
@@ -196,7 +196,7 @@ it.each([['Plan','acceptEdits',undefined,'plan','acceptEdits'],['Edit','plan','a
  mockService<Services,'logger'>('logger',{debug:vi.fn(),info:vi.fn(),warn:vi.fn(),error:vi.fn()})
  mockService<Services,'emitter'>('emitter',{tell:vi.fn(),broadcast:vi.fn()})
  const user=repository.chatCommands.addMessage({threadId:id,sender:'user',text:'Phase review'})
- expect(await chat({threadId:id,text:'Phase review',messageId:user.id,phase},services,{} as never,'')).toMatchObject({streaming:true})
+ expect(await chat({threadId:id,text:'Phase review',messageId:user.id,phase},services)).toMatchObject({streaming:true})
  expect(opened.mock.calls[0]![2].permissionMode).toBe('acceptEdits')
  if(target==='plan')expect(native.setPermissionMode).toHaveBeenCalledWith('plan')
  expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({permissionMode:target})
@@ -211,13 +211,13 @@ it('retains explicit channel intent while a fork queues input and refuses live n
  mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),getNativeTerminal} as never})
  mockService<Services,'logger'>('logger',{debug:vi.fn(),info:vi.fn(),warn:vi.fn(),error:vi.fn()})
  const channels=['plugin:review@owned']
- expect(await chat({threadId:id,text:'Review',channels},services,{} as never,'')).toMatchObject({queued:true})
+ expect(await chat({threadId:id,text:'Review',channels},services)).toMatchObject({queued:true})
  channels.push('plugin:other@owned')
  expect(getClaudeState(services,id)?.queuedMessage?.channels).toEqual(['plugin:review@owned'])
  getNativeTerminal.mockReturnValue({})
- expect(await chat({threadId:id,text:'Replace',channels:[]},services,{} as never,'')).toMatchObject({success:false,error:'Stop the native session before changing channel selection'})
+ expect(await chat({threadId:id,text:'Replace',channels:[]},services)).toMatchObject({success:false,error:'Stop the native session before changing channel selection'})
  expect(getClaudeState(services,id)?.queuedMessage?.text).toBe('Review')
- expect(await chat({threadId:id,text:'Invalid',channels:['--dangerously-load-development-channels']},services,{} as never,'')).toMatchObject({success:false})
+ expect(await chat({threadId:id,text:'Invalid',channels:['--dangerously-load-development-channels']},services)).toMatchObject({success:false})
 })
 
 it('applies an idle native charge once across completion order and rejects retired sessions', async () => {

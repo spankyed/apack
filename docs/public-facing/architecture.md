@@ -351,7 +351,7 @@ A flow run is not in the app's database: no unit (`transact`) on the app's engin
 | `settings.ts` / `settings-fe.ts` | Typed, owner-bound settings handles and frontend settings binding |
 | `paths.ts` | `getDataDirPath(name)` for a directory in this pack's data namespace |
 | `runtime-services.ts` | Shared runtime service binding used by the generated facade and registration |
-| `services.ts` | Service aggregation: imports each service object its manifest entry names (`"path#exportName"`), exports `Services`/`Z`/`EntityId` and the host-selected `services` facade and `servicesForAction(label)` factory. `Services` types `services.emitter` as `PackEmitter`, with this pack's surface and system events |
+| `services.ts` | Service aggregation: imports each service object its manifest entry names (`"path#exportName"`), exports `Services`/`EntityId` and the host-selected `services` facade and `servicesForAction(label)` factory. `Services` types `services.emitter` as `PackEmitter`, with this pack's surface and system events |
 | `repository.ts` | `repository`, typed with the repositories declared in `features.<id>.repositories` and dependencies' |
 | `repositories.ts` | This pack's repositories by name, which `pack-entry.ts` puts in the registration (the app holds them with the pack's other contributions) |
 | `pack-types.ts` | The facade types `apack pack build` bundles into `dist/types/pack-types.d.ts` for dependents |

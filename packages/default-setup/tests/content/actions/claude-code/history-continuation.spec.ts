@@ -13,7 +13,7 @@ for(const state of [{sessionId:'native-session',historyError:'boundary unavailab
   const query=vi.fn(),notify=vi.fn();
   mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),query} as never});
   mockService<Services,'chat'>('chat',{sendBlockMessage:notify});
-  expect((await chat({threadId:id,text:'Continue'},services,{} as never,'')).success).toBe(false);
+  expect((await chat({threadId:id,text:'Continue'},services)).success).toBe(false);
   expect(query).not.toHaveBeenCalled();expect(notify).toHaveBeenCalled();
   expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject(state);
  });
@@ -27,7 +27,7 @@ it('marks a native history error as blocked without discarding its session, and 
  const writer={finalize:vi.fn()};
  finalizeSessionError(services,id,writer as never,'No message found with message.uuid of: native-assistant',undefined,{isHistoryChange:true});
  expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({sessionId:'native-session',historyError:expect.stringContaining('No message found')});
- await reset({threadId:id},services,{} as never,'');
+ await reset({threadId:id},services);
  expect(repository.threadQueries.byId(id)?.context?.claudeCode).toBeUndefined();
 });
 
@@ -39,10 +39,10 @@ for(const worktreeMismatch of [false,true]) {
   mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),openConversation:query,isConversationBusy:vi.fn(()=>false),getConversation:vi.fn(),getHandle:vi.fn(),sessionExists:vi.fn(async()=>true)} as never});
   mockService<Services,'chat'>('chat',{...chatService,resolveReferences:vi.fn(async()=>({textPrefix:'',imageBlocks:[]}))} as never);
   mockService<Services,'threads'>('threads',{updateChatState:vi.fn()});
-  const result=await chat({threadId:id,text:'Continue'},services,{} as never,'');
+  const result=await chat({threadId:id,text:'Continue'},services);
   expect(result.success).toBe(false);
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.historyError).toBeDefined();
-  await chat({threadId:id,text:'Another message'},services,{} as never,'');
+  await chat({threadId:id,text:'Another message'},services);
   expect(query).toHaveBeenCalledTimes(worktreeMismatch?0:1);
  });
 }
@@ -55,7 +55,7 @@ it('drains the idle owner before reset so its final journal cannot restore the o
  const closeIdleConversation=vi.fn(async()=>{await closing;repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'old-session',turns:2}}});return true});
  mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),closeIdleConversation} as never});
  mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()});
- const resetting=reset({threadId:id},services,{} as never,'');
+ const resetting=reset({threadId:id},services);
  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.sessionId).toBe('old-session');
  release();expect(await resetting).toMatchObject({success:true});
  expect(repository.threadQueries.byId(id)?.context?.claudeCode).toBeUndefined();
@@ -65,6 +65,6 @@ it('preserves the session when its owner is busy instead of reporting a complete
  repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'busy-session'}}});
  mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),closeIdleConversation:vi.fn(async()=>false)} as never});
  const notify=vi.fn();mockService<Services,'chat'>('chat',{sendBlockMessage:notify});
- expect(await reset({threadId:id},services,{} as never,'')).toMatchObject({success:false,error:expect.stringContaining('Pause')});
+ expect(await reset({threadId:id},services)).toMatchObject({success:false,error:expect.stringContaining('Pause')});
  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.sessionId).toBe('busy-session');expect(notify).toHaveBeenCalledWith(expect.objectContaining({text:expect.stringContaining('Pause')}));
 });

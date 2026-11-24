@@ -1,11 +1,30 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
-import { _recordingModeSchema } from '@apackdev/sdk/runtime';
+import { _RECORDING_MODES, type _RecordingMode } from '@apackdev/sdk/runtime';
 import type { AppModule } from '../../AppModule.ts';
 import { getAppEnvironment } from '../../app-environment.ts';
 import { createRendererCapture } from './capture.ts';
 import { createRendererProfileTransport } from './profile-transport.ts';
+
+type ActiveRecordingMode = Exclude<_RecordingMode, 'disabled'>;
+const ACTIVE_RECORDING_MODES: readonly ActiveRecordingMode[] = _RECORDING_MODES.filter(
+  (mode): mode is ActiveRecordingMode => mode !== 'disabled',
+);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseActiveRecordingMode(input: unknown): ActiveRecordingMode {
+  if (typeof input !== 'string' || !(ACTIVE_RECORDING_MODES as readonly string[]).includes(input)) {
+    throw Error('Invalid renderer recording mode');
+  }
+  return input as ActiveRecordingMode;
+}
+
+function parseCaptureId(input: unknown): string {
+  if (typeof input !== 'string' || !UUID_PATTERN.test(input)) {
+    throw Error('Invalid renderer capture id');
+  }
+  return input;
+}
 
 /** Main owns the debugger; a lease prevents an old document's stop from closing a new capture. */
 export function createPerformanceModule(): AppModule {
@@ -20,7 +39,7 @@ export function createPerformanceModule(): AppModule {
   return { enable({ app }) {
     ipcMain.handle('performance:renderer:start', async (event, input: unknown) => {
       const contents = permitted(event);
-      const mode = _recordingModeSchema.exclude(['disabled']).parse(input);
+      const mode = parseActiveRecordingMode(input);
       if (active.has(contents.id)) throw Error('A renderer capture is active or stopping');
       if (contents.debugger.isAttached()) throw Error('The renderer debugger is already owned');
       contents.debugger.attach('1.3');
@@ -57,7 +76,7 @@ export function createPerformanceModule(): AppModule {
     });
     ipcMain.handle('performance:renderer:stop', (event, input: unknown) => {
       const contents = permitted(event);
-      const id = z.string().uuid().parse(input);
+      const id = parseCaptureId(input);
       const claim = active.get(contents.id);
       if (!claim || claim.id !== id) throw Error('No matching renderer capture');
       return claim.stop();

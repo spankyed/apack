@@ -22,7 +22,7 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   await rm(root, { recursive: true, force: true })
 })
-const setModel = () => action({ command: 'cc-config', text: 'set model "fixture-model"', threadId: 'fixture-thread' }, services, {} as never, 'fixture-flow')
+const setModel = () => action({ command: 'cc-config', text: 'set model "fixture-model"', threadId: 'fixture-thread' }, services)
 
 it.each(['{"privateFixtureSecret":"do-not-display",', 'null', '[]', '"privateFixtureSecret"', '42'])('preserves invalid settings bytes and refuses editing (%s)', async raw => {
   const file = join(root, 'settings.json')
@@ -52,7 +52,7 @@ it('keeps an existing chat settings write in its captured profile after the defa
  featureSettings.forFeature('code').set({path:['claudeProfile'],value:'app'})
  try {
   expect(cliService.claudeCode.profile().configDir).not.toBe(root)
-  const result=await action({command:'cc-config',text:'set model "fixture-model"',threadId:thread.id},services,{} as never,'fixture-flow')
+  const result=await action({command:'cc-config',text:'set model "fixture-model"',threadId:thread.id},services)
   expect(result.text).toContain('Set model')
   expect(JSON.parse(await readFile(join(root,'settings.json'),'utf8'))).toEqual({nativeFutureField:'retained',model:'fixture-model'})
   expect(await cliService.claudeCode.readSettings(claudeProfileOptions({profile}))).toEqual({nativeFutureField:'retained',model:'fixture-model'})
@@ -61,7 +61,7 @@ it('keeps an existing chat settings write in its captured profile after the defa
 
 it('recognizes the original loggedIn auth status after native setup', async () => {
  mockService<Services,'cli'>('cli',{claudeCode:{version:vi.fn(async()=>'2.1.302'),authStatus:vi.fn(async()=>({loggedIn:true})),readSettings:vi.fn(async()=>({}))} as never})
- const result=await action({command:'cc-stats',threadId:'fixture-thread'},services,{} as never,'fixture-flow')
+ const result=await action({command:'cc-stats',threadId:'fixture-thread'},services)
  expect(result.text).toContain('Auth: authenticated')
 })
 

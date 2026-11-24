@@ -73,8 +73,9 @@ cd "$WORK"
 "$APACK" pack init demo-pack >/dev/null
 PACK="$WORK/demo-pack"
 cd "$PACK"
-# The tarballs stand in for the npm registry. The scaffold names no @elmdb/ears: a pack has the SDK's
+# The tarballs stand in for the npm registry. The scaffold names no @elmdb/ears or zod: a pack has the SDK's engine and chooses its own schema library
 [ "$(npm pkg get dependencies.@elmdb/ears devDependencies.@elmdb/ears)" = "{}" ] || fail "apack pack init added @elmdb/ears to the pack"
+[ "$(npm pkg get dependencies.zod devDependencies.zod)" = "{}" ] || fail "apack pack init added zod to the pack"
 npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC"
 npm install --loglevel=error --no-audit --no-fund
 # @apackdev/sdk carries the platform API only; the component library and its editors come with @apackdev/ui
@@ -216,8 +217,8 @@ node -e '
   m.content.sources = { prompts: "src/content/prompts", ...m.content.sources };
   fs.writeFileSync("apack.json", JSON.stringify(m, null, 2) + "\n");
 '
-# The digest service imports the AI SDK's pure pieces (Output); mockInference runs the AI SDK in tests
-npm install --loglevel=error --no-audit --no-fund --save ai@^7.0.100
+# The digest service imports the AI SDK's pure pieces (Output) and zod; mockInference runs the AI SDK in tests
+npm install --loglevel=error --no-audit --no-fund --save ai@^7.0.100 zod@^4.6.7
 
 step "3. apack pack build"
 "${BUILD_ENV[@]}" "$APACK" pack build | tee "$WORK/build.log"
