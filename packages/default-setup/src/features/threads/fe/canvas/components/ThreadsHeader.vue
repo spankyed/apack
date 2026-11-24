@@ -44,7 +44,7 @@
         </button>
       </div>
       <!-- Filter buttons -->
-      <div class="flex gap-2 flex-shrink-0 whitespace-nowrap">
+      <div class="flex shrink-0 gap-1 whitespace-nowrap @md:gap-2">
         <FilterPopover
           :statuses="statuses"
           :tags="allTags"
@@ -63,31 +63,36 @@
           <Button
             type="button"
             variant="transparent"
-            class="!text-sm !px-3 !py-1.5"
+            aria-label="Filter"
+            title="Filter"
+            class="!text-sm !px-2 !py-1.5 @md:!px-3"
           >
-            <Filter :size="14" />
-            <span>Filter</span>
+            <Filter :size="14" aria-hidden="true" />
+            <span class="hidden @md:inline">Filter</span>
           </Button>
         </FilterPopover>
         <Button
           v-if="activeFilterCount > 0"
           type="button"
           variant="transparent"
-          class="!text-sm !px-3 !py-1.5"
+          aria-label="Clear filters"
+          :title="`Clear filters (${activeFilterCount})`"
+          class="!gap-1 !text-sm !px-2 !py-1.5 @2xl:!px-3"
           @click="send({ type: 'CLEAR_FILTERS' })"
         >
-          <span>Clear filters</span>
-          <span class="ml-1 text-neutral-500">
-            ({{ activeFilterCount }})
-          </span>
+          <FilterX :size="14" aria-hidden="true" class="@2xl:hidden" />
+          <span class="hidden @2xl:inline">Clear filters</span>
+          <span class="text-neutral-400" aria-hidden="true">{{ activeFilterCount }}</span>
         </Button>
       </div>
       <!-- Search input -->
       <div class="relative min-w-0 w-32 @3xl:w-64">
         <Search aria-hidden="true" class="pointer-events-none absolute w-4 h-4 -translate-y-1/2 left-2.5 top-1/2 text-neutral-500" />
         <input
+          ref="searchInput"
           v-model="searchKeyword"
           type="text"
+          aria-label="Search threads"
           placeholder="Search threads..."
           class="w-full min-w-0 pl-8 pr-7 py-1.5 text-sm transition-all duration-200 border rounded-md bg-neutral-800 border-neutral-700 placeholder-neutral-600 text-neutral-100 focus:outline-none focus:border-neutral-600 focus:bg-neutral-800"
         />
@@ -104,10 +109,13 @@
         @click="send({ type: 'SHOW_CREATE_FORM' })"
         type="button"
         variant="primary"
-        class="whitespace-nowrap flex-shrink-0"
+        class="shrink-0 whitespace-nowrap !px-2 @md:!px-4"
+        aria-label="New Thread"
+        title="New Thread"
         data-onboarding-id="thread-create-button"
       >
-        <span>New Thread</span>
+        <Plus :size="16" aria-hidden="true" class="@md:hidden" />
+        <span class="hidden @md:inline">New Thread</span>
       </Button>
     </div>
   </div>
@@ -117,7 +125,7 @@
 import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed, watch } from 'vue'
-import { Search, Filter, List, Columns3, PanelLeft, History, Archive, X } from 'lucide-vue-next'
+import { Search, Filter, FilterX, List, Columns3, PanelLeft, History, Archive, Plus, X } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
 import FilterPopover from './FilterPopover.vue'
 import { type ThreadsState } from '#features/threads/fe/state.ts'
@@ -151,7 +159,13 @@ const activeFilterCount = computed(() =>
   threads.value.data.filters.statuses.length + threads.value.data.filters.tags.length + threads.value.data.filters.chatStates.length
 )
 
+const searchInput = ref<HTMLInputElement | null>(null)
 const searchKeyword = ref(threads.value.data.filters.search ?? '')
+
+function clearSearch() {
+  searchKeyword.value = ''
+  searchInput.value?.focus()
+}
 let searchTimeout: ReturnType<typeof setTimeout> | undefined
 watch(searchKeyword, (val) => {
   clearTimeout(searchTimeout)
