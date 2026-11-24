@@ -1,4 +1,4 @@
-# @app/api
+# @app/server
 
 The backend process: a `node:http` + `ws` server exposing a tRPC router over WebSocket and the root event bus, the process boot, and the composition that opens the app's elmdb databases (`@elmdb/ears/database`) for the EARS engines and binds the app. It holds nothing else: behaviour (systems, repositories, flows) lives in packs (`packages/default-setup`), and app runtime in `@apackdev/host`, including the pack runtime (`@apackdev/host/packs/runtime`: loading, lifecycle, reload, applying), the app bus (`createAppBus(registry)`, `@apackdev/host/bus`), the migrations runners (`@apackdev/host/migrations`) and the host services (`createHostRuntime()`, `@apackdev/host/services`); this package wires them together and serves them. `tests/source-layout.spec.ts` lists the files `src/` may hold. Environment variables and the manual boot command are in the root `CLAUDE.md` (App environment).
 
@@ -23,7 +23,7 @@ transport, boot or composition belongs in `@apackdev/host`, which the same guard
 
 | Path | Purpose |
 |------|---------|
-| `server.ts` | Entry. Loads `dotenv`, calls `installFatalErrorHandling()` (`boot/errors.ts`) and `captureApiToken()` (`boot/config.ts`, before anything could spawn a process that would inherit the token), then runs `setupBackend()` and `createWebSocketServer()`. Any failure is written to stderr as a `{"__fatal": true, message, stack, source}` JSON line and the process exits 1 |
+| `server.ts` | Entry. Loads `.env` via `boot/env.ts` (`process.loadEnvFile()`), calls `installFatalErrorHandling()` (`boot/errors.ts`) and `captureApiToken()` (`boot/config.ts`, before anything could spawn a process that would inherit the token), then runs `setupBackend()` and `createWebSocketServer()`. Any failure is written to stderr as a `{"__fatal": true, message, stack, source}` JSON line and the process exits 1 |
 | `types.ts` | The `types` entry (`dist/types.d.ts`): `AppRouter`, `EARS`, `BaseEntity`, pack content preview types |
 | `transport/` | tRPC, the root event emitter and the ws server (below) |
 | `adapters/logging.ts` | Log output (below) |
@@ -90,13 +90,13 @@ Importing `runtime/index.ts` opens and binds nothing. `openAppStore()` creates t
 
 ## How Electron starts it
 
-`packages/main/src/modules/api-server/` (`ApiServer.ts`, `config.ts`) spawns `dist/server.js` with `cwd` = `packages/api`:
+`packages/main/src/modules/api-server/` (`ApiServer.ts`, `config.ts`) spawns `dist/server.js` with `cwd` = `packages/server`:
 
 - From source: `node --conditions=@apackdev/source dist/server.js`. Packaged: Electron's executable (`process.execPath`) with `ELECTRON_RUN_AS_NODE=1` and the full path.
 - Env (`getEnvironment`): `NODE_ENV` (`development` / `production`), `API_PORT` (from `get-port`, preferring the previous port), `APACK_STARTUP_ID`, `APACK_LOG_DIR` (main's log dir), `SHIPPED_PACKS_DIR` (`packages/`, or `resources/app/packages` packaged: the packs the app installs at first boot), `APACK_ENV`, `APACK_USER_DATA_DIR`.
 - `process-manager.ts` parses stderr lines starting with `{"__fatal":` to report the crash.
 
-Builds: `npm run dev` (root) runs `build:api:dev` → this package's `build:dev` (tsup, ESM `server.js` only, no tsc/dts/minify; the dev launcher builds default-setup first). `npm run build` runs `tsc --noEmit`, then tsup with ESM + CJS, `types.ts` declarations and minification. tsup bundles workspace packages from source (`@apackdev/source` + `module` conditions), stubs `.vue` imports. **It carries no pack's backend**: every pack's runtime is loaded from its own `dist/runtime/index.cjs` at boot.
+Builds: `npm run dev` (root) runs `build:server:dev` → this package's `build:dev` (tsup, ESM `server.js` only, no tsc/dts/minify; the dev launcher builds default-setup first). `npm run build` runs `tsc --noEmit`, then tsup with ESM + CJS, `types.ts` declarations and minification. tsup bundles workspace packages from source (`@apackdev/source` + `module` conditions), stubs `.vue` imports. **It carries no pack's backend**: every pack's runtime is loaded from its own `dist/runtime/index.cjs` at boot.
 
 ## Logging and redaction (`src/adapters/logging.ts`)
 
@@ -108,7 +108,7 @@ Loggers and error reports are SDK code (`@apackdev/sdk/logger`): a bound `create
 
 ## Type contract
 
-`@app/api` exposes `src/types.ts` to TypeScript under the workspace `@apackdev/source` condition.
+`@app/server` exposes `src/types.ts` to TypeScript under the workspace `@apackdev/source` condition.
 Other consumers use compiled `dist/types.d.ts`. Runtime resolution uses the compiled server entry.
 API code, tests and scripts use file-relative imports, so source contracts need no consumer-specific
 alias mapping or API build before the renderer can typecheck them.
@@ -118,10 +118,10 @@ alias mapping or API build before the renderer can typecheck them.
 - `vitest.config.ts` `include` is `tests/**/*.spec.ts`, and a spec's path under `tests/` mirrors the source it
   covers: `transport/`, `adapters/`, `runtime/`, and `source-layout.spec.ts` at the root, whose subject is `src/`
   itself. `tests/integration/` holds none today (the pack load pipeline spec moved to `@apackdev/host`).
-- Run: `npm test -w @app/api` (`vitest run`), `npm run test:watch -w @app/api`, a single file with `npm test -w @app/api -- secrets`. Root `npm run test:unit` runs this package first, then default-setup and `@apackdev/host`.
-- Config: `globals: true`, `environment: 'node'`, `testTimeout: 15_000`, `@apackdev/source` plus Vite's server conditions (without `module`) for `resolve` and `ssr.resolve`, `.env` loaded with dotenv. There's no global env or data dir setup: specs that touch stores set `APACK_ENV=test` and `APACK_USER_DATA_DIR` to an `fs.mkdtempSync` dir, then call `openAppStore()` from `src/runtime/index.ts` (see `secrets.spec.ts`). `app-reset.spec.ts` and `packaged-boot.spec.ts` load the built-in packs' built runtimes, so run `npm run build:default-setup` first.
+- Run: `npm test -w @app/server` (`vitest run`), `npm run test:watch -w @app/server`, a single file with `npm test -w @app/server -- secrets`. Root `npm run test:unit` runs this package first, then default-setup and `@apackdev/host`.
+- Config: `globals: true`, `environment: 'node'`, `testTimeout: 15_000`, `@apackdev/source` plus Vite's server conditions (without `module`) for `resolve` and `ssr.resolve`, `.env` loaded with `process.loadEnvFile()`. There's no global env or data dir setup: specs that touch stores set `APACK_ENV=test` and `APACK_USER_DATA_DIR` to an `fs.mkdtempSync` dir, then call `openAppStore()` from `src/runtime/index.ts` (see `secrets.spec.ts`). `app-reset.spec.ts` and `packaged-boot.spec.ts` load the built-in packs' built runtimes, so run `npm run build:default-setup` first.
 - Coverage by file: the files `src/` may hold (`source-layout`), the app bus's `CLIENT_CONNECTED` handling and `broadcast` dropped until a client connects, on this package's transport (`bus-client-connected`), the bound app's members (`bound-runtime`), each log event printed once (`log-capture`), data committed by one run read by the next through `openAppStore()` (`restart-persistence`), host data services, an app reset on the built-in packs leaving default settings, written flows and the app version (`app-reset`), current-format backup restore preserving preferences and onboarding completion (`host-data-services`), secrets procedures and redaction, the API's boot and `openAppDatabase` reading a data dir as the same entities, relations and roles (`app-database-parity`), the boot over the real shipped packs, each loaded from the built runtime in the directory it ships in, which is where an installed pack once took a shipped pack's role (`packaged-boot`) — and one spec for code outside this package (`claude-code-permission-shape`, a standalone Zod mirror of the Claude Code CLI's permission response). `app-reset` also shows the reset empties the app's state (`AppState`: onboarding and version).
-- Typecheck: root `npm run typecheck:api` runs three projects here — `tsc -p .` (`src`), `tsc -p tsconfig.test.json`
+- Typecheck: root `npm run typecheck:server` runs three projects here — `tsc -p .` (`src`), `tsc -p tsconfig.test.json`
   (`src` and `tests`, with `vitest/globals` so `describe`/`it`/`expect` are ambient in specs and nowhere else) and
   `tsc -p tsconfig.scripts.json` (`scripts/`). Leaving the specs out of a project lets them drift unseen: a call carrying an argument the
   callee dropped, a `Message` collected into a `Record<string, unknown>` array, a cast through types that no

@@ -4,7 +4,7 @@ import { connect } from 'node:net';
 import { resolveAppEnvironment, appDataDirFor, type AppChannel } from '@apackdev/sdk/env';
 import { findRunningApp } from '@apackdev/host/database';
 import { readApiEndpoint } from '@apackdev/host/process-liveness';
-import { API_HOST } from '@apackdev/sdk/utils/pure';
+import { API_HOST, errorMessage } from '@apackdev/sdk/utils/pure';
 import { parseAppChannel } from '../utils';
 import { validateAppBundle } from '../app/installed-app';
 import { PRODUCT_NAMES } from '../app/channels';
@@ -38,7 +38,7 @@ export async function inspectApp(channel: AppChannel, options: {
   const checks: { label: string; ok: boolean; message: string }[] = [];
   const check = async (label: string, run: () => string | Promise<string>) => {
     try { checks.push({ label, ok: true, message: await run() }); }
-    catch (error) { checks.push({ label, ok: false, message: error instanceof Error ? error.message : String(error) }); }
+    catch (error) { checks.push({ label, ok: false, message: errorMessage(error) }); }
   };
 
   await check('Installation', () => {

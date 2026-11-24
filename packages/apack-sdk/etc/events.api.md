@@ -73,9 +73,9 @@ export type _Asker =
 
 // @public
 export class AskError extends Error {
-    constructor(kind: string, message: string, data?: object | undefined);
+    constructor(kind: string, message: string, data?: object);
     // (undocumented)
-    readonly data?: object | undefined;
+    readonly data?: object;
     // (undocumented)
     readonly kind: string;
 }

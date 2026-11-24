@@ -72,7 +72,7 @@ async function importScript(scriptFile: string): Promise<{ default?: unknown }> 
     bundle: true,
     platform: 'node',
     format: 'esm',
-    target: 'node22',
+    target: 'node24',
     write: false,
     absWorkingDir: path.dirname(scriptFile),
     // The script's own file, not the compiled copy, is what `import.meta` points at

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { win32 as path } from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { parsePeLibraryMetadata } from './compiler-pe-libraries.ts';
@@ -32,7 +32,7 @@ export interface CompilerPeDirectoryEntry { readonly name: string; readonly kind
 export function peDirectoryEntriesHash(entries: readonly CompilerPeDirectoryEntry[]): string {
   const value = [...entries].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
     .map(entry => entry.kind + '\0' + entry.name + '\0').join('');
-  return createHash('sha256').update(value).digest('hex');
+  return hash('sha256', value, 'hex');
 }
 
 /** Live OS metadata; the caller separately records source namespace ownership. */
@@ -69,7 +69,7 @@ export function readPeActivationContext(image: string, { systemDirectory, applic
     const stat = fs.statSync(file, { throwIfNoEntry: false });
     const bytes = stat?.isFile() ? fs.readFileSync(file) : undefined;
     inputs.push({ file, kind: bytes !== undefined ? 'file' : stat?.isDirectory() ? 'directory' : 'missing',
-      hash: bytes === undefined ? null : createHash('sha256').update(bytes).digest('hex') });
+      hash: bytes === undefined ? null : hash('sha256', bytes, 'hex') });
     return bytes;
   };
   const bytes = read(image);

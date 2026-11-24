@@ -6,13 +6,13 @@ D9–D11 live in the goal; T4, M3, G3, G6, G7 and F18 are struck, the rest were 
 findings were and what each cost; the evidence table carries the dispositions
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
-plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
+plus the app plumbing it depends on (`packages/main`, `packages/server`, `@apackdev/host/bus`)
 
-**Delivery is owned by [goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md).** This document owns
+**Delivery is owned by [goal-terminal-ownership](../goals/goal-terminal-ownership.md).** This document owns
 the findings, the root causes and decisions D1–D8; the goal owns the outcome, the execution order and
 completion, and cites those decisions rather than restating them. Its D9–D11 settle what this document left
 open. A finding's disposition and the evidence that closed it live in
-[the evidence record](../references/evidence/terminal-ownership.md), not here; a row is struck here as it
+[the evidence record](../../references/evidence/terminal-ownership.md), not here; a row is struck here as it
 closes there.
 
 ## Symptom
@@ -86,7 +86,7 @@ Severity-ordered. `F` = round 1, `S` = security, `M` = multi-window, `X` = platf
 orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 
 **A ✔ means the row is closed**, with its disposition and evidence in
-[`docs/references/evidence/terminal-ownership.md`](../references/evidence/terminal-ownership.md) — that table
+[`docs/references/evidence/terminal-ownership.md`](../../references/evidence/terminal-ownership.md) — that table
 is where a finding's *state* lives, and this one stays what the findings *are*. A row without one is open,
 and the evidence table says what each is waiting for.
 
@@ -407,8 +407,8 @@ Recorded so they are not re-investigated.
 ## What comes after this, and what it changes here
 
 Two deferred plans follow this work, in order: the
-[ghostty-web migration](../archive/plans/xterm-to-ghostty-web.md) replaces the emulator, and the
-[terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) moves process and
+[ghostty-web migration](../plans/xterm-to-ghostty-web.md) replaces the emulator, and the
+[terminal runtime refactor](../../deferred/terminal-runtime-refactor-target.md) moves process and
 terminal-state authority into a host-owned service over a Rust broker. Neither is authorized, both are
 undated, and this list is meant to land first. Reading them changes four things here, and it is cheaper to
 know now than to discover at each stage:
@@ -549,7 +549,7 @@ on its merits rather than rediscover the question.
    xterms over one pty with replay. Revisit if that case is wanted.
 3. **F14: fix the mechanism, keep the capability.** An earlier revision of this document chose to
    delete `injectShellIntegration` and take titles from xterm's `onTitleChange`. That was wrong, and the
-   deferred [terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) is why: its
+   deferred [terminal runtime refactor](../../deferred/terminal-runtime-refactor-target.md) is why: its
    agent-observation pipeline runs on *"parsed OSC command markers for cwd, prompt, command start/end and
    exit status"* and names VS Code's shell integration as the design to follow. Deleting that capability now
    means rebuilding it two plans later.
@@ -562,7 +562,7 @@ on its merits rather than rediscover the question.
    The cheap deletion remains available if the refactor is abandoned; it is a false economy while it is not.
 4. **S1 is fixed at the source, not at the spawn.** The API token reaches every pty because
    `apiToken()` reads `process.env.APACK_API_TOKEN` lazily on every call
-   (`packages/api/src/boot/config.ts`), so the variable has to stay set for the process's whole life and
+   (`packages/server/src/boot/config.ts`), so the variable has to stay set for the process's whole life and
    every child inherits it. Read it once at boot, memoise it and delete the variable; `apiTokenIsOwn()`
    reflects the captured provenance instead of re-reading. That removes the leak for **every** child the API
    spawns, now and later, rather than for the one spawn site a filter would cover, and it is asserted by a
@@ -588,7 +588,7 @@ on its merits rather than rediscover the question.
    and passes after; or `dissolved`, which names the construction that removes the finding **and** a guard
    that fails if that construction is undone; or an explicit `driven: <what was done>` with the reason no
    test fits. A `dissolved` row with no guard is not closed, it is unverified. The record is
-   [`docs/references/evidence/terminal-ownership.md`](../references/evidence/terminal-ownership.md), whose
+   [`docs/references/evidence/terminal-ownership.md`](../../references/evidence/terminal-ownership.md), whose
    rows are added as findings are touched rather than pre-seeded, since this document is the list and a copy
    of it there would drift. A fix that exists only on an unmerged branch stays `open` with its branch named.
 7. **The presentation rewrite lands as a series, where the core rewrite lands as one change.** D1's argument

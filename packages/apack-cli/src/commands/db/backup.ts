@@ -29,40 +29,32 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
     throw new Error('The backup destination must be outside the source data directory.');
   }
   if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
-  const lock = holdDatabaseWriteLock(target.userDataDir, 'apack db backup');
-  let stage: string | undefined;
-  let reserved = false;
-  try {
-    if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
-    const db = await openTarget(target, { changes: 'nothing', command: 'backup' }, io);
-    await withDatabase(db, async () => {
-      fs.mkdirSync(path.dirname(destination), { recursive: true });
-      stage = fs.mkdtempSync(path.join(path.dirname(destination), '.apack-backup-'));
+  using _lock = holdDatabaseWriteLock(target.userDataDir, 'apack db backup');
+  if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
+  const db = await openTarget(target, { changes: 'nothing', command: 'backup' }, io);
+  await withDatabase(db, async () => {
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    using cleanup = new DisposableStack();
+    const stage = fs.mkdtempSync(path.join(path.dirname(destination), '.apack-backup-'));
+    cleanup.defer(() => fs.rmSync(stage, { recursive: true, force: true, maxRetries: 5 }));
+    let backup: string;
+    {
       // A data dir the app never ran a flow in has no run history yet
-      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true }) : undefined;
-      let backup: string;
-      try {
-        backup = await exportDatabase({ lmdb: databaseBackupStore(db.database), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, stage, {
-          name: 'backup', databases: runHistory ? ['lmdb', 'runHistory'] : ['lmdb'], mediaPath: db.paths.media,
-          appVersion: readHostCompatibility(target.userDataDir).version,
-          log: { info: message => io.err(message), warn: message => io.err(message) },
-        });
-      } finally {
-        runHistory?.database.close();
-      }
-      verifyBackup(backup);
-      fs.chmodSync(backup, 0o700);
-      // Exclusive reservation prevents overwriting a destination created while the snapshot was copied.
-      fs.mkdirSync(destination);
-      reserved = true;
-      fs.renameSync(backup, destination);
-      reserved = false;
-    });
-    io.out(destination);
-  } finally {
-    try {
-      if (reserved) fs.rmdirSync(destination);
-      if (stage) fs.rmSync(stage, { recursive: true, force: true, maxRetries: 5 });
-    } finally { lock.release(); }
-  }
+      using runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true }) : undefined;
+      backup = await exportDatabase({ lmdb: databaseBackupStore(db.database), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, stage, {
+        name: 'backup', databases: runHistory ? ['lmdb', 'runHistory'] : ['lmdb'], mediaPath: db.paths.media,
+        appVersion: readHostCompatibility(target.userDataDir).version,
+        log: { info: message => io.err(message), warn: message => io.err(message) },
+      });
+    }
+    verifyBackup(backup);
+    fs.chmodSync(backup, 0o700);
+    // Exclusive reservation prevents overwriting a destination created while the snapshot was copied.
+    using reservation = new DisposableStack();
+    fs.mkdirSync(destination);
+    reservation.defer(() => fs.rmdirSync(destination));
+    fs.renameSync(backup, destination);
+    reservation.move();
+  });
+  io.out(destination);
 }

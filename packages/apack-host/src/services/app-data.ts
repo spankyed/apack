@@ -31,13 +31,12 @@ export function createAppData({ database, engine, history, registry, settings, o
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
   async function exclusive<T>(operation: () => Promise<T>): Promise<T> {
     if (replacing) throw new AppDataBusyError('App data is already being replaced. Wait for it to finish.');
-    if (!registry.claimAllPackOperations()) throw new AppDataBusyError('A pack is being installed or changed. Try again once it finishes.');
+    using claim = registry.claimAllPackOperations();
+    if (!claim) throw new AppDataBusyError('A pack is being installed or changed. Try again once it finishes.');
+    using guard = new DisposableStack();
     replacing = true;
-    try { return await operation(); }
-    finally {
-      replacing = false;
-      registry.releaseAllPackOperations();
-    }
+    guard.defer(() => { replacing = false; });
+    return await operation();
   }
 
   async function replaceData<T>(replace: () => Promise<T>): Promise<T> {

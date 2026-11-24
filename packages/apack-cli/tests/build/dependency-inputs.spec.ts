@@ -31,6 +31,7 @@ const compilation = {
   readDirectory(): never { throw new Error('Unexpected directory read'); },
   readDataPath(): never { throw new Error('Unexpected data read'); },
   dispose() {},
+  [Symbol.dispose]() {},
   readFile() { return undefined; },
   captureGenerated() {},
   assertCurrent() {},

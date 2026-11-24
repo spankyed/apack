@@ -109,31 +109,36 @@ async function apiAddressFromWindow(page: SessionPage): Promise<{ port: number; 
 }
 
 /**
- * Runs `work`, and closes what is already open if it throws.
+ * Runs `work` with an unwind stack, closing any registered handles in reverse order if it throws.
  *
  * **A handle left open does not fail, it hangs.** Node keeps running while one is, so a refused claim left
  * both the CDP connection and the socket open and `npm run dev:drive -- --eval` printed its refusal and then sat
- * there for ever — which reads as the verb hanging rather than as a refusal that was reported. Every step
- * after the attach is wrapped, so the failure is rethrown unchanged and only the cleanup is added.
+ * there for ever — which reads as the verb hanging rather than as a refusal that was reported. Every handle
+ * opened during attach is registered as soon as it is acquired, so a failure rethrows unchanged while closing
+ * everything already open.
  *
  * **A failure in the cleanup must not replace the one being cleaned up after.** `close` here is a socket
  * and a CDP connection, either of which can throw on a connection that has already gone — and letting that
  * through would hand the caller an error about tidying up in place of the refusal or timeout it needs,
- * which is the one thing this function exists to deliver. So the close is attempted and its own failure
+ * which is the one thing this function exists to deliver. So each close is attempted and its own failure
  * dropped; the work's error is always what is rethrown.
  *
  * @internal
  */
-export async function _closingOnFailure<T>(close: () => Promise<void> | void, work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    // Dropped, never rethrown: see above — a close that fails must not become the reason the caller is given
-    try {
-      await close();
-    } catch { /* the handle is gone, which is what closing wanted */ }
-    throw error;
-  }
+export async function _attachRollback<T>(
+  work: (deferClose: (close: () => Promise<void> | void) => void) => Promise<T>,
+): Promise<T> {
+  await using unwind = new AsyncDisposableStack();
+  const result = await work((close) => {
+    unwind.defer(async () => {
+      // Dropped, never rethrown: see above — a close that fails must not become the reason the caller is given
+      try {
+        await close();
+      } catch { /* the handle is gone, which is what closing wanted */ }
+    });
+  });
+  unwind.move();
+  return result;
 }
 
 /**
@@ -165,40 +170,43 @@ export async function _claimDrive(api: Pick<ApiClient, 'claim'>, windowMs = CLAI
 
 export async function attachedSession(options: AttachedSessionOptions): Promise<AttachedSession> {
   const { attachToApp } = await import('./cdp-page.ts');
-  const { page, detach } = await attachToApp({ debugPort: options.debugPort });
-  await waitForAppReady(page);
+  return _attachRollback(async (deferClose) => {
+    const { page, detach } = await attachToApp({ debugPort: options.debugPort });
+    deferClose(detach);
+    await waitForAppReady(page);
 
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(`[page error] ${error.stack ?? error.message}`));
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`[console.error] ${message.text()}`);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(`[page error] ${error.stack ?? error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(`[console.error] ${message.text()}`);
+    });
+
+    const sessionPage = asSessionPage(page, createAppDriver(page, options.screenshotDir));
+
+    const api = await connectApiClient(await apiAddressFromWindow(sessionPage));
+    deferClose(() => api.close());
+    await _claimDrive(api);
+
+    const session = createSession({
+      page: sessionPage,
+      api,
+      takeErrors: () => errors.splice(0, errors.length),
+      // Read per call, as the launched session does: the app writes to it for as long as it is up
+      readLog: () => (options.logPath !== undefined && fs.existsSync(options.logPath) ? fs.readFileSync(options.logPath, 'utf-8') : ''),
+    });
+    // `ready` is what listens on the session's connection, where every addressed answer arrives. The serving
+    // session runs it before its first verb; a one-off question gets its session from here, so it runs here too
+    await session.ready();
+
+    return {
+      session,
+      // Lets go without closing: the app was not this connection's to open and is not its to end
+      detach: async () => {
+        api.close();
+        await detach();
+      },
+    };
   });
-
-  const sessionPage = asSessionPage(page, createAppDriver(page, options.screenshotDir));
-
-  // Everything opened after the attach is closed again if a later step throws — see `_closingOnFailure`
-  const api = await _closingOnFailure(detach, async () => connectApiClient(await apiAddressFromWindow(sessionPage)));
-  await _closingOnFailure(async () => { api.close(); await detach(); }, () => _claimDrive(api));
-
-  const session = createSession({
-    page: sessionPage,
-    api,
-    takeErrors: () => errors.splice(0, errors.length),
-    // Read per call, as the launched session does: the app writes to it for as long as it is up
-    readLog: () => (options.logPath !== undefined && fs.existsSync(options.logPath) ? fs.readFileSync(options.logPath, 'utf-8') : ''),
-  });
-  // `ready` is what listens on the session's connection, where every addressed answer arrives. The serving
-  // session runs it before its first verb; a one-off question gets its session from here, so it runs here too
-  await _closingOnFailure(async () => { api.close(); await detach(); }, () => session.ready());
-
-  return {
-    session,
-    // Lets go without closing: the app was not this connection's to open and is not its to end
-    detach: async () => {
-      api.close();
-      await detach();
-    },
-  };
 }
 
 export interface AttachedSessionOptions {

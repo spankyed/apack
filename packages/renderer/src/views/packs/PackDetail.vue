@@ -43,6 +43,9 @@
       <p v-if="pack.loadProblem" class="text-xs text-red-400 break-words" data-testid="pack-load-problem">
         Failed to load: {{ pack.loadProblem }}
       </p>
+      <ul v-if="pack.dependencyProblems.length" class="space-y-1 text-xs text-amber-400" aria-label="Pack dependencies">
+        <li v-for="problem in pack.dependencyProblems" :key="problem">{{ problem }}</li>
+      </ul>
       <p v-if="!pack.version" class="text-sm text-neutral-400">Pack metadata is unavailable.</p>
 
       <!-- Description -->

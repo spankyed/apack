@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash as cryptoHash } from 'node:crypto';
 import { compilerReadMapping } from '../../bin/compiler-source-hooks.mjs';
 import { compilerDiagnostic, compilerSourcePath, relativeCompilerPath, createCompilerInputObservations, type CompilerPathMapping } from '@apackdev/host/build/compiler-inputs';
 import { lockIsHeld } from '@apackdev/host/process-liveness';
@@ -68,7 +68,7 @@ export function createCompilerReadTree(snapshot: CompilerReadSnapshot, paths: re
   const locations = new Map<string, CompilerReadLocation>();
   let disposed = false;
   const assertOpen = () => { if (disposed) throw new Error('Compiler input operation outlived its build'); };
-  const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+  const digest = (bytes: Buffer) => cryptoHash('sha256', bytes, 'hex');
   const dispose = () => {
     if (disposed) return;
     disposed = true;

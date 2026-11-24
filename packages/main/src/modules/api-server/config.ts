@@ -32,14 +32,14 @@ export const getApiPaths = () => {
     // Development: Use app.getAppPath() to get the project root
     const appPath = app.getAppPath();
     return {
-      apiPath: path.join(appPath, 'packages', 'api'),
+      apiPath: path.join(appPath, 'packages', 'server'),
       serverFile: 'dist/server.js',
     };
   }
   
   // Production: ASAR disabled for API compatibility
   return {
-    apiPath: path.join(process.resourcesPath, 'app', 'packages', 'api'),
+    apiPath: path.join(process.resourcesPath, 'app', 'packages', 'server'),
     serverFile: 'dist/server.js',
   };
 };

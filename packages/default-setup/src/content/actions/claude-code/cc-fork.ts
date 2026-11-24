@@ -50,7 +50,7 @@ async function handleFork(
 
   const threadData = services.repository.chatQueries.threadData(threadId as any);
   const messages = (threadData?.messages ?? []) as any[];
-  const lastAssistant = [...messages].reverse().find(m =>
+  const lastAssistant = messages.findLast(m =>
     m.sender === 'assistant' && m.forkable !== false && typeof m.context?.cliUuid === 'string'
   );
   if (!lastAssistant?.id) return { text: 'No Claude Code assistant message with a session checkpoint to fork from.' };

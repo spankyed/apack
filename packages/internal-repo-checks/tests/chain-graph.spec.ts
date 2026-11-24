@@ -547,7 +547,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
     expect(dependsOn(app)).toEqual(expect.arrayContaining([producer.name, 'test:external-pack:contract']));
     const scripts = rootScripts();
     expect(reachableText('test:external-pack:contract', scripts).text).not.toContain('prepare-default-pack-fork');
-    expect(scripts[producer.name]).toContain('bounded.ts scenario tsx tests/acceptance/external-pack/prepare-default-pack-fork.ts');
+    expect(scripts[producer.name]).toContain('bounded.ts scenario node tests/acceptance/external-pack/prepare-default-pack-fork.ts');
     const combined = read('tests/acceptance/external-pack/test-external-pack.sh');
     expect(combined.indexOf('test-external-pack-contract.sh')).toBeLessThan(combined.indexOf('prepare-default-pack-fork.ts'));
     expect(combined.indexOf('prepare-default-pack-fork.ts')).toBeLessThan(combined.indexOf('test-external-pack-app.sh'));

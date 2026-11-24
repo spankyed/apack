@@ -57,14 +57,14 @@ export function snapshot(paths: readonly string[], root = REPO_ROOT): Map<string
     for (const entry of entries) {
       const child = path.join(absolute, entry.name);
       if (entry.isDirectory()) walk(child);
-      else if (entry.isFile()) hashes.set(repoRelative(root, child), crypto.createHash('sha256').update(fs.readFileSync(child)).digest('hex'));
+      else if (entry.isFile()) hashes.set(repoRelative(root, child), crypto.hash('sha256', fs.readFileSync(child), 'hex'));
     }
   };
   for (const relative of paths) {
     const absolute = path.join(root, relative);
     if (!fs.existsSync(absolute)) continue;
     if (fs.statSync(absolute).isDirectory()) walk(absolute);
-    else hashes.set(relative, crypto.createHash('sha256').update(fs.readFileSync(absolute)).digest('hex'));
+    else hashes.set(relative, crypto.hash('sha256', fs.readFileSync(absolute), 'hex'));
   }
   return hashes;
 }

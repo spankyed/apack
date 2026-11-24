@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { win32 as path } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -75,7 +75,7 @@ export function capturePeLibraryEnvironment(executable = process.execPath): Comp
   if (!section) throw new Error('Windows API-set schema has no .apiset section');
   const applicationContext = readPeActivationContext(executable, { systemDirectory, application: executable, resource: 1 });
   const bytes = fs.readFileSync(executable);
-  if (createHash('sha256').update(bytes).digest('hex') !== applicationContext.inputs.find(input => input.file === applicationContext.image)?.hash) {
+  if (hash('sha256', bytes, 'hex') !== applicationContext.inputs.find(input => input.file === applicationContext.image)?.hash) {
     throw new Error(`Windows compiler runtime changed while capturing Node-API exports: ${executable}`);
   }
   return Object.freeze({ systemDirectory, windowsDirectory: path.dirname(systemDirectory), safeSearch, devOverride,

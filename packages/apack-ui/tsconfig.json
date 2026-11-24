@@ -8,10 +8,11 @@
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/apack-ui.tsbuildinfo",
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     // Relative imports name the .ts source; tsdown resolves them. Not rewriteRelativeImportExtensions:
     // vue-tsc only emits declarations, and reports TS2876 for .vue imports with it
     "allowImportingTsExtensions": true,
@@ -19,7 +20,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "preserve",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "scripts/**/*.ts", "tests/**/*.ts", "tsdown.config.ts"]

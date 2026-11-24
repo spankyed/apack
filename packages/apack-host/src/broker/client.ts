@@ -13,6 +13,7 @@ import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.ts';
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
 // There was a copy here, with a script that re-derived and compared it; a package with the file in it
@@ -31,9 +32,13 @@ export const PROTOCOL_VERSION = 1;
 
 /** A refusal the broker answered with, carrying its code rather than a message to match on */
 export class BrokerError extends Error {
-  constructor(readonly code: ErrorCode, message: string, readonly session?: string) {
+  readonly code: ErrorCode;
+  readonly session?: string;
+  constructor(code: ErrorCode, message: string, session?: string) {
     super(message);
     this.name = 'BrokerError';
+    this.code = code;
+    this.session = session;
   }
 }
 
@@ -625,7 +630,7 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
     // A start that ended with nothing answering: a broker holds the lock beside this socket and is not
     // listening on it — still binding, or its socket file was removed from under it
     throw new Error(
-      `nothing answers at ${options.socket} though a terminal broker was started or already holds it: ${error instanceof Error ? error.message : String(error)}`,
+      `nothing answers at ${options.socket} though a terminal broker was started or already holds it: ${errorMessage(error)}`,
       { cause: error },
     );
   }

@@ -68,14 +68,14 @@ async function bundlePackSource<T extends EsbuildOptions>(
       path.resolve(stdin.resolveDir ?? packDir, stdin.sourcefile ?? 'stdin.ts'),
       Buffer.from(stdin.contents ?? ''));
   }
-  const plugins: import('esbuild').Plugin[] = [rejectHostImportsPlugin(), stubFrontendAssetsPlugin(), ...(overrides.plugins ?? [])];
+  const plugins: import('esbuild').Plugin[] = [rejectHostImportsPlugin(), rejectFrontendPackagesPlugin(), stubFrontendAssetsPlugin(), ...(overrides.plugins ?? [])];
   if (options.compilation) plugins.push(capturedSourcesPlugin(options.compilation, workingDir));
 
   const merged: EsbuildOptions = {
     bundle: true,
     format: 'esm',
     platform: 'node',
-    target: 'node20',
+    target: 'node24',
     external: [...HOST_EXTERNALS, ...HOST_RESOLVED_BINARIES],
     tsconfigRaw: configuration && esbuildTsconfig(configuration, tree?.path),
     minify: options.release ?? false,
@@ -402,6 +402,25 @@ export function rejectHostImportsPlugin(): import('esbuild').Plugin {
       }));
       build.onResolve({ filter: appOnly }, (args) => ({
         errors: [{ text: `${args.path} is only for the app (${APP_ONLY_EXPORTS[args.path]}); packs can't import it (imported from ${importedFrom(args.importer)})` }],
+      }));
+    },
+  };
+}
+
+/**
+ * Fails the bundle when backend code imports a package the host shares with pack frontends only (`SHARED_DEPS`,
+ * `target: 'fe'`: Vue, Tiptap, the icon set). Those are host externals, so without this the import would be left for the
+ * backend loader, which provides none of them, and the pack would build and then fail as it loads. A component or a
+ * style imported by path is a different case, stubbed below, since a definition names one for the renderer.
+ */
+function rejectFrontendPackagesPlugin(): import('esbuild').Plugin {
+  const frontendOnly = Object.entries(SHARED_DEPS).filter(([, dep]) => dep.target === 'fe').map(([name]) => name);
+  const filter = new RegExp(`^(?:${frontendOnly.map(escapeRegExp).join('|')})(?:/|$)`);
+  return {
+    name: 'reject-frontend-packages',
+    setup(build) {
+      build.onResolve({ filter }, (args) => ({
+        errors: [{ text: `${args.path} is only for a pack's frontend; backend code can't import it (imported from ${path.relative(process.cwd(), args.importer) || args.importer})` }],
       }));
     },
   };

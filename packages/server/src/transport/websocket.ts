@@ -1,6 +1,7 @@
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import { json } from 'node:stream/consumers';
 import { WebSocketServer } from 'ws';
 import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { appRouter } from './index.ts';
@@ -13,7 +14,7 @@ import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { ApiEndpoint } from '@apackdev/host/process-liveness';
-import { API_HOST, API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
+import { API_HOST, API_TOKEN_HEADER, errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('backend');
 
@@ -50,16 +51,8 @@ function answer(res: http.ServerResponse, status: number, body: object): void {
 }
 
 /** The request's JSON body, once it has all arrived */
-function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => {
-      try { resolve(JSON.parse(body)); }
-      catch (err) { reject(err); }
-    });
-  });
-}
+const readJsonBody = (req: http.IncomingMessage): Promise<Record<string, unknown>> =>
+  json(req) as Promise<Record<string, unknown>>;
 
 /**
  * The development endpoints `apack pack dev` and `apack pack build --watch` call. `POST /dev/reload { packId }`
@@ -75,9 +68,9 @@ async function handleDevRequest(url: string, req: http.IncomingMessage, res: htt
     if (url === '/dev/reload') {
       const { packId } = body;
       if (!packId || typeof packId !== 'string') return answer(res, 400, { error: 'packId required' });
-      if (!appPacks.claimPackOperation(packId)) return answer(res, 409, { error: 'another operation on this pack is in progress' });
-      try { await reloadPackById(appPacks, packId, backendActor); }
-      finally { appPacks.releasePackOperation(packId); }
+      using claim = appPacks.claimPackOperation(packId);
+      if (!claim) return answer(res, 409, { error: 'another operation on this pack is in progress' });
+      await reloadPackById(appPacks, packId, backendActor);
       return answer(res, 200, { ok: true });
     }
     const { root } = body;
@@ -85,7 +78,7 @@ async function handleDevRequest(url: string, req: http.IncomingMessage, res: htt
     return answer(res, 200, { ok: true, ...await installDevPack(appPacks, root, backendActor) });
   } catch (err) {
     logger.error(`${url} failed:`, err as Error);
-    answer(res, 500, { error: (err as Error).message });
+    answer(res, 500, { error: errorMessage(err) });
   }
 }
 

@@ -6,7 +6,7 @@ Date: 2026-10-19.
 ## Purpose and position
 
 Assess Wireit as the smaller alternative to Nx for replacing generic validation infrastructure.
-The [fast-validation plan](../archive/plans/validation-feedback-budget.md) owns workflow, runtime and coverage goals;
+The [fast-validation plan](validation-feedback-budget.md) owns workflow, runtime and coverage goals;
 the [Nx evaluation](nx-orchestration-evaluation.md) provides the replacement ledger and protected
 apack guarantees. This assessment does not change the current goal's acceptance requirements.
 

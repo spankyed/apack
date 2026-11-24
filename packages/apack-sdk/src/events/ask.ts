@@ -107,9 +107,13 @@ export type SystemAskMap = { [system: string]: { [ask: string]: AskDeclaration }
  * ask's declaration; anything else a handler throws is answered as `failed`.
  */
 export class AskError extends Error {
-  constructor(readonly kind: string, message: string, readonly data?: object) {
+  readonly kind: string;
+  readonly data?: object;
+  constructor(kind: string, message: string, data?: object) {
     super(message);
     this.name = 'AskError';
+    this.kind = kind;
+    this.data = data;
   }
 }
 

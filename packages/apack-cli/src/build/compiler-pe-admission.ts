@@ -1,5 +1,5 @@
 import { win32 as path } from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash as cryptoHash } from 'node:crypto';
 import { parsePeLibraryMetadata, type PeImportedSymbol, type PeLibraryMetadata } from './compiler-pe-libraries.ts';
 import { resolvePeApiSet } from './compiler-pe-api-sets.ts';
 import { peLibraryPaths, type CompilerPeEnvironment } from './compiler-pe-environment.ts';
@@ -47,7 +47,7 @@ export function assertCapturedPeLibraries(entry: string, packageRoot: string, in
       }
       const bytes = input.read(selected.file);
       const kind = bytes !== undefined ? 'file' : input.directoryExists(selected.file) ? 'directory' : 'missing';
-      const hash = bytes === undefined ? null : createHash('sha256').update(bytes).digest('hex');
+      const hash = bytes === undefined ? null : cryptoHash('sha256', bytes, 'hex');
       if (kind !== selected.kind || hash !== selected.hash) throw new Error(`Windows activation context changed during inspection: ${selected.file}`);
     }
     return new Map(context.redirections.map(binding => [binding.name.toLowerCase(), binding.file]));

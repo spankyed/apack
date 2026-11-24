@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash as cryptoHash } from 'node:crypto';
 import { verifyPack } from '../packs/assets.ts';
 import type { PackIntegrity } from '../packs/layout-paths.ts';
 import { readPackageInputs, type PackageInputOwner } from './package-inputs.ts';
@@ -63,7 +63,7 @@ export function writePackBuildInputs(directory: string, inputs: PackBuildInputs)
 /** A supplied receipt must already be verified by the caller; captured bytes must still match it. */
 export function readPackBuildInputs(directory: string, integrity: PackIntegrity = verifyPack(directory)): PackBuildInputs {
   const bytes = fs.readFileSync(path.join(directory, PACK_BUILD_INPUTS_FILE));
-  if (createHash('sha256').update(bytes).digest('hex') !== integrity.files[PACK_BUILD_INPUTS_FILE]) {
+  if (cryptoHash('sha256', bytes, 'hex') !== integrity.files[PACK_BUILD_INPUTS_FILE]) {
     throw new Error('Pack build inputs do not match the sealed output; rebuild the complete pack');
   }
   return parsePackBuildInputs(JSON.parse(bytes.toString('utf8')));

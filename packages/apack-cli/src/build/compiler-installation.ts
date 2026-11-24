@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, hash as cryptoHash } from 'node:crypto';
 import envPaths from 'env-paths';
 import { holdExclusiveLock, holdExclusiveLockWaiting } from '@apackdev/host/exclusive-lock';
 import { lockIsHeld } from '@apackdev/host/process-liveness';
@@ -48,7 +48,7 @@ export function readEsbuildOverride({ cwd = process.cwd(), env = process.env }: 
 function executableIdentity(root: string, executable: ReturnType<typeof readEsbuildOverride>) {
   if (!executable) return null;
   return [path.relative(root, executable.file), executable.kind === 'missing' ? null
-    : [path.relative(root, executable.source), executable.mode & 0o111, createHash('sha256').update(executable.bytes).digest('hex')]];
+    : [path.relative(root, executable.source), executable.mode & 0o111, cryptoHash('sha256', executable.bytes, 'hex')]];
 }
 
 /** A checkout builds the same distributable worker that an installed CLI runs. */
@@ -208,7 +208,7 @@ async function installationAt(entry: string, sources: CompilerSources, signal?: 
     || fs.realpathSync.native(capturedExecutable) !== capturedExecutable) return undefined;
   const capturedRuntime = readCompilerRuntimeInputs(capturedExecutable);
   if (capturedRuntime.contentsHash !== runtime.contentsHash) return undefined;
-  const hash = createHash('sha256').update(JSON.stringify([inputs.hash, executableId, capturedRuntime.hash])).digest('hex');
+  const hash = cryptoHash('sha256', JSON.stringify([inputs.hash, executableId, capturedRuntime.hash]), 'hex');
   if (hash !== recorded) return undefined;
   const environment = Object.freeze({ ESBUILD_BINARY_PATH: executable?.kind === 'file' ? capturedPath(executable.source) : undefined });
   const executableCurrent = () => {
@@ -295,7 +295,7 @@ async function captureInto(entry: string, sources: CompilerSources, options: Com
     for (const directory of runtime.directories) mkdir(capturedPath(directory));
     if (executable?.kind === 'file') {
       copy({ source: executable.source, mode: executable.mode,
-        hash: createHash('sha256').update(executable.bytes).digest('hex') }, executable.bytes);
+        hash: cryptoHash('sha256', executable.bytes, 'hex') }, executable.bytes);
     } else if (executable) {
       console.warn(`[esbuild] Ignoring bad configuration: ESBUILD_BINARY_PATH=${(options.env ?? process.env).ESBUILD_BINARY_PATH}`);
     }
@@ -341,7 +341,7 @@ async function captureInto(entry: string, sources: CompilerSources, options: Com
     }
     if (readCompilerRuntimeInputs(process.execPath).hash !== runtime.hash) throw new Error('Compiler runtime changed during capture');
     const capturedRuntime = readCompilerRuntimeInputs(capturedPath(runtime.executable));
-    const hash = createHash('sha256').update(JSON.stringify([inputs.hash, sources.executableId, capturedRuntime.hash])).digest('hex');
+    const hash = cryptoHash('sha256', JSON.stringify([inputs.hash, sources.executableId, capturedRuntime.hash]), 'hex');
     // Written last: an entry without it is one a reuse refuses, so an interrupted capture is never taken as whole
     fs.writeFileSync(path.join(entry, 'compiler-inputs.json'), JSON.stringify({ hash,
       packages: inputs.nodes.map(node => capturedPath(node.directory)),

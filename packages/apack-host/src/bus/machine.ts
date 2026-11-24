@@ -402,7 +402,9 @@ export function createBusMachine(options: BusOptions) {
       teardownPack: enqueueActions(({ enqueue, event, context, system, self }) => {
         if (event.type !== 'TEARDOWN_PACK') return;
         const current = clientLoadedPacks();
-        enqueue.assign({ awaitingFrontends: new Set([...context.awaitingFrontends].filter(id => current.has(id) && id !== event.packId)) });
+        const awaitingFrontends = context.awaitingFrontends.intersection(current);
+        if (event.packId !== undefined) awaitingFrontends.delete(event.packId);
+        enqueue.assign({ awaitingFrontends });
         const afterStop = event.afterStop;
         // Drain already queued sends before revoking the inboxes they were sent to.
         stopSystems(enqueue, system, event.systemIds, afterStop && (() => self.send({ type: 'SYSTEMS_STOPPED', afterStop })));

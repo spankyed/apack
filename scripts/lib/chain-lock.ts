@@ -25,13 +25,15 @@ export const CHAIN_LOCK = path.join(STAMP_DIR, 'chain.lock');
 
 /** Thrown when another run holds the lock: a refusal, which is why `chain.ts` prints it rather than rethrowing */
 export class ChainLockHeld extends Error {
-  constructor(readonly holder: string, waited: boolean, file: string = CHAIN_LOCK) {
+  readonly holder: string;
+  constructor(holder: string, waited: boolean, file: string = CHAIN_LOCK) {
     const where = path.relative(process.cwd(), file);
     super(`another chain run holds ${where}:\n  ${holder}\n\n`
       + 'Two runs share this checkout\'s stamps, so each would cache results the other took against a\n'
       + `different tree. ${waited ? 'It stopped working while it held the lock, so it looks stuck.' : 'Wait for it to finish, or pass --wait to queue behind it.'}\n`
       + 'If you need both at once, give one of them its own checkout: `git worktree add`.\n'
       + `If no chain is running, delete ${where} and try again.`);
+    this.holder = holder;
   }
 }
 

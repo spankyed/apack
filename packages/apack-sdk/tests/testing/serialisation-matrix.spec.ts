@@ -1,7 +1,7 @@
 // The three value-serialising passes that live in this package, each against its own row of the matrix.
 //
 // The matrix is data (`src/testing/serialisation-matrix.ts`) because no package can import all five passes —
-// the encoder is `@app/api`'s and `toJSON` is `@apackdev/cli`'s, and each asserts its row in its own suite. What
+// the encoder is `@app/server`'s and `toJSON` is `@apackdev/cli`'s, and each asserts its row in its own suite. What
 // that buys is that a cell cannot drift from the code: `docs/references/value-serialisation.md` is the same
 // answers in prose, and these are the ones that fail.
 //

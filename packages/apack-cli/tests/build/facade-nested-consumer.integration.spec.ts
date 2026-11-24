@@ -1,4 +1,3 @@
-// @slow: one packed install, one declaration bundle and one consumer compile
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

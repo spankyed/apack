@@ -10,15 +10,14 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest": "node ../../scripts/ensure-packages-built.ts",
     "test": "vitest run",
-    "pretest:integration": "tsx ../../scripts/ensure-packages-built.ts",
+    "pretest:integration": "node ../../scripts/ensure-packages-built.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "devDependencies": {
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
-    "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vite": "^7.3.7",
     "vitest": "^4.1.12"

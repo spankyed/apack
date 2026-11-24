@@ -101,7 +101,7 @@ export async function action(
     // Check if model signaled goal met in the most recent assistant message
     const threadData = services.repository.chatQueries.threadData(threadId as any);
     const messages = threadData?.messages ?? [];
-    const lastAssistant = [...messages].reverse().find(
+    const lastAssistant = messages.findLast(
       (m: any) => m.sender !== 'user' && m.text && !m.compacted,
     );
     const goalMet = lastAssistant?.text ? /\bGOAL_MET\b/.test(lastAssistant.text) : false;

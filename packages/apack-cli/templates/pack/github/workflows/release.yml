@@ -44,7 +44,7 @@ jobs:
 
       - run: npm run facade:check
 
-      - run: npx apack pack archive --out .apack/release
+      - run: npx apack pack export --out .apack/release
 
       - uses: actions/attest-build-provenance@v2
         with:

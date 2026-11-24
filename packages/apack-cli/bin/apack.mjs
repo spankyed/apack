@@ -10,7 +10,7 @@ function projectCli() {
   try {
     const projectPkg = createRequire(path.join(process.cwd(), 'noop.js')).resolve('@apackdev/cli/package.json');
     const projectDir = realpathSync(path.dirname(projectPkg));
-    const ownDir = realpathSync(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+    const ownDir = realpathSync(path.dirname(import.meta.dirname));
     return projectDir === ownDir ? null : path.join(projectDir, 'bin', 'apack.mjs');
   } catch {
     return null;

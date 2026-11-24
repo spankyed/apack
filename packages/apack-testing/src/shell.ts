@@ -122,12 +122,12 @@ export async function startShell(packId: string, options: StartShellOptions, bac
   packs.registerPackFE({ kind: 'native', declaration: { ...nativeFrontendDeclarationFixture(registration),
     entityDestinations: Object.fromEntries(Object.entries(entityDestinations).filter(([, feature]) => ids.includes(feature))) } }, registration);
 
-  const stops: Array<() => void> = [];
+  using stops = new DisposableStack();
   // What the systems send while the shell is starting (a surface asking for its data as it's spawned is answered at
   // once over the in-memory bus) is held until the shell subscribes, as a socket would deliver it later
   let connection: ShellConnection | undefined;
   const held: Message[] = [];
-  stops.push(testRootEvents.onOutgoing((message) => {
+  stops.defer(testRootEvents.onOutgoing((message) => {
     if (connection) connection.onMessage(message);
     else held.push(message);
   }));
@@ -169,10 +169,11 @@ export async function startShell(packId: string, options: StartShellOptions, bac
     },
   }), { systemId: HOST.application, input: { ownsLastActiveSurface: false } });
   // Bound before the shell starts: starting it spawns the surfaces' actors, which may reach the frontend host
-  stops.push(startFeTestRuntime({ application: actor, client, packs: backendFirst(packs, backend) }));
+  stops.defer(startFeTestRuntime({ application: actor, client, packs: backendFirst(packs, backend) }));
   const started = actor.start();
-  stops.unshift(() => started.stop());
+  stops.defer(() => started.stop());
 
+  const ownedStops = stops.move();
   const shell: TestShell = {
     actor: started,
     opened: () => started.getSnapshot().context.activeSurface.id,
@@ -185,7 +186,7 @@ export async function startShell(packId: string, options: StartShellOptions, bac
     notices,
     stop: () => {
       if (!running.delete(shell)) return;
-      for (const stop of stops) stop();
+      ownedStops.dispose();
     },
   };
   running.add(shell);

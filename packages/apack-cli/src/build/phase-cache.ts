@@ -9,7 +9,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { dependencyClosure, packageIdentity, UnresolvedDependencyError, type ClosurePackage } from '@apackdev/host/build/package-identity';
 import type { CompilationInputs } from './compilation-inputs.ts';
@@ -41,7 +41,7 @@ export function readPhaseCache(root: string): { stamps: PhaseStamps; inputs?: Pa
     const inputs = readPackBuildInputs(dir, receipt);
     assertPackBuildInputsCurrent(root, inputs);
     const bytes = fs.readFileSync(path.join(dir, CACHE_FILE));
-    if (createHash('sha256').update(bytes).digest('hex') !== receipt.files[CACHE_FILE]) return { stamps: {} };
+    if (cryptoHash('sha256', bytes, 'hex') !== receipt.files[CACHE_FILE]) return { stamps: {} };
     const parsed: unknown = JSON.parse(bytes.toString('utf8'));
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { stamps: {} };
     return { stamps: parsed as PhaseStamps, inputs, integrity: receipt };
@@ -98,7 +98,7 @@ export function takeForward(distDir: string, stagedDir: string, files: readonly 
     const expected = options.hashes[file.split(path.sep).join('/')];
     if (!expected) throw new Error(`Reusable output is not in the verified receipt: ${file}`);
     const bytes = fs.readFileSync(from);
-    if (createHash('sha256').update(bytes).digest('hex') !== expected) throw new Error(`Reusable output changed: ${file}`);
+    if (cryptoHash('sha256', bytes, 'hex') !== expected) throw new Error(`Reusable output changed: ${file}`);
     const to = path.join(stagedDir, file);
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.writeFileSync(to, bytes);
@@ -136,7 +136,7 @@ export function apackScope(packDir: string): { readonly hash: string } | { reado
     const { name, version, hash } = packageIdentity(directory);
     return `${name}@${version}:${hash}`;
   }).sort();
-  return { hash: createHash('sha256').update(identities.join('\n')).digest('hex') };
+  return { hash: cryptoHash('sha256', identities.join('\n'), 'hex') };
 }
 
 /** The facade types a dependent compiles against: the pack's own sources, and what it compiles them with */

@@ -40,7 +40,7 @@ it.skipIf(process.platform !== 'darwin')('limits reset to selected data and pres
   const selected = selectPackagedApp({ channel: 'preview', app, dataDir: data });
   expect(resetTargets(selected)).toContain(data);
   expect(() => resetTargets({ ...selected, context: { ...selected.context, userDataDir: os.homedir() } })).toThrow(/protected/);
-  await execFileWhileWorking(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'reset', '--channel', 'preview', '--app', app, '--data-dir', data]);
+  await execFileWhileWorking(process.execPath, [path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'reset', '--channel', 'preview', '--app', app, '--data-dir', data]);
   expect(fs.existsSync(data)).toBe(false);
   for (const dir of [other, diagnostics, app]) expect(fs.existsSync(dir)).toBe(true);
 });
@@ -57,13 +57,13 @@ it.skipIf(process.platform === 'win32')('preserves the app exit status and captu
 it.skipIf(process.platform !== 'darwin')('collects the selected bundle and profile rather than the installed production app', async () => {
   const { root, app } = fixture();
   const selected = selectPackagedApp({ channel: 'preview', app, dataDir: path.join(root, 'data') });
-  const server = path.join(selected.appDir, 'packages/api/dist/server.js');
+  const server = path.join(selected.appDir, 'packages/server/dist/server.js');
   fs.mkdirSync(path.dirname(server), { recursive: true });
   fs.writeFileSync(server, 'preview-api');
   fs.writeFileSync(path.join(app, 'Contents/Info.plist'), '<plist/>');
   fs.mkdirSync(selected.logsDir, { recursive: true });
   fs.writeFileSync(path.join(selected.logsDir, 'main.log'), 'preview-log');
-  const { stdout: output } = await execFileWhileWorking(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'diagnostics', '--channel', 'preview', '--app', app, '--data-dir', selected.context.userDataDir]);
+  const { stdout: output } = await execFileWhileWorking(process.execPath, [path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'diagnostics', '--channel', 'preview', '--app', app, '--data-dir', selected.context.userDataDir]);
   const out = output.trim().split('\n').at(-1)!;
   expect(out.startsWith(path.join(REPO_ROOT, 'diagnostics/preview') + path.sep)).toBe(true);
   roots.push(out);
@@ -98,7 +98,7 @@ it.skipIf(process.platform !== 'darwin')('returns a failing exit code from the s
   }
   let result: { code?: unknown; stdout: string; stderr: string };
   try {
-    result = await execFileWhileWorking(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'verify-signing', '--channel', 'preview', '--app', app], {
+    result = await execFileWhileWorking(process.execPath, [path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'verify-signing', '--channel', 'preview', '--app', app], {
       env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH },
     });
   } catch (error) {

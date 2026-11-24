@@ -5,8 +5,8 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo",
 
-    // Tests import the same source and ES2022 built-ins as the application.
-    "lib": ["ES2022"],
+    // Tests import the same source and ES2024/ES2025 built-ins as the application.
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "types": ["node", "jsdom"]
   }
 }

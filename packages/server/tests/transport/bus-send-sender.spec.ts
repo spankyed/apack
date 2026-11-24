@@ -54,7 +54,7 @@ describe('bus.send carries the sender across the boundary', () => {
   /**
    * `Required<Omit<Message, 'client'>>` cannot be satisfied without naming every field a *sender* may set, so
    * this is one case rather than one per field, and it guards both halves: a field added to `Message` stops this
-   * file compiling until it is named here (`npm run typecheck:api` covers these tests), and then fails the
+   * file compiling until it is named here (`npm run typecheck:server` covers these tests), and then fails the
    * assertion until `bus.send`'s schema names it too.
    *
    * One field is omitted from the type deliberately, and the `Omit` is what forces that choice to be made

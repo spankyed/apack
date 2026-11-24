@@ -47,7 +47,7 @@ async function handleFork(
 
   const threadData = services.repository.chatQueries.threadData(threadId as any);
   const messages = (threadData?.messages ?? []) as any[];
-  const lastAssistant = [...messages].reverse().find(m => m.sender === 'assistant');
+  const lastAssistant = messages.findLast(m => m.sender === 'assistant');
   if (!lastAssistant?.id) return { text: 'No assistant message to fork from.' };
 
   const topic = threadData?.topic || 'Untitled';

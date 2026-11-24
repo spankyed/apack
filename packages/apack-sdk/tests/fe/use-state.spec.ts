@@ -31,7 +31,10 @@ const shown = (of: Node): string => (of.type === '#text' ? of.text : of.type ===
 
 // ── the machines ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-class Repository { constructor(readonly directory: string) {} }
+class Repository {
+  readonly directory: string;
+  constructor(directory: string) { this.directory = directory; }
+}
 
 type BoardEvent =
   | { type: 'RETITLE'; title: string }

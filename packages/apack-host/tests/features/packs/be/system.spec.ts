@@ -362,6 +362,38 @@ describe('pack information without activation', () => {
     return (event!.packs as InstalledPackSummary[]).find(pack => pack.id === PACK_ID)!;
   };
 
+  it('reports the named provider’s status and clears the diagnostic when it is restored', () => {
+    const { packsDir } = resolveAppEnvironment();
+    const provider = path.join(packsDir, 'starter-a');
+    const alternate = path.join(packsDir, 'starter-b');
+    const feature = { welcome: { description: 'Alternate starter feature.', designation: 'starter' } };
+    writeInstalledPackFixture(path.join(packsDir, PACK_ID), {
+      id: PACK_ID, name: 'Dependent pack', version: '1.0.0',
+      dependencies: { 'starter-a': 'github:owner/starter ^1.0.0' },
+    });
+    writeInstalledPackFixture(alternate, { id: 'starter-b', name: 'Alternate starter', version: '1.0.0', features: feature });
+    const system = runPacksSystem();
+    try {
+      expect(list(system).dependencyProblems).toEqual(['Requires starter-a (^1.0.0). Install the named pack.']);
+      writeInstalledPackFixture(provider, { id: 'starter-a', name: 'Original starter', version: '2.0.0' });
+      expect(list(system).dependencyProblems).toEqual(['Requires starter-a (^1.0.0). Installed version 2.0.0 is incompatible.']);
+      expect(setPackEnabled('starter-a', false)).toBe(true);
+      expect(list(system).dependencyProblems).toEqual(['Requires starter-a (^1.0.0). Installed version 2.0.0 is incompatible.']);
+      writeInstalledPackFixture(provider, { id: 'starter-a', name: 'Original starter', version: '1.1.0' });
+      expect(list(system).dependencyProblems).toEqual(['Requires starter-a (^1.0.0). Enable the installed pack.']);
+      expect(setPackEnabled('starter-a', true)).toBe(true);
+      registry.recordLoadProblem('starter-a', 'Its engine failed to initialize.');
+      expect(list(system).dependencyProblems).toEqual(['Requires starter-a (^1.0.0). The installed pack failed to load. Its engine failed to initialize.']);
+      registry.clearLoadProblem('starter-a');
+      expect(list(system).dependencyProblems).toEqual([]);
+      fs.rmSync(path.join(provider, PACK_LAYOUT.integrity));
+      expect(list(system).dependencyProblems).toEqual(['Requires starter-a (^1.0.0). Its installed build is unavailable.']);
+    } finally {
+      registry.clearLoadProblem('starter-a');
+      system.stop();
+    }
+  });
+
   it.each(['disabled', 'activation-failed'])('lists %s declarations without activating backend or frontend code', kind => {
     const dir = path.join(resolveAppEnvironment().packsDir, PACK_ID);
     const manifest = { id: PACK_ID, name: 'Declared pack', version: '1.0.0',
@@ -1270,9 +1302,8 @@ describe('catalog refresh refusal after a completed pack mutation', () => {
 describe('the claim on a pack', () => {
   /** Whether a claim is free now, taking nothing */
   const probeClaim = (key: string) => {
-    const free = registry.claimPackOperation(key);
-    if (free) registry.releasePackOperation(key);
-    return free;
+    using claim = registry.claimPackOperation(key);
+    return claim !== null;
   };
   const withSystem = {
     manifest: { features: { widget: { description: 'Widget.', system: { entry: 'src/system.ts' } } } },
@@ -1320,7 +1351,8 @@ describe('the claim on a pack', () => {
     await installPackFromLocal(packSource('1.0.0'));
     const system = runPacksSystem();
     takeSystemErrors();
-    expect(registry.claimPackOperation(PACK_ID)).toBe(true);
+    using claim = registry.claimPackOperation(PACK_ID);
+    expect(claim).not.toBeNull();
     try {
       system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });
       expect(takeSystemErrors().map(e => e.message).join('\n')).toContain('in progress');
@@ -1328,7 +1360,7 @@ describe('the claim on a pack', () => {
         { type: 'PACK_ENABLED_CHANGED', packId: PACK_ID, enabled: true },
       ]);
       expect(readInstalledPacks().find(record => record.id === PACK_ID)?.enabled ?? true).toBe(true);
-    } finally { registry.releasePackOperation(PACK_ID); system.stop(); }
+    } finally { system.stop(); }
   });
 
   it.each(['uninstall', 'update'] as const)('refused for %s is reported to the Packs view', async operation => {
@@ -1336,13 +1368,14 @@ describe('the claim on a pack', () => {
     // An update needs a source to update from before it asks for the claim
     recordUserInstall(resolveAppEnvironment().installedPacksFile, PACK_ID, 'owner/repo');
     const system = runPacksSystem();
-    expect(registry.claimPackOperation(PACK_ID)).toBe(true);
+    using claim = registry.claimPackOperation(PACK_ID);
+    expect(claim).not.toBeNull();
     try {
       system.send(operation === 'uninstall' ? { type: 'UNINSTALL_PACK', packId: PACK_ID } : { type: 'UPDATE_PACK', packId: PACK_ID });
       await vi.waitFor(() => expect(emitted(system.sent)).toContainEqual({
         type: operation === 'uninstall' ? 'PACK_UNINSTALL_FAILED' : 'PACK_UPDATE_FAILED',
         packId: PACK_ID, error: expect.stringContaining('in progress'),
       }));
-    } finally { registry.releasePackOperation(PACK_ID); system.stop(); }
+    } finally { system.stop(); }
   });
 });

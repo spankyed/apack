@@ -128,7 +128,7 @@ Script: `.apack/w1-order.ts` on the VM (run by `tsx`, source condition); result 
 - **Size:** medium. It may need a headless harness; if the API cannot run headless on the VM, record why and say
   so before moving on.
 
-**Result (2026-11-15, met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR` set to
+**Result (2026-11-15, met).** The API runs headless on the VM (`packages/server` dist, `SHIPPED_PACKS_DIR` set to
 `packages`, `APACK_ENV=development`, own data dir) and loads the default-setup pack. Through the bus, the script
 `.apack/w2-readback.ts` (run by `C:\Users\apackdev\w2-read.ps1`) asks the app's `default-setup/code` feature to
 create a PowerShell terminal, types three lines through `terminal.TERMINAL_INPUT`, then asks the broker over its

@@ -140,7 +140,7 @@ export function createViewHost({ ears, packs, observe }: ViewHostOptions): ViewH
         views.delete(key);
       };
     },
-    stats: () => ({ views: views.size, subscriptions: [...views.values()].reduce((sum, shared) => sum + shared.observers.size, 0) }),
+    stats: () => ({ views: views.size, subscriptions: views.values().reduce((sum, shared) => sum + shared.observers.size, 0) }),
     close() {
       unlisten();
       for (const shared of views.values()) {

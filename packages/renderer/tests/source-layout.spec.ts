@@ -1,7 +1,7 @@
 // The renderer is a shell around @apackdev/host, and its folders are the jobs it does: `boot/` starts the window,
 // `runtime/` makes this window's resources and binds the frontend port, `transport/` is the wire to the API,
 // `adapters/` implements the ports the host's machines take, and `views/` renders. The API's tree says the same of
-// itself (`packages/api/tests/source-layout.spec.ts`), so the two read alike and a concept found in one is
+// itself (`packages/server/tests/source-layout.spec.ts`), so the two read alike and a concept found in one is
 // looked for in the same place in the other.
 //
 // A folder named for a layer rather than a job — core, shared, lib, utils, common, helpers — takes whatever nobody
@@ -47,7 +47,7 @@ describe('packages/renderer/src', () => {
   it('names no folder for a layer, at any depth', () => {
     const dirs = read('paths', fs.readdirSync(SRC, { recursive: true, withFileTypes: true }))
       .filter((e) => e.isDirectory())
-      .map((e) => ({ name: e.name, path: path.relative(SRC, path.join(e.parentPath ?? e.path, e.name)) }));
+      .map((e) => ({ name: e.name, path: path.relative(SRC, path.join(e.parentPath, e.name)) }));
 
     // `core/shared/debug/` was three of these deep: the rule is only worth anything below the top level too
     const LAYER_NAMES = ['core', 'shared', 'lib', 'libs', 'utils', 'util', 'common', 'helpers', 'misc'];

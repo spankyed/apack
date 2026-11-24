@@ -125,7 +125,7 @@ export const EXIT_IDLE_MS = 15_000
  * the request has to say `unset` instead. Both read this list.
  *
  * `ANTHROPIC_API_KEY` is the one on it: the CLI authenticates as whoever the user signed in as, and the API
- * can genuinely be carrying a key — it auto-loads `packages/api/.env` — which would make the CLI
+ * can genuinely be carrying a key — it auto-loads `packages/server/.env` — which would make the CLI
  * authenticate as the app.
  */
 export const DENIED_TO_A_CHILD = ['ANTHROPIC_API_KEY'] as const;
@@ -133,7 +133,7 @@ export const DENIED_TO_A_CHILD = ['ANTHROPIC_API_KEY'] as const;
 /**
  * Build the environment for a spawned Claude CLI child process.
  *
- * The API server auto-loads `packages/api/.env` via `dotenv/config`, so a
+ * The API server auto-loads `packages/server/.env` via `process.loadEnvFile()`, so a
  * developer's `ANTHROPIC_API_KEY` can be in its environment (the app's own
  * model calls don't read it: `services.inference` uses the key selected in
  * Settings → Secrets). The Claude CLI treats env-var API keys as an

@@ -67,21 +67,18 @@ it('installs the build as the user\'s own copy and starts it', async () => {
   expect(readInstalledPacks(recordsFile()).find(record => record.id === ID)).toMatchObject({ enabled: true, updatesWith: 'user' });
   expect(bus.send.mock.calls.map(([event]) => event.type)).toContain('PACK_CHANGED');
   // The claim is released, so the next build can install
-  expect(registry.claimPackOperation(ID)).toBe(true);
-  registry.releasePackOperation(ID);
+  using nextClaim = registry.claimPackOperation(ID);
+  expect(nextClaim).not.toBeNull();
 });
 
 it('places nothing while another operation holds the pack', async () => {
-  expect(registry.claimPackOperation(ID)).toBe(true);
-  try {
-    await expect(installDevPack(registry, source, bus as never)).rejects.toThrow(/already in progress for dev-pack/);
-    expect(fs.existsSync(packDir())).toBe(false);
-    expect(registry.getPackRegistration(ID)).toBeNull();
-    // The other operation's claim is untouched
-    expect(registry.claimPackOperation(ID)).toBe(false);
-  } finally {
-    registry.releasePackOperation(ID);
-  }
+  using claim = registry.claimPackOperation(ID);
+  expect(claim).not.toBeNull();
+  await expect(installDevPack(registry, source, bus as never)).rejects.toThrow(/already in progress for dev-pack/);
+  expect(fs.existsSync(packDir())).toBe(false);
+  expect(registry.getPackRegistration(ID)).toBeNull();
+  // The other operation's claim is untouched
+  expect(registry.claimPackOperation(ID)).toBeNull();
 });
 
 it('replaces a disabled pack\'s files without starting it', async () => {

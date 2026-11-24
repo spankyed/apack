@@ -10,14 +10,15 @@
     "customConditions": ["@apackdev/source"],
     "allowImportingTsExtensions": true,
     "allowJs": true,
-    "target": "ES2022",
+    "erasableSyntaxOnly": true,
+    "target": "ES2024",
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
   "include": ["_support/**/*.ts", "e2e/**/*.ts", "performance/**/*.ts", "acceptance/**/*.ts", "../playwright.config.ts"]

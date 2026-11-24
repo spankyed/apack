@@ -291,7 +291,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           env: terminalEnv,
           // **A session inherits the host's environment, so `env` cannot say what must be absent.** The CLI
           // authenticates as whoever the user signed in as, and a key the app happens to carry — the API
-          // auto-loads `packages/api/.env` — would make it authenticate as the app instead
+          // auto-loads `packages/server/.env` — would make it authenticate as the app instead
           unset: DENIED_TO_A_CHILD,
           cwd: options.cwd,
         },

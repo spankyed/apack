@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "sdk-modules:check": "npm test -- tests/packs/runtime/sdk-bridge-drift.spec.ts",
-    "sdk-modules:update": "tsx scripts/sdk-modules.ts"
+    "sdk-modules:update": "node scripts/sdk-modules.ts"
   },
   "exports": {
     "./app-state": "./src/app-state/index.ts",
@@ -71,14 +71,12 @@
     "@opentelemetry/core": "^3.0.0",
     "@opentelemetry/sdk-trace": "^3.0.0",
     "ai": "^7.0.100",
-    "fs-extra": "^11.4.0",
     "minimatch": "^11.0.5",
     "semver": "^7.8.5",
     "tar": "^7.5.22",
     "xstate": "^5.19.2"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/semver": "^7.8.0"
   }
 }

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { registerCompilerCommonJS } from './compiler-commonjs.ts';
 import { splitCompilerModulePath } from './compiler-module-path.ts';
-import { createRequire, findPackageJSON, isBuiltin, register, registerHooks, type ModuleHooks } from 'node:module';
+import { createRequire, findPackageJSON, isBuiltin, register, registerHooks } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { CompilationInputs } from './compilation-inputs.ts';
 import { withoutCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
@@ -19,7 +19,6 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
   // callers still need separate identities even when two captures contain identical source bytes.
   const namespace = `apack-build-${++sequence}`;
   const closed = new Int32Array(new SharedArrayBuffer(4));
-  let hooks: ModuleHooks | undefined;
   let pending: ReturnType<typeof initialize> | undefined;
   let stopping: Promise<void> | undefined;
   const scoped = (value: string | undefined) => {
@@ -93,16 +92,28 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
     const [esm, cjs] = await withoutCompilerFileReads(() => Promise.all([import('tsx/esm/api'), import('tsx/cjs/api')]));
     const tsconfig = writeCompilerModuleConfiguration(compilation.configuration ?? compilation.declarationConfiguration, tree);
     const importCompilerSource = createRequire(import.meta.url)(path.join(cliPackageDirectory(), 'bin/compiler-import.cjs')) as (url: string) => Promise<Record<string, unknown>>;
+    await using stack = new AsyncDisposableStack();
     const commonjs = cjs.register({ namespace });
+    stack.defer(() => commonjs.unregister());
     const unregisterCommonJS = registerCompilerCommonJS(compilation, tree.directory, tsconfig);
-    try {
-      const modules = esm.register({ namespace, tsconfig });
-      // Run before tsx's synchronous hooks, while the request still carries its capture namespace.
-      try { hooks = registerHooks(ownedHooks); }
-      catch (error) { await modules.unregister(); throw error; }
-      return { modules, commonjs, unregisterCommonJS, importCompilerSource };
-    } catch (error) { unregisterCommonJS(); commonjs.unregister(); throw error; }
+    stack.defer(unregisterCommonJS);
+    const modules = esm.register({ namespace, tsconfig });
+    stack.defer(() => modules.unregister());
+    // Run before tsx's synchronous hooks, while the request still carries its capture namespace.
+    const registeredHooks = registerHooks(ownedHooks);
+    stack.defer(() => registeredHooks.deregister());
+    const resources = stack.move();
+    return { commonjs, importCompilerSource, resources };
   }
+
+  const dispose = (): Promise<void> => {
+    stopping ??= (async () => {
+      Atomics.store(closed, 0, 1);
+      const loaded = await pending?.catch(() => undefined);
+      await loaded?.resources.disposeAsync();
+    })();
+    return stopping;
+  };
 
   return {
     async importModule(file: string): Promise<Record<string, unknown>> {
@@ -129,17 +140,7 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
       url.searchParams.set('tsx-namespace', namespace);
       return importCompilerSource(url.href);
     },
-    dispose(): Promise<void> {
-      stopping ??= (async () => {
-        Atomics.store(closed, 0, 1);
-        const loaded = await pending?.catch(() => undefined);
-        hooks?.deregister();
-        if (loaded) {
-          try { await loaded.modules.unregister(); }
-          finally { loaded.unregisterCommonJS(); loaded.commonjs.unregister(); }
-        }
-      })();
-      return stopping;
-    },
+    dispose,
+    [Symbol.asyncDispose]: dispose,
   };
 }

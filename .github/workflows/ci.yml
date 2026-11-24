@@ -133,8 +133,8 @@ jobs:
       - name: Facade types report (default-setup)
         run: npm run facade:check --workspace @app/default-setup
 
-      - name: Unit tests (api)
-        run: npm test --workspace @app/api -- --reporter=verbose
+      - name: Unit tests (server)
+        run: npm test --workspace @app/server -- --reporter=verbose
 
       - name: Unit tests (default-setup)
         run: npm test --workspace @app/default-setup -- --reporter=verbose

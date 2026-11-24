@@ -7,10 +7,12 @@
     "tsBuildInfoFile": "../node_modules/.cache/tsbuildinfo/scripts.tsbuildinfo",
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
-    "target": "ES2022",
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "allowJs": true,
     "checkJs": true,
     "strict": true,

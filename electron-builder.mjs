@@ -262,8 +262,8 @@ export default /** @type import('electron-builder').Configuration */
     // app loads — so the exclusions above would strip every one of them and `apack pack init` from the CLI this
     // app installs (bin/app-launcher.sh) would scaffold nothing. Last match wins, so this comes after them.
     'packages/apack-cli/dist/package/templates/**',
-    // Include API's local node_modules
-    'packages/api/node_modules/**/*',
+    // Include the server's local node_modules
+    'packages/server/node_modules/**/*',
     // Exclude dev tool output
     '!**/node_modules/.bin',
     '!**/node_modules/@types/**',

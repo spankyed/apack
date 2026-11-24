@@ -1,7 +1,7 @@
 # apack-terminal: public release (deferred)
 
 Status: deferred by decision, 2026-11-12. Nothing here is started or scheduled. The v1 plan
-(`docs/plans/apack-terminal-v1.md`) is apack-only and does not include any of this.
+(`docs/archive/plans/apack-terminal-v1.md`) is apack-only and does not include any of this.
 
 Why deferred: apack is the only consumer, and nothing outside this repository depends on the broker. Publishing
 would add a support and compatibility burden with no user asking for it.

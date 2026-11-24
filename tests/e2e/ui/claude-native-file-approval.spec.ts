@@ -139,15 +139,23 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       await expect(panel).toBeHidden()
     } catch(error) {
       const snapshot = await context()
-      const {openDatabase} = await import('@apackdev/ears/lmdb')
-      const {createEarsEngine} = await import('@apackdev/ears')
-      const database = openDatabase({path:join(workspace!,'app-data/apack/ears-db'),readOnly:true})
       try {
-        const ears = createEarsEngine({database})
-        const ids = [snapshot.threadId,snapshot.claude.pendingControlRequest?.approvalMessageId].filter(Boolean)
-        const rows = ids.map(id => ears.getRow(id)).filter(Boolean).map(row => ({id:row!.id,context:row!.context,blockResponse:row!.blockResponse,responseTimestamp:row!.responseTimestamp}))
-        await writeFile(join(workspace!,'native-file-live-backend.json'),JSON.stringify({at:Date.now(),rows},null,2))
-      } finally { database.close() }
+        const { openDatabase } = await import('@elmdb/ears/database')
+        const { createEarsEngine } = await import('@elmdb/ears')
+        const database = openDatabase({ path: join(workspace!, 'app-data/apack/lmdb'), readOnly: true })
+        try {
+          const ears = createEarsEngine({ database })
+          const ids = [snapshot.threadId, snapshot.claude.pendingControlRequest?.approvalMessageId].filter(Boolean)
+          const rows = ids.map(id => ears.getRow(id)).filter(Boolean).map(row => ({
+            id: row!.id, context: row!.context, blockResponse: row!.blockResponse, responseTimestamp: row!.responseTimestamp,
+          }))
+          await writeFile(join(workspace!, 'native-file-live-backend.json'), JSON.stringify({ at: Date.now(), rows }, null, 2))
+        } finally {
+          database.close()
+        }
+      } catch (diagnosticError) {
+        await writeFile(join(workspace!, 'native-file-live-backend-error.txt'), String(diagnosticError))
+      }
       await writeFile(join(workspace!,'native-file-socket-frames.json'),JSON.stringify(socketFrames))
       await writeFile(join(workspace!,'native-file-decision-failure.json'),JSON.stringify({turn,context:await context()},null,2))
       await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-file-decision-failure.png')})

@@ -97,7 +97,7 @@ export interface CodeTerminalContext {
    * **One slot for all of them is the trap**, and it is invisible when it fires: two creates in flight share
    * it, so the second's intent is what the first answer reads and the second answer finds nothing. Run
    * "build" then "test" before the first answer and `test` runs in the build terminal
-   * (`docs/issues/ISSUE-terminal-integration-review.md`, T4).
+   * (`docs/archive/issues/ISSUE-terminal-integration-review.md`, T4).
    *
    * An entry is removed when its ask ends, with the terminal or with a refusal, so the map holds only what is
    * genuinely in flight.

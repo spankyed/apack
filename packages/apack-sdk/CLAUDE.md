@@ -268,7 +268,7 @@ makes only the first — and these are the shapes that answer "built pack":
   `writeManifest`), where a pack directory would change what the command under test sees;
 - the **installed or discovered shape** — a data dir's `packs/<id>/apack.json`, or a built built-in with a
   `dist/runtime/index.cjs` and no source. Measured 2026-10-02: 23 such sites, 20 in `@apackdev/host` and 3 in
-  `packages/api`, whose subjects are discovery, staging, an update check or the loader. None wants a source
+  `packages/server`, whose subjects are discovery, staging, an update check or the loader. None wants a source
   tree, which is why the guardrail's population is the packages that *import* the fixture rather than every
   package that could.
 

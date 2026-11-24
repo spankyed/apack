@@ -480,14 +480,8 @@ const e2eRun = (root: string, specs: readonly string[], flags: readonly string[]
   specs: specs.map((spec) => path.relative(root, spec)),
 });
 
-const groupByPackage = (specs: readonly string[], root: string): Map<string | null, string[]> => {
-  const byPkg = new Map<string | null, string[]>();
-  for (const spec of specs) {
-    const pkg = packageOf(path.relative(root, spec));
-    byPkg.set(pkg, [...(byPkg.get(pkg) ?? []), spec]);
-  }
-  return byPkg;
-};
+const groupByPackage = (specs: readonly string[], root: string): Map<string | null, string[]> =>
+  Map.groupBy(specs, (spec) => packageOf(path.relative(root, spec)));
 
 /**
  * A vitest config is read as *data* by `suite-timeouts.spec.ts` and `chain-inputs.spec.ts`, never imported,

@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APACK="$ROOT/node_modules/.bin/apack"
 export APACK_HOST="$ROOT"
 source "$ROOT/tests/acceptance/external-pack/support.sh"
-"$ROOT/node_modules/.bin/tsx" "$ROOT/tests/acceptance/external-pack/prepare-default-pack-fork.ts" --check
+node "$ROOT/tests/acceptance/external-pack/prepare-default-pack-fork.ts" --check
 
 for PACK in "${FIXTURE_PACKS[@]}"; do
   if [ ! -d "$PACK/dist" ]; then

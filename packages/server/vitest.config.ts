@@ -3,10 +3,14 @@ import { defaultServerConditions } from 'vite';
 
 // Vitest's own defaults: Vite's server conditions without 'module'
 const conditions = ['@apackdev/source', ...defaultServerConditions.filter((c) => c !== 'module')];
-import { config as dotenvConfig } from 'dotenv';
-
-// Load environment variables from .env file
-dotenvConfig();
+// Load environment variables from .env file when present
+const IGNORED_ENV_FILE_ERRORS = new Set(['ENOENT', 'EISDIR', 'ENOTDIR', 'EACCES', 'EPERM']);
+try {
+  process.loadEnvFile();
+} catch (err) {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (!code || !IGNORED_ENV_FILE_ERRORS.has(code)) throw err;
+}
 
 export default defineConfig({
   /* Vite‑level plugins -------------------------------------------------- */

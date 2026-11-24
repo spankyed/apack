@@ -31,12 +31,8 @@ export function terminalLinkDecision(url: unknown): TerminalLinkDecision {
   if (typeof url !== 'string') return {action: 'refuse', reason: 'it is not text'};
   if (url.length > MAX_TERMINAL_LINK_LENGTH) return {action: 'refuse', reason: `it is longer than ${MAX_TERMINAL_LINK_LENGTH} characters`};
 
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return {action: 'refuse', reason: 'it is not a URL'};
-  }
+  const parsed = URL.parse(url);
+  if (!parsed) return {action: 'refuse', reason: 'it is not a URL'};
   // A file link names a file on a machine. With no host it names one on this machine, which a program has no business
   // handing to the OS; with a host it names one on another machine or a network share, which this window does not open.
   if (parsed.protocol === 'file:') {

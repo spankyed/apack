@@ -57,7 +57,7 @@ Keep the `apack-terminal` broker, terminal actors/events, backend process owners
 records unless a specific migration blocker requires an explicitly scoped change. The pty is the broker's
 and the emulator is the renderer's, so this migration replaces one side of that split and neither crosses it. Agent CLI execution is a separate path.
 Do not combine this migration with a persistence rewrite, PTY multiplexing, shell integration redesign or
-the broader fixes proposed in the [terminal integration review](../../issues/ISSUE-terminal-integration-review.md).
+the broader fixes proposed in the [terminal integration review](../issues/ISSUE-terminal-integration-review.md).
 That review is dated investigation material; recheck its findings against current code before using them.
 
 ## Current integration

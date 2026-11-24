@@ -1,5 +1,5 @@
 import type { ElectronApplication, Page } from '@playwright/test';
-import { createHash } from 'node:crypto';
+import { createHash, hash as cryptoHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { availableParallelism, cpus, hostname, release, totalmem } from 'node:os';
@@ -14,7 +14,7 @@ export function classifySourceFiles(trackedDiff: Buffer, untracked: readonly str
   return { dirty: trackedDiff.length > 0 || authoredUntracked.length > 0, authoredUntracked, excludedUntracked };
 }
 
-const digest = (input: string | Buffer) => createHash('sha256').update(input).digest('hex');
+const digest = (input: string | Buffer) => cryptoHash('sha256', input, 'hex');
 /** Build identities are hashes of actual output bytes, collected outside the measured interval. */
 function treeIdentity(root: string) {
   const hash = createHash('sha256');
@@ -43,7 +43,7 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
   const cpuLimit = limit('cpu.max')?.split(' ');
   const cpuCount = cpuLimit && cpuLimit[0] !== 'max' ? Math.min(availableParallelism(), Number(cpuLimit[0]) / Number(cpuLimit[1])) : availableParallelism();
   const memoryLimit = Number(limit('memory.max'));
-  const builds = ['packages/api/dist', 'packages/main/dist', 'packages/preload/dist', 'packages/renderer/dist', 'packages/default-setup/dist']
+  const builds = ['packages/server/dist', 'packages/main/dist', 'packages/preload/dist', 'packages/renderer/dist', 'packages/default-setup/dist']
     .map(directory => ({ ...treeIdentity(path.join(root, directory)), path: directory }));
   // The native package as the install put it: the lockfile's source and integrity for it, and the bytes of every binding
   // it and its platform packages hold

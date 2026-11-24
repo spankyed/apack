@@ -1,10 +1,19 @@
-# apack
+<p align="center">
+  <img src="resources/readme-banner.png" alt="apack" width="100%" />
+</p>
 
-**apack is a programmable desktop workspace for working with and building shared tools.**
+<h1 align="center">apack</h1>
 
-Build tools and workflows around your own work, then share them as **packs**. A pack can contain
-reusable prompts and actions or add an entire feature with its own interface, services and data.
-Most of apack ships in the `default-setup` pack, using the same APIs available to pack authors.
+<p align="center">
+  <strong>A programmable desktop workspace.</strong><br />
+  <strong>Build tools around your work, then share them as packs.</strong>
+</p>
+
+---
+
+**apack is a programmable desktop workspace for working with and building shared tools.** A pack can contain
+reusable actions, prompts, and flows or add an entire feature with its own interface, services and data.
+Most of apack's feature ship in the [default-setup](https://github.com/spankyed/default-setup) pack, using the same APIs available to pack authors.
 
 Conversations, documents and automation work with a shared data layer. Write actions, save
 parameterized prompts and connect them in the visual flow editor. Flows can call models, run tools,
@@ -110,7 +119,7 @@ apack separates the desktop host from the features it runs:
 | Area | Responsibility |
 |---|---|
 | `packages/main`, `packages/preload` | Desktop lifecycle, windows, protocols and IPC |
-| `packages/api`, `packages/renderer` | Backend process/transport and frontend shell |
+| `packages/server`, `packages/renderer` | Backend process/transport and frontend shell |
 | `packages/apack-host` | Pack discovery, installation and runtime; host services and settings |
 | `packages/default-setup` | Shipped features, extensions and content |
 | `packages/apack-sdk`, `packages/apack-ui` | Pack-facing APIs, types, components and editors |

@@ -118,7 +118,7 @@ export interface FileDuration {
  * Every file the run reported, attributed to the suite that holds it.
  *
  * The reporter states the project, so attribution is a lookup rather than a recovery — a path alone is
- * ambiguous for `tests/source-layout.spec.ts`, which both `api` and `renderer` hold.
+ * ambiguous for `tests/source-layout.spec.ts`, which both `server` and `renderer` hold.
  *
  * Skipped modules are dropped here rather than in the reporter. A skipped file reports a duration of 0
  * rather than no duration, and counting those as readings would pull a half's quantile bar down with
@@ -703,14 +703,10 @@ export function readDurations(root: string, dir: string, half: Half): DurationRe
  * another's, and a corrupt or absent file starts a window of one rather than refusing.
  */
 export function writeDurations(root: string, rows: readonly FileDuration[], measuredAt = new Date().toISOString()): void {
-  const byRecord = new Map<string, FileDuration[]>();
-  for (const row of rows) {
-    const key = `${row.dir}\u0000${row.half}`;
-    byRecord.set(key, [...byRecord.get(key) ?? [], row]);
-  }
+  const byRecord = Map.groupBy(rows, (row) => `${row.dir}\u0000${row.half}`);
   for (const [key, held] of byRecord) {
     const [dir, half] = key.split('\u0000') as [string, Half];
-    const sorted = [...held].sort((a, b) => a.file.localeCompare(b.file));
+    const sorted = held.toSorted((a, b) => a.file.localeCompare(b.file));
     const ms = Object.fromEntries(sorted.map((row) => [row.file, row.ms]));
     const overheadMs = Object.fromEntries(sorted.map((row) => [row.file, row.overheadMs]));
     prependToWindow(recordFor(root, dir, half), { measuredAt, ms, overheadMs }, soundDurations);

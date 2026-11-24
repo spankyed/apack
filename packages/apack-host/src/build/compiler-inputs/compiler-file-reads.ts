@@ -70,7 +70,7 @@ function readPath(file: fs.PathOrFileDescriptor): fs.PathOrFileDescriptor {
 }
 
 function sourceError(error: unknown): unknown {
-  if (!(error instanceof Error)) return error;
+  if (!Error.isError(error)) return error;
   const scope = currentScope();
   if (!scope) return error;
   error.message = scope.compilation.diagnostic(error.message);
@@ -167,9 +167,9 @@ function install() {
     catch (error) { throw sourceError(error); }
   }) as typeof fs.readFileSync;
   fs.readFile = ((file: fs.PathOrFileDescriptor, ...args: unknown[]) => callbackRead(read, file, args)) as typeof fs.readFile;
-  fs.promises.readFile = (async (file, ...args) => {
+  fs.promises.readFile = (async (file: fs.PathLike | fs.promises.FileHandle, ...args: unknown[]) => {
     // A FileHandle already owns its descriptor; its lifetime belongs to the opening operation.
-    if (typeof file === 'object' && !(file instanceof URL) && !Buffer.isBuffer(file)) return readPromise(file, ...args);
+    if (typeof file === 'object' && !(file instanceof URL) && !Buffer.isBuffer(file)) return Reflect.apply(readPromise, fs.promises, [file, ...args]);
     try { return await Reflect.apply(readPromise, fs.promises, [readPath(file), ...args]); }
     catch (error) { throw sourceError(error); }
   }) as typeof fs.promises.readFile;

@@ -47,8 +47,8 @@ it('preserves native handle identity, borrowed stat receivers and disposal', asy
   try {
     expect(Object.getPrototypeOf(one)).toBe(prototype);
     const borrowed = await one.stat.call(two);
-    expect(borrowed.size).toBe(6);
-    expect(borrowed.ino).toBe(fs.statSync(second).ino);
+    expect(borrowed?.size).toBe(6);
+    expect(borrowed?.ino).toBe(fs.statSync(second).ino);
     await one[Symbol.asyncDispose]();
     expect(capturedDescriptor(fd)).toBeUndefined();
     await expect(one.stat()).rejects.toMatchObject({ code: 'EBADF' });

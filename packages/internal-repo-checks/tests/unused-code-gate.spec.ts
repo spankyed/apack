@@ -20,7 +20,7 @@ import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
  * and a package whose source no config compiles.
  *
  * **Every tsconfig, not one per workspace.** A package's checks run through more configs than its
- * `tsconfig.json`: `typecheck:api` compiles `packages/api` through three, and the published packages build
+ * `tsconfig.json`: `typecheck:server` compiles `packages/server` through three, and the published packages build
  * through a `tsconfig.package.json`. All of those inherit the flag today, and a narrower population would
  * pass while one of them turned it off. What is excluded is derived rather than named — a config whose
  * parsed file list is empty compiles nothing, which is what a solution config like the renderer's root is.
@@ -155,7 +155,7 @@ describe('every workspace is checked for unused code', () => {
     // Most configs here inherit rather than spell it, and an inherited `false` is the way this decays
     // without anything being deleted
     it('follows extends, in both directions', () => {
-      const base = path.join(REPO_ROOT, 'packages', 'api');
+      const base = path.join(REPO_ROOT, 'packages', 'server');
       const effective = (compilerOptions: Record<string, unknown>): boolean | undefined =>
         ts.parseJsonConfigFileContent({ extends: './tsconfig.json', compilerOptions }, ts.sys, base).options.noUnusedLocals;
       expect(effective({}), 'a config that only extends has to inherit the flag, or the population above is '

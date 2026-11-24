@@ -5,14 +5,15 @@
     // instead of reparsing. `incremental` works with `noEmit`; `composite` does not, which is why this
     // is not project references (docs/goals/goal-test-tiers.md).
     "incremental": true,
-    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/api.tsbuildinfo",
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/server.tsbuildinfo",
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
     // Their sources import .ts files by name; this config emits, which requires rewriteRelativeImportExtensions too
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "target": "ES2022",
-    "lib": ["ES2022"],
+    "erasableSyntaxOnly": true,
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

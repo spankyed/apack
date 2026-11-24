@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './boot/env';
 import { installFatalErrorHandling, writeFatalError } from './boot/errors';
 import { captureApiToken } from './boot/config';
 import { setupBackend } from './runtime';

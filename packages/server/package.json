@@ -1,5 +1,5 @@
 {
-  "name": "@app/api",
+  "name": "@app/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -40,9 +40,7 @@
     "@vscode/ripgrep": "^1.17.1",
     "chokidar": "^3.6.0",
     "croner": "^10.0.1",
-    "dotenv": "^16.5.0",
     "elmdb": "0.1.0",
-    "fs-extra": "^11.3.1",
     "ws": "^8.18.2",
     "xstate": "^5.19.2",
     "zod": "^4.6.7"
@@ -51,8 +49,7 @@
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "@trpc/server": "^11.1.2",
-    "@types/fs-extra": "^11.0.4",
-    "@types/node": "^22.15.17",
+    "@types/node": "^24.12.0",
     "@types/ws": "^8.18.1",
     "cross-env": "^10.1.0",
     "esbuild": "^0.25.0",

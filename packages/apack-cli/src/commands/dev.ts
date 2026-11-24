@@ -1,7 +1,7 @@
 import { readSettingsOverrides } from '@apackdev/host/database';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createPackBuilder } from '../build/build-process.ts';
@@ -93,7 +93,7 @@ export function backendRevision(root: string): string {
   const { files } = JSON.parse(fs.readFileSync(path.join(root, 'dist', 'integrity.json'), 'utf-8')) as { files: Record<string, string> };
   const backend = Object.entries(files).filter(([file]) => file === 'apack.json' || file === 'runtime/index.cjs'
     || file.startsWith('runtime/content/') || file.startsWith('build/') || file.startsWith('types/'));
-  return createHash('sha256').update(JSON.stringify(backend.sort(([a], [b]) => a.localeCompare(b)))).digest('hex');
+  return hash('sha256', JSON.stringify(backend.sort(([a], [b]) => a.localeCompare(b))), 'hex');
 }
 
 /**

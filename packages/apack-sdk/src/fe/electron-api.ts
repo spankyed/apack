@@ -190,7 +190,7 @@ export interface _HostBridge {
  * boundary: a pack's frontend runs in the app window, loaded with `import()` from `pack://`, so it can
  * read every member of `window.electronAPI` at runtime whatever this says. What the omission does is stop
  * advertising them. Closing it for real means isolating pack frontends from the window
- * (`docs/goals/goal-pack-frontend-isolation.md`), and until that exists this is a signpost — which
+ * (`docs/goals/goal-pack-security-isolation.md`), and until that exists this is a signpost — which
  * is why it drops members no pack has a reason to want.
  */
 type PackFacingBridge = Omit<_HostBridge, 'apiToken' | 'performance'> & {

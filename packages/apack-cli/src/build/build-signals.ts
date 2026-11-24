@@ -5,15 +5,17 @@ export async function withBuildSignals(run: (signal: AbortSignal) => Promise<voi
   const stop = (signal: 'SIGINT' | 'SIGTERM') => { received ??= signal; controller.abort(); };
   const interrupt = () => stop('SIGINT');
   const terminate = () => stop('SIGTERM');
-  process.on('SIGINT', interrupt);
-  process.on('SIGTERM', terminate);
-  try {
-    await run(controller.signal);
-  } catch (error) {
-    if (!received || !(error instanceof Error) || error.name !== 'AbortError') throw error;
-  } finally {
-    process.removeListener('SIGINT', interrupt);
-    process.removeListener('SIGTERM', terminate);
+  {
+    using signals = new DisposableStack();
+    process.on('SIGINT', interrupt);
+    signals.defer(() => process.removeListener('SIGINT', interrupt));
+    process.on('SIGTERM', terminate);
+    signals.defer(() => process.removeListener('SIGTERM', terminate));
+    try {
+      await run(controller.signal);
+    } catch (error) {
+      if (!received || !(error instanceof Error) || error.name !== 'AbortError') throw error;
+    }
   }
   if (received) {
     onInterrupted?.();

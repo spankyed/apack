@@ -373,7 +373,7 @@ Things worth knowing before changing it:
   other's answers. But every claim is now a question's, held about a second, so `_claimDrive` waits out a
   holder for 10s before giving up. Waiting never takes a live claim; it waits for one to end, and a claim
   still held after the window is a driver genuinely running, which the refusal says.
-- **A step that fails after the attach closes what is already open** (`_closingOnFailure`). A handle left
+- **A step that fails after the attach closes what is already open** (`_attachRollback`). A handle left
   open does not fail, it *hangs*: Node keeps running while one is, so a refused claim printed its reason to
   stderr and the process sat there for ever — measured still running 25s later, which reads as the verb
   hanging rather than as a refusal that was reported.

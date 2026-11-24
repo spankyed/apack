@@ -153,63 +153,55 @@ export async function manageInstalledApp(options: AppCommandOptions, deps: AppCo
   const log = deps.log ?? console.log;
   const run = deps.run ?? (async (command, args) => { await execFileAsync(command, args); });
   const quit = deps.quit ?? quitApp;
-  const lock = holdExclusiveLock({
+  using _lock = holdExclusiveLock({
     file: path.join(applications, `.${product}.manage.lock`),
     what: `apack ${action}`,
     refuse: holder => new Error(`Another app operation is running: ${holder}. Try again once it finishes.`),
   });
-  let staging: string | undefined;
-  let staged: string | undefined;
-  try {
-    const exists = bundleExists(appPath);
-    if (action === 'install' && exists && !options.replace) {
-      throw new Error(`${appPath} is already installed. Use --replace to replace it, or apack upgrade to update it.`);
-    }
-    if (action === 'upgrade' && !exists) throw new Error(`${product} is not installed. Run apack install first.`);
-    if (action === 'uninstall') {
-      if (!exists) { log(`${product} is not installed.`); return; }
-      await quit(product, log, appPath);
-      fs.rmSync(appPath, { recursive: true, maxRetries: 5 });
-      log(`Uninstalled ${product}. Your data and settings were kept.`);
-      return;
-    }
-
-    const have = exists ? installedVersion(appPath) : null;
-    if (action === 'upgrade' && !have) throw new Error(`Cannot read the installed app's version. Use apack install --replace to repair it.`);
-    log(`Looking for ${options.version ?? 'the latest'} ${product} release...`);
-    const release = pickAppRelease(await (deps.listReleases ?? listAppReleases)(), channel, options.version);
-    if (!release) throw new Error(`Could not find a complete ${product} ${options.version ?? 'latest'} release with its mac-arm64 zip and sha256.`);
-    if (action === 'upgrade' && have && !options.force && semver.gte(have, release.version)) {
-      log(`${product} ${have} is already installed; selected release is ${release.version}. Use --force to reinstall or downgrade.`);
-      return;
-    }
-    staging = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-install-'));
-    const zipPath = path.join(staging, release.zip.name);
-    log(`Downloading ${release.zip.name}...`);
-    await downloadVerified({ asset: release.zip, checksum: release.checksum, to: zipPath, download: deps.download });
-    const expanded = path.join(staging, 'app');
-    await run('ditto', ['-x', '-k', zipPath, expanded]);
-    const incoming = path.join(expanded, `${product}.app`);
-    validateAppBundle(incoming, channel, release.version);
-
-    staged = path.join(applications, stagingDirName(`${product}.app`, 'installing'));
-    await run('ditto', [incoming, staged]);
-    validateAppBundle(staged, channel, release.version);
-    if (exists) await quit(product, log, appPath);
-    // Recheck at the last moment: an app installed outside this CLI also needs explicit replacement.
-    if (action === 'install' && !options.replace && bundleExists(appPath)) {
-      throw new Error(`${appPath} appeared during installation. Run again with --replace.`);
-    }
-    replaceDir(staged, appPath);
-    log(`${product} ${release.version} installed at ${appPath}.`);
-    if (options.relaunch) await run('open', [appPath]);
-  } finally {
-    try {
-      if (staged) fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 });
-      if (staging) fs.rmSync(staging, { recursive: true, force: true, maxRetries: 5 });
-    } finally {
-      lock.release();
-    }
+  const exists = bundleExists(appPath);
+  if (action === 'install' && exists && !options.replace) {
+    throw new Error(`${appPath} is already installed. Use --replace to replace it, or apack upgrade to update it.`);
   }
+  if (action === 'upgrade' && !exists) throw new Error(`${product} is not installed. Run apack install first.`);
+  if (action === 'uninstall') {
+    if (!exists) { log(`${product} is not installed.`); return; }
+    await quit(product, log, appPath);
+    fs.rmSync(appPath, { recursive: true, maxRetries: 5 });
+    log(`Uninstalled ${product}. Your data and settings were kept.`);
+    return;
+  }
+
+  const have = exists ? installedVersion(appPath) : null;
+  if (action === 'upgrade' && !have) throw new Error(`Cannot read the installed app's version. Use apack install --replace to repair it.`);
+  log(`Looking for ${options.version ?? 'the latest'} ${product} release...`);
+  const release = pickAppRelease(await (deps.listReleases ?? listAppReleases)(), channel, options.version);
+  if (!release) throw new Error(`Could not find a complete ${product} ${options.version ?? 'latest'} release with its mac-arm64 zip and sha256.`);
+  if (action === 'upgrade' && have && !options.force && semver.gte(have, release.version)) {
+    log(`${product} ${have} is already installed; selected release is ${release.version}. Use --force to reinstall or downgrade.`);
+    return;
+  }
+  using cleanup = new DisposableStack();
+  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-install-'));
+  cleanup.defer(() => fs.rmSync(staging, { recursive: true, force: true, maxRetries: 5 }));
+  const zipPath = path.join(staging, release.zip.name);
+  log(`Downloading ${release.zip.name}...`);
+  await downloadVerified({ asset: release.zip, checksum: release.checksum, to: zipPath, download: deps.download });
+  const expanded = path.join(staging, 'app');
+  await run('ditto', ['-x', '-k', zipPath, expanded]);
+  const incoming = path.join(expanded, `${product}.app`);
+  validateAppBundle(incoming, channel, release.version);
+
+  const staged = path.join(applications, stagingDirName(`${product}.app`, 'installing'));
+  cleanup.defer(() => fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 }));
+  await run('ditto', [incoming, staged]);
+  validateAppBundle(staged, channel, release.version);
+  if (exists) await quit(product, log, appPath);
+  // Recheck at the last moment: an app installed outside this CLI also needs explicit replacement.
+  if (action === 'install' && !options.replace && bundleExists(appPath)) {
+    throw new Error(`${appPath} appeared during installation. Run again with --replace.`);
+  }
+  replaceDir(staged, appPath);
+  log(`${product} ${release.version} installed at ${appPath}.`);
+  if (options.relaunch) await run('open', [appPath]);
 }
 

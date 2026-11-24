@@ -8,9 +8,11 @@
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/apack-testing.tsbuildinfo",
     // Workspace @apackdev/* sources import .ts files by name
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
-    "target": "ES2022",
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,

@@ -22,7 +22,7 @@ export async function action(params: Record<string, any>, services: Services) {
     messages: services.repository.chatQueries.threadData(threadId as EntityId)?.messages?.map(message => [message.id, message.context?.cliUuid])});
   const snapshot = readSnapshot();
   const messages = services.repository.chatQueries.threadData(threadId as EntityId)?.messages ?? [];
-  const assistant = [...messages].reverse().find(message => message.sender === 'assistant' && typeof message.context?.cliUuid === 'string');
+  const assistant = messages.findLast(message => message.sender === 'assistant' && typeof message.context?.cliUuid === 'string');
   const cliUuid = assistant?.context?.cliUuid as string | undefined;
   const fail = (reason: string, block = false) => {
     if (block && snapshot === readSnapshot()) persistClaudeState(services, threadId, {historyError: reason});

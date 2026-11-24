@@ -4,7 +4,9 @@ import { getDesignated, hasDesignation } from '../designations/index.ts';
 // Import directly — not from '../utils' barrel which pulls in Node-only modules (fs, child_process)
 import { randomId } from '../utils/random-id.ts';
 import { RepositoryError, RepositoryErrorCode } from '../repositories/repository-error.ts';
+import { isError } from '../utils/is-error.ts';
 import { redactSecrets, redactSecretText } from '../utils/redact.ts';
+import { errorMessage } from '../utils/shared.ts';
 import { boundHost } from '../runtime/host-runtime.ts';
 import type { RunNodeId } from '../services/run-history.ts';
 import type { StepRuntimeError } from '../steps/types.ts';
@@ -95,10 +97,10 @@ export function reportError({ step, ...input }: ReportErrorInput): StepRuntimeEr
 
 /** The error's name, message and stack, with key-shaped strings redacted (provider errors can quote the key) */
 function normalizeError(error: unknown): { message: string; stack?: string; name?: string } {
-  if (error instanceof Error) {
+  if (isError(error)) {
     return {
       name: error.name,
-      message: redactSecretText(error.message || error.toString()),
+      message: redactSecretText(errorMessage(error) || error.toString()),
       stack: error.stack && redactSecretText(error.stack),
     };
   }

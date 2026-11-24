@@ -675,6 +675,8 @@ Resolution order for semver and `github:` deps: the workspace (`../<id>`, `../..
 
 Run `apack pack fetch-deps` to pull dependency snapshots for cross-pack type interop.
 
+The installed pack’s details in Packs report named dependencies that are missing, disabled, incompatible or unable to load. A pack that supplies the same role under another ID is a separate provider. Restore or enable the named pack, or install a version that satisfies the required range.
+
 ## Entities and relations
 
 ```json

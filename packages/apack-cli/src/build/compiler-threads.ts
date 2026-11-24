@@ -6,6 +6,7 @@ import threads, { SHARE_ENV, BroadcastChannel, getEnvironmentData, setEnvironmen
 import { withoutCompilerFileReads, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
 import { answerWhileWorking, threadWork } from '@apackdev/sdk/progress';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 /**
  * How much of its own CPU a worker may spend before it accepts the final input collection: what refuses a worker
@@ -55,16 +56,19 @@ export function ownCompilerThreads(bootstrap: string, workspace: string, environ
       const handoff: ThreadHandoff = { pid: process.pid, channel: randomUUID(), report: path.join(workspace, `thread-${randomUUID()}.json`), environment: startupEnvironment };
       const channel = new BroadcastChannel(handoff.channel);
       channel.unref();
-      const previous = getEnvironmentData(HANDOFF);
-      setEnvironmentData(HANDOFF, handoff);
       let worker: InstanceType<typeof NativeWorker>;
-      try {
+      {
+        using envGuard = new DisposableStack();
+        const previous = getEnvironmentData(HANDOFF);
+        setEnvironmentData(HANDOFF, handoff);
+        envGuard.defer(() => setEnvironmentData(HANDOFF, previous));
+        using channelGuard = new DisposableStack();
+        channelGuard.defer(() => channel.close());
         worker = Reflect.construct(target, [filename, workerOptions], newTarget);
-      } catch (error) { channel.close(); throw error; }
-      finally { setEnvironmentData(HANDOFF, previous); }
+        channelGuard.move();
+      }
       const terminate = worker.terminate.bind(worker);
-      let readyResolve!: () => void;
-      const ready = new Promise<void>(resolve => { readyResolve = resolve; });
+      const { promise: ready, resolve: readyResolve } = Promise.withResolvers<void>();
       let report: ThreadReport | undefined, exited = false, sequence = 0;
       let stopping: Promise<number> | undefined;
       const pending = new Map<number, { accepted(): void; resolve(value: CompilerInputObservations[]): void; reject(error: Error): void }>();
@@ -106,8 +110,7 @@ export function ownCompilerThreads(bootstrap: string, workspace: string, environ
             // Bound an unresponsive worker, not filesystem verification or nested collection: a worker that is
             // computing answers late and is waited for, and one doing nothing for the watchdog's window is refused.
             // Its own CPU, since a thread shares its process's pid.
-            let accepted!: () => void;
-            const acceptance = new Promise<void>(settle => { accepted = settle; });
+            const { promise: acceptance, resolve: accepted } = Promise.withResolvers<void>();
             if (finish) {
               answerWhileWorking(acceptance, { work: threadWork(worker), what: 'Compiler worker', ceilingMs: ACCEPT_CPU_MS }).catch((cause: unknown) => {
                 if (!pending.delete(id)) return;
@@ -157,7 +160,7 @@ export function serveCompilerThread(
   const finalize = () => finished ??= (async () => {
     let report: ThreadReport;
     try { report = { observations: await finish() }; }
-    catch (error) { report = { error: error instanceof Error ? error.message : String(error) }; }
+    catch (error) { report = { error: errorMessage(error) }; }
     // Exit and broadcast delivery have no shared ordering. The owner reads this on native exit.
     withoutCompilerFileReads(() => fs.writeFileSync(handoff.report, JSON.stringify(report)));
     return report;

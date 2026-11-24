@@ -16,7 +16,7 @@
     "@apackdev/cli": "*",
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
-    "@app/api": "*",
+    "@app/server": "*",
     "@app/preload": "*",
     "@app/renderer": "*",
     "electron-context-menu": "^4.1.2",
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@app/internal-electron-versions": "*",
-    "typescript": "5.8.3",
+    "typescript": "^5.8.3",
     "vite": "7.3.7",
     "vite-plugin-static-copy": "^3.1.2",
     "vitest": "^4.1.12"

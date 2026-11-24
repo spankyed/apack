@@ -4,6 +4,8 @@
  * limit; failures name the cause instead of looking like "no release".
  */
 
+import { errorMessage } from '@apackdev/sdk/utils/pure';
+
 /** Metadata requests: a release list or a manifest, small enough that a slow one is a stuck one. */
 const BUDGET_MS = 10_000;
 
@@ -25,9 +27,13 @@ const tokenVar = (): string | undefined =>
   process.env.GITHUB_TOKEN ? 'GITHUB_TOKEN' : process.env.GH_TOKEN ? 'GH_TOKEN' : undefined;
 
 export class GitHubRequestError extends Error {
-  constructor(message: string, readonly reason: GitHubFailure, readonly status?: number) {
+  readonly reason: GitHubFailure;
+  readonly status?: number;
+  constructor(message: string, reason: GitHubFailure, status?: number) {
     super(message);
     this.name = 'GitHubRequestError';
+    this.reason = reason;
+    this.status = status;
   }
 }
 
@@ -46,7 +52,7 @@ export async function githubFetch(url: string, accept = 'application/vnd.github+
   try {
     response = await fetch(url, { headers: headers(accept), signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
-    throw new GitHubRequestError(`GitHub request to ${url} failed: ${err instanceof Error ? err.message : err}`, 'failed');
+    throw new GitHubRequestError(`GitHub request to ${url} failed: ${errorMessage(err)}`, 'failed');
   }
   if (response.ok) return response;
 

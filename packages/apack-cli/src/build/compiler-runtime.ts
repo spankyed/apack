@@ -1,7 +1,7 @@
 import nodeFs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { hash as cryptoHash } from 'node:crypto';
 import type { PackageInputFile } from '@apackdev/host/build/package-inputs';
 import type { BuildInputObserver } from '@apackdev/host/build/pack-inputs';
 import { readPeActivationContext } from './compiler-pe-activation.ts';
@@ -55,7 +55,7 @@ export function readCompilerRuntimeInputs(
       for (const name of fs.readdirSync(file).sort()) walk(path.join(file, name));
     } else if (stat.isFile()) {
       const bytes = fs.readFileSync(file);
-      const hash = createHash('sha256').update(bytes).digest('hex');
+      const hash = cryptoHash('sha256', bytes, 'hex');
       files.push([relative(file), stat.mode & 0o111, hash]);
       onFile?.({ path: relative(file), source: file, mode: stat.mode & 0o777, hash }, bytes);
     } else {
@@ -123,8 +123,8 @@ export function readCompilerRuntimeInputs(
   const identity: unknown[] = [relative(executable), files.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
     [...directories].map(relative).sort(), links.map(({ source, target, text }) => [relative(source), relative(target),
       process.platform === 'win32' || path.isAbsolute(text) ? null : text]).sort()];
-  const contentsHash = createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+  const contentsHash = cryptoHash('sha256', JSON.stringify(identity), 'hex');
   if (activation !== undefined) identity.push(activation);
   return { executable, directory: electron && process.platform === 'darwin' ? path.dirname(root) : root,
-    directories: [...directories], links, contentsHash, hash: createHash('sha256').update(JSON.stringify(identity)).digest('hex') };
+    directories: [...directories], links, contentsHash, hash: cryptoHash('sha256', JSON.stringify(identity), 'hex') };
 }

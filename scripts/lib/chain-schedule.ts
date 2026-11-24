@@ -114,7 +114,7 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
         const clashes = (name: string): boolean =>
           (step.conflicts ?? []).includes(name)
           || (steps.find((candidate) => candidate.name === name)?.conflicts ?? []).includes(step.name);
-        if ([...running.keys()].some(clashes)) continue;
+        if (running.keys().some(clashes)) continue;
         // `continue`, never `break`: a one-core leg must not wait behind a nine-core pool that happens to
         // sit earlier in the table. A count of steps could `break` safely, because every candidate wanted
         // the same one slot; a budget cannot, because the next candidate may fit where this one does not.

@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import type { AttachedSession, AttachedSessionOptions } from '@apackdev/testing';
 import { readSession, touchSession, waitForSession, STARTED_BY_ENV, type DevSession } from '@apackdev/host/dev-session';
 import { processWork, type WorkReading } from '@apackdev/sdk/progress';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { holdExclusiveLock, readLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { dataDirInUse } from './profiles';
 import { sourceTarget } from './pack-host';
@@ -97,15 +98,19 @@ export async function spawnDevApp(
     : [cliBin(), 'pack', 'dev'];
   const logPath = path.join(dataDir, 'dev-spawn.log');
   fs.mkdirSync(dataDir, { recursive: true });
-  const log = fs.openSync(logPath, 'a');
-  const child = spawn(process.execPath, [...command, ...profileArgs], {
-    cwd: from,
-    detached: true,
-    stdio: ['ignore', log, log],
-    // The one thing `dev` cannot work out for itself: it writes the session file and cannot know who asked
-    env: { ...process.env, [STARTED_BY_ENV]: 'drive' },
-  });
-  fs.closeSync(log);
+  let child: ReturnType<typeof spawn>;
+  {
+    using fdGuard = new DisposableStack();
+    const log = fs.openSync(logPath, 'a');
+    fdGuard.defer(() => fs.closeSync(log));
+    child = spawn(process.execPath, [...command, ...profileArgs], {
+      cwd: from,
+      detached: true,
+      stdio: ['ignore', log, log],
+      // The one thing `dev` cannot work out for itself: it writes the session file and cannot know who asked
+      env: { ...process.env, [STARTED_BY_ENV]: 'drive' },
+    });
+  }
   child.unref();
   let exited = false;
   child.once('exit', () => { exited = true; });
@@ -117,7 +122,7 @@ export async function spawnDevApp(
     return { session, logPath: session.logPath ?? logPath };
   } catch (error) {
     const tail = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf-8').trimEnd().split('\n').slice(-6).join('\n') : '';
-    throw new Error(`${error instanceof Error ? error.message : String(error)}${tail ? `\n${tail}` : ''}`);
+    throw new Error(`${errorMessage(error)}${tail ? `\n${tail}` : ''}`);
   }
 }
 
@@ -167,9 +172,9 @@ export async function spawnOrAttach(
     reuse?: boolean;
   } = {},
 ): Promise<{ app: AttachableApp; state: 'spawned' | 'attached' }> {
-  let lock: ExclusiveLock;
+  let acquired: ExclusiveLock;
   try {
-    lock = holdExclusiveLock({ file: spawnLockFile(dataDir), what: 'development session spawn', refuse: () => HELD });
+    acquired = holdExclusiveLock({ file: spawnLockFile(dataDir), what: 'development session spawn', refuse: () => HELD });
   } catch (error) {
     if (error !== HELD) throw error;
     if (!reuse) throw new Error('--rm and --with-secrets require a new session; another caller is already starting one here.');
@@ -178,19 +183,16 @@ export async function spawnOrAttach(
     verifySessionHost(session, expectedRoot);
     return { app: { session, logPath: session.logPath }, state: 'attached' };
   }
-  try {
-    const live = attachableApp(dataDir, expectedRoot);
-    if (live) {
-      if (!reuse) throw new Error('--rm and --with-secrets require a new session; this app is already running. Attach without those flags.');
-      return { app: live, state: 'attached' };
-    }
-    if (dataDirInUse(dataDir)) throw new Error('An app occupies this profile without a verifiable development session. Close it before spawning.');
-    const app = spawn ? await spawn(from, dataDir, profileArgs) : await spawnDevApp(from, dataDir, profileArgs, scope);
-    verifySessionHost(app.session, expectedRoot);
-    return { app, state: 'spawned' };
-  } finally {
-    lock.release();
+  using _lock = acquired;
+  const live = attachableApp(dataDir, expectedRoot);
+  if (live) {
+    if (!reuse) throw new Error('--rm and --with-secrets require a new session; this app is already running. Attach without those flags.');
+    return { app: live, state: 'attached' };
   }
+  if (dataDirInUse(dataDir)) throw new Error('An app occupies this profile without a verifiable development session. Close it before spawning.');
+  const app = spawn ? await spawn(from, dataDir, profileArgs) : await spawnDevApp(from, dataDir, profileArgs, scope);
+  verifySessionHost(app.session, expectedRoot);
+  return { app, state: 'spawned' };
 }
 
 /** This CLI's own entry, so the spawned `dev` is this version rather than whatever is on PATH. */

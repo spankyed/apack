@@ -17,12 +17,13 @@
  *
  * `assertSourceResolution` (`@apackdev/host/build/source-resolution`) is the same question with the opposite
  * expectation, asked of a host process. It lives in `@apackdev/host` and this does not, because this needs
- * `typescript`, which `@apackdev/host` deliberately does not declare — `packages/api` imports host, and the
+ * `typescript`, which `@apackdev/host` deliberately does not declare — `packages/server` imports host, and the
  * compiler has no business in the backend's tree.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SOURCE_CONDITION, SOURCE_PACKAGES } from '@apackdev/host/build/source-resolution';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import ts from 'typescript';
 import { readPackCompilerConfiguration } from './compiler-configuration.ts';
 import { readSource } from './pack-sources.ts';
@@ -74,7 +75,7 @@ export function packResolvesSource(packDir: string): PackResolution {
   if (!fs.existsSync(configFile)) return { resolved: [] };
   let options: ts.CompilerOptions;
   try { options = readPackCompilerConfiguration(packDir)!.options; }
-  catch (error) { return { resolved: [], unreadable: `tsconfig.json could not be read, so this rule could not check it: ${error instanceof Error ? error.message : String(error)}` }; }
+  catch (error) { return { resolved: [], unreadable: `tsconfig.json could not be read, so this rule could not check it: ${errorMessage(error)}` }; }
   // Any path under the pack's `src`: a bare specifier resolves from the containing file's directory outwards, and
   // the file itself is never read, so it need not exist
   const from = path.join(packDir, 'src', 'index.ts');

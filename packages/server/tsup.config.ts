@@ -5,7 +5,7 @@ import { esbuildBundledPackages, installedPackage } from '@apackdev/host/build/b
 export default defineConfig((options) => {
   const isDev = options.env?.NODE_ENV === 'development';
   return {
-    outDir: appBuildOutput('api'),
+    outDir: appBuildOutput('server'),
     entry: isDev ? ['src/server.ts'] : ['src/types.ts', 'src/server.ts'],
     // **The production build owns this directory; the dev build only adds to it.** Code splitting names
     // chunks by content, so a bundle that stops importing one leaves it behind — and `electron-builder.mjs`
@@ -45,7 +45,7 @@ export default defineConfig((options) => {
     // What the bundle inlined, for the app's third-party notices (scripts/lib/third-party-notices.ts); the ESM and
     // CJS runs each hand over their list, and the record merges them
     // esbuild is found from tsup, which runs the esbuild it depends on rather than the one installed beside this package
-    esbuildBundledPackages(packages => recordBundledPackages('api', packages), { fromDir: installedPackage('tsup', import.meta.dirname).dir }),
+    esbuildBundledPackages(packages => recordBundledPackages('server', packages), { fromDir: installedPackage('tsup', import.meta.dirname).dir }),
     {
       name: 'externalize-vue',
       setup(build) {

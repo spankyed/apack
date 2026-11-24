@@ -137,6 +137,8 @@ export interface InstalledPackSummary extends PackExtensions {
   updateCheckError?: string;
   /** Why this installed pack isn't running although it is enabled: the app skipped it or failed to load it */
   loadProblem?: string;
+  /** Direct named dependencies the current profile cannot supply. */
+  dependencyProblems: string[];
   /**
    * The decisions the last apply left the user about this pack's content, in the order the view draws them.
    *
@@ -166,6 +168,11 @@ export interface PackContentOffer extends ContentOffer {
   /** The content key, which is what resolving it names */
   key: string;
   label: string;
+}
+
+/** An exclusive operation claim held against a `PackRegistry`; idempotent on repeated release/disposal. */
+export interface PackOperationClaim extends Disposable {
+  release(): void;
 }
 
 /** What a surface's sends are checked against: the event types it receives */
@@ -227,18 +234,15 @@ export interface PackRegistry extends PackRegistryView {
   clearLoadProblem(packId: string): void;
   /**
    * Claims a pack id, or an install's source, for one operation: install, update, restore, uninstall, enable
-   * or disable, reload, or a development install. False when another operation holds it, so the copy of a
-   * pack's files and the load of its runtime never overlap. Release with `releasePackOperation`.
+   * or disable, reload, or a development install. Returns null when another operation holds it, so the copy of a
+   * pack's files and the load of its runtime never overlap. Dispose or call `release()` on the returned handle.
    */
-  claimPackOperation(key: string): boolean;
-  releasePackOperation(key: string): void;
+  claimPackOperation(key: string): PackOperationClaim | null;
   /**
-   * Claims every pack at once, for replacing the app's data (a reset or a backup import). False while any
-   * operation holds a pack; while held, `claimPackOperation` refuses every key. Release with
-   * `releaseAllPackOperations`.
+   * Claims every pack at once, for replacing the app's data (a reset or a backup import). Returns null while any
+   * operation holds a pack; while held, `claimPackOperation` refuses every key.
    */
-  claimAllPackOperations(): boolean;
-  releaseAllPackOperations(): void;
+  claimAllPackOperations(): PackOperationClaim | null;
   /** Host systems and every registered pack's that the bus runs, by id: all but the early ones */
   getRegisteredSystems(): Map<string, AnyStateMachine>;
   /** The refs of a registered pack's systems, `<packId>/<featureId>` */
@@ -865,17 +869,27 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
       loadProblems.set(packId, problem);
     },
     claimPackOperation(key) {
-      if (allClaimed || operations.has(key)) return false;
+      if (allClaimed || operations.has(key)) return null;
       operations.add(key);
-      return true;
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        operations.delete(key);
+      };
+      return { release, [Symbol.dispose]: release };
     },
-    releasePackOperation: key => { operations.delete(key); },
     claimAllPackOperations() {
-      if (allClaimed || operations.size > 0) return false;
+      if (allClaimed || operations.size > 0) return null;
       allClaimed = true;
-      return true;
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        allClaimed = false;
+      };
+      return { release, [Symbol.dispose]: release };
     },
-    releaseAllPackOperations: () => { allClaimed = false; },
     loadProblem: (packId) => catalog.getSnapshot().problems.find(problem => problem.id === packId)?.message ?? loadProblems.get(packId),
     clearLoadProblem(packId) {
       loadProblems.delete(packId);
