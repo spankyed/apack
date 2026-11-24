@@ -14,8 +14,11 @@ function fixture(main = false) {
   const context = { dialogStore: { dismiss: dismissPanel, getState: () => ({ open: panelShown ? [{ id: 'native-dialog', kind: 'local_jsx', payload: { nodeId: 'native-node' } }] : [] }) }, localJsx, getAppState: () => ({ notifications: notices }), taskRegistry: { all: () => ({ registry: task }), getTranscript: () => ({ messages: rows }) } }
   const composer = {
     read: vi.fn(async () => ({ text: draft })),
-    write: vi.fn(async (text: string, _mode: 'replace') => { draft = text }),
-    attribute: vi.fn((_origin: { kind: string }, write: () => Promise<void>) => write()),
+    write: vi.fn(async (text: string, _mode: 'replace'): Promise<{ isFilled: boolean; refusal?: string }> => {
+      draft = text
+      return { isFilled: true }
+    }),
+    attribute: vi.fn((_origin: { kind: string }, write: () => Promise<{ isFilled: boolean; refusal?: string }>) => write()),
   }
   const module = { call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ type: 'text', value: '' })) }, commands = new Map<string, { name: string; type: string; load(): Promise<typeof module> }>()
   const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: ['context', 'ultraplan'].includes(name) ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
@@ -98,6 +101,33 @@ it('preserves an unrelated native draft and refuses an old view confirmation', a
   await expect(f.controller.answer(f.native, { client_id: 'client', command_id: result.id, decision: 'confirm' })).rejects.toThrow('selection changed')
   expect(f.confirm).not.toHaveBeenCalled()
   await f.controller.retire('client'); expect(f.cancel).toHaveBeenCalledOnce(); expect(f.draft()).toBe('New view draft')
+})
+
+it('reports an original dialog refusal before dispatch and allows a fresh command after it closes', async () => {
+  const f = fixture(true)
+  const request = { client_id: 'client', operation: 'prepare', text: '/cost' }
+  f.composer.write.mockResolvedValueOnce({ isFilled: false, refusal: 'dialog' })
+
+  const first = await f.controller.parentOperation(f.native, request)
+  const refused = { client_id: 'client', command_id: first.id }
+  await f.controller.parentOperation(f.native, { ...refused, operation: 'start' })
+  const readRefusal = () => f.controller.parentOperation(f.native, { ...refused, operation: 'read' })
+  await vi.waitFor(async () => expect((await readRefusal()).kind).toBe('failed'))
+  expect(await readRefusal()).toMatchObject({
+    message: 'Respond to the open Claude Code prompt before running this command.',
+  })
+  expect(f.enter).not.toHaveBeenCalled()
+  expect(f.draft()).toBe('')
+
+  const second = await f.controller.parentOperation(f.native, request)
+  const retry = { client_id: 'client', command_id: second.id }
+  await f.controller.parentOperation(f.native, { ...retry, operation: 'start' })
+  await vi.waitFor(async () => {
+    expect(await f.controller.parentOperation(f.native, { ...retry, operation: 'read' })).toMatchObject({
+      kind: 'finished', result: { kind: 'command_output', text: 'Original cost output' },
+    })
+  })
+  expect(f.enter).toHaveBeenCalledOnce()
 })
 
 it('returns a new matching parent command result without treating it as worker input', async () => {

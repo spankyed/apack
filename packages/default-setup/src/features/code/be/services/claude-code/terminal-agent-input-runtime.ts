@@ -116,7 +116,10 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
  const operation={native:n,parentTicket,commandDefinition:command,clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
  try{
-  await writeDraft(text);current();
+  const fill=await writeDraft(text);current();
+  if(fill?.isFilled===false&&fill.refusal==='dialog'){
+   throw Error(expectedRun?'Respond to the open Claude Code prompt before running this command.':'Respond to the open Claude Code prompt before sending input.');
+  }
   if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
   current();requireAddress();await ownerPost('/view-enter',{pid:process.pid,kind:facts.view.kind,taskId:facts.view.taskId,revision:facts.sequence});
   const deadline=Date.now()+4000;
