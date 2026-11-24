@@ -53,16 +53,30 @@ function nativeIdleReturnHint(n){
  const text=notice.segments.map(segment=>segment.text).join('');
  return text.length<=256?text:undefined;
 }
+function nativeTeamTaskDrawing(state){
+ const {leadAgentId,teammates}=state.teamContext;
+ const teamContext={leadAgentId,teammates:Object.fromEntries(Object.entries(teammates??{}).map(([id,member])=>[id,{name:member.name,color:member.color}]))};
+ const tasks=Object.fromEntries(Object.entries(state.tasks??{}).filter(([,task])=>task.type==='in_process_teammate'&&task.status==='running').map(([id,task])=>{
+  const {agentName,agentId}=task.identity;
+  const progress=task.progress?{
+   recentActivities:task.progress.recentActivities?.map(({isSearch,isRead,activityDescription})=>({isSearch,isRead,activityDescription})),
+   lastActivity:task.progress.lastActivity?{activityDescription:task.progress.lastActivity.activityDescription}:undefined,
+  }:undefined;
+  return [id,{type:task.type,status:task.status,identity:{agentName,agentId},progress}];
+ }));
+ return {teamContext,tasks};
+}
 function nativeComposerTasks(n,fiber,state){
- // The terminal's task-store provider scopes the snapshot to this mounted conversation.
- if(!state||state.teamContext)return;
+ // Use the same availability and lead rules as the mounted task-store hook.
+ if(!state||!n.runtime.fse()||n.taskSessionGlobals.Bn()||state.teamContext&&!n.taskTeamContext.o$(state.teamContext))return;
  const context=n.privateTasks.$nr;
  for(let depth=0;fiber&&depth<128;fiber=fiber.return,depth++){
   if(fiber.type!==context&&fiber.type!==context.Provider)continue;
   const tasks=fiber.memoizedProps?.value?.getSnapshot?.();
   if(!Array.isArray(tasks)||!tasks.length)return;
   if(!composerTaskSnapshotIds.has(tasks))composerTaskSnapshotIds.set(tasks,++composerTaskSnapshotSequence);
-  return {tasks,revision:composerTaskSnapshotIds.get(tasks),expanded:state.expandedView==='tasks'};
+  const team=state.teamContext?nativeTeamTaskDrawing(state):undefined;
+  return {tasks,revision:composerTaskSnapshotIds.get(tasks),expanded:state.expandedView==='tasks',team};
  }
 }
 function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n)){
@@ -85,7 +99,7 @@ function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n
  if(component==='Spinner'&&props.mode==='tool-input')props.mode='tool-use';
  if(component==='PromptHint'&&edits.has(client))props.isDraft=edits.get(client).box.text.length>0;
  const idleReturnHint=component==='PromptHint'&&!props.isWorking?nativeIdleReturnHint(n):undefined;
- const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props,idleReturnHint,taskList?.revision,taskList?.expanded])).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props,idleReturnHint,taskList?.revision,taskList?.expanded,taskList?.team])).digest('hex');
  return {...source,props,fingerprint,idleReturnHint,taskList};
 }
 function nativeComposerList(n,client,inputs=nativeComposerInputs(n)){
@@ -157,8 +171,14 @@ async function formatNativeIdleTasks(n,facts,options){
 async function drawNativeComposer(n,element,taskList,options){
  // Export the mounted task snapshot without subscribing to the live store.
  if(element===null||element===false)return '';const theme=nativeThemeProvider(n);
- const children=taskList?n.jsx.e(n.privateTasks.$nr.Provider,{value:{getSnapshot:()=>taskList.tasks,subscribe:()=>()=>{}},children:element}):element;
+ const subscribe=()=>()=>{};
+ let children=taskList?n.jsx.e(n.privateTasks.$nr.Provider,{value:{getSnapshot:()=>taskList.tasks,subscribe},children:element}):element;
  const initialState=taskList?{...n.documentDefaults.$Et(),expandedView:taskList.expanded?'tasks':'none'}:undefined;
+ if(taskList?.team){
+  // The outer provider owns cleanup. Team drawing data belongs only in the nested read-only context.
+  const state={...initialState,...taskList.team};
+  children=n.jsx.e(n.taskAppState.RP.Provider,{value:{getSnapshot:()=>state,subscribe},children});
+ }
  const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState,children:n.jsx.e(theme.type,{value:theme.value,children})});
  const text=await n.staticRender.v6e(tree,{columns:Math.max(20,Math.min(240,options.columns??process.stdout.columns??80))});
  options.signal?.throwIfAborted();if(typeof text!=='string'||text.length>65536)throw Error('Native composer drawing exceeds limit');return text;

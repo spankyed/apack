@@ -220,7 +220,8 @@ it('renders the current private task snapshot without lending the original task 
     originalContext: { toolContext: () => ({ getAppState: () => state }) },
   })
   let view: { kind: string; taskId?: string } = { kind: 'main' }
-  let state: { expandedView: string; teamContext?: object } = { expandedView: 'tasks' }
+  let state: { expandedView: string; teamContext?: object; tasks?: object } = { expandedView: 'tasks' }
+  let leader = false, remote = false, eligible = true
   let tasks = [{ id: '1', subject: 'Review migration notes', status: 'in_progress' }]
   const originalSubscribe = vi.fn()
   const privateTaskContext = { Provider: 'Native task provider' }
@@ -233,6 +234,10 @@ it('renders the current private task snapshot without lending the original task 
   const staticRender = vi.fn(async (_tree: unknown) => 'native output')
   const native = {
     privateTasks: { $nr: privateTaskContext },
+    runtime: { fse: () => eligible },
+    taskSessionGlobals: { Bn: () => remote },
+    taskTeamContext: { o$: () => leader },
+    taskAppState: { RP: { Provider: 'Team drawing provider' } },
     questionOptions: { Ze: () => 'main', j: () => 'session' },
     documentDefaults: { $Et: () => ({ expandedView: 'none' }) },
     appProvider: { d_: 'App state provider' },
@@ -256,8 +261,32 @@ it('renders the current private task snapshot without lending the original task 
   expect(collapsed.fingerprint).not.toBe(expanded.fingerprint)
   tasks = [{ ...tasks[0]!, status: 'completed' }]
   expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs).fingerprint).not.toBe(collapsed.fingerprint)
-  state = { expandedView: 'tasks', teamContext: {} }
+  state = {
+    expandedView: 'tasks',
+    teamContext: { leadAgentId: 'lead', teammates: { worker: { name: 'reviewer', color: 'blue', socketPath: '/private/worker' } } },
+    tasks: { worker: { type: 'in_process_teammate', status: 'running', identity: { agentName: 'reviewer', agentId: 'worker' },
+      abortController: new AbortController(), progress: { recentActivities: [{ isRead: true, activityDescription: 'Reading' }] } } },
+  }
   expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs).taskList).toBeUndefined()
+  leader = true
+  const team = api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs)
+  await api.formatNativeComposer(native, team, team.props, {})
+  const teamTree = staticRender.mock.calls[1]![0] as typeof appTree
+  expect(teamTree.props.initialState).toEqual({ expandedView: 'tasks' })
+  const teamProjection = teamTree.props.children.props.children
+  expect(teamProjection.type).toBe('Team drawing provider')
+  expect(teamProjection.props.value.getSnapshot()).toEqual({
+    expandedView: 'tasks',
+    teamContext: { leadAgentId: 'lead', teammates: { worker: { name: 'reviewer', color: 'blue' } } },
+    tasks: { worker: { type: 'in_process_teammate', status: 'running', identity: { agentName: 'reviewer', agentId: 'worker' },
+      progress: { recentActivities: [{ isRead: true, activityDescription: 'Reading' }] } } },
+  })
+  remote = true
+  expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs).taskList).toBeUndefined()
+  remote = false
+  eligible = false
+  expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'main', inputs).taskList).toBeUndefined()
+  eligible = true
   state = { expandedView: 'tasks' }
   view = { kind: 'agent', taskId: 'worker' }
   expect(api.nativeComposerFacts(native, 'window', 'Spinner', 'worker', inputs).taskList).toBeUndefined()

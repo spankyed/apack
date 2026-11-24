@@ -402,6 +402,9 @@ async function initialize(){
   const planNormalize=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   const planTool=await import('/$bunfs/root/chunk-rhvre9pz.js');
   const planTeams=await import('/$bunfs/root/chunk-tt5gpzxk.js');
+  const taskTeamContext=await import('/$bunfs/root/chunk-c20dx22n.js');
+  const taskAppState=await import('/$bunfs/root/chunk-sv68ryxf.js');
+  const taskSessionGlobals=await import('/$bunfs/root/chunk-hdxpvbx1.js');
   const planStore=await import('/$bunfs/root/chunk-ehw6t5ag.js');
   const planProactivity=await import('/$bunfs/root/chunk-ck4jw7jw.js');
 
@@ -413,7 +416,7 @@ async function initialize(){
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   observeNativeManagedSettings(settingsDetector.Ta);
-  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={hookPresence,mcpInputTiming,fileSuggestions,referenceSearch,referenceWorkspace,referenceTransport,addressAdmission,addressNormalization,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,fleet,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,privateTasks,privateTaskDrawing,taskTeamContext,taskAppState,taskSessionGlobals,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,mcpChannelBlocked,managedPermissionRulesOnly,permissions,models,catalog,questionTool,questionOptions,questionText,questionDialog,questionImageModel,questionImage,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }

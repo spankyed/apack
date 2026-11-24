@@ -39,6 +39,8 @@ export const claudeNativeLinuxBindings: {
         "d_": "l_"
       }
     },
+    "chunk-c20dx22n.js": { "module": "chunk-96y2045y.js", "exports": { "o$": "Q$" } },
+    "chunk-sv68ryxf.js": { "module": "chunk-7ty29y1t.js", "exports": { "RP": "EP" } },
     "chunk-w5063paj.js": { "module": "chunk-vbhkddsn.js", "exports": { "ktr": "dtr" } },
     "chunk-s5erk9wy.js": { "module": "chunk-nz0exf6r.js", "exports": { "$nr": "vnr" } },
     "chunk-0xdgy4bd.js": {
@@ -271,6 +273,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-hdxpvbx1.js": {
       "module": "chunk-26c4qsbq.js",
       "exports": {
+        "Bn": "Hn",
         "Bc": "Uc",
         "chn": "Ygn",
         "dzo": "$Go",
@@ -291,6 +294,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-hqtnbrjd.js": {
       "module": "chunk-a7b8k0bt.js",
       "exports": {
+        "fse": "ise",
         "igr": "Umr",
         "Xps": "ups",
         "ql": "Vl",
