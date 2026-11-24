@@ -24,10 +24,10 @@
 
 | # | Work Item | Size | Scope |
 |---|---|---|---|
-| 6 | **Finalize & pin external kernels:** merge `apack-state`'s `ci-kernel-boundaries` fix and bump its `@apackdev/link` pin (`apack-link` `#25`/`#26`/`#27` and `apack-state` `#31` on `@apackdev/orderings` are already merged on `master`); add `apack-state`, `apack-link`, and `apack-orderings` to [external-packages.mjs](../../scripts/lib/external-packages.mjs), and add `@apackdev/state` and `@apackdev/link` to `SHARED_INSTANCE_PACKAGES` (only packages shared between host and packs; keep test-only `@apackdev/orderings` out of the production bridge). | S–M | 4 repos |
+| 6 | **Finalize & pin external kernels:** merge `apack-state`'s `ci-kernel-boundaries` fix, bump its `@apackdev/link` pin (`apack-link` `#25`/`#26`/`#27` and `apack-state` `#31` on `@apackdev/orderings` are already merged on `master`), and land the `apack-state` **deterministic clock & deadline PR** (`system({ clock })`, once-per-step `time`, `until(due)` — replacing `later`, see [Deterministic Clock & Deadline Architecture](#deterministic-clock--deadline-architecture-6)); add `apack-state`, `apack-link`, and `apack-orderings` to [external-packages.mjs](../../scripts/lib/external-packages.mjs), and add `@apackdev/state` and `@apackdev/link` to `SHARED_INSTANCE_PACKAGES` (only packages shared between host and packs; keep test-only `@apackdev/orderings` out of the production bridge). | S–M | 4 repos |
 | 7 | **Spike `utilityProcess` + `MessageChannelMain` (1 day) & lock `packages/main` ↔ `packages/server` window-owner lifecycle** — if the spike passes, land `utilityProcess` as a standalone pre-cutover PR and hand each window a `MessageChannelMain` at cutover (authority by possession — no HMAC, watermark, `window:gone`, or loopback window port); if it fails, fall back to the reconciled HMAC design (no `apiToken` in windows, preload-owned single link, spawn-env watermark, IPC disconnect invariant). Both paths keep `link.onEnd`-bound subscriptions, `@apackdev/orderings` every-ordering verification, and a dedicated local-tool path covering `apack pack drive --channel beta`. See [Window-Owner Lifecycle & Deferred Transport Architecture](#window-owner-lifecycle--deferred-transport-architecture-7). | S–M | `monorepo` |
 | 8 | **Run a throwaway 1-feature spike** against the released tarballs porting the hardest real slice (**commit surface + one live brain flow touching `runHistory`**) to validate the non-EARS transaction boundary and benchmark TS 5.9 compile time extrapolated to 49 machines. | M | `monorepo` |
-| 9 | **Write the feature-by-feature cutover order/size table** and lock the **singleton-free `using`-disposable test harness** contract (`@apackdev/testing` + `@apackdev/sdk/testing` driving `@apackdev/state` + `@apackdev/link` on one `@apackdev/orderings` schedule). | S | `monorepo` |
+| 9 | **Write the feature-by-feature cutover order/size table** and lock the **singleton-free `using`-disposable test harness** contract (`@apackdev/testing` + `@apackdev/sdk/testing` driving `@apackdev/state` + `@apackdev/link` + injected `clock` on one `@apackdev/orderings` schedule — no global `vi.useFakeTimers()`). | S | `monorepo` |
 
 ---
 
@@ -45,8 +45,8 @@
 
 | # | Work Item | Size | Scope |
 |---|---|---|---|
-| 13 | **Roll Vitest 4 `isolate: false` across the rewritten runtime/feature suites** — cashes in `#11` on the ~841s import/setup CPU tax (`333s` host + `508s` pack, 10-core `npm run test:unit` across 866 files, 2026-11-23, [singleton-free-test-harness.md](singleton-free-test-harness.md)); keep only global-mutating specs in `isolate: true`. | M | `monorepo` |
-| 14 | **Enable `oxlint --type-aware` repo-wide + add `oxlint` `jsPlugins` rule enforcing `errorMessage()` at boundaries** (bans raw `instanceof Error ? e.message : ...` that swallows `SuppressedError`s). | S | `monorepo` |
+| 13 | **Roll Vitest 4 `isolate: false` across the rewritten runtime/feature suites** — cashes in `#11` (and `#6`'s injected clock removing global `vi.useFakeTimers()` mutations) on the ~841s import/setup CPU tax (`333s` host + `508s` pack, 10-core `npm run test:unit` across 866 files, 2026-11-23, [singleton-free-test-harness.md](singleton-free-test-harness.md)); keep only global-mutating specs in `isolate: true`. | M | `monorepo` |
+| 14 | **Enable `oxlint --type-aware` repo-wide + add `oxlint` `jsPlugins` boundary/state rules** — enforce `errorMessage()` at boundaries (bans raw `instanceof Error ? e.message : ...` that swallows `SuppressedError`s) and ban ambient time/randomness (`setTimeout`, `setInterval`, `Date.now()`, 0-arg `new Date()`, `performance.now()`, `Math.random()`, `crypto.randomUUID()`) in state definition files. | S | `monorepo` |
 | 15 | **Replace `tsup` with `tsdown` in `packages/server` & unify duplicate `esbuild` (`0.25`/`0.28`) / `vite` (`7`/`8`) trees.** | S–M | `monorepo` |
 | 16 | **Make codegen'd pack `ears.ts` (`emitEARS`) erasable** (`export const EARS` + type-only `export namespace EARS`), unlocking `erasableSyntaxOnly: true` for packs and eventual `tsx`-free pack builds. | M | `monorepo` |
 | 17 | **Enable selective `isolatedDeclarations: true`** on `@apackdev/sdk` + `@apackdev/host` (unblocked once Zod `z.infer` and tRPC `AppRouter` are gone). | M | `monorepo` |
@@ -66,6 +66,36 @@
 | 24 | **Extract `apack-fs-tx` (`@apackdev/fs-tx`, TS, own repo):** crash-safe `private-file`, `replace-dir`, `exclusive-lock`, `process-liveness` with dedicated fault-injection / Windows-retry / Stryker suite. | M | New repo + `monorepo` |
 | 25 | **Extract `apack-agent-runners` (`@apackdev/agent-runners`, TS, own repo):** `claude-code` & `codex` subprocess/JSONL adapters decoupled from `default-setup` so external CLI wire-protocol changes ship independently. | M | New repo + `monorepo` |
 | 26 | *(Optional)* **Build `apack-sys` (Rust, own repo):** `goblin` ELF/Mach-O/PE binary inspection (dropping PowerShell helpers), `rayon`/`sha2` parallel tree hashing, native OS process-tree queries (dropping `ps` forks), and optional `notify` watcher. | L | New repo + `monorepo` |
+
+---
+
+## Deterministic Clock & Deadline Architecture (`#6`)
+
+Do **not** build a dedicated `later` construct in `apack-state`: the app has only one delayed transition ([machine.ts](../../packages/apack-host/src/features/application/fe/machine.ts), `running.connecting` → `after: { 30000: { target: 'unreachable' } }`), and the hard part of delays is cancellation, which `apack-state`'s `run` already owns (`run` already returns `Promise<Next<R, H> | void>` and cancels with `Left` on state exit). Instead, make time an explicit capability on `system({ clock })` (built in `apack-state` from `origin/master`, where `@apackdev/orderings` is already wired).
+
+### Build now in `apack-state`
+
+1. **Once-per-step, monotonically clamped `time` as input:** `system({ clock })` samples `clock.now()` **once** at the start of each atomic step, clamps `time = Math.max(lastTime, clock.now())` (so `StepLog.time` never goes backward and `time - data.startedAt` is never negative across NTP backward jumps while preserving wall-clock epoch ms), exposes `time` to handlers, and records it on `StepLog`. `onSchedule(schedule)` in `@apackdev/state/testing` wires `clock: schedule.clock` automatically so every scheduled check is deterministic and concurrent `using app = createTestApp(...)` tests never need global `vi.useFakeTimers()`.
+2. **Deadline-only wait in `run` (`until(due)` — no `sleep(ms)`):** `until(due)` waits until `clock` reaches `due`, making restart-safe `until(data.due)` the default idiom (and `until(time + 30_000)` explicit for transient delays like `running.connecting`).
+   - On state exit, `until` **both** cancels the underlying timer (clearing the real timer / removing it from `@apackdev/orderings`'s `clockLane` so timers neither keep Node alive nor bloat exhaustive schedules) **and** rejects with `Left` (never triggering `failed`).
+   - Keep `due <= clock.now()` scheduled through `clock.after(0, ...)` rather than resolving synchronously (and reject `Left` immediately if `scope.signal.aborted`).
+   - Keep `run`'s required `failed` handler uniform for async `run` (no special-case hole for timer-only `run`).
+3. **Hardened single production `Clock` (~30 lines):** instead of an independent `setTimeout` per caller, the default production `Clock` owns **one ordered deadline queue** (earliest `due` first, FIFO tie-breaking — matching `@apackdev/orderings`'s `clockLane` 1:1) and **at most one active `setTimeout`** capped at `MAX_HOP` (`<= 60_000` ms or `0x7fffffff`), draining only entries with `entry.due <= now()` on fire:
+   - eliminates Node/browser 32-bit `setTimeout` overflow (>24.8 days),
+   - prevents early firing on NTP backward jumps,
+   - exposes `clock.poke()` wired to Electron's `powerMonitor.on('resume')` so wall-clock deadlines that passed while a laptop slept drain immediately on wake,
+   - reuses the exact single ordered deadline scheduler that future standing deadlines need.
+
+### Verification, static graph, and pack rules
+
+- **`@apackdev/orderings` checks:** cover (a) a deadline racing an event that leaves the state (naming `running.connecting → unreachable` as the port test case), and (b) a separate `until(data.due)` re-entry/restart check (since `running.connecting` is a transient initial state that computes `time + 30_000` rather than reading `data.due`).
+- **Static graph check:** confirm `apack-state`'s `npm run graph:check` (`tools/graph.mts`) captures `connecting → unreachable` directly from `run`'s return type.
+- **State-code determinism rule (in [apack-state.md](apack-state.md) pack rules & `#14`):** ban `setTimeout`, `setInterval`, `Date.now()`, 0-arg `new Date()`, `performance.now()`, `Math.random()`, and `crypto.randomUUID()` in state definition files (allowing `new Date(time)`, and leaving services/actions unaffected) so pure handlers are genuinely replayable from their inputs alone.
+
+### Deferred (`apack-state` `docs/deferred/`)
+
+- **Standing deadlines derived from data (`from: ['due']` / `each: 'deadlines'`):** frame as a fourth standing primitive following `apack-state`'s existing `starts`/`follows`/`awaits` pattern — data changes re-arm automatically, `null` cancels automatically, restarts preserve deadlines, the static graph sees them, and the kernel reuses the single ordered deadline queue built now. Earns its place when kept states arrive.
+- **Dual branded clocks (`Instant` + `after(ms)` vs. `EpochMs` + `until(epochMs)`):** kept open if kept states and strict NTP-forward-jump-immune active timeouts ever both appear and warrant compile-time separation forbidding monotonic timestamps in persisted `data`.
 
 ---
 
