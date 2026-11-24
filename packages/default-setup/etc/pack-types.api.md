@@ -1450,6 +1450,8 @@ interface ClaudeNativeAgentUiTarget {
     taskId: string;
 }
 
+type ClaudeNativeAgentViewSource = Pick<ClaudeNativeAgentUiTarget, 'revision' | 'taskId'>;
+
 type ClaudeNativeBashDialog = z.infer<typeof ClaudeNativeBashDialogSchema>;
 
 interface ClaudeNativeBashDialogResponse {
@@ -2918,6 +2920,10 @@ interface ClaudeNativeTaskDetails {
     taskId: string;
     name: string;
     teammateName?: string;
+    ancestors?: {
+        taskId: string;
+        name: string;
+    }[];
     status: string;
     canInput: boolean;
     canFocusInput?: boolean;
@@ -3037,7 +3043,7 @@ interface ClaudeNativeTerminalOwner {
     answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>;
     getFileDialogs(): Promise<ClaudeNativeFileDialog[]>;
     answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>;
-    operateTask(taskId: string, operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop', text?: string, worker?: ClaudeNativeWorkflowWorkerTarget): Promise<{
+    operateTask(taskId: string, operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop', text?: string, worker?: ClaudeNativeWorkflowWorkerTarget, fromAgent?: ClaudeNativeAgentViewSource): Promise<{
         paused?: boolean;
         resume?: {
             taskId: string;
@@ -3709,7 +3715,10 @@ type ClaudeTerminalViewRequest = {
     revision: number;
     taskId: string;
 } & ({
-    operation: 'background' | 'foreground' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'stop';
+    operation: 'background' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'stop';
+} | {
+    operation: 'foreground';
+    fromAgent?: ClaudeNativeAgentViewSource;
 } | {
     operation: 'input' | 'send';
     text: string;
@@ -9865,8 +9874,8 @@ interface TerminalTab extends OpenFile {
 type Thinking = z.infer<typeof ThinkingSchema>;
 
 declare const ThinkingSchema: z.ZodEnum<{
-    enabled: "enabled";
     disabled: "disabled";
+    enabled: "enabled";
     adaptive: "adaptive";
 }>;
 
@@ -12772,8 +12781,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
