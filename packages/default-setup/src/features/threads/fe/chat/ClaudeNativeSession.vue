@@ -311,12 +311,15 @@ function navigateResumeChoices(panel: (typeof noticePanels.value)[number], event
   choices[(index + step + choices.length) % choices.length]?.focus()
 }
 let resumeFocus: { ownerId: string; sessionId: string; section: HTMLElement; previous: HTMLElement | null } | undefined
+function isNonblockingFocusNotice(kind: (typeof noticePanels.value)[number]['kind']) {
+  return kind === 'ide_onboarding' || kind === 'fullscreen_upsell' || kind === 'goal_proposal'
+}
 function rememberNonblockingNoticeFocus(panel: (typeof noticePanels.value)[number], event: FocusEvent) {
   const section = event.currentTarget, previous = event.relatedTarget
-  if (!['ide_onboarding', 'fullscreen_upsell'].includes(panel.kind) || !(section instanceof HTMLElement) || !(previous instanceof HTMLElement) || section.contains(previous)) return
+  if (!isNonblockingFocusNotice(panel.kind) || !(section instanceof HTMLElement) || !(previous instanceof HTMLElement) || section.contains(previous)) return
   resumeFocus = { ownerId: panel.ownerId, sessionId: panel.sessionId, section, previous }
 }
-watch(() => noticePanels.value.find(panel => ['fullscreen_upsell', 'ide_onboarding', 'resume_return', 'newer_model_offer', 'cost_threshold', 'ultraplan_choice', 'ultraplan_launch', 'permission_browser', 'peer_inbound_approval', 'computer_use_approval', 'effort_medium_nudge', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) || panel.notice.kind === 'cold_resume_quota' && panel.notice.trigger === 'resume' && panel.notice.preferredChoice !== undefined), async (panel, previous) => {
+watch(() => noticePanels.value.find(panel => isNonblockingFocusNotice(panel.kind) || ['resume_return', 'newer_model_offer', 'cost_threshold', 'ultraplan_choice', 'ultraplan_launch', 'permission_browser', 'peer_inbound_approval', 'computer_use_approval', 'effort_medium_nudge', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) || panel.notice.kind === 'cold_resume_quota' && panel.notice.trigger === 'resume' && panel.notice.preferredChoice !== undefined), async (panel, previous) => {
   const sameDialog = panel && previous && panel.ownerId === previous.ownerId && panel.sessionId === previous.sessionId && panel.id === previous.id
   const phaseChanged = panel?.notice.kind === 'auto_mode_flagged_allow' && previous?.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase !== previous.notice.phase
   if (sameDialog && !phaseChanged) return
@@ -327,12 +330,12 @@ watch(() => noticePanels.value.find(panel => ['fullscreen_upsell', 'ide_onboardi
       && retained.previous?.isConnected && (document.activeElement === document.body || retained.section.contains(document.activeElement))) retained.previous.focus({ preventScroll: true })
     return
   }
+  if (isNonblockingFocusNotice(panel.kind)) return
   await nextTick()
   if (!noticePanels.value.includes(panel) || !document.hasFocus()) return
   const section = noticeElements.value.find(element => element.dataset.nativeNotice === panel.kind)
   if (!section) return
   resumeFocus = { ownerId: panel.ownerId, sessionId: panel.sessionId, section, previous: sameDialog && retained ? retained.previous : document.activeElement instanceof HTMLElement ? document.activeElement : null }
-  if (panel.notice.kind === 'ide_onboarding' || panel.notice.kind === 'fullscreen_upsell') return
   if (panel.notice.kind === 'ultraplan_choice' || panel.notice.kind === 'ultraplan_launch') {
     section.querySelector<HTMLElement>('.native-notice__body')?.focus({ preventScroll: true })
     return
