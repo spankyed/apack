@@ -66,6 +66,14 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('Session ready')
   const composer = card.locator('[contenteditable="true"]')
+  async function replaceDraft(text: string) {
+    await composer.focus()
+    await composer.press('ControlOrMeta+a')
+    await composer.press('Backspace')
+    await expect(composer).toHaveText('')
+    await composer.fill(text)
+    await expect(composer).toHaveText(text)
+  }
 
 
 
@@ -76,6 +84,8 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   const browserReturns: unknown[] = [], browserCaptures: string[] = [], browserIds = new Set<string>()
   let browserWaitingCancellation: { phase: number; dialogId: string; browserPid: number; finishedTurn: { id: string; reason: 'answer' }; capture: string } | undefined
   const retry = process.env.CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY === '1'
+  const retryBrowserPause = realBrowser && retry && process.env.CLAUDE_RESEARCH_MCP_RETRY_BROWSER_PAUSE === '1'
+  let browserRetryPause: { phase: number; dialogId: string; turnId: string; browserPid: number; captures: string[] } | undefined
   const draft = 'Keep my release notes while I confirm browser input.'
   const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = []
   const nativeWindow = await electronApp.browserWindow(appPage)
@@ -135,10 +145,10 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   for (const step of cases) {
     await appPage.setViewportSize({ width: 1100, height: 900 })
     await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), String(step.phase))
-    await composer.fill('Review release input ' + step.phase + '.')
+    await replaceDraft('Review release input ' + step.phase + '.')
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(() => readFile(join(workspace!, 'mcp-elicitation-model-ready-' + step.phase), 'utf8').then(() => true, () => false)).toBe(true)
-    await composer.fill(draft)
+    await replaceDraft(draft)
     const savedDocument = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
     const savedSelection = await composer.evaluate(element => (element as any).editor.state.selection.toJSON())
     await writeFile(join(workspace!, 'mcp-elicitation-model-release-' + step.phase), 'Draft retained before original MCP URL request')
@@ -197,7 +207,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       expect(original.kind).toBe('mcp_url_elicitation')
       if (step.scenario === 'url-retry-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
       else if (step.scenario === 'url-retry-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
-      else if (step.scenario === 'url-retry-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
+      else if (step.scenario === 'url-retry-pause' && !retryBrowserPause) await card.getByTitle('Pause agent work', { exact: true }).click()
       else {
         if (step.scenario === 'url-retry') await capturePhase('prompt')
         await panel.getByRole('button', { name: 'Accept', exact: true }).click()
@@ -208,6 +218,27 @@ test('uses original terminal URL decisions, waiting and completion with cancella
           await capturePhase('waiting')
           if (realBrowser) await visitBrowser(step.phase, 680, 600, true, await frame(), savedSelection)
           await panel.getByRole('button', { name: 'Retry now', exact: true }).click()
+        } else if (step.scenario === 'url-retry-pause') {
+          const waiting = await frame()
+          const turnId = (await context()).native.state.activeTurnId
+          expect(turnId).toBeTruthy()
+          const browserPid = await visitBrowser(step.phase, 1100, 900, true, waiting, savedSelection)
+          const pause = card.getByTitle('Pause agent work', { exact: true })
+          const pauseCaptures: string[] = []
+          for (const [width, height] of [[1100, 900], [680, 600]]) {
+            await appPage.setViewportSize({ width, height })
+            await expect(pause).toBeInViewport({ ratio: 1 })
+            await expect(panel.getByRole('button', { name: 'Retry now', exact: true })).toBeInViewport({ ratio: 1 })
+            const capture = `native-mcp-url-${width}-waiting-retry-pause.png`
+            await appPage.screenshot({ path: testInfo.outputPath(capture) })
+            pauseCaptures.push(capture)
+          }
+          expect((await context()).native.state.activeTurnId).toBe(turnId)
+          await pause.click()
+          await expect(panel).toBeHidden({ timeout: 15000 })
+          await expect.poll(async () => (await context()).native.state.lastTurn).toEqual({ id: turnId, reason: 'aborted' })
+          expect(() => process.kill(browserPid, 0)).not.toThrow()
+          browserRetryPause = { phase: step.phase, dialogId: waiting.id, turnId, browserPid, captures: pauseCaptures }
         } else {
           if (realBrowser) await visitBrowser(step.phase, 1100, 900, false, await frame(), savedSelection)
           await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -275,7 +306,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   }
   await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), '0')
   const turnsBeforeRecovery = (await context()).turns
-  await composer.fill('Continue after cancelling the release input.')
+  await replaceDraft('Continue after cancelling the release input.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.busy, { timeout: 15000 }).toBe(false)
   await expect.poll(async () => (await context()).turns, { timeout: 15000 }).toBeGreaterThan(turnsBeforeRecovery)
@@ -284,10 +315,10 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status, { timeout: 15000 }).toMatch(/^(exited|error)$/)
   if (await section.getByRole('button', { name: 'Back to conversation', exact: true }).isVisible()) await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
-  await composer.fill('Continue reviewing the same release session.')
+  await replaceDraft('Continue reviewing the same release session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, browserReturns: realBrowser ? browserReturns : undefined, browserCaptures: realBrowser ? browserCaptures : undefined, browserWaitingCancellation, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
+  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, browserReturns: realBrowser ? browserReturns : undefined, browserCaptures: realBrowser ? browserCaptures : undefined, browserWaitingCancellation, browserRetryPause, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeMcpUrlApp: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
