@@ -20,6 +20,7 @@ import { claudeTerminalFullscreenOfferRuntime } from './terminal-fullscreen-offe
 import { claudeTerminalResumeReturnRuntime } from './terminal-resume-return-runtime.ts'
 import { claudeTerminalRemoteCalloutRuntime } from './terminal-remote-callout-runtime.ts'
 import { claudeTerminalUltraplanChoiceRuntime } from './terminal-ultraplan-choice-runtime.ts'
+import { claudeTerminalUltraplanLaunchRuntime } from './terminal-ultraplan-launch-runtime.ts'
 import { claudeTerminalCostWarningRuntime } from './terminal-cost-warning-runtime.ts'
 import { claudeTerminalColdQuotaRuntime } from './terminal-cold-quota-runtime.ts'
 import { claudeTerminalRefusalRuntime } from './terminal-refusal-runtime.ts'
@@ -852,6 +853,7 @@ ${claudeTerminalColdQuotaRuntime}
 ${claudeTerminalCostWarningRuntime}
 ${claudeTerminalRemoteCalloutRuntime}
 ${claudeTerminalUltraplanChoiceRuntime}
+${claudeTerminalUltraplanLaunchRuntime}
 ${claudeTerminalLeftArrowRuntime}
 ${claudeTerminalSandboxNetworkRuntime}
 ${claudeTerminalBrowserPermissionRuntime}
@@ -1127,6 +1129,7 @@ async function readNativeNoticeSnapshot(n,signal){
   const ideWelcome=nativeIdeOnboarding(n);if(ideWelcome){const welcome=await projectNativeIdeOnboarding(n,ideWelcome);if(welcome)return {notice:welcome,retirements:refusal.retirements};}
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
+  const launch=nativeUltraplanLaunch(n);if(launch)return {notice:launch.notice,retirements:refusal.retirements};
   const ultraplan=nativeUltraplanChoice(n);if(ultraplan)return {notice:ultraplan.notice,retirements:refusal.retirements};
   const remoteCallout=nativeRemoteCallout(n);if(remoteCallout)return {notice:remoteCallout.notice,retirements:refusal.retirements};
   const costWarning=nativeCostWarning(n);if(costWarning)return {notice:costWarning.notice,retirements:refusal.retirements};
@@ -1225,6 +1228,7 @@ async function control(request,abort){
   if(['newer_accept','newer_keep','newer_dismiss'].includes(request.decision)){answerNativeNewerModelOffer(n,request);return {answered:true};}
   if(['resume_compact','resume_continue','resume_never','resume_dismiss'].includes(request.decision)){answerNativeResumeReturn(n,request);return {answered:true};}
   if(request.decision==='fullscreen_accept'||request.decision==='fullscreen_dismiss'){answerNativeFullscreenOffer(n,request);return {answered:true};}
+  if(['ultraplan_launch_run','ultraplan_launch_cancel','ultraplan_launch_escape'].includes(request.decision)){answerNativeUltraplanLaunch(n,request);return {answered:true};}
   if(['ultraplan_here','ultraplan_fresh','ultraplan_cancel'].includes(request.decision)){answerNativeUltraplanChoice(n,request);return {answered:true};}
   if(['remote_enable','remote_dismiss'].includes(request.decision)){answerNativeRemoteCallout(n,request);return {answered:true};}
   if(request.decision==='cost_acknowledge'){answerNativeCostWarning(n,request);return {answered:true};}

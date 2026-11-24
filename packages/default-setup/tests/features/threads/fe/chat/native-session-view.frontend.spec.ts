@@ -814,3 +814,49 @@ it('shows the entire Ultraplan handoff and routes the native choices without cha
   expect(panel.isConnected).toBe(false)
   expect(document.activeElement).toBe(draft)
 })
+
+it('shows loading terms before exposing the cloud action, then addresses Run and Escape to the committed review', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } })
+  await nextTick()
+  f.back.click()
+  await nextTick()
+  const draft = document.createElement('textarea')
+  f.root.prepend(draft)
+  draft.focus()
+  const loading = {
+    id: 'cloud-plan', revision: 'loading-revision', sessionId: 'session', kind: 'ultraplan_launch',
+    title: 'Run ultraplan in the cloud?', subtitle: 'a few minutes', phase: 'loading', paragraphs: ['Loading…'],
+    choices: [{ value: 'ultraplan_launch_cancel', label: 'Cancel' }],
+  } satisfies ClaudeNativeNotice
+  const owner = { ...f.snapshot.state!, view: { kind: 'main' as const, revision: 3 } }
+  f.publish({ ...f.snapshot, state: { ...owner, notice: loading } })
+  await nextTick()
+  await nextTick()
+  const dialog = f.root.querySelector('[data-native-notice="ultraplan_launch"]')!
+  expect(dialog.querySelector('[role="status"]')?.textContent).toBe('Loading…')
+  expect(dialog.querySelector('[data-native-choice="ultraplan_launch_run"]')).toBeNull()
+  expect(document.activeElement).toBe(dialog.querySelector('.native-notice__body'))
+  const terms = {
+    ...loading, revision: 'terms-revision', phase: 'terms',
+    paragraphs: ['Original disclosure', 'This will upload your repository to a cloud session.', 'Proceed?'],
+    promptLabel: 'Prompt (sent from a connected channel):', summary: 'Review the SDK <img src="unsafe">',
+    helpLabel: 'More information:', helpUrl: 'https://code.claude.com/docs/en/claude-code-on-the-web',
+    choices: [{ value: 'ultraplan_launch_run', label: 'Yes' }, { value: 'ultraplan_launch_cancel', label: 'No' }],
+  } satisfies ClaudeNativeNotice
+  f.publish({ ...f.snapshot, state: { ...owner, notice: terms } })
+  await nextTick()
+  expect(dialog.textContent).toContain(terms.summary)
+  expect(dialog.textContent).toContain(terms.promptLabel)
+  expect(dialog.textContent).toContain(terms.paragraphs[1])
+  expect(dialog.querySelector('img')).toBeNull()
+  expect(dialog.querySelector('a')?.getAttribute('href')).toBe(terms.helpUrl)
+  dialog.querySelector<HTMLButtonElement>('[data-native-choice="ultraplan_launch_run"]')!.click()
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({
+    type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner', notice: {
+      id: terms.id, revision: terms.revision, sessionId: terms.sessionId, decision: 'ultraplan_launch_run',
+    },
+  }))
+  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send.mock.calls.at(-1)![0].notice).toMatchObject({ revision: terms.revision, decision: 'ultraplan_launch_escape' })
+})
