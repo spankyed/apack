@@ -17,8 +17,8 @@ function fixture(options: { unchanged?: boolean; snapshotChanged?: boolean; refu
   })
   const start = claudeTerminalUiRuntime.indexOf('let ownerReading=false'), end = claudeTerminalUiRuntime.indexOf('ownerTimer.unref();', start) + 'ownerTimer.unref();'.length
   expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start)
-  new Function('readFileSync', 'configUrl', 'control', 'ownerPost', 'ownerAgents', 'setInterval', 'AbortController', 'process', 'native', claudeTerminalUiRuntime.slice(start, end))(
-    () => JSON.stringify({ sessionId: configured }), 'observer.json', control, post, () => [], (callback: () => Promise<void>) => { tick = callback; return { unref() {} } }, AbortController, { pid: 123 }, undefined,
+  new Function('readFileSync', 'configUrl', 'control', 'ownerPost', 'ownerAgents', 'setInterval', 'AbortController', 'process', 'native', 'nativeMainStatusReconciliation', claudeTerminalUiRuntime.slice(start, end))(
+    () => JSON.stringify({ sessionId: configured }), 'observer.json', control, post, () => [], (callback: () => Promise<void>) => { tick = callback; return { unref() {} } }, AbortController, { pid: 123 }, undefined, undefined,
   )
   return { tick: () => tick(), calls, post, control, advanceBilling: () => { billingTime++ }, configured: () => configured, oldSession, nextSession }
 }

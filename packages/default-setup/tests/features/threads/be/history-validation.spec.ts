@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { mockService, startApp } from '@apackdev/testing/harness'
-import { testRootEvents } from '@apackdev/sdk/testing'
+import { testRootEvents, takeSystemErrors } from '@apackdev/sdk/testing'
 import type { Services } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
 import { chatService } from '#features/threads/be/services/chat.ts'
@@ -23,8 +23,16 @@ for (const type of ['FORK_THREAD','REVERT_THREAD','SUMMARIZE_THREAD'] as const) 
     const f=fixture(vi.fn(async()=>{throw Error('No message found')}))
     const before=repository.chatQueries.threadData(f.id)?.messages
     const teardown=vi.fn();registerThreadTeardown(threadId=>{if(threadId===f.id)teardown()})
-    await app.send('threads',{type,threadId:f.id,messageId:type==='FORK_THREAD'?f.first.id:f.pivot.id})
-    await vi.waitFor(()=>expect(f.notify).toHaveBeenCalled())
+    if(type==='FORK_THREAD'){
+      await app.connect()
+      expect(await app.ask('threads',{type,threadId:f.id,messageId:f.first.id},{client:'fork-window'})).toMatchObject({
+        ok:false,failure:{message:'No message found'},
+      })
+      expect(takeSystemErrors()).toEqual([])
+    }else{
+      await app.send('threads',{type,threadId:f.id,messageId:f.pivot.id})
+      await vi.waitFor(()=>expect(f.notify).toHaveBeenCalled())
+    }
     expect(f.validate).toHaveBeenCalledWith(expect.objectContaining({sessionId:'native-session',messageUuid:'native-first',signal:expect.any(AbortSignal)}))
     expect(repository.chatQueries.threadData(f.id)?.messages).toEqual(before)
     expect(repository.threadCommands.forkCount(f.id)).toBe(0)
@@ -33,13 +41,15 @@ for (const type of ['FORK_THREAD','REVERT_THREAD','SUMMARIZE_THREAD'] as const) 
 }
 it('keeps the fork navigation reply addressed to its original requester after validation',async()=>{
   const app=await startApp({systems:['threads']})
+  await app.connect()
   const f=fixture()
   const clients:Array<string|undefined>=[]
   const off=testRootEvents.onSurfaceSend(message=>{if(message.to==='default-setup/threads'&&message.event.type==='SHOW_THREAD')clients.push(message.client)})
   try {
-    await app.send('threads',{type:'FORK_THREAD',threadId:f.id,messageId:f.first.id},{sender:'default-setup/threads',client:'fork-window'})
-    await vi.waitFor(()=>expect(repository.threadCommands.forkCount(f.id)).toBe(1))
-    expect(clients).toEqual(['fork-window'])
+    const answer=await app.ask('threads',{type:'FORK_THREAD',threadId:f.id,messageId:f.first.id},{client:'fork-window'})
+    expect(answer).toMatchObject({ok:true,value:{threadId:expect.any(String)}})
+    expect(repository.threadCommands.forkCount(f.id)).toBe(1)
+    expect(clients).toEqual([])
   } finally {off()}
 })
 it('cancels a menu mutation if the source changes during native validation',async()=>{

@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const cleanup = vi.hoisted(() => {
   vi.resetModules();
   return {
-    history: vi.fn(), sizing: vi.fn(), reads: vi.fn(), views: vi.fn(), handles: vi.fn(), schedules: vi.fn(),
+    history: vi.fn(), sizing: vi.fn(), reads: vi.fn(), terminalViews: vi.fn(), views: vi.fn(), handles: vi.fn(), schedules: vi.fn(),
     listeners: vi.fn(), actors: vi.fn(), unavailable: undefined as Error | undefined,
   };
 });
@@ -21,6 +21,9 @@ vi.mock('#features/code/be/features/terminal.ts', async (original) => ({
 }));
 vi.mock('#features/code/be/services/window-reads.ts', async (original) => ({
   ...await original<typeof import('#features/code/be/services/window-reads.ts')>(), startStoppingWindowReads: () => cleanup.reads,
+}));
+vi.mock('#features/threads/be/system.ts', async (original) => ({
+  ...await original<typeof import('#features/threads/be/system.ts')>(), startClaudeTerminalViews: () => cleanup.terminalViews,
 }));
 vi.mock('#features/threads/be/claude-ui.ts', async (original) => ({
   ...await original<typeof import('#features/threads/be/claude-ui.ts')>(), clearClaudeUiViews: cleanup.views,
@@ -78,6 +81,7 @@ it('releases the window-reads subscription it started, once', () => {
   onShutdown();
   onShutdown();
   expect(cleanup.reads).toHaveBeenCalledOnce();
+  expect(cleanup.terminalViews).toHaveBeenCalledOnce();
 });
 
 it('retires a stored Claude handle even when the runtime service binding is unavailable', async () => {

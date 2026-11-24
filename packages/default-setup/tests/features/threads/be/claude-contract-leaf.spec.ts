@@ -20,5 +20,8 @@ it('resolves incoming Claude events before generated pack files exist', () => {
   const names = incoming.isUnion() ? incoming.types.flatMap(member => { const property = checker.getPropertyOfType(member, 'type'); if (!property) return []; const type = checker.getTypeOfSymbolAtLocation(property, declaration); return type.isStringLiteral() ? [type.value] : [] }) : []
   expect(names).toContain('CLAUDE_PROMPT_HOST_RESPONSE')
   expect(names).toContain('CLAUDE_TERMINAL_MOUNT')
-  expect(names).toContain('USER_MSG')
+  const asks = contract.getProperty('asks')!
+  const requests = checker.getTypeOfSymbolAtLocation(asks, asks.valueDeclaration!)
+  expect(requests.flags & ts.TypeFlags.Any).toBe(0)
+  expect(requests.getProperty('USER_MSG')).toBeDefined()
 })

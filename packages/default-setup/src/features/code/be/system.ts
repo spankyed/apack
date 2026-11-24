@@ -85,7 +85,10 @@ function resolveInitialDirectory(
  * listing on it, and each window asks for what it shows.
  */
 export const answers = codeSpec.answers<keyof SearchAsks | keyof ActionsAsks | keyof PromptsAsks | keyof CommitAsks | keyof PullRequestAsks | keyof GitHubAsks | keyof ExplorerAsks | keyof TerminalAsks>({
-  PREPARE_CLAUDE_PROFILE_SETUP: () => services.cli.claudeCode.prepareOwnedProfileSetup(),
+  PREPARE_CLAUDE_PROFILE_SETUP: ({ client }) => {
+    if (!client) throw new Error('Claude profile setup requires a requesting window')
+    return services.cli.claudeCode.prepareOwnedProfileSetup()
+  },
   GET_CODE_START: ({ context }) => ({
     baseDirectory: context.baseDirectory,
     settings: featureSettings.forFeature('code').get(),

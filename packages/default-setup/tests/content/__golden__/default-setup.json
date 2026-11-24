@@ -661,7 +661,12 @@
           },
           "costUsd": {
             "type": "number",
-            "description": "Total cost in USD",
+            "description": "Turn cost in USD",
+            "required": false
+          },
+          "sessionCostUsd": {
+            "type": "number",
+            "description": "Native cumulative session cost in USD",
             "required": false
           },
           "durationMs": {
