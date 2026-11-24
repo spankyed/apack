@@ -1149,8 +1149,21 @@ const handleSubmit = async () => {
 .input :global(.tiptap-wrapper .ProseMirror) { padding: 0; }
 /* The draft area owns scrolling so the caret stays above the fixed composer controls. */
 .input :global(.composer-document .ProseMirror) { max-height: none; overflow: visible; }
-/* Wide decimal markers need space inside the draft's scrolling viewport. */
-.input :global(.composer-document .ProseMirror ol:has(> li:nth-child(1000))) { padding-inline-start: 6ch; }
+/* Size the hanging indent from the widest ordinal, including lists that start above 1. */
+@supports (margin-inline-start: calc(sibling-count() * 1ch)) and (opacity: attr(start type(<number>), 1)) {
+  .input :global(.composer-document .ProseMirror ol) {
+    --composer-list-start: attr(start type(<number>), 1);
+  }
+  .input :global(.composer-document .ProseMirror ol > li) {
+    --composer-last-ordinal: calc(var(--composer-list-start) + sibling-count() - 1);
+    --composer-largest-ordinal: max(1, abs(var(--composer-list-start)), abs(var(--composer-last-ordinal)));
+    --composer-ordinal-digits: calc(round(down, log(var(--composer-largest-ordinal), 10), 1) + 1);
+    margin-inline-start: max(0px, calc((var(--composer-ordinal-digits) - 2) * 2ch));
+  }
+}
+@supports not ((margin-inline-start: calc(sibling-count() * 1ch)) and (opacity: attr(start type(<number>), 1))) {
+  .input :global(.composer-document .ProseMirror ol:has(> li:nth-child(1000))) { padding-inline-start: 6ch; }
+}
 .input {
   --composer-default-history-reserve: clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem);
   border-color: rgba(255, 255, 255, 0.09);
