@@ -232,7 +232,7 @@ function canPresentNotice(kind: (typeof noticePanels.value)[number]['kind']) {
 }
 function answerNotice(panel: (typeof noticePanels.value)[number], decision: Exclude<ClaudeNativeNoticeResponse['decision'],'credit'>, selectedValues?: string[]) {
   const state = view.value?.state, notice = state?.notice
-  if (!state || !notice || active.value || noticePending.value || !canPresentNotice(notice.kind) || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
+  if (!state || !notice || active.value || noticePending.value || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || !canPresentNotice(panel.kind) || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
   send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
 }
 function selectAutoRule(panel: (typeof noticePanels.value)[number], value: string, checked: boolean) {
