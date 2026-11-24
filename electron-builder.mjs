@@ -3,6 +3,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {createRequire} from 'node:module';
+import {verifyPack} from '@apackdev/host/packs/assets';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, brokerSbomComponent, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
@@ -22,6 +23,7 @@ const metadata = readBuildManifest(buildRoot);
 const isBeta = metadata.channel === 'beta';
 const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
+const defaultSetupDist = 'packages/default-setup/dist';
 /**
  * The newest glibc any binary the Linux app ships needs: 2.28, which the terminal broker apack-terminal publishes and
  * elmdb's binding are each built against (manylinux_2_28), and which Electron's own Linux build needs. It is the deb's
@@ -66,6 +68,7 @@ export default /** @type import('electron-builder').Configuration */
       ? path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources/app')
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
+    verifyPack(path.join(appDir, defaultSetupDist));
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
     // Electron's own notices, which electron-builder deletes on macOS, and there the licenses of the frameworks they
     // don't name (scripts/lib/electron-notices.ts)
@@ -262,6 +265,9 @@ export default /** @type import('electron-builder').Configuration */
     // app loads — so the exclusions above would strip every one of them and `apack pack init` from the CLI this
     // app installs (bin/app-launcher.sh) would scaffold nothing. Last match wins, so this comes after them.
     'packages/apack-cli/dist/package/templates/**',
+    // The installer checks the built-in pack's sealed file set, including its generated declarations.
+    `!${defaultSetupDist}/**`,
+    { from: defaultSetupDist, to: defaultSetupDist, filter: ['**/*'] },
     // Include the server's local node_modules
     'packages/server/node_modules/**/*',
     // Exclude dev tool output
