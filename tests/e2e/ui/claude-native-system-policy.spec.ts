@@ -22,7 +22,14 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   await app.navigate('default-setup/threads')
   await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase: 'Edit' }) }, workspace!)
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
-  await card.locator('[contenteditable="true"]').fill('Review the release notes for this project.')
+  const composer = card.locator('[contenteditable="true"]')
+  async function replaceDraft(text: string) {
+    await composer.click()
+    await composer.press('ControlOrMeta+A')
+    await appPage.keyboard.insertText(text)
+    await expect(composer).toHaveText(text)
+  }
+  await replaceDraft('Review the release notes for this project.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns, { timeout: 15000 }).toBe(1)
@@ -67,7 +74,6 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   const status = card.getByTestId('composer-native-status')
   if (unreadable) { /* Warning display and continuation are separate from helper acceptance. */ }
   else await expect(status).toContainText('Managed OS policy ready')
-  const composer = card.locator('[contenteditable="true"]')
   const warning=appPage.locator('[data-native-managed-settings]')
   if(unreadable){await expect(warning).toBeVisible({timeout:15000});await warning.locator('summary').click();await expect(warning).toContainText('/etc/claude-code/managed-settings.json');await expect(warning).toContainText('EACCES')}
 
@@ -77,7 +83,7 @@ test('honors OS-managed policy before user settings in the everyday composer', a
 
   const nativeWindow=await electronApp.browserWindow(appPage)
   const draft='Keep my policy review draft while checking managed settings.'
-  await composer.fill(draft)
+  await replaceDraft(draft)
   const originalDocument=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
   const captures:string[]=[]
   for(const [width,height] of [[1100,900],[680,600]]){
@@ -121,16 +127,51 @@ test('honors OS-managed policy before user settings in the everyday composer', a
   }
   expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
   const sent='Review this managed policy session without running tools.'
-  await composer.fill(sent);await card.getByRole('button',{name:'Send',exact:true}).click()
+  await replaceDraft(sent);await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).turns).toBe(2);await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
-  let original:any
-  await expect.poll(async()=>{for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{const rows=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));const matches=rows.filter(row=>row.type==='user'&&row.isMeta!==true&&(row.message?.content===sent||row.message?.content?.some?.((block:any)=>block.type==='text'&&block.text===sent)));if(matches.length){expect(matches).toHaveLength(1);original=matches[0];return true}}catch(error:any){if(error.code!=='ENOENT')throw error}}return false}).toBe(true)
-  await composer.fill(draft);if(!unreadable)await expect(status).toContainText('Managed OS policy ready')
+  async function originalInput(text: string) {
+    let uuid: string | undefined
+    await expect.poll(async () => {
+      for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
+        try {
+          const path = join(workspace!, '.claude/projects', bucket, sessionId + '.jsonl')
+          const rows = (await readFile(path, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+          const matches = rows.filter(row => row.type === 'user' && row.isMeta !== true &&
+            (row.message?.content === text || row.message?.content?.some?.((block: any) => block.type === 'text' && block.text === text)))
+          if (matches.length) {
+            expect(matches).toHaveLength(1)
+            uuid = matches[0].uuid
+            return uuid
+          }
+        } catch (error: any) {
+          if (error.code !== 'ENOENT') throw error
+        }
+      }
+    }).toBeTruthy()
+    return uuid!
+  }
+  const nativeHumanUuid = await originalInput(sent)
+  await replaceDraft(draft);if(!unreadable)await expect(status).toContainText('Managed OS policy ready')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  await writeFile(join(workspace!,'native-system-policy-app-proof.json'),JSON.stringify({sessionId,boundNativePid,captures,liveTransitions,draftRetained:true,privateControlsSuppressed:!unreadable,userStatusOverridden:!unreadable,managedPreferencePriority:darwinPolicy,nativeManagedWarning:unreadable,originalSettingsConsent:settingsConsent,successfulContinuation:unreadable,warningText:unreadable?await warning.innerText():undefined,nativeHumanUuid:original.uuid,sent}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
-  await composer.fill('Continue this saved policy review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(3);expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+  await expect(composer).toHaveText(draft)
+  const continuation = 'Continue this saved policy review.'
+  await replaceDraft(continuation)
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => (await context()).turns).toBe(3)
+  expect((await context()).sessionId).toBe(sessionId)
+  const nativeResumeHumanUuid = await originalInput(continuation)
+  expect(nativeResumeHumanUuid).not.toBe(nativeHumanUuid)
+  expect(errors).toEqual([])
   if(unreadable){await expect(warning).toBeVisible();await expect(warning).toContainText('EACCES')}
+  await writeFile(join(workspace!, 'native-system-policy-app-proof.json'), JSON.stringify({
+    sessionId, boundNativePid, captures, liveTransitions, draftRetained: true,
+    privateControlsSuppressed: !unreadable, userStatusOverridden: !unreadable,
+    managedPreferencePriority: darwinPolicy, nativeManagedWarning: unreadable,
+    originalSettingsConsent: settingsConsent, successfulContinuation: unreadable,
+    warningText: unreadable ? await warning.innerText() : undefined,
+    nativeHumanUuid, sent, nativeResumeHumanUuid, continuation,
+  }))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSystemPolicy:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
