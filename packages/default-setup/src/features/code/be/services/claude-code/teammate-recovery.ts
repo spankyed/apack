@@ -171,9 +171,10 @@ async function openRecoveredTeammate(
       if (await readProcessStart(pane.worker[0], childSignal) !== pane.worker[1]) throw new ClaudeTeammateEnded()
       try {
         await pasteExactTeammateInput(pane, env, Buffer.from(data), childSignal)
-      } catch (error) {
-        await verify(childSignal)
-        throw error
+      } catch {
+        // Drop a refused input. Keep reading the relay so the socket itself does not close the view.
+        // The monitor checks the original worker and pane independently.
+        childSignal.throwIfAborted()
       }
     }
   }
@@ -190,7 +191,7 @@ async function openRecoveredTeammate(
     wire = connection
     listener.close()
     display.subscribe(() => { if (display?.snapshot.status === 'exited') void close().catch(() => {}) })
-    void acceptInput(connection).then(() => close(), error => ended(error)).catch(() => {})
+    void acceptInput(connection).then(() => close(), ended).catch(() => {})
 
     tmux = await openClaudeTerminalAttachment(pane.executable, ['-S', pane.socket,
       'attach-session', '-E', '-f', 'ignore-size,active-pane', '-t', pane.tmuxSession,

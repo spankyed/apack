@@ -284,8 +284,8 @@ export function createClaudeTerminalViews(dependencies: {
         const survivor = survivingTeammateCurrent(view, target.taskId)?.target
         if (survivor?.recoveryId !== target.recoveryId || survivor.taskId !== target.taskId) return false
         const client = view.attachmentOwner?.snapshot
+        // Retain the ended card under its original identity. Input has a separate live-client gate.
         return view.attachment?.status !== 'ready' || client?.jobId === survivor.taskId && client.sessionId === survivor.sessionId
-          && (client.status === 'live' && !client.inputBlocked || view.attachmentOwner?.endedTeammate === true)
       }
       if (state?.ownerId !== target.ownerId || state.sessionId !== view.attachment?.sessionId) return false
       const currentOwner = dependencies.get(view.threadId)
@@ -297,7 +297,6 @@ export function createClaudeTerminalViews(dependencies: {
         return view.teammateReconnects.has(target.taskId)
       const client = view.attachmentOwner?.snapshot
       return client?.jobId === target.taskId && client.sessionId === state.sessionId
-        && (client.status === 'live' && !client.inputBlocked || view.attachmentOwner?.endedTeammate === true)
     }
     const continuation = dependencies.continuation?.(view.threadId)
     return !!view.attachment && continuation?.sessionId === view.attachment.sessionId && continuation.continuedInSessionId === view.attachment.continuedInSessionId
