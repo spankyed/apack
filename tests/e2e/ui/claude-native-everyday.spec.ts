@@ -55,12 +55,21 @@ test('completes an everyday native review across Agent, approval, question and i
   const terminalRows = section.locator('[data-terminal-text]')
   const readTerminalScreen = () => terminalRows.innerText({ timeout: 500 }).catch(() => '')
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
+  async function writeStartupEvidence(native: Awaited<ReturnType<typeof context>>['native'], output: string) {
+    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({
+      screen: recognizeOnboardingPrompt(output, workspace),
+      theme, security, navigated, trusted, trustAttempts, output,
+      status: native?.state?.status,
+      nativePid: native?.state?.nativePid,
+      mainStatus: native?.state?.mainStatus,
+    }))
+  }
   await expect.poll(async () => {
     const current = await context(), native = current.native
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Release review') === true
     const text = await readTerminalScreen()
+    await writeStartupEvidence(native, text)
+    if (native?.state?.status === 'live') return restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Release review') === true
     const screen = recognizeOnboardingPrompt(text, workspace)
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
