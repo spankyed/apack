@@ -19,7 +19,7 @@
                 <h3 class="text-sm font-medium">Auto-memory</h3>
                 <p role="status" class="mt-1 text-xs text-neutral-400">{{ dialog.auto_memory.status }}</p>
               </div>
-              <button type="button" :aria-label="dialog.auto_memory.enabled ? 'Turn Auto-memory off' : 'Turn Auto-memory on'" :disabled="pending || !dialog.auto_memory.toggleable || busy || !!problem" class="shrink-0 rounded-lg border border-white/15 px-3 py-2 text-xs font-medium hover:bg-white/10 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="load(!dialog.auto_memory.enabled)">
+              <button type="button" :aria-label="dialog.auto_memory.enabled ? 'Turn Auto-memory off' : 'Turn Auto-memory on'" :disabled="pending || !dialog.auto_memory.toggleable || busy || managedSettingsStale || !!problem" class="shrink-0 rounded-lg border border-white/15 px-3 py-2 text-xs font-medium hover:bg-white/10 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="load(!dialog.auto_memory.enabled)">
                 {{ pendingAction === 'setAutoMemory' ? 'Saving…' : dialog.auto_memory.enabled ? 'Turn off' : 'Turn on' }}
               </button>
             </div>
@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import { X } from 'lucide-vue-next'
 import { openSurface } from '#generated/fe.ts'
@@ -78,13 +78,18 @@ import { ask } from '#generated/events.ts'
 import type { ClaudeMemoryRequest } from '../../be/types.ts'
 import type { ClaudeMemoryDialog } from '#features/code/be/services/claude-code/host-controls.ts'
 
-const props = defineProps<{ target: Omit<ClaudeMemoryRequest, 'action'>; busy?: boolean }>()
+const props = defineProps<{ target: Omit<ClaudeMemoryRequest, 'action'>; busy?: boolean; managedSettingsRevision?: number }>()
 const emit = defineEmits<{ close: [restoreFocus: boolean] }>()
 const dialog = shallowRef<ClaudeMemoryDialog>()
 const problem = ref<string>()
 const pendingAction = ref<ClaudeMemoryRequest['action']['kind']>()
 const pending = computed(() => pendingAction.value !== undefined)
 const lifetime = new AbortController()
+const readPolicyRevision = ref(props.managedSettingsRevision)
+const managedSettingsStale = computed(() => readPolicyRevision.value !== props.managedSettingsRevision)
+watch([managedSettingsStale, pending], ([stale, inFlight]) => {
+  if (stale && !inFlight) void load()
+}, { flush: 'post' })
 onMounted(() => { void load() })
 onBeforeUnmount(() => lifetime.abort())
 
@@ -93,12 +98,13 @@ function load(enabled?: boolean) {
 }
 
 async function operate(action: ClaudeMemoryRequest['action']) {
-  if (pending.value) return
+  if (pending.value || lifetime.signal.aborted || (action.kind === 'setAutoMemory' && managedSettingsStale.value)) return
+  if (action.kind === 'read') readPolicyRevision.value = props.managedSettingsRevision
   pendingAction.value = action.kind
   problem.value = undefined
   try {
     const outcome = await ask('threads', { type: 'CLAUDE_MEMORY', ...props.target, action }, { signal: lifetime.signal })
-    if (lifetime.signal.aborted) return
+    if (lifetime.signal.aborted || (action.kind === 'read' && managedSettingsStale.value)) return
     if (!outcome.ok) { problem.value = outcome.failure.message; return }
     if (outcome.value.path) {
       if (action.kind === 'createInstruction') editFile(outcome.value.path)

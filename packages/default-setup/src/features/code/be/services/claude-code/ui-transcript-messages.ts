@@ -58,6 +58,7 @@ export function createClaudeTranscriptMessageHost(options: {
   const entries = new Map<string, Entry>()
   let groups: ClaudeUiToolGroup[] = [], placements: (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[] = [], readingGroups=false, groupsAgain=false
   let timestamps: ClaudeTranscriptTimestamp[] = [], timestampRevision = 0, timestampReading = false
+  let managedSettingsRevision = 0
   let managedSettingsDiagnostics: import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[]=[]
   let diagnostics: import('./ui-controls.ts').ClaudeUiDiagnosticAttachment[] = [], readingDiagnostics=false, diagnosticsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
@@ -222,6 +223,7 @@ export function createClaudeTranscriptMessageHost(options: {
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
     get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, instanceRevision: entry.instanceRevision, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.idleReturnHint && entry.body.status==='live'?{idleReturnHint:entry.idleReturnHint}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
+    get managedSettingsRevision() { return current() ? managedSettingsRevision : 0 },
     get managedSettingsDiagnostics(){return current()?managedSettingsDiagnostics:[]} ,
     get diagnostics() {
       if(!current())return []
@@ -237,7 +239,12 @@ export function createClaudeTranscriptMessageHost(options: {
         if (line.client_id === options.client.client_id) { timestampRevision++; void refreshTimestamps() }
         return
       }
-      if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.managed_settings_diagnostics === true) { void refreshDiagnostics(); return }
+      if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.managed_settings_diagnostics === true) {
+        managedSettingsRevision++
+        publish()
+        void refreshDiagnostics()
+        return
+      }
       if(line.type==='attachment'||line.type==='assistant'||line.type==='user'||line.type==='conversation_reset'||line.type==='system'&&line.subtype==='ui_invalidate')void refreshDiagnostics()
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
         if(line.tool_groups===true||line.composer_placements===true||line.terminal_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}

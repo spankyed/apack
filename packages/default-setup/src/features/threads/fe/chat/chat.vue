@@ -43,7 +43,7 @@
               aria-label="Scroll to latest message" @click="scrollToBottom('smooth')">Latest message <span aria-hidden="true">↓</span></button>
           </template>
         </ClaudeNativeSession>
-        <NativeMemoryPanel v-if="showMemory && memoryTarget" :key="memoryTarget.attachmentId" :target="memoryTarget" :busy="nativeComposerOwner?.busy" @close="closeMemory" />
+        <NativeMemoryPanel v-if="showMemory && memoryTarget" :key="memoryTarget.attachmentId" :target="memoryTarget" :busy="nativeComposerOwner?.busy" :managed-settings-revision="nativeUiDrawing?.managedSettingsRevision" @close="closeMemory" />
         <NativeManagedSettingsNotice v-if="!nativeTerminalActive && !focusedAgent && !agentSelection && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
