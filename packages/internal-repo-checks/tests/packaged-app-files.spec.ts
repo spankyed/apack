@@ -290,6 +290,16 @@ describe("the packaged app's file list", () => {
     expect(population('every package source file', perPackage('src')).filter(ships)).toEqual([]);
   });
 
+  it('excludes the SDK manifest editor test dependency', () => {
+    const testDependency = 'packages/apack-sdk/node_modules/vscode-json-languageservice';
+    const lock = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package-lock.json'), 'utf8'));
+    expect(lock.packages[testDependency]?.dev).toBe(true);
+    const builtFiles = population('the SDK JSON language service', filesUnder(testDependency));
+    expect(builtFiles.filter(ships)).toEqual([]);
+    const withoutExclusion = without(`!${testDependency}/**`);
+    expect(builtFiles.some(file => shipsUnder(withoutExclusion, file))).toBe(true);
+  });
+
   /**
    * The trees `stagePublishTree` writes so `npm publish` has something to publish. The app never loads one — it
    * resolves `@apackdev/sdk` through `node_modules` to `packages/apack-sdk/dist` — and the recursive include of

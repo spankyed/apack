@@ -270,6 +270,8 @@ export default /** @type import('electron-builder').Configuration */
     { from: defaultSetupDist, to: defaultSetupDist, filter: ['**/*'] },
     // Include the server's local node_modules
     'packages/server/node_modules/**/*',
+    // The broad workspace copy can pick up this nested SDK test dependency.
+    '!packages/apack-sdk/node_modules/vscode-json-languageservice/**',
     // Exclude dev tool output
     '!**/node_modules/.bin',
     '!**/node_modules/@types/**',
