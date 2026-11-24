@@ -1,5 +1,6 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
+import {rmSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {createRequire} from 'node:module';
@@ -69,6 +70,8 @@ export default /** @type import('electron-builder').Configuration */
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
     verifyPack(path.join(appDir, defaultSetupDist));
+    // Electron Builder can copy this nested SDK test dependency through its dependency collector.
+    rmSync(path.join(appDir, 'packages/apack-sdk/node_modules/vscode-json-languageservice'), {recursive: true, force: true});
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
     // Electron's own notices, which electron-builder deletes on macOS, and there the licenses of the frameworks they
     // don't name (scripts/lib/electron-notices.ts)
@@ -270,8 +273,6 @@ export default /** @type import('electron-builder').Configuration */
     { from: defaultSetupDist, to: defaultSetupDist, filter: ['**/*'] },
     // Include the server's local node_modules
     'packages/server/node_modules/**/*',
-    // The broad workspace copy can pick up this nested SDK test dependency.
-    '!packages/apack-sdk/node_modules/vscode-json-languageservice/**',
     // Exclude dev tool output
     '!**/node_modules/.bin',
     '!**/node_modules/@types/**',
