@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { addService } from '../../src/commands/add/service.ts';
 import { expect, it } from 'vitest';
-import { ManifestSchema, type PackManifest } from '@apackdev/sdk/build';
+import { ManifestSchema, type PackManifest } from '@apackdev/pack-format';
 import { addArtifact, addBlock, addFeature, addFeatureService, addPackService, addStep } from '../../src/commands/add/manifest.ts';
 
 const cases: Array<[string, (manifest: PackManifest) => void]> = [

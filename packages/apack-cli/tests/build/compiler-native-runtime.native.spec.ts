@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { expect, it, onTestFinished } from 'vitest';
-import { ManifestSchema } from '@apackdev/sdk/build';
+import { ManifestSchema } from '@apackdev/pack-format';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { formatNodeOptions } from '@apackdev/host/build/source-resolution';

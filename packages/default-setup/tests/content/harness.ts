@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { buildPackConfigFromManifest, compilePack } from '@apackdev/sdk/build';
+import { buildPackConfigFromManifest, compilePack } from '@apackdev/pack-build';
 import { createDocumentsApplier } from '@apackdev/sdk/content';
 import { applyRecord, importCompiledContent, type ApplyRecord, type AppliedItem, type ImportMode, type ApplyResult, type ContentSelection } from '@apackdev/sdk/utils';
 import { type EARS } from '@apackdev/sdk';

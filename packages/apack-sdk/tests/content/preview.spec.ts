@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compilePack } from '../../src/build/content-compiler.ts';
 import { previewPackContent } from '../../src/content/preview.ts';
 import type { ContentApplier } from '../../src/utils/apply.ts';
 import { startTestRuntime, testPacks } from '../../src/testing/index.ts';
@@ -20,35 +19,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function compileDemo(): Promise<string> {
+function writeDemoIndex(): string {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-preview-'));
-  const write = (file: string, content: string) => {
-    fs.mkdirSync(path.dirname(path.join(root!, file)), { recursive: true });
-    fs.writeFileSync(path.join(root!, file), content);
-  };
-  write('glossary.json', JSON.stringify([{ term: 'Pack', description: 'A bundle' }, { term: 'Content', children: [{ term: 'Hook' }] }]));
-  write('faqs.json', JSON.stringify([{ question: 'Why?' }]));
-  vi.spyOn(console, 'log').mockImplementation(() => {});
   const out = path.join(root, 'dist');
-  write('notes.json', JSON.stringify([{ term: 'Note' }]));
-  write('apack.json', JSON.stringify({
-    id: 'demo', name: 'Demo', version: '1.0.0',
-    content: {
-      formats: { terms: { format: 'json', entity: 'Term', identity: ['term'] }, records: { format: 'json' } },
-      sources: {
-        glossary: { path: 'glossary.json', format: 'terms' },
-        notes: { path: 'notes.json', format: 'terms' },
-      },
-      datasets: { faqs: { path: 'faqs.json', format: 'records' } },
-    },
+  fs.mkdirSync(out, { recursive: true });
+  fs.writeFileSync(path.join(out, 'content.json'), JSON.stringify({
+    version: 1,
+    packId: 'demo',
+    entries: [
+      { key: 'glossary', written: true, identity: ['term'], count: 3, items: [{ key: 'Pack', description: 'A bundle' }, { key: 'Content', childCount: 1 }] },
+      { key: 'notes', written: true, identity: ['term'], count: 1, items: [{ key: 'Note' }] },
+      { key: 'faqs', written: false, count: 1, items: [{ key: '' }] },
+    ],
   }));
-  await compilePack({ packDir: root, outputDir: out });
   return out;
 }
 
 describe('previewPackContent', () => {
-  it("lists the written keys the compiling pack's appliers import, and their items, whatever the keys are", async () => {
-    const out = await compileDemo();
+  it("lists the written keys the compiling pack's appliers import, and their items, whatever the keys are", () => {
+    const out = writeDemoIndex();
     testPacks.appliers.set('demo', [noopApplier('glossary')]);
 
     expect(previewPackContent(out)).toEqual({
@@ -59,8 +48,8 @@ describe('previewPackContent', () => {
     });
   });
 
-  it("fails when the compiling pack registered no appliers (it isn't installed)", async () => {
-    const out = await compileDemo();
+  it("fails when the compiling pack registered no appliers (it isn't installed)", () => {
+    const out = writeDemoIndex();
     testPacks.appliers.set('other', [noopApplier('glossary')]);
     try {
       expect(() => previewPackContent(out)).toThrow(/Pack "demo" isn't installed/);
@@ -72,5 +61,29 @@ describe('previewPackContent', () => {
   it('fails for a directory without content.json', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-preview-'));
     expect(() => previewPackContent(root!)).toThrow(/has no content\.json/);
+  });
+
+  it('rejects malformed content.json entries/items and strips unknown fields', () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-preview-'));
+    testPacks.appliers.set('demo', [noopApplier('glossary')]);
+    const write = (data: unknown) => fs.writeFileSync(path.join(root!, 'content.json'), JSON.stringify(data));
+
+    write({ version: 1, packId: 'demo', entries: [
+      { key: 'glossary', written: true, count: 1, items: [{ key: 'A' }] },
+      { key: 'glossary', written: true, count: 1, items: [{ key: 'B' }] },
+    ] });
+    expect(() => previewPackContent(root!)).toThrow(/duplicate entry key/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: -1, items: [] }] });
+    expect(() => previewPackContent(root!)).toThrow(/malformed entry/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: 1, items: [{ key: 123 }] }] });
+    expect(() => previewPackContent(root!)).toThrow(/malformed item/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: 1, items: [{ key: 'A', childCount: -2 }] }] });
+    expect(() => previewPackContent(root!)).toThrow(/invalid childCount/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: 1, items: [{ key: 'A', extra: 'secret' }] }] });
+    expect(previewPackContent(root!).content.glossary).toEqual([{ key: 'A' }]);
   });
 });

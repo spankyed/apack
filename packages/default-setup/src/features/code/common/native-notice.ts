@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import {claudeSettingsSnapshot} from './native-settings.ts'
+import {claudeSettingsSnapshot, type ClaudeSettingsSnapshot } from './native-settings.ts'
 import type {ClaudeCreditRequest} from './native-credit.ts'
 
 /** Exact notice emitted by the reviewed 2.1.302 Opus 5 same-model refusal retry. */
@@ -81,8 +81,259 @@ export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
   z.object({ ...identity, ...body, kind: z.literal('auto_mode_server_fallback'), helpUrl: z.string().max(4000) }),
   z.object({ ...identity, ...body, kind: z.literal('plugin_hint'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), sourceCommand: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'disable']), label: z.string().min(1).max(4000) })).length(3) }),
   z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), fileExtension: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
-])
-export type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>
+]) satisfies z.ZodType<ClaudeNativeNotice>
+export type ClaudeNativeNotice = {
+  id: string
+  revision: string
+  sessionId: string
+  title: string
+  paragraphs: string[]
+} & (
+  | {
+    kind: 'managed_settings_security'
+    paragraphsAnsi: string[]
+    preferredChoice: 'policy_approve' | 'policy_reject'
+    choices: {
+      value: 'policy_approve' | 'policy_reject'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'ultraplan_launch'
+    subtitle: string
+    phase: 'loading' | 'review' | 'terms'
+    choices: {
+      value: 'ultraplan_launch_run' | 'ultraplan_launch_cancel'
+      label: string
+      description?: string
+    }[]
+    promptLabel?: string
+    summary?: string
+    helpLabel?: string
+    helpUrl?: 'https://code.claude.com/docs/en/claude-code-on-the-web'
+  }
+  | {
+    kind: 'fable_overage_consent_prompt'
+    snapshot: ClaudeSettingsSnapshot
+  }
+  | {
+    kind: 'credit_consent_result'
+    severity: 'feedback'
+    links: string[]
+  }
+  | {
+    kind: 'chrome_install_upsell'
+    preferredChoice: 'chrome_not_now'
+    choices: {
+      value: 'chrome_not_now' | 'chrome_install' | 'chrome_never'
+      label: string
+      description?: string
+    }[]
+  }
+  | {
+    kind: 'chrome_install_setup'
+    phase: 'connecting' | 'waiting_install' | 'stalled' | 'connected' | 'failed'
+    installPageOpened: boolean
+    choices: {
+      value: 'chrome_continue' | 'chrome_wait' | 'chrome_skip'
+      label: string
+      description?: string
+    }[]
+  }
+  | {
+    kind: 'effort_preference_result'
+    severity: 'feedback' | 'warning'
+  }
+  | {
+    kind: 'effort_medium_nudge'
+    model: string
+    preferredChoice: 'effort_accept' | 'effort_decline'
+    choices: {
+      value: 'effort_accept' | 'effort_decline'
+      label: string
+    }[]
+    warning?: string
+  }
+  | {
+    kind: 'auto_default_nudge'
+    choices: {
+      value: 'auto_nudge_accept' | 'auto_nudge_decline'
+      label: string
+    }[]
+    preferredChoice?: 'auto_nudge_accept' | 'auto_nudge_decline'
+  }
+  | {
+    kind: 'auto_mode_setup_review'
+    choices: {
+      value: 'auto_review_accept' | 'auto_review_decline'
+      label: string
+    }[]
+    preferredChoice?: 'auto_review_accept' | 'auto_review_decline'
+  }
+  | {
+    kind: 'auto_mode_flagged_allow'
+    choices: {
+      value: 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_submit'
+      label: string
+    }[]
+    phase: 'review' | 'pick'
+    rules: {
+      value: string
+      label: string
+    }[]
+    selectedValues: string[]
+    preferredChoice?: 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_submit'
+  }
+  | {
+    kind: 'computer_use_approval'
+    phase: 'apps' | 'os_permissions'
+    choices: {
+      value: 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry'
+      label: string
+    }[]
+    preferredChoice?: 'computer_deny'
+  }
+  | {
+    kind: 'permission_browser'
+    toolName: string
+    requestId: string
+    choices: {
+      value: 'browser_allow' | 'browser_domain' | 'browser_deny'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'left_arrow_confirm'
+    preferredChoice: 'background_confirm' | 'background_stay'
+    choices: {
+      value: 'background_confirm' | 'background_stay'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'sandbox_network_access'
+    choices: {
+      value: 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'permission_publish_plugin'
+    previewFiles: string[]
+    files: string[]
+    choices: [{ value: 'publish_plugin_decline'; label: string; }] | [{ value: 'publish_plugin_confirm'; label: string; }, { value: 'publish_plugin_decline'; label: string; }]
+  }
+  | {
+    kind: 'refusal_fallback_prompt'
+    originalModel: string
+    fallbackModel: string
+    choices: {
+      value: 'retry_fallback' | 'edit_prompt'
+      label: string
+    }[]
+    helpUrl?: string
+  }
+  | {
+    kind: 'autocompact_offer'
+    selectedTokens: number
+    canPrevious: boolean
+    canNext: boolean
+    choices: {
+      value: 'compact_accept' | 'compact_keep'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'cold_resume_quota'
+    trigger: 'idle' | 'resume'
+    choices: {
+      value: 'quota_resume' | 'quota_new_conversation'
+      label: string
+      description?: string
+    }[]
+    preferredChoice?: 'quota_resume' | 'quota_new_conversation'
+  }
+  | {
+    kind: 'newer_model_inline'
+    ansi: string
+  }
+  | {
+    kind: 'newer_model_offer'
+    choices: {
+      value: 'newer_keep' | 'newer_accept'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'resume_return'
+    choices: {
+      value: 'resume_compact' | 'resume_continue' | 'resume_never'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'fullscreen_upsell'
+    choices: {
+      value: 'fullscreen_accept' | 'fullscreen_dismiss'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'ultraplan_choice'
+    plan: string
+    choices: [{ value: 'ultraplan_here'; label: string; description: string; }, { value: 'ultraplan_fresh'; label: string; description: string; }, { value: 'ultraplan_cancel'; label: string; description: string; }]
+  }
+  | {
+    kind: 'remote_callout'
+    disabled: boolean
+    choices: [{ value: 'remote_enable'; label: string; description: string; }, { value: 'remote_dismiss'; label: string; description: string; }]
+  }
+  | {
+    kind: 'cost_threshold'
+    helpUrl: 'https://code.claude.com/docs/en/costs'
+    choices: [{ value: 'cost_acknowledge'; label: string; }]
+  }
+  | {
+    kind: 'ide_onboarding'
+    choices: [{ value: 'ide_welcome_dismiss'; label: 'Continue'; }]
+  }
+  | {
+    kind: 'peer_inbound_approval'
+    message: string
+    choices: [{ value: 'peer_deny'; label: string; }, { value: 'peer_deliver'; label: string; }]
+  }
+  | {
+    kind: 'goal_proposal'
+    choices: {
+      value: 'goal_decline' | 'goal_accept'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'auto_mode_server_fallback'
+    helpUrl: string
+  }
+  | {
+    kind: 'plugin_hint'
+    pluginName: string
+    marketplaceName: string
+    sourceCommand: string
+    choices: {
+      value: 'disable' | 'yes' | 'no'
+      label: string
+    }[]
+  }
+  | {
+    kind: 'lsp_recommendation'
+    pluginName: string
+    marketplaceName: string
+    fileExtension: string
+    choices: {
+      value: 'never' | 'disable' | 'yes' | 'no'
+      label: string
+    }[]
+  }
+)
 export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({decision:'credit';credit:ClaudeCreditRequest} | { selectedValues?: string[]; decision: 'publish_plugin_confirm' | 'publish_plugin_decline' | 'effort_accept' | 'effort_decline' | 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry' | 'computer_cancel' | 'chrome_install' | 'chrome_not_now' | 'chrome_never' | 'chrome_continue' | 'chrome_wait' | 'chrome_skip' | 'chrome_cancel' | 'browser_allow' | 'browser_domain' | 'browser_deny' | 'browser_cancel' | 'quota_resume' | 'quota_new_conversation' | 'quota_dismiss' | 'newer_accept' | 'newer_keep' | 'newer_dismiss' | 'resume_compact' | 'resume_continue' | 'resume_never' | 'resume_dismiss' | 'background_confirm' | 'background_stay' | 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny' | 'sandbox_cancel' | 'policy_approve' | 'policy_reject' | 'compact_previous' | 'compact_next' | 'compact_accept' | 'compact_keep' | 'compact_dismiss' | 'goal_accept' | 'goal_decline' | 'peer_deny' | 'peer_deliver' | 'peer_cancel' | 'ide_welcome_dismiss' | 'cost_acknowledge' | 'remote_enable' | 'remote_dismiss' | 'ultraplan_launch_run' | 'ultraplan_launch_cancel' | 'ultraplan_launch_escape' | 'ultraplan_here' | 'ultraplan_fresh' | 'ultraplan_cancel' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' })
 export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decision: string): boolean {
   if (notice.kind === 'fable_overage_consent_prompt') return decision === 'credit'
@@ -115,5 +366,10 @@ export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decisio
 }
 
 /** Original dialog settlement identities, scoped to their native conversation. */
-export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()), rewoundUserUuids: z.array(z.string().uuid()).optional(), rewoundNoticeUuids: z.array(z.string().uuid()).optional() }))
-export type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>
+export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()), rewoundUserUuids: z.array(z.string().uuid()).optional(), rewoundNoticeUuids: z.array(z.string().uuid()).optional() })) satisfies z.ZodType<ClaudeNativeMessageRetirements>
+export type ClaudeNativeMessageRetirements = {
+  sessionId: string
+  uuids: string[]
+  rewoundUserUuids?: string[]
+  rewoundNoticeUuids?: string[]
+}[]

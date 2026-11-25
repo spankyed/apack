@@ -49,6 +49,20 @@ describe('apack pack build rejects @apackdev/host imports', () => {
     expect(result.error).toMatch(/@elmdb\/ears\/database is only for the app[\s\S]*packs can't import it/);
   });
 
+  it('rejects private @apackdev/pack-format and @apackdev/pack-build imports in backend and frontend bundles', async () => {
+    const beFormatDir = pack({ 'src/__generated__/pack-entry.ts': "import { parseManifest } from '@apackdev/pack-format';\nexport const registration = { parseManifest };\n" });
+    expect((await bundlePackRuntime(beFormatDir, path.join(beFormatDir, 'dist'))).error)
+      .toMatch(/@apackdev\/pack-format is a private apack tooling package/);
+
+    const beBuildDir = pack({ 'src/__generated__/pack-entry.ts': "import { compilePack } from '@apackdev/pack-build';\nexport const registration = { compilePack };\n" });
+    expect((await bundlePackRuntime(beBuildDir, path.join(beBuildDir, 'dist'))).error)
+      .toMatch(/@apackdev\/pack-build is a private apack tooling package/);
+
+    const feFormatDir = pack({ 'src/entry.ts': "import { parseManifest } from '@apackdev/pack-format';\nexport default parseManifest;\n" });
+    expect((await bundlePackFE({ packDir: feFormatDir, outputDir: path.join(feFormatDir, 'dist'), entryPoint: path.join(feFormatDir, 'src', 'entry.ts') })).error)
+      .toMatch(/@apackdev\/pack-format is a private apack tooling package/);
+  });
+
   it('still bundles pack code that imports @apackdev/sdk', async () => {
     const dir = pack({ 'src/__generated__/pack-entry.ts': "import { findRelations } from '@apackdev/sdk/ears';\nexport const registration = { findRelations };\n" });
     expect(await bundlePackRuntime(dir, path.join(dir, 'dist'))).toEqual({ success: true });

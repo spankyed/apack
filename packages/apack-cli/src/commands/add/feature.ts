@@ -1,5 +1,5 @@
 import { writeManifest } from '../../manifest-writer.ts';
-import { FEATURE_ID_PATTERN, FeatureEntrySchema } from '@apackdev/sdk/build';
+import { FEATURE_ID_PATTERN, FeatureEntrySchema } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import { renderTemplate } from '../../templates.ts';
 import * as path from 'node:path';

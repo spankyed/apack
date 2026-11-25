@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { ControlRequestLine } from './types.ts'
 
 const box = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH), cursor: z.number().int().nonnegative() }).strict()
-  .refine(value => value.cursor <= value.text.length, 'cursor exceeds prompt text')
+  .refine(value => value.cursor <= value.text.length, 'cursor exceeds prompt text') satisfies z.ZodType<ClaudePromptHostBox>
 const decoration = z.object({ _apackThemeColor: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).optional(), _apackThemeBackgroundColor: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).optional(), start: z.number().int().nonnegative(), end: z.number().int().nonnegative(),
   color: z.string().optional(), backgroundColor: z.string().optional(), dimColor: z.boolean().optional(),
   bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(), strikethrough: z.boolean().optional(),
@@ -23,10 +23,32 @@ const fill = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH), mode: z
       lastStart = run.start
       if (!virtual) paintEnd = run.end
     }
-  })
+  }) satisfies z.ZodType<ClaudePromptHostFill>
 const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy', 'ui_read_selection']), client_id: z.string(), surface: z.enum(['desktop', 'mobile', 'vscode']) }).passthrough()
-export type ClaudePromptHostBox = z.infer<typeof box>
-export type ClaudePromptHostFill = z.infer<typeof fill>
+export type ClaudePromptHostBox = {
+  text: string
+  cursor: number
+}
+export type ClaudePromptHostFill = {
+  text: string
+  mode: 'replace' | 'append' | 'insert'
+  ifEmpty?: true
+  focus?: true
+  decorations?: {
+    start: number
+    end: number
+    _apackThemeColor?: string
+    _apackThemeBackgroundColor?: string
+    color?: string
+    backgroundColor?: string
+    dimColor?: boolean
+    bold?: boolean
+    italic?: boolean
+    underline?: boolean
+    strikethrough?: boolean
+    virtualText?: string
+  }[]
+}
 export type ClaudePromptHostFillResult = { filled: boolean; change?: ClaudePromptHostBox }
 export interface ClaudePromptHost {
   available?(): boolean

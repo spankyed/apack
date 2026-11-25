@@ -1,5 +1,6 @@
-import { _compileSettingsDefinition, type SettingsCatalog, type SettingsDefinition, type NativePackDeclaration } from '@apackdev/sdk/framework';
+import type { SettingsCatalog, SettingsDefinition, NativePackDeclaration } from '@apackdev/sdk/framework';
 import { resolveName, PACK_ID_PATTERN, FEATURE_ID_PATTERN } from '@apackdev/sdk/ids';
+import { compileSettingsDefinition } from '../features/settings/compile.ts';
 
 /** One projection for installed, native and prospective settings declarations. */
 export function settingsForDeclarations(app: SettingsDefinition, declarations: readonly Pick<NativePackDeclaration, 'id' | 'dependencies' | 'settings' | 'features'>[], revision = 0): SettingsCatalog {
@@ -14,13 +15,13 @@ export function settingsForDeclarations(app: SettingsDefinition, declarations: r
     dependencies[pack.id] = Object.keys(pack.dependencies ?? {});
     for (const [id, definition] of Object.entries(pack.settings ?? {})) {
       if (!FEATURE_ID_PATTERN.test(id)) throw new Error(`Invalid settings group "${pack.id}/${id}"`);
-      _compileSettingsDefinition(definition);
+      compileSettingsDefinition(definition);
       groups[pack.id][id] = definition;
     }
     for (const [id, feature] of Object.entries(pack.features ?? {})) {
       if (!FEATURE_ID_PATTERN.test(id)) throw new Error(`Invalid feature "${pack.id}/${id}"`);
       if (feature.settings) {
-        _compileSettingsDefinition(feature.settings);
+        compileSettingsDefinition(feature.settings);
         features[resolveName(id, pack.id)] = feature.settings;
       }
     }

@@ -1,6 +1,6 @@
 import { EARS } from '../types/entities.ts';
 import type { ContentItem } from './item-types.ts';
-import { boundHost } from '../runtime/host-runtime.ts';
+import { _boundBackendHost } from '../runtime/backend-port.ts';
 import { collectionContentWriter, documentContentWriter } from './document-writers.ts';
 
 /** Where a record sits: its parent row (for tree children) and its position among its siblings */
@@ -65,5 +65,5 @@ const sdkContentWriters: Record<string, ContentWriter> = {
  * declaring an entity the SDK owns is reported by the schema rather than silently losing its writer.
  */
 export const _contentWriterRegistry: ContentWriterRegistry = {
-  get: (entity) => boundHost().packs.contentWriters(entity) ?? sdkContentWriters[entity],
+  get: (entity) => _boundBackendHost().packs.contentWriters(entity) ?? sdkContentWriters[entity],
 };

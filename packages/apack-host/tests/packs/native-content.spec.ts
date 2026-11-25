@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { expect, it, vi } from 'vitest';
-import { _nativePackDeclarationProblem } from '@apackdev/sdk/build';
+import { _nativePackDeclarationProblem } from '@apackdev/pack-format';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import { startTestRuntime } from '@apackdev/sdk/testing';
 import { importCompiledContent } from '@apackdev/sdk/utils';

@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import type { PackDependencySnapshot, PackTypeManifest } from '@apackdev/sdk/build';
+import type { PackDependencySnapshot, PackTypeManifest } from '@apackdev/pack-format';
 import { resolveDepFiles, type DependencyResolutionOptions, type ResolvedDepFiles } from './fetch-deps';
 
 export async function resolveDependencyFiles(root: string, deps: Record<string, string> = {}, options: DependencyResolutionOptions = {}): Promise<Map<string, ResolvedDepFiles>> {

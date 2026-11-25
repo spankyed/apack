@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';
-import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@apackdev/sdk/build';
+import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@apackdev/pack-format';
 import { ownModuleFindings, type OwnModuleSpecifier } from '@apackdev/host/build/own-module-specifiers';
 import { readSubpathImports } from '@apackdev/host/build/subpath-imports';
 // The key itself, not a copy of it: one declaration, so a rename there renames what this refuses
@@ -256,10 +256,13 @@ const RULE_LIST = [
   },
   {
     key: 'host-imports',
-    rule: "A pack doesn't import the host's private @apackdev/host package, which is not installed for a pack; "
-      + 'use @apackdev/sdk',
-    check(view, _place) {
-      return view.specifiers.filter(({ text }) => /^@apackdev\/host(\/|$)/.test(text))
+    rule: "A pack doesn't import private apack host or tooling packages (@apackdev/host, @apackdev/pack-format, "
+      + '@apackdev/pack-build), which are not installed for a pack; use @apackdev/sdk',
+    check(view, place) {
+      const pattern = place.packRelative.startsWith('src/')
+        ? /^@apackdev\/(?:host|pack-format|pack-build)(\/|$)/
+        : /^@apackdev\/host(\/|$)/;
+      return view.specifiers.filter(({ text }) => pattern.test(text))
         .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
     },
   },

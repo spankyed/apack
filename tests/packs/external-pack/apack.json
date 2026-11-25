@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/apack-sdk/apack.schema.json",
+  "$schema": "../../../packages/apack-pack-format/apack.schema.json",
   "id": "e2e-fixture",
   "name": "E2E Fixture",
   "version": "0.1.0",

@@ -7,5 +7,26 @@ export const ClaudeWorkflowApprovalSchema = z.object({
   summary: z.array(z.object({ title: z.string().max(200000), detail: z.string().max(200000).optional(), prompts: z.array(z.string().max(200000)).max(4096) })).max(4096).optional(),
   canEdit: z.boolean().optional(), description: z.string().max(200000).optional(), raw: z.boolean().optional(), summaryUnavailable: z.boolean().optional(),
   choices: z.array(z.object({ value: z.enum(['yes', 'yes-always', 'no']), label: z.string().max(4000), decision: z.enum(['allow', 'deny']), feedback: z.boolean() })).max(3),
-}).refine(value => !value.withheld || value.script === undefined && value.summary === undefined && value.description === undefined, 'Withheld script cannot be presented')
-export type ClaudeWorkflowApproval = z.infer<typeof ClaudeWorkflowApprovalSchema>
+}).refine(value => !value.withheld || value.script === undefined && value.summary === undefined && value.description === undefined, 'Withheld script cannot be presented') satisfies z.ZodType<ClaudeWorkflowApproval>
+export type ClaudeWorkflowApproval = {
+  token: string
+  ready: boolean
+  withheld: boolean
+  choices: {
+    value: 'yes' | 'no' | 'yes-always'
+    label: string
+    decision: 'deny' | 'allow'
+    feedback: boolean
+  }[]
+  script?: string
+  args?: string
+  summary?: {
+    title: string
+    prompts: string[]
+    detail?: string
+  }[]
+  canEdit?: boolean
+  description?: string
+  raw?: boolean
+  summaryUnavailable?: boolean
+}

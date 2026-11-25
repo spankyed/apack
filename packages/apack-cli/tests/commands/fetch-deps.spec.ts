@@ -1,9 +1,9 @@
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { findDepFiles, releasesInRange, type GitHubRelease } from '../../src/commands/fetch-deps';
 
 const release = (tag: string): GitHubRelease => ({ tag_name: tag, assets: [] });

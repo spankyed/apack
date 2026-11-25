@@ -1,4 +1,4 @@
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -34,7 +34,7 @@ vi.mock('../../src/build/build-process.ts', () => ({
   }),
 }));
 import { buildPackArchive } from '../../src/commands/archive';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let tmp: string;

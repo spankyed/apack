@@ -1,10 +1,10 @@
-import { _packServiceSelection, _parseServiceReference } from '@apackdev/sdk/framework';
+import { _packServiceSelection } from '@apackdev/pack-format';
+import { _parseServiceReference } from '@apackdev/sdk/framework';
 import { HOST_PACK_ID } from '@apackdev/sdk/ids';
 import * as path from 'node:path';
-import {
-  generatePackFiles, packValidation, validateManifest, validatePackSources,
-  type PackDiagnostic, type PackValidation, type SkippedPackCheck,
-} from '@apackdev/sdk/build';
+import { generatePackFiles, validateManifest, validatePackSources } from '@apackdev/pack-build';
+import { packValidation, type PackDiagnostic, type PackValidation, type SkippedPackCheck } from '@apackdev/pack-format';
+import { compileSettingsDefinition, settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { dependencyTypes, type ResolvedDeps } from './generate';
 import { inspectDependencies, type DependencyInspection } from '../build/dependency-inspection.ts';
 import { findPackRoot, readManifest } from '../utils';
@@ -18,9 +18,18 @@ export async function validatePack(root: string): Promise<PackValidation & { dep
   const skippedChecks: SkippedPackCheck[] = [];
   let packId: string | undefined;
   let dependencies: DependencyInspection[] = [];
+  let manifestValid = manifestResult.status === 'valid';
+  let manifest: ReturnType<typeof readManifest> | undefined;
+  if (manifestValid) {
+    manifest = readManifest(root);
+    const settingsDiagnostics = settingsDeclarationDiagnostics(manifest);
+    if (settingsDiagnostics.length) {
+      diagnostics.push(...settingsDiagnostics);
+      manifestValid = false;
+    }
+  }
 
-  if (manifestResult.status === 'valid') {
-    const manifest = readManifest(root);
+  if (manifestValid && manifest) {
     packId = manifest.id;
     const sources = validatePackSources(root, manifest);
     diagnostics.push(...sources.diagnostics);
@@ -59,7 +68,12 @@ export async function validatePack(root: string): Promise<PackValidation & { dep
     } else {
       try {
         // Generates in memory: checks exports, contracts and content without writing generated files.
-        await generatePackFiles(manifest, { packRoot: root, depTypes: resolved.depTypes, depSnapshots: resolved.depSnapshots });
+        await generatePackFiles(manifest, {
+          packRoot: root,
+          depTypes: resolved.depTypes,
+          depSnapshots: resolved.depSnapshots,
+          validateSettings: compileSettingsDefinition,
+        });
       } catch (err) {
         diagnostics.push({ code: 'codegen.failed', severity: 'error', packId, path: [], message: errorMessage(err) });
         skippedChecks.push({ check: 'remaining-codegen', reason: 'Code generation stopped at its first error.' });

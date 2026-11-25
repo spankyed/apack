@@ -1,5 +1,5 @@
 import type { DeclarationData } from './catalog-view.ts';
-import type { StepEntry } from '../build/manifest.ts';
+import type { StepEntry } from './declaration-types.ts';
 
 type BackendDeclaration = DeclarationData<Pick<StepEntry, 'build' | 'trigger'>>;
 

@@ -13,8 +13,20 @@ export const ClaudeNativeMcpTaskInfoSchema = z.object({
   startTime: z.number().finite().nonnegative(),
   endTime: z.number().finite().nonnegative().optional(),
   protocol: z.string().max(64).optional(),
-})
-export type ClaudeNativeMcpTaskInfo = z.infer<typeof ClaudeNativeMcpTaskInfoSchema>
+}) satisfies z.ZodType<ClaudeNativeMcpTaskInfo>
+export type ClaudeNativeMcpTaskInfo = {
+  truncated: boolean
+  status: string
+  startTime: number
+  serverName?: string
+  toolName?: string
+  serverTaskId?: string
+  statusMessage?: string
+  parked?: true
+  pollIntervalMs?: number
+  endTime?: number
+  protocol?: string
+}
 
 export function claudeMcpTaskStatusLabel(info: ClaudeNativeMcpTaskInfo | undefined, status: string): string {
   if (status === 'killed') return 'Stopped'

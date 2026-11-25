@@ -1,7 +1,17 @@
 import { z } from 'zod'
 
 /** Native observations describe a completed request, never a promise about the next bill. */
-export const ClaudeRateLimitInfoSchema = z.object({
+export interface ClaudeRateLimitInfo {
+  [key: string]: unknown
+  status?: string | null
+  rateLimitType?: string | null
+  resetsAt?: number | null
+  isUsingOverage?: boolean | null
+  overageStatus?: string | null
+  overageDisabledReason?: string | null
+}
+
+export const ClaudeRateLimitInfoSchema: z.ZodType<ClaudeRateLimitInfo> = z.object({
   status: z.string().max(128).nullish(),
   rateLimitType: z.string().max(128).nullish(),
   resetsAt: z.number().finite().nonnegative().max(8640000000000).nullish(),
@@ -9,7 +19,6 @@ export const ClaudeRateLimitInfoSchema = z.object({
   overageStatus: z.string().max(128).nullish(),
   overageDisabledReason: z.string().max(256).nullish(),
 }).passthrough()
-export type ClaudeRateLimitInfo = z.infer<typeof ClaudeRateLimitInfoSchema>
 export interface ClaudeBillingObservation {
   sessionId: string
   observedAt: number

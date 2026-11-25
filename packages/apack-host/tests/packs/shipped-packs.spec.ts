@@ -1,5 +1,5 @@
 import { sealBuild } from './runtime/build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 // The packs the app ships are installed packs: the boot installs them into the data dir, so there is one
 // kind of pack on disk and one load path to it. What this pins is when the boot writes and when it does not
 // — unchanged app-managed installs stay untouched, and user-owned copies or removals survive refresh.
@@ -15,7 +15,7 @@ import { loadAppPacks } from '../../src/packs/runtime/loader.ts';
 import { reloadPackById } from '../../src/packs/runtime/reload.ts';
 import { readAppPackSources } from '../../src/packs/app-sources.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 
 let tmp: string;
 let shipped: string;

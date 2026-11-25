@@ -469,8 +469,8 @@ npm run api:update               # Regenerate etc/<entry>.api.md and .component.
 npm run facade:check             # Chain: the verified build against etc/pack-types.api.md
 npm run facade:check -w @app/default-setup  # The same, derived from source
 npm run facade:update            # Derive from source and update the report
-npm run schema:update            # -w @apackdev/sdk: regenerate apack.schema.json
-npm run schema:check             # -w @apackdev/sdk: fails if apack.schema.json is stale
+npm run schema:update            # -w @apackdev/pack-format: regenerate apack.schema.json
+npm run schema:check             # -w @apackdev/pack-format: fails if apack.schema.json is stale
 npm run content-parity:check     # -w @app/default-setup: written entities against tests/content/__golden__
 npm run content-parity:update    # -w @app/default-setup: re-record them, deliberately
 
@@ -587,10 +587,12 @@ Layers, each importing only the ones above it (`check:specifiers`, `findUpwardIm
 | `packages/server` | transport (`node:http`, `ws`, the tRPC routers, the log stream), process boot and composition (`runtime/index.ts`); `src/` is one folder per job — `boot/`, `runtime/`, `transport/`, `adapters/` — which `packages/renderer/src` mirrors with `views/` added |
 | `packages/renderer` | the frontend composition: binds the frontend port, and composes the host's shell with the window's I/O (the API client, the pack loader, storage, the toast and error page); `src/` is the API's four job folders plus `views/` |
 
-**Those five are the layers worth reading; `findUpwardImports` enforces twelve.** The rest are tooling and
-shells — `@apackdev/ui` (which may reach `@apackdev/sdk` and nothing else), `@apackdev/testing`, `@apackdev/cli`,
-`@app/main`, `@app/preload` (the narrowest: a sandboxed bridge may not reach the app runtime),
-`@app/internal-repo-checks` and `@app/internal-publish-checks` — and what each may import is in `LAYERS`
+**Those five are the layers worth reading; `findUpwardImports` enforces fourteen.** The rest are format,
+build, tooling, and shells — `@apackdev/pack-format` (pure JS / Workers-safe manifest & snapshot schemas),
+`@apackdev/pack-build` (Node-only codegen and content compilers), `@apackdev/ui` (which may reach
+`@apackdev/sdk` and nothing else), `@apackdev/testing`, `@apackdev/cli`, `@app/main`, `@app/preload` (the
+narrowest: a sandboxed bridge may not reach the app runtime), `@app/internal-repo-checks` and
+`@app/internal-publish-checks` — and what each may import is in `LAYERS`
 (`scripts/check-import-specifiers.ts`). A hand-written list says nothing about the workspaces it omits, so
 the rule derives its own population instead: a workspace holding code has a layer or is a pack, whose imports
 the pack rules govern more narrowly. Deriving it rather than listing it is what surfaces a workspace nobody

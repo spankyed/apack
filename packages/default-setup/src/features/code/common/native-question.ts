@@ -10,15 +10,41 @@ export const ClaudeQuestionCardSchema = z.object({
     multiSelect: z.boolean().default(false), min: z.number().optional(), max: z.number().optional(),
     step: z.number().positive().optional(), defaultValue: z.number().optional(), unit: z.string().optional(),
   }).passthrough()).min(1).max(4),
-}).passthrough()
-export type ClaudeQuestionCard = z.infer<typeof ClaudeQuestionCardSchema>
+}).passthrough() satisfies z.ZodType<ClaudeQuestionCard>
+export type ClaudeQuestionCard = {
+  [x: string]: unknown
+  questions: {
+    [x: string]: unknown
+    question: string
+    header: string
+    options: {
+      [x: string]: unknown
+      label: string
+      description?: string
+      preview?: string
+    }[]
+    multiSelect: boolean
+    kind?: 'number' | 'text' | 'choice'
+    description?: string
+    placeholder?: string
+    min?: number
+    max?: number
+    step?: number
+    defaultValue?: number
+    unit?: string
+  }[]
+  title?: string
+}
 export const ClaudeQuestionAnswerSchema = z.object({
   answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])).optional(),
   annotations: z.record(z.string(), z.object({preview: z.string().optional(), notes: z.string().optional()}).strict()).optional(),
   response: z.string().optional(), followUp: z.boolean().optional(),
 }).strict()
-export const ClaudeQuestionPartialAnswerSchema = ClaudeQuestionAnswerSchema.pick({ answers: true, annotations: true })
-export type ClaudeQuestionPartialAnswer = z.infer<typeof ClaudeQuestionPartialAnswerSchema>
+export const ClaudeQuestionPartialAnswerSchema = ClaudeQuestionAnswerSchema.pick({ answers: true, annotations: true }) satisfies z.ZodType<ClaudeQuestionPartialAnswer>
+export type ClaudeQuestionPartialAnswer = {
+  answers?: Record<string, string | string[]>
+  annotations?: Record<string, { preview?: string | undefined; notes?: string | undefined; }>
+}
 export const CLAUDE_QUESTION_IMAGE_COUNT = 4
 export const CLAUDE_QUESTION_IMAGE_BYTES = 10 * 1024 * 1024
 export const CLAUDE_QUESTION_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
@@ -27,8 +53,11 @@ export const ClaudeQuestionImagesSchema = z.array(z.object({
   data: z.string().min(4).max(Math.ceil(CLAUDE_QUESTION_IMAGE_BYTES / 3) * 4)
     .regex(/^[A-Za-z0-9+/]+={0,2}$/).refine(data => data.length % 4 === 0),
 }).strict()).min(1).max(CLAUDE_QUESTION_IMAGE_COUNT).refine(images => images.reduce((bytes, { data }) =>
-  bytes + data.length / 4 * 3 - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0), 0) <= CLAUDE_QUESTION_IMAGE_BYTES)
-export type ClaudeQuestionImage = z.infer<typeof ClaudeQuestionImagesSchema>[number]
+  bytes + data.length / 4 * 3 - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0), 0) <= CLAUDE_QUESTION_IMAGE_BYTES) satisfies z.ZodType<ClaudeQuestionImage[]>
+export type ClaudeQuestionImage = {
+  mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+  data: string
+}
 
 export interface ClaudeQuestionAnswer {
   answers?: Record<string, string | string[]>
@@ -51,5 +80,17 @@ export const ClaudeQuestionPresentationSchema = z.object({
   notice: z.string().optional(),
   previewFormat: z.string().nullable(), extendedQuestions: z.boolean(), optionalDescriptions: z.boolean(),
   previews: z.array(z.object({ question: z.string(), option: z.string(), kind: z.enum(['full', 'withheld', 'empty']), markdown: z.string().optional(), html: z.string().optional() })).max(16),
-})
-export type ClaudeQuestionPresentation = z.infer<typeof ClaudeQuestionPresentationSchema>
+}) satisfies z.ZodType<ClaudeQuestionPresentation>
+export type ClaudeQuestionPresentation = {
+  previewFormat: string | null
+  extendedQuestions: boolean
+  optionalDescriptions: boolean
+  previews: {
+    question: string
+    option: string
+    kind: 'empty' | 'full' | 'withheld'
+    markdown?: string
+    html?: string
+  }[]
+  notice?: string
+}

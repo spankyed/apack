@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../packages/apack-sdk/apack.schema.json",
+  "$schema": "../../../packages/apack-pack-format/apack.schema.json",
   "id": "bundled-ui-fixture",
   "name": "Bundled UI Fixture",
   "version": "0.1.0",

@@ -1008,7 +1008,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // both bundles. A pack source edit reaches this step through `build:default-setup`. `check:tiers` and the
   // app build's own header keep an app bundle from tracing into a pack's `src`
   { name: 'build:runtime', budget: 'suite', outputs: APP_OUTPUTS,
-    inputs: [...ROOT, ...TSCONFIG_PRESETS, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host'].flatMap(workspace),
+    inputs: [...ROOT, ...TSCONFIG_PRESETS, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host', 'apack-pack-format'].flatMap(workspace),
       'packages/server/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   // App checks load the shipped pack separately at runtime. Its bytes can change while every

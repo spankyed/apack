@@ -1,15 +1,16 @@
-import { _compileSettingsDefinition, type SettingsCatalog, type SettingsDefinition } from '@apackdev/sdk/framework';
+import type { SettingsCatalog, SettingsDefinition } from '@apackdev/sdk/framework';
 import { deepMerge, hasOwn, isPlainObject } from '@apackdev/sdk/utils/pure';
 import { settingsTargetPath, type AppSettings, type SettingsDocument, type SettingsTarget, type SettingsProblem } from '@apackdev/sdk/types';
 import type { FeatureRef } from '@apackdev/sdk/ids';
 import { getIn, isEqual, settingsProblems, SettingsRefusedError } from './document.ts';
+import { compileSettingsDefinition } from './compile.ts';
 
 /** Compile one accepted revision; live writes and backup preflight validate through the same rules. */
 export function compileSettingsCatalog(catalog: SettingsCatalog) {
   const validators = new Map<string, { path: readonly string[]; issues(value: unknown): SettingsProblem[] }>();
   const compile = (target: SettingsTarget, definition: SettingsDefinition) => {
     const path = settingsTargetPath(target);
-    const validator = _compileSettingsDefinition(definition);
+    const validator = compileSettingsDefinition(definition);
     validators.set(JSON.stringify(path), { path, issues: value => validator.validate(value)
       .map(issue => ({ target, path: issue.path.map(String), message: issue.message })) });
     return structuredClone(definition.defaults);

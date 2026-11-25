@@ -180,7 +180,7 @@ export function packExternalsPlugin(packDir: string): VitePlugin {
     const runtimeIndex = await resolveSdkFile(ctx, '@apackdev/sdk/runtime');
     if (!runtimeIndex) return [];
     // Workspace source, or the published package's compiled modules
-    return ['host-runtime', 'fe-host'].flatMap((name) => {
+    return ['host-runtime', 'backend-port', 'fe-host'].flatMap((name) => {
       const file = ['ts', 'js'].map(ext => path.join(path.dirname(runtimeIndex), `${name}.${ext}`)).find(f => fs.existsSync(f));
       return file ? [fs.realpathSync(file)] : [];
     });
@@ -606,12 +606,15 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
       configFile: false,
       plugins: [
         {
-          // The app's private host package isn't provided to packs; they import @apackdev/sdk
+          // Private apack host and tooling packages aren't provided to packs; they import @apackdev/sdk
           name: 'reject-host-imports',
           enforce: 'pre',
           resolveId(id: string, importer?: string) {
-            if (/^@apackdev\/host(?:\/|$)/.test(id)) {
-              this.error(`${id} is the app's private host package; packs import @apackdev/sdk instead${importer ? ` (imported from ${importer})` : ''}`);
+            if (/^@apackdev\/(?:host|pack-format|pack-build)(?:\/|$)/.test(id)) {
+              const reason = id.startsWith('@apackdev/host')
+                ? `${id} is the app's private host package`
+                : `${id} is a private apack tooling package`;
+              this.error(`${reason}; packs import @apackdev/sdk instead${importer ? ` (imported from ${importer})` : ''}`);
             }
             return null;
           },

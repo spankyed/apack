@@ -7,5 +7,8 @@ export const ClaudeMcpElicitationAnswerSchema = z.object({
 }).strict().superRefine((answer, context) => {
   if (answer.action !== 'accept' && answer.content !== undefined)
     context.addIssue({ code: 'custom', path: ['content'], message: 'Only accepted MCP elicitation can contain content' })
-})
-export type ClaudeMcpElicitationAnswer = z.infer<typeof ClaudeMcpElicitationAnswerSchema>
+}) satisfies z.ZodType<ClaudeMcpElicitationAnswer>
+export type ClaudeMcpElicitationAnswer = {
+  action: 'cancel' | 'accept' | 'decline'
+  content?: Record<string, string | number | boolean | string[]>
+}

@@ -1,6 +1,6 @@
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { expect, it } from 'vitest';
-import { ManifestSchema } from '@apackdev/sdk/build';
+import { ManifestSchema } from '@apackdev/pack-format';
 import { backendBindingProblem } from '../../src/packs/declaration-binding.ts';
 
 const manifest = ManifestSchema.parse({

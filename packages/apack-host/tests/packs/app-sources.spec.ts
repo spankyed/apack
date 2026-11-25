@@ -3,7 +3,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import { readAppPackSources } from '../../src/packs/app-sources.ts';
 import { createContributionCatalog } from '../../src/packs/catalog.ts';
 import { createPackRegistry } from '../../src/packs/registry.ts';

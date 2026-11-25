@@ -1,9 +1,9 @@
-import { ClaudeGenericToolPermissionApprovalSchema, ClaudeToolPermissionApprovalSchema } from '../../../common/native-tool-permission.ts'
-import { ClaudeWorkflowApprovalSchema } from '../../../common/native-workflow-approval.ts'
+import { ClaudeGenericToolPermissionApprovalSchema, ClaudeToolPermissionApprovalSchema, type ClaudeToolPermissionApproval, type ClaudeGenericToolPermissionApproval } from '../../../common/native-tool-permission.ts'
+import { ClaudeWorkflowApprovalSchema, type ClaudeWorkflowApproval } from '../../../common/native-workflow-approval.ts'
 import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
-import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
-import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema } from '../../../common/native-file-approval.ts'
-import { ClaudeQuestionPresentationSchema, type ClaudeQuestionImage, type ClaudeQuestionPartialAnswer } from '../../../common/native-question.ts'
+import { ClaudePlanPresentationSchema, type ClaudePlanPresentation } from '../../../common/native-plan.ts'
+import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema, type ClaudeFileApprovalReview, type ClaudeFileApprovalPresentation } from '../../../common/native-file-approval.ts'
+import { ClaudeQuestionPresentationSchema, type ClaudeQuestionImage, type ClaudeQuestionPartialAnswer, type ClaudeQuestionPresentation } from '../../../common/native-question.ts'
 import { z } from 'zod'
 
 /**
@@ -33,9 +33,21 @@ export const ClaudeNativeFileDialogSchema = z.object({
   title: z.string().max(1000), question: z.string().max(4000),
   reason: z.string().max(16000).optional(),
   input: z.record(z.string(), z.unknown()),
-})
+}) satisfies z.ZodType<ClaudeNativeFileDialog>
 export const ClaudeNativeFileDialogsSchema = z.array(ClaudeNativeFileDialogSchema).max(1)
-export type ClaudeNativeFileDialog = z.infer<typeof ClaudeNativeFileDialogSchema>
+export type ClaudeNativeFileDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'Read' | 'Write' | 'Edit' | 'NotebookEdit'
+  title: string
+  question: string
+  input: Record<string, unknown>
+  review?: ClaudeFileApprovalReview
+  approval?: ClaudeFileApprovalPresentation
+  reason?: string
+}
 export interface ClaudeNativeFileDialogResponse {
   choice?: string
   choiceToken?: string
@@ -52,9 +64,17 @@ export const ClaudeNativeQuestionDialogSchema = z.object({
   requestId: z.string().min(1).max(256), toolName: z.literal('AskUserQuestion'),
   shownInput: z.record(z.string(), z.unknown()),
   presentation: ClaudeQuestionPresentationSchema,
-})
+}) satisfies z.ZodType<ClaudeNativeQuestionDialog>
 export const ClaudeNativeQuestionDialogsSchema = z.array(ClaudeNativeQuestionDialogSchema).max(1)
-export type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>
+export type ClaudeNativeQuestionDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'AskUserQuestion'
+  shownInput: Record<string, unknown>
+  presentation: ClaudeQuestionPresentation
+}
 export interface ClaudeNativeQuestionDialogResponse {
   id: string
   revision: string
@@ -76,8 +96,21 @@ export interface ClaudeNativeQuestionRenderRequest {
 export const ClaudeNativeQuestionRenderSchema = z.object({
   tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(),
   question: z.object({ token: z.string().uuid(), dialogId: z.string(), revision: z.string().uuid(), shownInput: z.record(z.string(), z.unknown()), presentation: ClaudeQuestionPresentationSchema }),
-}).passthrough().refine(value => value.tree !== undefined, 'Native question drawing must contain a tree')
-export type ClaudeNativeQuestionRender = z.infer<typeof ClaudeNativeQuestionRenderSchema>
+}).passthrough().refine(value => value.tree !== undefined, 'Native question drawing must contain a tree') satisfies z.ZodType<ClaudeNativeQuestionRender>
+export type ClaudeNativeQuestionRender = {
+  [x: string]: unknown
+  tree: unknown
+  props: Record<string, unknown>
+  rewritten: boolean
+  hooked: boolean
+  question: {
+    token: string
+    dialogId: string
+    revision: string
+    shownInput: Record<string, unknown>
+    presentation: ClaudeQuestionPresentation
+  }
+}
 
 export interface ClaudeNativeQuestionHoldRequest {
   id: string
@@ -97,9 +130,27 @@ export const ClaudeNativeBashDialogSchema = z.object({
   choiceToken: ClaudeBashApprovalPresentationSchema.shape.token.optional(),
   description: z.string().max(4000).optional(), reason: z.string().max(16000).optional(),
   input: z.record(z.string(), z.unknown()),
-})
+}) satisfies z.ZodType<ClaudeNativeBashDialog>
 export const ClaudeNativeBashDialogsSchema = z.array(ClaudeNativeBashDialogSchema).max(1)
-export type ClaudeNativeBashDialog = z.infer<typeof ClaudeNativeBashDialogSchema>
+export type ClaudeNativeBashDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'Bash'
+  command: string
+  cwd: string
+  input: Record<string, unknown>
+  choices?: {
+    value: string
+    token: string
+    label: string
+    prefix?: string
+  }[]
+  choiceToken?: string
+  description?: string
+  reason?: string
+}
 export interface ClaudeNativeBashDialogResponse {
   id: string
   revision: string
@@ -116,9 +167,18 @@ export const ClaudeNativePlanDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
   requestId: z.string().min(1).max(256), toolName: z.enum(['EnterPlanMode', 'ExitPlanMode']),
   presentation: ClaudePlanPresentationSchema, reason: z.string().max(16000).optional(), input: z.record(z.string(), z.unknown()),
-})
+}) satisfies z.ZodType<ClaudeNativePlanDialog>
 export const ClaudeNativePlanDialogsSchema = z.array(ClaudeNativePlanDialogSchema).max(1)
-export type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>
+export type ClaudeNativePlanDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'EnterPlanMode' | 'ExitPlanMode'
+  presentation: ClaudePlanPresentation
+  input: Record<string, unknown>
+  reason?: string
+}
 export interface ClaudeNativePlanDialogResponse {
   id: string; revision: string; sessionId: string; choice: string; feedback?: string; plan?: string
 }
@@ -127,9 +187,18 @@ export const ClaudeNativeWorkflowDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
   requestId: z.string().min(1).max(256), toolName: z.literal('Workflow'),
   presentation: ClaudeWorkflowApprovalSchema, reason: z.string().max(16000).optional(), input: z.record(z.string(), z.unknown()),
-})
+}) satisfies z.ZodType<ClaudeNativeWorkflowDialog>
 export const ClaudeNativeWorkflowDialogsSchema = z.array(ClaudeNativeWorkflowDialogSchema).max(1)
-export type ClaudeNativeWorkflowDialog = z.infer<typeof ClaudeNativeWorkflowDialogSchema>
+export type ClaudeNativeWorkflowDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'Workflow'
+  presentation: ClaudeWorkflowApproval
+  input: Record<string, unknown>
+  reason?: string
+}
 export interface ClaudeNativeWorkflowDialogResponse {
   id: string; revision: string; sessionId: string; decision: 'allow' | 'deny'; choice?: string; choiceToken: string; feedback?: string
 }
@@ -140,9 +209,18 @@ export const ClaudeNativeToolPermissionDialogSchema = z.object({
   requestId: z.string().min(1).max(256), toolName: z.enum(['WebFetch', 'Skill']),
   presentation: ClaudeToolPermissionApprovalSchema, reason: z.string().max(16000).optional(),
   input: z.record(z.string(), z.unknown()),
-})
+}) satisfies z.ZodType<ClaudeNativeToolPermissionDialog>
 export const ClaudeNativeToolPermissionDialogsSchema = z.array(ClaudeNativeToolPermissionDialogSchema).max(1)
-export type ClaudeNativeToolPermissionDialog = z.infer<typeof ClaudeNativeToolPermissionDialogSchema>
+export type ClaudeNativeToolPermissionDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'WebFetch' | 'Skill'
+  presentation: ClaudeToolPermissionApproval
+  input: Record<string, unknown>
+  reason?: string
+}
 export interface ClaudeNativeToolPermissionDialogResponse {
   id: string; revision: string; sessionId: string; toolName: 'WebFetch' | 'Skill';
   choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
@@ -154,9 +232,18 @@ export const ClaudeNativeGenericToolPermissionDialogSchema = z.object({
   requestId: z.string().min(1).max(256), toolName: z.string().min(1).max(256),
   presentation: ClaudeGenericToolPermissionApprovalSchema, reason: z.string().max(16000).optional(),
   input: z.record(z.string(), z.unknown()),
-})
+}) satisfies z.ZodType<ClaudeNativeGenericToolPermissionDialog>
 export const ClaudeNativeGenericToolPermissionDialogsSchema = z.array(ClaudeNativeGenericToolPermissionDialogSchema).max(1)
-export type ClaudeNativeGenericToolPermissionDialog = z.infer<typeof ClaudeNativeGenericToolPermissionDialogSchema>
+export type ClaudeNativeGenericToolPermissionDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: string
+  presentation: ClaudeGenericToolPermissionApproval
+  input: Record<string, unknown>
+  reason?: string
+}
 export interface ClaudeNativeGenericToolPermissionDialogResponse {
   id: string; revision: string; sessionId: string; toolName: string;
   choice: string; choiceToken: string; decision: 'allow' | 'deny' | 'cancel'; feedback?: string; prefix?: string

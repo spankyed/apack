@@ -1,7 +1,7 @@
 import { createLogger } from '@apackdev/sdk/logger'
 import { z } from 'zod'
 import type { ClaudeTerminalUiTransport } from './terminal-ui.ts'
-import { ClaudeNativeQuestionDialogSchema, ClaudeNativeBashDialogSchema, ClaudeNativeFileDialogSchema, ClaudeNativeWorkflowDialogSchema, ClaudeNativePlanDialogSchema, ClaudeNativeToolPermissionDialogSchema, ClaudeNativeGenericToolPermissionDialogSchema } from './terminal-dialogs.ts'
+import { ClaudeNativeQuestionDialogSchema, ClaudeNativeBashDialogSchema, ClaudeNativeFileDialogSchema, ClaudeNativeWorkflowDialogSchema, ClaudeNativePlanDialogSchema, ClaudeNativeToolPermissionDialogSchema, ClaudeNativeGenericToolPermissionDialogSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeBashDialog, type ClaudeNativeFileDialog, type ClaudeNativeWorkflowDialog, type ClaudeNativePlanDialog, type ClaudeNativeToolPermissionDialog, type ClaudeNativeGenericToolPermissionDialog } from './terminal-dialogs.ts'
 
 const logger = createLogger('claude-background-controls')
 
@@ -13,8 +13,15 @@ export const ClaudeBackgroundControlSchema = z.discriminatedUnion('kind', [
   z.object({kind: z.literal('plan'), dialog: ClaudeNativePlanDialogSchema}),
   z.object({kind: z.literal('tool'), dialog: ClaudeNativeToolPermissionDialogSchema}),
   z.object({kind: z.literal('generic'), dialog: ClaudeNativeGenericToolPermissionDialogSchema}),
-])
-export type ClaudeBackgroundControl = z.infer<typeof ClaudeBackgroundControlSchema>
+]) satisfies z.ZodType<ClaudeBackgroundControl>
+export type ClaudeBackgroundControl =
+  | { kind: 'question'; dialog: ClaudeNativeQuestionDialog }
+  | { kind: 'bash'; dialog: ClaudeNativeBashDialog }
+  | { kind: 'file'; dialog: ClaudeNativeFileDialog }
+  | { kind: 'workflow'; dialog: ClaudeNativeWorkflowDialog }
+  | { kind: 'plan'; dialog: ClaudeNativePlanDialog }
+  | { kind: 'tool'; dialog: ClaudeNativeToolPermissionDialog }
+  | { kind: 'generic'; dialog: ClaudeNativeGenericToolPermissionDialog }
 export type ClaudeBackgroundApproval = Exclude<ClaudeBackgroundControl, {kind: 'question'}>
 export interface ClaudeBackgroundControls {
   readonly value: ClaudeBackgroundControl | undefined

@@ -301,8 +301,13 @@ describe('findUpwardImports', () => {
   // no tree behind it would only make the manifest read throw; the real ones are covered by `holds for the
   // repo` and the two coverage cases at the end of this block.
   const modelled = ['apack-sdk', 'apack-host', 'server', 'renderer'];
+  const modelledAllowed = new Set(['@apackdev/sdk', '@apackdev/host', '@apackdev/ui']);
   const layers = LAYERS.filter((l) => modelled.includes(path.basename(l.dir)))
-    .map((l) => ({ ...l, dir: `layers/${path.basename(l.dir).replace(/^apack-/, '')}` }));
+    .map((l) => ({
+      ...l,
+      allowed: l.allowed.filter((name) => modelledAllowed.has(name)),
+      dir: `layers/${path.basename(l.dir).replace(/^apack-/, '')}`,
+    }));
   const allowed = () => {
     layer('layers/sdk', { dependencies: { '@elmdb/ears': '^0.1.0', yaml: '*' } }, {
       'src/index.ts': "import { untypedWrite } from '@apackdev/sdk/ears';\nexport type { Q } from '@elmdb/ears/database';\nexport * from '@apackdev/sdk/events';\n",

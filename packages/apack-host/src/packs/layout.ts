@@ -21,13 +21,17 @@ import * as tar from 'tar';
 import { isDeepStrictEqual } from 'node:util';
 import { DECLARED_COMMANDS_KEY } from '@apackdev/sdk/framework';
 import { replaceDir } from '../replace-dir.ts';
-import { parseSnapshot, parseContentIndex, contentFile, CONTENT_INDEX_FILE, _snapshotFormatMismatch, PACK_SNAPSHOT_FORMAT, type ContentIndex, type PackManifest, type PackSnapshot, type SnapshotFormatMismatch } from '@apackdev/sdk/build';
+import {
+  PACK_LAYOUT, PACK_LAYOUT_VERSION, parseSnapshot, parseContentIndex, contentFile, CONTENT_INDEX_FILE,
+  _snapshotFormatMismatch, PACK_SNAPSHOT_FORMAT,
+  type ContentIndex, type PackIntegrity, type PackManifest, type PackSnapshot, type SnapshotFormatMismatch,
+} from '@apackdev/pack-format';
 import type { PackRegistry } from './registry.ts';
-import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
 import type { LoadedPackEntry } from './layout-types.ts';
 import { readPackIntegrity, packBuildRevision, verifyPack, readVerifiedPackFiles, sha256File, packFileHashes, listPackFiles } from './assets.ts';
+import { settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 
-export { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
+export { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from '@apackdev/pack-format';
 export type { LoadedPackEntry } from './layout-types.ts';
 export { readPackIntegrity, packBuildRevision, readPackAsset, verifyPack, sha256File, packFileHashes } from './assets.ts';
 
@@ -264,6 +268,10 @@ function checkedSnapshot(raw: unknown, manifest: unknown): PackSnapshot {
   if (mismatch) throw new Error(snapshotFormatProblem(mismatch, PACK_SNAPSHOT_FORMAT));
   const result = parseSnapshot(raw);
   if (!result.snapshot) throw new Error(result.diagnostics.map(issue => issue.message).join('; '));
+  const settingsDiagnostics = settingsDeclarationDiagnostics(result.snapshot.manifest, {
+    codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+  });
+  if (settingsDiagnostics.length) throw new Error(settingsDiagnostics.map(issue => issue.message).join('; '));
   if (!isDeepStrictEqual(manifest, result.snapshot.manifest)) {
     throw new Error('its manifest does not match its built declarations; rebuild and install the complete pack');
   }

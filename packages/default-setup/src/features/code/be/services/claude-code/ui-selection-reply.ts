@@ -3,8 +3,11 @@ import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 
-const selection = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH).optional(), instance_id: z.string().min(1).max(256).optional() }).strict()
-export type ClaudeUiSelection = z.infer<typeof selection>
+const selection = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH).optional(), instance_id: z.string().min(1).max(256).optional() }).strict() satisfies z.ZodType<ClaudeUiSelection>
+export type ClaudeUiSelection = {
+  text?: string
+  instance_id?: string
+}
 
 /** Selection text bypasses the logged event bus. A mounted view receives only this one-use address. */
 export async function createClaudeSelectionReply(signal: AbortSignal, expiresAt: number, current: () => boolean): Promise<{

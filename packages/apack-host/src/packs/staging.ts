@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { readInstalledPacks, writeInstalledPacks } from './installed.ts';
 import { recordHostCompatibility } from './host-info.ts';
 import { recordIsStale } from '../process-liveness.ts';

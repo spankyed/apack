@@ -19,7 +19,7 @@ function tool(source: boolean) {
   write('bin/apack.mjs', 'import "../dist/cli.js";');
   const entry = source ? 'src/build/tool-identity.ts' : 'dist/shared.js';
   write(entry, 'export const identity = 1;');
-  for (const name of source ? ['host', 'sdk'] : ['sdk']) {
+  for (const name of source ? ['host', 'pack-format', 'pack-build', 'sdk'] : ['sdk']) {
     write(`node_modules/@apackdev/${name}/package.json`, JSON.stringify({ name: `@apackdev/${name}`, version: '1.0.0',
       ...(source && name === 'sdk' && { dependencies: { '@elmdb/ears': '0.1.0' } }),
       exports: { '.': './entry.js', './package.json': './package.json',
@@ -39,7 +39,7 @@ function tool(source: boolean) {
   return { root, write, hash: () => buildToolHash(pathToFileURL(path.join(root, entry)).href) };
 }
 
-it.each(['src/commands/generate.ts', 'src/utils.ts', ...['host', 'sdk'].map(name => `node_modules/@apackdev/${name}/src/helper.ts`),
+it.each(['src/commands/generate.ts', 'src/utils.ts', ...['host', 'pack-format', 'pack-build', 'sdk'].map(name => `node_modules/@apackdev/${name}/src/helper.ts`),
   'node_modules/@elmdb/ears/dist/index.js'])(
   'includes workspace helper %s without relying on a version change', file => {
     const scope = tool(true);

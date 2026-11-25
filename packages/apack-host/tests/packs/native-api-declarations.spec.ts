@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { ManifestSchema } from '@apackdev/sdk/build';
+import { ManifestSchema } from '@apackdev/pack-format';
 import type { NativePackDeclaration, PackRegistration } from '@apackdev/sdk/framework';
 import { startTestRuntime } from '@apackdev/sdk/testing';
 import { createPackRegistry } from '../../src/packs/registry.ts';

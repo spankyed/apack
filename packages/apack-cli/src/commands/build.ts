@@ -3,22 +3,8 @@ import { writePackBuildInputs, PACK_BUILD_INPUTS_FILE } from '@apackdev/host/bui
 import { _packEntityTypes, _packRelationTypes, _packRoles } from '@apackdev/sdk/framework';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  compilePack,
-  buildPackConfigFromManifest,
-  PACK_TYPES_FACADE,
-  GENERATED_ENTITY_DESTINATIONS_FILE,
-  GENERATED_EVENT_CONTRACTS_FILE,
-  PACK_SNAPSHOT_FORMAT,
-  entitiesWithoutShapes,
-  CONTENT_COMPILERS_FILE,
-  WORKERS_DIR,
-  _buildProvenance,
-  parseSnapshot,
-  compileHelp,
-  _declarationRevision,
-  type CompilePackOptions, type PackConfig, type PackSnapshot, type PackTypeManifest, type ContentDependency,
-} from '@apackdev/sdk/build';
+import { compilePack, buildPackConfigFromManifest, PACK_TYPES_FACADE, GENERATED_ENTITY_DESTINATIONS_FILE, GENERATED_EVENT_CONTRACTS_FILE, entitiesWithoutShapes, WORKERS_DIR, compileHelp, type CompilePackOptions, type PackConfig, type ContentDependency } from '@apackdev/pack-build';
+import { PACK_SNAPSHOT_FORMAT, CONTENT_COMPILERS_FILE, _buildProvenance, parseSnapshot, _declarationRevision, type PackSnapshot, type PackTypeManifest } from '@apackdev/pack-format';
 import { findFEEntry, bundlePackFE } from '../build/fe-bundler';
 import { apackScope, dslInputsHash, typesInputsHash, readPhaseCache, reuseProblem, takeForward, writeStamps, type PhaseStamp } from '../build/phase-cache';
 import { refusePackRuleViolations } from '../build/pack-rules.ts';
@@ -35,7 +21,7 @@ import { bundlePackTypes } from '../build/types-bundler';
 import { facadeProblems } from '../build/facade-gate';
 import { compareFacadeReport, facadeReportFile, facadeReportText } from '../build/facade-report';
 import { bundlePackFlowHelpers } from '../build/flow-helpers-bundler';
-import { PACK_LAYOUT, sealPackBuild, readPackBuild } from '@apackdev/host/packs';
+import { PACK_LAYOUT, sealPackBuild, readPackBuild, settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { buildStagingDir, publishPackBuild, type PackBuildCandidate } from '../build/build-publication.ts';
 import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
@@ -278,6 +264,11 @@ async function buildIntoStaging(args: string[], root: string) {
     failures.push(...generatedDeclarationProblems(root, snapshot.declarationRevision, !args.includes('--skip-fe')));
     const validation = parseSnapshot(snapshot);
     failures.push(...validation.diagnostics.map(issue => issue.message));
+    if (validation.snapshot) {
+      failures.push(...settingsDeclarationDiagnostics(validation.snapshot.manifest, {
+        codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+      }).map(issue => issue.message));
+    }
     if (failures.length > 0) {
       throw new Error(`Build failed, so no snapshot was written:\n${failures.map((f) => `  - ${f}`).join('\n')}`);
     }

@@ -12,7 +12,7 @@
  */
 import { documentRepository } from '../repositories/document-repository.ts';
 import type { ContentSection } from '../types/sdk-entities.ts';
-import { boundHost, _isHostBound } from '../runtime/host-runtime.ts';
+import { _boundBackendHost, _isBackendHostBound } from '../runtime/backend-port.ts';
 import { boundFeHost, _isFeHostBound } from '../runtime/fe-host.ts';
 
 /**
@@ -66,6 +66,6 @@ export function commandsFromDocuments(): PackCommand[] {
  */
 export function getCommands(): PackCommand[] {
   if (_isFeHostBound()) return [...boundFeHost().application.getSnapshot().context.commands];
-  if (_isHostBound()) { boundHost(); return commandsFromDocuments(); }
+  if (_isBackendHostBound()) { _boundBackendHost(); return commandsFromDocuments(); }
   throw new Error('No host is bound to read the commands from: call bindHost(runtime) (backend) or bindFeHost(runtime) (frontend) from @apackdev/sdk/runtime first');
 }

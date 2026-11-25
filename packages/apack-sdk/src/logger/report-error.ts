@@ -7,7 +7,7 @@ import { RepositoryError, RepositoryErrorCode } from '../repositories/repository
 import { isError } from '../utils/is-error.ts';
 import { redactSecrets, redactSecretText } from '../utils/redact.ts';
 import { errorMessage } from '../utils/shared.ts';
-import { boundHost } from '../runtime/host-runtime.ts';
+import { _boundBackendHost } from '../runtime/backend-port.ts';
 import type { RunNodeId } from '../services/run-history.ts';
 import type { StepRuntimeError } from '../steps/types.ts';
 import { createLogger } from './logger.ts';
@@ -171,7 +171,7 @@ function reportStepError(input: ReportSystemErrorInput, step: StepErrorContext):
 
   if (runtimeError.runNodeId) {
     try {
-      boundHost().services.runHistory.update(runtimeError.runNodeId as RunNodeId, { result: {
+      _boundBackendHost().runHistory?.update(runtimeError.runNodeId as RunNodeId, { result: {
         error: {
           message: runtimeError.message,
           source: runtimeError.source,

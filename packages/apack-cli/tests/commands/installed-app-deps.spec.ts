@@ -1,12 +1,12 @@
 import { sealPackBuild } from '@apackdev/host/packs';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPackArchive, installPackFromLocal, stagePack } from '@apackdev/host/packs';
 import { resolveDepFiles } from '../../src/commands/fetch-deps';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_LAYOUT } from '@apackdev/host/packs';
 

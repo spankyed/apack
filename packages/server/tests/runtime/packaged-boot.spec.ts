@@ -1,4 +1,4 @@
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 // The app's boot, over the real packs it ships: each one installed into the data dir and then loaded from
 // there, which is the one path for every pack (`npm run build:default-setup` writes the build it is installed from). A
 // packaged app's api bundle carries no pack's backend, so this is the path in a packaged build and from
@@ -13,7 +13,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeEach, expect, it } from 'vitest';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-packaged-boot-'));

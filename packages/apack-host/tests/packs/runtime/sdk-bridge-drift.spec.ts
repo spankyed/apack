@@ -111,9 +111,8 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // The app's log files: Electron main and the API append to them; a pack logs through createLogger, which
   // reaches the same files as a log event, redacted and capped like everything else the app writes
   ['@apackdev/host/logs', "the app's log files, appended to by main and the API"],
-  // Metadata: tooling reads them, code never requires them.
+  // Metadata: tooling reads it, code never requires it.
   ['@apackdev/sdk/package.json', 'package metadata, not code'],
-  ['@apackdev/sdk/apack.schema.json', 'manifest JSON schema, not code'],
 ]);
 
 const UNBRIDGED_BY_DESIGN = new Map(UNBRIDGED_BY_POLICY);

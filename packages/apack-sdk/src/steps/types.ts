@@ -93,6 +93,7 @@ export interface StepBuildFacet {
 import type { AnyActorRef } from 'xstate';
 import type { EARS } from '../types/entities.ts';
 import type { RunNode, RunNodeId } from '../services/run-history.ts';
+import type { PackServiceAccess } from '../services/pack-service-access.ts';
 
 export type TimestampMs = number;
 /** What a run node ran: a flow, an event it heard, or a step */
@@ -118,7 +119,7 @@ export interface StepRun {
 
 export interface RuntimeServices {
   getFlowActor: (flowRunNodeId: EARS.EntityId) => AnyActorRef | undefined;
-  servicesForAction: import('../services/index.ts').PackServiceAccess['servicesForAction'];
+  servicesForAction: PackServiceAccess['servicesForAction'];
 }
 
 export interface ExecutionContext {

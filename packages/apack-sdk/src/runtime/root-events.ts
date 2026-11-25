@@ -1,4 +1,4 @@
-import { boundHost } from './host-runtime.ts';
+import { _boundBackendHost } from './backend-port.ts';
 import type { LogEvent } from '../logger/index.ts';
 import type { Message } from '../events/index.ts';
 
@@ -37,7 +37,7 @@ export interface RootEvents {
   onOutgoing(callback: (message: Message) => void): () => void;
 }
 
-const bus = () => boundHost().transport.rootEvents;
+const bus = () => _boundBackendHost().transport.rootEvents;
 
 /**
  * The bound app's root event bus. Each call goes to the bound bus's own method (not through a Proxy, which

@@ -1,5 +1,6 @@
-import { _packServiceSelection, type _PackServiceDeclarations, type DeclarationData, type NativePackDeclaration } from '@apackdev/sdk/framework';
-import type { PackManifest } from '@apackdev/sdk/build';
+import { _packServiceSelection } from '@apackdev/pack-format';
+import type { _PackServiceDeclarations, DeclarationData, NativePackDeclaration } from '@apackdev/sdk/framework';
+import type { PackManifest } from '@apackdev/pack-format';
 import type { PackCatalogSnapshot } from './catalog.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 

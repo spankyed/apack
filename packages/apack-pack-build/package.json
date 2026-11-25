@@ -1,0 +1,29 @@
+{
+  "name": "@apackdev/pack-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node-only pack compiler, content compiler, help compiler, and entry codegen",
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@apackdev/pack-format": "*",
+    "@apackdev/sdk": "*",
+    "@elmdb/ears": "0.1.0",
+    "esbuild": "^0.25.0",
+    "json-schema-to-typescript": "^15.0.4",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-to-markdown": "^2.1.2",
+    "typescript": "^5.8.3",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4"
+  }
+}

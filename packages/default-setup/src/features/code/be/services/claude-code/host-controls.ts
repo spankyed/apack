@@ -11,8 +11,23 @@ export const ClaudeModelInfoSchema = z.object({
   supportsAdaptiveThinking: z.boolean().optional(), supportsFastMode: z.boolean().optional(),
   supportsAutoMode: z.boolean().optional(), supportsThinkingOff: z.boolean().optional(),
 }).passthrough()
-export const ClaudeModelCatalogSchema = z.object({ models: z.array(ClaudeModelInfoSchema) }).passthrough()
-export type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>
+export const ClaudeModelCatalogSchema = z.object({ models: z.array(ClaudeModelInfoSchema) }).passthrough() satisfies z.ZodType<ClaudeModelCatalog>
+export type ClaudeModelCatalog = {
+  [x: string]: unknown
+  models: {
+    [x: string]: unknown
+    value: string
+    displayName: string
+    resolvedModel?: string
+    description?: string
+    supportsEffort?: boolean
+    supportedEffortLevels?: string[]
+    supportsAdaptiveThinking?: boolean
+    supportsFastMode?: boolean
+    supportsAutoMode?: boolean
+    supportsThinkingOff?: boolean
+  }[]
+}
 
 /** Metadata returned by the initialize exchange in Claude Code 2.1.299–2.1.301. */
 export const ClaudeInitializationSchema = z.object({
@@ -22,8 +37,35 @@ export const ClaudeInitializationSchema = z.object({
   claude_code_version: z.string().optional(),
   current_permission_mode: z.string().optional(),
   capabilities: z.array(z.string()).optional(),
-}).passthrough()
-export type ClaudeInitialization = z.infer<typeof ClaudeInitializationSchema>
+}).passthrough() satisfies z.ZodType<ClaudeInitialization>
+export type ClaudeInitialization = {
+  [x: string]: unknown
+  commands: {
+    [x: string]: unknown
+    name: string
+    description?: string
+  }[]
+  agents: {
+    [x: string]: unknown
+    name: string
+  }[]
+  models: {
+    [x: string]: unknown
+    value: string
+    displayName: string
+    resolvedModel?: string
+    description?: string
+    supportsEffort?: boolean
+    supportedEffortLevels?: string[]
+    supportsAdaptiveThinking?: boolean
+    supportsFastMode?: boolean
+    supportsAutoMode?: boolean
+    supportsThinkingOff?: boolean
+  }[]
+  claude_code_version?: string
+  current_permission_mode?: string
+  capabilities?: string[]
+}
 
 export const ClaudeContextUsageSchema = z.object({
   model: z.string(),
@@ -41,8 +83,35 @@ export const ClaudeContextUsageSchema = z.object({
     tokens: z.number().nonnegative(),
     kind: z.string().optional(),
   }).passthrough()),
-}).passthrough()
-export type ClaudeContextUsage = z.infer<typeof ClaudeContextUsageSchema>
+}).passthrough() satisfies z.ZodType<ClaudeContextUsage>
+export type ClaudeContextUsage = {
+  [x: string]: unknown
+  model: string
+  totalTokens: number
+  maxTokens: number
+  percentage: number
+  memoryFiles: {
+    [x: string]: unknown
+    path: string
+    type: string
+    tokens: number
+  }[]
+  categories: {
+    [x: string]: unknown
+    name: string
+    tokens: number
+    kind?: string
+  }[]
+  skills?: {
+    [x: string]: unknown
+    skillFrontmatter: {
+      [x: string]: unknown
+      name: string
+      source: string
+      tokens: number
+    }[]
+  }
+}
 
 /** The native host owns instruction visibility, memory sources, and effective toggle eligibility. */
 export const ClaudeMemoryDialogSchema = z.object({
@@ -51,15 +120,45 @@ export const ClaudeMemoryDialogSchema = z.object({
   memories: z.array(z.object({ name: z.string(), path: z.string(), type: z.string().nullable() })).optional(),
   auto_memory: z.object({ enabled: z.boolean(), toggleable: z.boolean(), status: z.string() }),
   auto_dream: z.object({ shown: z.boolean(), status: z.string(), detail: z.string() }),
-})
-export type ClaudeMemoryDialog = z.infer<typeof ClaudeMemoryDialogSchema>
+}) satisfies z.ZodType<ClaudeMemoryDialog>
+export type ClaudeMemoryDialog = {
+  files: {
+    kind: string
+    path: string
+    label: string
+    exists: boolean
+  }[]
+  folders: {
+    path: string
+    label: string
+  }[]
+  auto_memory: {
+    enabled: boolean
+    toggleable: boolean
+    status: string
+  }
+  auto_dream: {
+    shown: boolean
+    status: string
+    detail: string
+  }
+  memories?: {
+    name: string
+    path: string
+    type: string | null
+  }[]
+}
 
 /** Native acknowledgement distinguishes cancelled inputs from inputs still queued. */
 export const ClaudeInterruptReceiptSchema = z.object({
   still_queued: z.array(z.string()),
   cancelled: z.array(z.string()).optional(),
-}).passthrough()
-export type ClaudeInterruptReceipt = z.infer<typeof ClaudeInterruptReceiptSchema>
+}).passthrough() satisfies z.ZodType<ClaudeInterruptReceipt>
+export type ClaudeInterruptReceipt = {
+  [x: string]: unknown
+  still_queued: string[]
+  cancelled?: string[]
+}
 
 /** Live MCP server state; preserve future status/configuration fields. */
 export const ClaudeMcpStatusSchema = z.object({
@@ -68,15 +167,41 @@ export const ClaudeMcpStatusSchema = z.object({
     serverInfo: z.object({ name: z.string(), version: z.string() }).passthrough().optional(),
     tools: z.array(z.object({ name: z.string() }).passthrough()).optional(),
   }).passthrough()),
-}).passthrough()
-export type ClaudeMcpStatus = z.infer<typeof ClaudeMcpStatusSchema>
+}).passthrough() satisfies z.ZodType<ClaudeMcpStatus>
+export type ClaudeMcpStatus = {
+  [x: string]: unknown
+  mcpServers: {
+    [x: string]: unknown
+    name: string
+    status: string
+    serverInfo?: {
+      [x: string]: unknown
+      name: string
+      version: string
+    }
+    tools?: {
+      [x: string]: unknown
+      name: string
+    }[]
+  }[]
+}
 
 /** Native lookup does not create a plan; paths can be omitted by the native access mode. */
 export const ClaudePlanSchema = z.discriminatedUnion('exists', [
   z.object({ exists: z.literal(false) }).passthrough(),
   z.object({ exists: z.literal(true), content: z.string(), path: z.string().optional() }).passthrough(),
-])
-export type ClaudePlan = z.infer<typeof ClaudePlanSchema>
+]) satisfies z.ZodType<ClaudePlan>
+export type ClaudePlan =
+  | {
+    [x: string]: unknown
+    exists: false
+  }
+  | {
+    [x: string]: unknown
+    exists: true
+    content: string
+    path?: string
+  }
 
 interface PendingControl {
   resolve(value: unknown): void
@@ -148,13 +273,30 @@ export function createHostControls(write: (value: unknown) => boolean, pid?: num
 export const ClaudeFileRewindSchema = z.object({
   canRewind: z.boolean(), error: z.string().optional(), filesChanged: z.array(z.string()).optional(),
   insertions: z.number().optional(), deletions: z.number().optional(), skippedLinks: z.number().optional(),
-}).passthrough()
-export type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>
+}).passthrough() satisfies z.ZodType<ClaudeFileRewind>
+export type ClaudeFileRewind = {
+  [x: string]: unknown
+  canRewind: boolean
+  error?: string
+  filesChanged?: string[]
+  insertions?: number
+  deletions?: number
+  skippedLinks?: number
+}
 
 /** Native merged settings and source attribution; backend-only, never log or publish the values. */
 export const ClaudeSettingsSchema = z.object({
   effective: z.record(z.string(), z.unknown()),
   sources: z.array(z.object({ source: z.string(), settings: z.record(z.string(), z.unknown()) }).passthrough()),
   applied: z.record(z.string(), z.unknown()).optional(),
-}).passthrough()
-export type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>
+}).passthrough() satisfies z.ZodType<ClaudeSettings>
+export type ClaudeSettings = {
+  [x: string]: unknown
+  effective: Record<string, unknown>
+  sources: {
+    [x: string]: unknown
+    source: string
+    settings: Record<string, unknown>
+  }[]
+  applied?: Record<string, unknown>
+}

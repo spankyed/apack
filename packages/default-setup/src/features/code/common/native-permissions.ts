@@ -34,7 +34,7 @@ export const claudePermissionsSnapshot = z.object({
   }).strict().optional(),
   editor: z.object({id: z.string().uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/), value: z.string().max(CLAUDE_NATIVE_EDITOR_MAX_BYTES), closing: z.boolean()}).strict().optional(),
   readOnly: z.boolean(),
-}).strict()
+}).strict() satisfies z.ZodType<ClaudePermissionsSnapshot>
 export const claudePermissionsOperation = z.discriminatedUnion('action', [
   z.object({action: z.literal('externalSave'), id: z.string().uuid(), value: z.string().max(CLAUDE_NATIVE_EDITOR_MAX_BYTES).refine(value => new TextEncoder().encode(value).length <= CLAUDE_NATIVE_EDITOR_MAX_BYTES, 'Environment document exceeds the 8 MiB editor transport limit')}).strict(),
   z.object({action: z.literal('externalCancel'), id: z.string().uuid()}).strict(),
@@ -46,6 +46,118 @@ export const claudePermissionsOperation = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), scope: z.string().regex(/^[a-f0-9]{64}$/), value: z.string().min(1).max(16384), token: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
   z.object({ action: z.literal('submit'), value: z.string().max(16384), scope: z.string().regex(/^[a-f0-9]{64}$/).optional(), formRevision: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict(),
   z.object({ action: z.literal('cancel'), scope: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict(),
-])
-export type ClaudePermissionsSnapshot = z.infer<typeof claudePermissionsSnapshot>
-export type ClaudePermissionsOperation = z.infer<typeof claudePermissionsOperation>
+]) satisfies z.ZodType<ClaudePermissionsOperation>
+export type ClaudePermissionsSnapshot = {
+  title: string
+  tabs: {
+    value: string
+    label: string
+    selected: boolean
+  }[]
+  paragraphs: {
+    runs: {
+      text: string
+      style: {
+        color?: string
+        backgroundColor?: string
+        bold?: boolean
+        italic?: boolean
+        underline?: boolean
+        strikethrough?: boolean
+        inverse?: boolean
+        dimColor?: boolean
+      }
+    }[]
+    role?: 'alert'
+  }[]
+  choices: {
+    value: string
+    label: string
+    disabled: boolean
+    description?: string
+    approved?: boolean
+    retryScheduled?: boolean
+    retryAvailable?: boolean
+  }[]
+  readOnly: boolean
+  decisions?: {
+    approved: number
+    retry: number
+  }
+  defaultFocusValue?: string
+  search?: string
+  searchScope?: string
+  form?: {
+    value: string
+    placeholder: string
+    multiline: boolean
+    submitLabel: string
+    live?: {
+      kind: 'directory' | 'autoRule'
+      id: string
+      revision: string
+      suggestions: {
+        value: string
+        label: string
+        token: string
+        description?: string
+      }[]
+      problem?: string
+      selectedValue?: string
+    }
+  }
+  editor?: {
+    id: string
+    revision: string
+    value: string
+    closing: boolean
+  }
+}
+export type ClaudePermissionsOperation =
+  | {
+    action: 'externalSave'
+    id: string
+    value: string
+  }
+  | {
+    action: 'externalCancel'
+    id: string
+  }
+  | {
+    action: 'tab'
+    value: string
+  }
+  | {
+    action: 'retry'
+    value: string
+  }
+  | {
+    action: 'select'
+    value: string
+  }
+  | {
+    action: 'search'
+    scope: string
+    value: string
+  }
+  | {
+    action: 'change'
+    scope: string
+    value: string
+  }
+  | {
+    action: 'complete'
+    scope: string
+    value: string
+    token: string
+  }
+  | {
+    action: 'submit'
+    value: string
+    scope?: string
+    formRevision?: string
+  }
+  | {
+    action: 'cancel'
+    scope?: string
+  }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { claudePermissionsSnapshot, claudePermissionsOperation } from './native-permissions.ts'
+import { claudePermissionsSnapshot, claudePermissionsOperation, type ClaudePermissionsOperation, type ClaudePermissionsSnapshot } from './native-permissions.ts'
 
 export const claudeSettingValue = z.union([z.boolean(), z.string().max(16384), z.number().finite(), z.null()])
 export const claudeSettingsTab = z.enum(['Status', 'Config', 'Usage', 'Stats'])
@@ -20,7 +20,7 @@ export const claudeSettingsStats = z.object({
     modelUsage: z.record(z.string().max(1024), z.object({inputTokens:nativeReading,outputTokens:nativeReading,cacheReadInputTokens:nativeReading,cacheCreationInputTokens:nativeReading,costUSD:nativeReading}).strict()),
     dailyActivity: z.array(z.object({date:z.string().max(64),messageCount:nativeReading,sessionCount:nativeReading,toolCallCount:nativeReading}).strict()).max(10000),
   }).strict().optional(),
-}).strict()
+}).strict() satisfies z.ZodType<ClaudeSettingsStats>
 export const claudeSettingsFrame = z.object({
   selectedTab: claudeSettingsTab,
   tabs: z.array(claudeSettingsTab).length(4),
@@ -35,8 +35,102 @@ export const claudeSettingsEditor = z.discriminatedUnion('kind', [
   z.object({kind:z.literal('choice'),description:z.string().max(65536).optional(),consent:z.object({links:z.array(z.string().url().max(4096)).max(16).optional(),description:z.string().max(65536),cancelLabel:z.string().max(65536),defaultFocusValue:z.string().min(1).max(16384).optional()}).strict().optional(),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536).optional(),value:z.string().max(16384).optional(),previewValue:z.string().max(16384).optional(),model:z.object({draftEffort:z.string().max(128).optional(),focusValue:z.string().max(16384).optional(),description:z.string().max(65536),effortText:z.string().max(65536),canAdjustEffort:z.boolean(),fastModeNotice:z.string().max(65536).optional()}).strict().optional(),canPreview:z.boolean().optional(),canToggleSyntax:z.boolean().optional(),preview:z.object({theme:z.object({text:z.string().max(128),inverseText:z.string().max(128)}).strict(),text:z.string().max(200000),ansi:z.string().max(200000).optional(),lines:z.array(z.string().max(16384)).max(256),caption:z.string().max(65536)}).strict().optional(),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),description:z.string().max(65536).optional(),descriptionAnsi:z.string().max(65536).optional(),disabled:z.boolean(),canEdit:z.boolean().optional(),canReset:z.boolean().optional()}).strict()).max(256)}).strict(),
   z.object({kind:z.literal('group'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(200000).optional(),disabled:z.boolean(),rows:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),kind:z.enum(['boolean','choice']),value:z.union([z.boolean(),z.string().max(16384)]),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),disabled:z.boolean()}).strict()).max(256).optional()}).strict()).max(64)}).strict(),
   z.object({kind:z.literal('form'),live:z.object({id:z.string().min(1).max(128),feedback:z.object({text:z.string().max(65536),tone:z.enum(['success','error'])}).strict().optional()}).strict().optional(),consent:z.object({links:z.array(z.string().url().max(4096)).max(16).optional(),cancelLabel:z.string().max(65536),focusField:z.literal('answer'),problem:z.string().max(65536).optional()}).strict().optional(),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(65536).optional(),submitLabel:z.string().max(65536),fields:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),value:z.string().max(16384)}).strict()).max(64)}).strict(),
-])
-export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
+]) satisfies z.ZodType<ClaudeSettingsEditor>
+export type ClaudeSettingsEditor =
+  | {
+    kind: 'information'
+    revision: string
+    title: string
+    description: string
+  }
+  | {
+    kind: 'choice'
+    revision: string
+    disabled: boolean
+    options: {
+      value: string
+      label: string
+      disabled: boolean
+      description?: string
+      descriptionAnsi?: string
+      canEdit?: boolean
+      canReset?: boolean
+    }[]
+    description?: string
+    consent?: {
+      description: string
+      cancelLabel: string
+      links?: string[]
+      defaultFocusValue?: string
+    }
+    title?: string
+    value?: string
+    previewValue?: string
+    model?: {
+      description: string
+      effortText: string
+      canAdjustEffort: boolean
+      draftEffort?: string
+      focusValue?: string
+      fastModeNotice?: string
+    }
+    canPreview?: boolean
+    canToggleSyntax?: boolean
+    preview?: {
+      theme: {
+        text: string
+        inverseText: string
+      }
+      text: string
+      lines: string[]
+      caption: string
+      ansi?: string
+    }
+  }
+  | {
+    kind: 'group'
+    revision: string
+    title: string
+    disabled: boolean
+    rows: {
+      key: string
+      label: string
+      kind: 'boolean' | 'choice'
+      value: string | boolean
+      disabled: boolean
+      options?: {
+        value: string
+        label: string
+        disabled: boolean
+      }[]
+    }[]
+    description?: string
+  }
+  | {
+    kind: 'form'
+    revision: string
+    title: string
+    submitLabel: string
+    fields: {
+      key: string
+      label: string
+      value: string
+    }[]
+    live?: {
+      id: string
+      feedback?: {
+        text: string
+        tone: 'error' | 'success'
+      }
+    }
+    consent?: {
+      cancelLabel: string
+      focusField: 'answer'
+      links?: string[]
+      problem?: string
+    }
+    description?: string
+  }
 export const claudeHelpTab = z.enum(['General', 'Commands', 'Custom commands'])
 export const claudeHelpSnapshot = z.object({selectedTab:claudeHelpTab,tabs:z.array(claudeHelpTab).length(3),paragraphs:z.array(z.string().max(65536)).max(4096),commands:z.array(z.object({name:z.string().max(4096),label:z.string().max(4096),description:z.string().max(65536)}).strict()).max(2048),links:z.array(z.string().url().max(4096)).max(32)}).strict()
 export const claudeIdeSnapshot = z.object({
@@ -61,9 +155,176 @@ export const claudeSettingsSnapshot = z.object({
     editorAvailable: z.boolean().optional(),
     isLocked: z.boolean(), lockReason: z.string().max(16384).optional(),
   }).strict()).max(256),
-}).strict()
-export type ClaudeSettingsStats = z.infer<typeof claudeSettingsStats>
-export type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>
+}).strict() satisfies z.ZodType<ClaudeSettingsSnapshot>
+export type ClaudeSettingsStats = {
+  loading: boolean
+  outcome: 'error' | 'success' | 'loading' | 'empty' | 'unavailable'
+  view?: 'Overview' | 'Models'
+  range?: 'all' | '7d' | '30d'
+  copyState?: 'error' | 'idle' | 'pending' | 'saved'
+  insight?: string
+  calendar?: string
+  problem?: string
+  data?: {
+    totalSessions: number
+    totalMessages: number
+    totalDays: number
+    activeDays: number
+    modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; costUSD: number; }>
+    dailyActivity: {
+      date: string
+      messageCount: number
+      sessionCount: number
+      toolCallCount: number
+    }[]
+    streaks?: {
+      currentStreak: number
+      longestStreak: number
+      currentStreakStart?: string | null
+      longestStreakStart?: string | null
+      longestStreakEnd?: string | null
+    }
+    longestSession?: {
+      sessionId: string
+      duration: number
+      messageCount: number
+      timestamp: string
+    } | null
+    firstSessionDate?: string | null
+    lastSessionDate?: string | null
+    peakActivityDay?: string | null
+    peakActivityHour?: number | null
+    dailyModelTokens?: {
+      date: string
+      tokensByModel: Record<string, number>
+    }[]
+    allTimeActivity?: {
+      date: string
+      messageCount: number
+      sessionCount: number
+      toolCallCount: number
+    }[]
+  }
+}
+export type ClaudeSettingsSnapshot = {
+  revision: string
+  rows: {
+    key: string
+    label: string
+    kind: 'number' | 'boolean' | 'text' | 'choice'
+    value: string | number | boolean | null
+    isLocked: boolean
+    description?: string
+    options?: string[]
+    editorAvailable?: boolean
+    lockReason?: string
+  }[]
+  permissions?: ClaudePermissionsSnapshot
+  ide?: {
+    stage: 'selection' | 'enable' | 'disable' | 'connecting' | 'finished'
+    title: string
+    paragraphs: string[]
+    options: {
+      value: string
+      label: string
+      description?: string
+    }[]
+    description?: string
+    selectedValue?: string
+    disabled?: boolean
+  }
+  help?: {
+    selectedTab: 'General' | 'Commands' | 'Custom commands'
+    tabs: ('General' | 'Commands' | 'Custom commands')[]
+    paragraphs: string[]
+    commands: {
+      name: string
+      label: string
+      description: string
+    }[]
+    links: string[]
+  }
+  frame?: {
+    selectedTab: 'Status' | 'Config' | 'Usage' | 'Stats'
+    tabs: ('Status' | 'Config' | 'Usage' | 'Stats')[]
+    hidden: boolean
+    usage?: {
+      startedAt: number
+      context: {
+        window: number
+        tokens?: number
+        percent?: number
+      }
+      rateLimits: {
+        kind: string
+        percentUsed: number
+        resetsAt?: string
+      }[]
+      cost?: {
+        usd: number
+      }
+    }
+    stats?: {
+      loading: boolean
+      outcome: 'error' | 'success' | 'loading' | 'empty' | 'unavailable'
+      view?: 'Overview' | 'Models'
+      range?: 'all' | '7d' | '30d'
+      copyState?: 'error' | 'idle' | 'pending' | 'saved'
+      insight?: string
+      calendar?: string
+      problem?: string
+      data?: {
+        totalSessions: number
+        totalMessages: number
+        totalDays: number
+        activeDays: number
+        modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; costUSD: number; }>
+        dailyActivity: {
+          date: string
+          messageCount: number
+          sessionCount: number
+          toolCallCount: number
+        }[]
+        streaks?: {
+          currentStreak: number
+          longestStreak: number
+          currentStreakStart?: string | null
+          longestStreakStart?: string | null
+          longestStreakEnd?: string | null
+        }
+        longestSession?: {
+          sessionId: string
+          duration: number
+          messageCount: number
+          timestamp: string
+        } | null
+        firstSessionDate?: string | null
+        lastSessionDate?: string | null
+        peakActivityDay?: string | null
+        peakActivityHour?: number | null
+        dailyModelTokens?: {
+          date: string
+          tokensByModel: Record<string, number>
+        }[]
+        allTimeActivity?: {
+          date: string
+          messageCount: number
+          sessionCount: number
+          toolCallCount: number
+        }[]
+      }
+    }
+    diagnostics?: string[]
+    status?: {
+      label: string
+      value: string
+    }[][]
+  }
+  editor?: ClaudeSettingsEditor
+  commitPending?: boolean
+  refreshPending?: boolean
+  dismissible?: boolean
+}
 export type ClaudeSettingValue = z.infer<typeof claudeSettingValue>
 export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
   z.object({action:z.literal('change'),formId:z.string().min(1).max(128),key:z.string().max(4096),value:z.string().max(16384)}).strict(),
@@ -87,8 +348,84 @@ export const claudeSettingsOperation = z.discriminatedUnion('kind', [
   z.object({kind:z.literal('write'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096),value:claudeSettingValue}).strict(),
   z.object({kind:z.literal('open'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096)}).strict(),
   z.object({kind:z.literal('editor'),revision:z.string().regex(/^[a-f0-9]{64}$/),editorRevision:z.string().regex(/^[a-f0-9]{64}$/),command:claudeSettingsEditorCommand}).strict(),
-])
-export type ClaudeSettingsOperation = z.infer<typeof claudeSettingsOperation>
+]) satisfies z.ZodType<ClaudeSettingsOperation>
+export type ClaudeSettingsOperation =
+  | {
+    kind: 'permissions'
+    revision: string
+    command: ClaudePermissionsOperation
+  }
+  | {
+    kind: 'ideSelect'
+    revision: string
+    value: string
+  }
+  | {
+    kind: 'helpTab'
+    revision: string
+    tab: 'General' | 'Commands' | 'Custom commands'
+  }
+  | {
+    kind: 'read'
+  }
+  | {
+    kind: 'stats'
+    revision: string
+    action: 'Overview' | 'Models' | 'cycleDates' | 'copy'
+  }
+  | {
+    kind: 'tab'
+    revision: string
+    tab: 'Status' | 'Config' | 'Usage' | 'Stats'
+  }
+  | {
+    kind: 'write'
+    revision: string
+    key: string
+    value: string | number | boolean | null
+  }
+  | {
+    kind: 'open'
+    revision: string
+    key: string
+  }
+  | {
+    kind: 'editor'
+    revision: string
+    editorRevision: string
+    command: {
+      action: 'change'
+      formId: string
+      key: string
+      value: string
+    } | {
+      action: 'setGroup'
+      key: string
+      value: string | boolean
+    } | {
+      action: 'select'
+      value: string
+    } | {
+      action: 'preview'
+      value: string
+    } | {
+      action: 'themeEdit' | 'themeReset'
+      value: string
+    } | {
+      action: 'toggleSyntax'
+    } | {
+      action: 'focusModel'
+      value: string
+    } | {
+      action: 'adjustEffort'
+      direction: 'left' | 'right'
+    } | {
+      action: 'save'
+      values: Record<string, string>
+    } | {
+      action: 'cancel'
+    }
+  }
 export type ClaudeSettingsRequest = { requestId: string; action: ClaudeSettingsOperation }
 
 export type ClaudeSettingsView = { requestId: string; status: 'pending' | 'ready' | 'error'; snapshot?: ClaudeSettingsSnapshot; problem?: string; savedKey?: string }

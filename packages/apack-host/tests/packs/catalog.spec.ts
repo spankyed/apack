@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import { resolveName } from '@apackdev/sdk/ids';
 import type { SettingsDefinition } from '@apackdev/sdk/framework';
 import { hostDeclaration } from '../../src/features/declaration.ts';
@@ -418,4 +418,15 @@ it('preserves entity names and declaration identity across native, source and in
   catalog.replace([{ dir: '/installed/owned', enabled: false, snapshot: { format: PACK_SNAPSHOT_FORMAT,
     declarationRevision: revision, manifest, types: { entities: { Memo: 'Memo' }, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} } }]);
   expect(Object.keys(catalog.get('owned')!.snapshot.manifest.data!.entities!)).toEqual(['Memo']);
+});
+
+it('rejects snapshots with invalid settings defaults in replace() without altering the committed catalog', () => {
+  const catalog = createContributionCatalog(app);
+  catalog.replace([source('first')]);
+  const before = catalog.getSnapshot();
+  const broken = source('broken');
+  broken.snapshot.manifest.extensions!.settings!.assistant.defaults = { name: 42 as unknown as string };
+  broken.snapshot.declarationRevision = _declarationRevision(broken.snapshot.manifest);
+  expect(() => catalog.replace([broken])).toThrow('manifest.extensions.settings.assistant.defaults.name');
+  expect(catalog.getSnapshot()).toBe(before);
 });
