@@ -232,6 +232,12 @@ it('retires an in-flight send when the composer unmounts', async () => {
 async function nativeMount(focused = false) {
   if (focused) vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const f = mount(vi.fn(async () => undefined))
+  if (focused) {
+    // This editor fixture creates ProseMirror separately from the Vue component.
+    f.root.querySelector('[data-testid="editor-fixture"]')!.append(editor.view.dom)
+    editor.view.focus()
+    expect(document.activeElement).toBe(editor.view.dom)
+  }
   f.state.nativePrompt = { mountId: 'native-view' }; await nextTick()
   const adoption = f.prompt.mock.lastCall![0]
   f.state.nativePrompt.reply = { revision: adoption.revision, status: 'applied', frame: { text: adoption.text, cursor: adoption.cursor } }
