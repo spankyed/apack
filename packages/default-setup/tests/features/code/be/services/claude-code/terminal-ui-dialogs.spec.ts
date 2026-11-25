@@ -200,6 +200,42 @@ it.each([false, true])('revalidates an edited clear-context plan before clearing
   })
   expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny' })
 })
+it('leaves the native plan open when approval disconnects during save confirmation', async () => {
+  const f = planFixture()
+  const state = f.context.getAppState()
+  state.settings.showClearContextOnPlanAccept = true
+  state.toolPermissionContext.isAutoModeAvailable = false
+  f.native.planAuto.yp = () => f.native.planAuto.Fx.mock.calls.length === 0
+  const started = deferred<void>()
+  const confirmation = deferred<string>()
+  const editedPlan = '# Edited release plan'
+  Object.assign(f.native.runtime, { rat: vi.fn() })
+  Object.assign(f.native, { planStore: {
+    ATo: vi.fn(async () => {}),
+    bYe: vi.fn(() => {
+      started.resolve()
+      return confirmation.promise
+    }),
+  } })
+  const dialog = await f.snapshot()
+  const request = {
+    subtype: 'apack_answer_plan_dialog', id: dialog.id, revision: dialog.revision,
+    session_id: dialog.sessionId, choice: 'yes-accept-edits', plan: editedPlan,
+  }
+  const abort = new AbortController()
+  const refusal = expect(f.control(request, abort)).rejects.toThrow('Client disconnected')
+  await started.promise
+  abort.abort(new Error('Client disconnected'))
+  confirmation.resolve(editedPlan)
+  await refusal
+
+  expect(f.answer).not.toHaveBeenCalled()
+  expect(f.native.planAuto.Fx).not.toHaveBeenCalled()
+  expect(f.context.getAppState()).toBe(state)
+  expect((await f.snapshot()).revision).toBe(dialog.revision)
+  await expect(f.control(request, new AbortController())).resolves.toEqual({ answered: true })
+  expect(f.answer).toHaveBeenCalledExactlyOnceWith('dialog-1', { behavior: 'deny' })
+})
 it('passes an edited, reviewable plan through the native tool input only', async () => {
   const f = planFixture(), dialog = await f.snapshot()
   await expect(f.reply(dialog, { plan: 'UNSAFE replacement' })).rejects.toThrow('cannot be reviewed')

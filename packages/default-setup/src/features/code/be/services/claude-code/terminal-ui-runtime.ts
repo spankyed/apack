@@ -997,7 +997,7 @@ function planPresentation(n,context,payload){
  return {plan:withheld?'':raw,...(typeof payload.planFilePath==='string'?{planFilePath:payload.planFilePath}:{}),empty,withheld,choices,initialChoice:state.proactivityLevel==='ask'&&n.planProactivity.BG()&&choices.some(option=>option.value==='yes-default-keep-context')&&!choices.some(option=>option.value==='yes-resume-auto-mode')?'yes-default-keep-context':choices[0]?.value??'',
   permissionMode:permission.mode,prePlanMode:permission.prePlanMode,autoActive:n.planAuto.yp()};
 }
-async function answerPlan(n,d,request){
+async function answerPlan(n,d,request,signal){
  if(request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native plan feedback');
  const feedback=request.feedback?.trim();
  if(request.choice==='no'){d.store.answer(d.item.id,{behavior:'deny',...(feedback?{feedback}:{})});return;}
@@ -1011,7 +1011,9 @@ async function answerPlan(n,d,request){
  if(option.clearContext&&edited&&typeof d.payload.planFilePath==='string'){
   await n.planStore.ATo(d.payload.planFilePath,plan,d.context.storageV5);
   n.runtime.rat(d.context.storageV5);
-  if(await n.planStore.bYe(d.context.agentId,d.context.storageV5)!==plan)throw Error('Native revised plan could not be saved');
+  const saved=await n.planStore.bYe(d.context.agentId,d.context.storageV5);
+  signal.throwIfAborted();
+  if(saved!==plan)throw Error('Native revised plan could not be saved');
   if(nativeDialog(n,d.item.kind).revision!==d.revision)throw Error('Native plan changed while saving');
  }
  if(option.mode!=='auto'&&n.planAuto.yp()){
@@ -1370,7 +1372,7 @@ async function control(request,abort){
  if(request.subtype==='apack_answer_plan_dialog'){
   abort.signal.throwIfAborted();let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
-  await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
+  await answerPlan(n,d,request,abort.signal);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_main_queue_send_now')return sendNativeQueueNow(n,request,abort);
  if(request.subtype==='apack_main_queue_edit')return editNativeQueuedPrompt(n,request,abort);
