@@ -58,6 +58,26 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
   if (cursor < 0 || encoded.indexOf(marker, cursor + marker.length) >= 0) return
   const before = encoded.slice(0, cursor), after = encoded.slice(cursor + marker.length)
   if (before + after !== text) {
+    // Changing the visible URL alone expands an autolink to [text](href). Probe
+    // both the URL and its destination so the serializer keeps the angle form.
+    const { node, offset } = resolved.parent.childBefore(resolved.parentOffset)
+    const link = node?.marks.find(mark => mark.type.name === 'link' && mark.attrs.href === node.text)
+    if (node?.isText && link && markerMarks.some(mark => mark.eq(link))) {
+      const local = resolved.parentOffset - offset
+      // An ASCII marker also preserves the serializer's URL scheme detection.
+      let urlMarker = 'apackCursorMarker'
+      while (text.includes(urlMarker)) urlMarker += 'Z'
+      const url = node.text!.slice(0, local) + urlMarker + node.text!.slice(local)
+      const temporaryLink = link.type.create({ ...link.attrs, href: url })
+      const content = doc.type.schema.text(url, node.marks.map(mark => mark === link ? temporaryLink : mark))
+      const start = resolved.start() + offset
+      const alternate = serialize(doc.replace(start, start + node.nodeSize, new Slice(Fragment.from(content), 0, 0)))
+      const at = alternate.indexOf(urlMarker)
+      if (at >= 0 && alternate.indexOf(urlMarker, at + urlMarker.length) < 0
+          && alternate.slice(0, at) + alternate.slice(at + urlMarker.length) === text) {
+        return { text, cursor: at, doc, position }
+      }
+    }
     // Emphasis serializers move enclosed whitespace outside their delimiters. At that edge a
     // marked probe can pull spaces back inside. Accept an unmarked probe only if it proves
     // that the original serialized prompt is unchanged.
@@ -250,6 +270,12 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
       return {doc, sourcePositions, markerMarks}
     }
     let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
+    if (!located && canonicalSource) {
+      // Marking an autolink in the source changes both its visible text and
+      // destination. For canonical text the serializer can prove the caret instead.
+      const position = findClaudePromptPosition(parsed, frame.cursor, serialize)
+      if (position !== undefined) located = { doc: parsed, sourcePositions: new Map([[frame.cursor, position]]), markerMarks: parsed.resolve(position).marks() }
+    }
     if (!located && !canonicalSource && offsets.length) {
       // A global diff is quadratic across many normalized list markers. Probe the visible
       // list boundaries directly, then verify the marked parse preserves the entire document.

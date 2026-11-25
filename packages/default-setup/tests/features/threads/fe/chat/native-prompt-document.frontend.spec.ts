@@ -32,6 +32,42 @@ it('maps UTF-16 caret positions through Markdown marks, lists, code and paragrap
   }
 })
 
+it('round-trips a caret inside a plain URL serialized as a Markdown autolink', () => {
+  const url = 'https://example.test/docs'
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'Review ' },
+    { type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }] },
+    { type: 'text', text: ' today' },
+  ] }] })
+  const doc = editor.state.doc
+  const text = 'Review <' + url + '> today'
+  expect(serialize(doc)).toBe(text)
+  for (let offset = 1; offset <= url.length; offset++) {
+    const position = 8 + offset
+    const cursor = 8 + offset
+    expect(captureClaudePromptDocument(doc, position, serialize)).toMatchObject({ text, cursor })
+    expect(findClaudePromptPosition(doc, cursor, serialize)).toBe(position)
+  }
+})
+
+it('keeps the destination, caret and URL decoration through a native structural rewrite', () => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const url = 'https://example.test/docs'
+  const text = '## Release notes\n\nReview <' + url + '> today'
+  const start = text.indexOf(url)
+  const cursor = start + 10
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+    text, cursor, decorations: [{ start: start + 8, end: start + 15, color: 'red' }],
+  } })
+  try {
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(bridge.readDraft()).toMatchObject({ text, cursor })
+    expect(editor.view.dom.querySelector('a')?.getAttribute('href')).toBe(url)
+    expect(editor.view.dom.querySelector('a .claude-prompt-decoration')?.textContent).toBe(url.slice(8, 15))
+  } finally { bridge.dispose() }
+})
+
 it.each([
   ['bold', 'Review  ', 'release notes', '**Review**  release notes'],
   ['italic', 'Review     ', 'notes', '*Review*     notes'],
