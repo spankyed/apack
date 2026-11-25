@@ -1,4 +1,4 @@
-import type { StepEntry } from '../build/manifest.ts';
+import type { StepEntry } from '../framework/declaration-types.ts';
 import type { NativePackDeclaration } from '../framework/pack-catalog.ts';
 import type { PackRegistration } from '../framework/pack-registration.ts';
 

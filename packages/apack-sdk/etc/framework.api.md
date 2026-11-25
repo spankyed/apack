@@ -17,7 +17,9 @@ import type { RankDeclaration } from '@elmdb/ears';
 import type { RelationRules } from '@elmdb/ears';
 import type { RowRules } from '@elmdb/ears';
 import type { SearchDeclaration } from '@elmdb/ears';
-import { z } from 'zod';
+
+// @public (undocumented)
+export type AllowablePackCheck = (typeof ALLOWABLE_PACK_CHECKS)[number];
 
 // @public
 export type AnswerArgs<C extends SystemContract, K extends AskName<C>> = ChildAnswerArgs<ContractContext<C>, MachineEvents<C>, ContractAsks<C>, K>;
@@ -61,7 +63,12 @@ export interface ArtifactCatalogEntry {
 }
 
 // @public (undocumented)
-export type ArtifactDeclaration = z.infer<typeof ArtifactEntrySchema>;
+export interface ArtifactDeclaration {
+    // (undocumented)
+    fe?: string;
+    // (undocumented)
+    icon: string;
+}
 
 // @internal
 export const _BASELINE_HOST_SERVICE_NAMES: readonly ["logger", "emitter", "repository", "settings"];
@@ -85,7 +92,14 @@ export interface BlockCatalogEntry {
 }
 
 // @public (undocumented)
-export type BlockDeclaration = z.infer<typeof BlockEntrySchema>;
+export interface BlockDeclaration {
+    // (undocumented)
+    be?: string;
+    // (undocumented)
+    fe?: string;
+    // (undocumented)
+    kind?: 'display' | 'input';
+}
 
 // @public
 export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends EventObject, A, K extends keyof A & string> {
@@ -100,6 +114,16 @@ export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends
     readonly signal: AbortSignal;
 }
 
+// @public (undocumented)
+export interface CommandsExtensionDeclaration {
+    // (undocumented)
+    list: Record<string, {
+        placeholder: string;
+    }>;
+    // (undocumented)
+    onUserEdit?: ContentEditPolicy;
+}
+
 // @internal
 export function _compileSettingsDefinition(definition: SettingsDefinition): SettingsValidator;
 
@@ -108,6 +132,49 @@ export type ComponentTarget = string | {
     entry: string;
     load?: 'lazy';
 };
+
+// @public (undocumented)
+export interface ContentConfig {
+    // (undocumented)
+    datasets?: Record<string, ContentSourceConfig>;
+    // (undocumented)
+    formats?: Record<string, ContentFormatConfig>;
+    // (undocumented)
+    sources?: Record<string, string | ContentSourceConfig>;
+    // (undocumented)
+    writers?: Record<string, string>;
+}
+
+// @public (undocumented)
+export type ContentEditPolicy = (typeof CONTENT_EDIT_POLICIES)[number];
+
+// @public (undocumented)
+export interface ContentFieldDeclaration {
+    // (undocumented)
+    default?: unknown;
+    // (undocumented)
+    from: string;
+    // (undocumented)
+    type?: 'string';
+}
+
+// @public (undocumented)
+export interface ContentFormatConfig {
+    // (undocumented)
+    compiler?: string;
+    // (undocumented)
+    entity?: string | string[];
+    // (undocumented)
+    fields?: Record<string, ContentFieldDeclaration>;
+    // (undocumented)
+    format?: 'markdown-tree' | 'json';
+    // (undocumented)
+    identity?: string[];
+    // (undocumented)
+    media?: string;
+    // (undocumented)
+    tree?: ContentTreeDeclaration;
+}
 
 // @public
 export interface ContentRuntime {
@@ -127,6 +194,28 @@ export interface ContentRuntime {
     // (undocumented)
     roles: Record<string, string>;
     rowRules?: Record<string, RowRules>;
+}
+
+// @public (undocumented)
+export interface ContentSourceConfig {
+    // (undocumented)
+    applier?: string;
+    // (undocumented)
+    format?: string;
+    // (undocumented)
+    onUserEdit?: ContentEditPolicy;
+    // (undocumented)
+    path?: string;
+}
+
+// @public (undocumented)
+export interface ContentTreeDeclaration {
+    // (undocumented)
+    branch?: string;
+    // (undocumented)
+    branchEntity?: string;
+    // (undocumented)
+    relKind?: string;
 }
 
 // @public
@@ -190,7 +279,18 @@ export interface DslCatalogEntry {
 }
 
 // @public (undocumented)
-export type DslDeclaration = z.infer<typeof DslEntrySchema>;
+export interface DslDeclaration {
+    // (undocumented)
+    entry: string;
+    // (undocumented)
+    globals?: Record<string, string>;
+    // (undocumented)
+    inline?: string[];
+    // (undocumented)
+    prefix?: string;
+    // (undocumented)
+    targets: 'monaco'[];
+}
 
 // @internal
 export function _entityDestinationsProblem(destinations: Readonly<Record<string, string>>, features: Readonly<Record<string, {
@@ -350,11 +450,14 @@ export type MachineMatchesContract<Entry, C extends SystemContract> = Entry exte
 } ? [Spec, SystemSpec<C>] extends [SystemSpec<C>, Spec] ? true : 'this system\'s defineSystem<…> declares a contract that is not the one apack.json names for its feature' : 'this system\'s default export has no `spec` from defineSystem<…>';
 
 // @public
+export type MigrationLine = (typeof MIGRATION_LINES)[number];
+
+// @public
 export interface NativePackDeclaration extends PackDataDeclarations, FrontendDeclaration {
     // (undocumented)
-    artifacts?: Record<string, z.infer<typeof ArtifactEntrySchema>>;
+    artifacts?: Record<string, ArtifactDeclaration>;
     // (undocumented)
-    blocks?: Record<string, z.infer<typeof BlockEntrySchema>>;
+    blocks?: Record<string, BlockDeclaration>;
     consumes?: PackConsumption;
     content?: {
         writers?: Record<string, string>;
@@ -365,7 +468,7 @@ export interface NativePackDeclaration extends PackDataDeclarations, FrontendDec
     // (undocumented)
     dependencies?: Record<string, string>;
     // (undocumented)
-    dsl?: Record<string, DeclarationData<z.infer<typeof DslEntrySchema>>>;
+    dsl?: Record<string, DeclarationData<DslDeclaration>>;
     dslDefinitions?: Record<string, string>;
     entityDestinations?: Record<string, string>;
     eventContracts?: PackEventContracts;
@@ -384,22 +487,29 @@ export interface NativePackDeclaration extends PackDataDeclarations, FrontendDec
     id: string;
     // (undocumented)
     lifecycle?: PackLifecycleDeclaration;
-    migrations?: z.infer<typeof MigrationsSchema>;
+    migrations?: PackMigrationsDeclaration;
     // (undocumented)
     repositories?: Record<string, string>;
     services?: Record<string, string>;
     // (undocumented)
     settings?: Record<string, SettingsDefinition>;
     // (undocumented)
-    steps?: Record<string, z.infer<typeof StepEntrySchema>>;
+    steps?: Record<string, StepEntry>;
     version?: string;
 }
 
-// @internal
-export function _nativePackDeclarationProblem(declaration: unknown): string | undefined;
-
 // @public
 export function onPackCatalogChanged(listener: () => void): () => void;
+
+// @public (undocumented)
+export interface PackBuildConfig {
+    // (undocumented)
+    bundleUi?: boolean;
+    // (undocumented)
+    opaqueDeps?: string[];
+    // (undocumented)
+    workers?: Record<string, string>;
+}
 
 // @public
 export interface PackCatalogView {
@@ -425,8 +535,43 @@ export interface PackCatalogView {
 }
 
 // @public
+export interface PackChecksDeclaration {
+    // (undocumented)
+    allow?: AllowablePackCheck[];
+}
+
+// @public
 export interface PackConsumption {
     readonly services: readonly string[];
+}
+
+// @public
+export interface PackContentPreview {
+    content: Record<string, PackContentPreviewItem[]>;
+    // (undocumented)
+    directory: string;
+    packId: string;
+    unavailable: string[];
+}
+
+// @public
+export interface PackContentPreviewItem {
+    childCount?: number;
+    // (undocumented)
+    description?: string;
+    key: string;
+}
+
+// @public (undocumented)
+export interface PackDataConfig {
+    // (undocumented)
+    entities?: Record<string, PackEntityEntry>;
+    // (undocumented)
+    ranks?: Record<string, PackRankEntry>;
+    // (undocumented)
+    relations?: Record<string, PackRelationEntry>;
+    // (undocumented)
+    roles?: string[];
 }
 
 // @public
@@ -447,6 +592,11 @@ export function _packDeclarationProblem(expected: {
     id: string;
     declarationRevision: string;
 }, binding: unknown): string | undefined;
+
+// @public
+export type PackDependencySnapshot = Omit<PackSnapshot, 'format'> & {
+    format?: number;
+};
 
 // @public (undocumented)
 export interface PackEARS {
@@ -496,11 +646,59 @@ export interface _PackEntityDeclaration {
     substrings?: readonly string[];
 }
 
+// @public (undocumented)
+export interface PackEntityEntry {
+    // (undocumented)
+    changeOrder?: boolean;
+    // (undocumented)
+    embed?: {
+        from: readonly string[];
+        chunk?: 'whole' | 'paragraph' | 'heading';
+        model: EmbeddingModelId;
+        dims: number;
+    };
+    // (undocumented)
+    indexes?: readonly string[];
+    // (undocumented)
+    search?: {
+        fields: Record<string, number>;
+        stem?: SearchStemLanguage;
+    };
+    // (undocumented)
+    shape?: string;
+    // (undocumented)
+    shortCode?: string;
+    // (undocumented)
+    substrings?: readonly string[];
+}
+
 // @internal
 export function _packEntityTypes(declaration: PackDataDeclarations): Record<string, string>;
 
 // @public
 export type PackEventContracts = Record<string, FeatureEventContract>;
+
+// @public (undocumented)
+export interface PackExtensionsDeclaration extends FrontendDeclaration {
+    // (undocumented)
+    artifacts?: Record<string, ArtifactDeclaration>;
+    // (undocumented)
+    blocks?: Record<string, BlockDeclaration>;
+    // (undocumented)
+    commands?: CommandsExtensionDeclaration;
+    // (undocumented)
+    dsl?: Record<string, DslDeclaration>;
+    // (undocumented)
+    help?: {
+        path: string;
+    };
+    // (undocumented)
+    services?: Record<string, string>;
+    // (undocumented)
+    settings?: Record<string, SettingsDefinition>;
+    // (undocumented)
+    steps?: Record<string, StepEntry>;
+}
 
 // @public
 export interface PackFeature {
@@ -514,6 +712,34 @@ export interface PackFeature {
     // (undocumented)
     system?: PackFeatureSystem;
     views?: ViewDefinitions;
+}
+
+// @public (undocumented)
+export interface PackFeatureEntry {
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    designation?: string;
+    // (undocumented)
+    entities?: Record<string, PackEntityEntry>;
+    // (undocumented)
+    projections?: string;
+    // (undocumented)
+    references?: ReferenceDeclarations;
+    // (undocumented)
+    repositories?: Record<string, string>;
+    // (undocumented)
+    services?: Record<string, string>;
+    // (undocumented)
+    settings?: SettingsDefinition;
+    // (undocumented)
+    surface?: SurfaceDeclaration;
+    // (undocumented)
+    system?: PackSystemEntry;
+    // (undocumented)
+    types?: string;
+    // (undocumented)
+    views?: string;
 }
 
 // @public
@@ -530,6 +756,13 @@ export interface PackFeatureSystem {
 }
 
 // @public
+export interface PackFlowHelpers {
+    exports: string[];
+    module: string;
+    types: string;
+}
+
+// @public
 export type PackLifecycleDeclaration = Partial<Record<typeof LIFECYCLE_HOOK_NAMES[number], string>>;
 
 // @public
@@ -540,6 +773,46 @@ export interface PackLifecycleHooks {
     onShutdown?: () => void;
 }
 
+// @public (undocumented)
+export interface PackManifest {
+    // (undocumented)
+    $schema?: string;
+    // (undocumented)
+    build?: PackBuildConfig;
+    // (undocumented)
+    checks?: PackChecksDeclaration;
+    // (undocumented)
+    consumes?: PackConsumption;
+    // (undocumented)
+    content?: ContentConfig;
+    // (undocumented)
+    data?: PackDataConfig;
+    // (undocumented)
+    dependencies?: Record<string, string>;
+    // (undocumented)
+    description?: string;
+    // (undocumented)
+    extensions?: PackExtensionsDeclaration;
+    // (undocumented)
+    features?: Record<string, PackFeatureEntry>;
+    // (undocumented)
+    hostVersion?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    license?: string;
+    // (undocumented)
+    lifecycle?: PackLifecycleDeclaration;
+    // (undocumented)
+    migrations?: PackMigrationsDeclaration;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    permissions?: PackPermission[];
+    // (undocumented)
+    version: string;
+}
+
 // @public
 export interface PackMigration {
     // (undocumented)
@@ -548,6 +821,44 @@ export interface PackMigration {
     target: string;
     // (undocumented)
     up: () => void;
+}
+
+// @public (undocumented)
+export interface PackMigrationDeclaration {
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    up: string;
+}
+
+// @public (undocumented)
+export interface PackMigrationsDeclaration {
+    // (undocumented)
+    app?: Record<string, PackMigrationDeclaration>;
+    // (undocumented)
+    pack?: Record<string, PackMigrationDeclaration>;
+}
+
+// @public (undocumented)
+export type PackPermission = (typeof PACK_PERMISSIONS)[number];
+
+// @public
+export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, string>>>;
+
+// @public (undocumented)
+export interface PackRankEntry {
+    // (undocumented)
+    damping?: number;
+    // (undocumented)
+    direction?: 'out' | 'in' | 'both';
+    // (undocumented)
+    relations: readonly string[];
+    // (undocumented)
+    tolerance?: number;
+    // (undocumented)
+    types: readonly string[];
+    // (undocumented)
+    weights?: boolean;
 }
 
 // @internal
@@ -586,6 +897,16 @@ export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
     readonly key?: readonly string[];
     readonly weighted?: boolean;
+}
+
+// @public (undocumented)
+export interface PackRelationEntry {
+    // (undocumented)
+    acyclic?: boolean;
+    // (undocumented)
+    key?: readonly string[];
+    // (undocumented)
+    weighted?: boolean;
 }
 
 // @internal
@@ -647,10 +968,51 @@ export function _packServiceSelection(pack: _PackServiceDeclarations, provider: 
 // @internal
 export function _packShortCodes(declaration: PackDataDeclarations): Record<string, string>;
 
+// @public (undocumented)
+export interface PackSnapshot {
+    declarationRevision: string;
+    dslDefinitions?: Record<string, string>;
+    entityDestinations: Record<string, string>;
+    eventContracts?: PackEventContracts;
+    facades: Record<string, string>;
+    flowHelpers?: PackFlowHelpers;
+    format: number;
+    help?: HelpDocument[];
+    // (undocumented)
+    manifest: PackManifest;
+    provenance?: PackProvenance;
+    // (undocumented)
+    sdkVersion?: string;
+    // (undocumented)
+    types: PackTypeManifest;
+}
+
 // @public
 export function packSystem(entry: SystemEntry, options: {
     incoming: readonly string[];
 }): PackFeatureSystem;
+
+// @public (undocumented)
+export interface PackSystemEntry {
+    // (undocumented)
+    contract?: string;
+    // (undocumented)
+    entry: string;
+    // (undocumented)
+    events?: {
+        incoming?: string[];
+    };
+}
+
+// @public (undocumented)
+export interface PackTypeManifest {
+    // (undocumented)
+    entities: Record<string, string>;
+    // (undocumented)
+    relKinds: Record<string, string>;
+    // (undocumented)
+    roles: Record<string, string>;
+}
 
 // @internal
 export function _packWeightedKinds(declaration: PackDataDeclarations): Record<string, string>;
@@ -677,6 +1039,9 @@ export interface ProjectionDefinition {
 
 // @public
 export type ProjectionDefinitions = Readonly<Record<string, ProjectionDefinition>>;
+
+// @public (undocumented)
+export type ProvenanceKind = 'entities' | 'relKinds' | 'weightedKinds' | 'roles' | 'rankIndexes' | 'referenceTypes' | 'referenceCategories' | 'tiptapExtensions' | 'surfaces';
 
 // @public (undocumented)
 export interface ReferenceCatalogEntry {
@@ -814,9 +1179,9 @@ export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build'
         callbacks: {
             compile: string;
             decompile: string;
-            validateTrack?: string | undefined;
-            validate?: string | undefined;
-            register?: string | undefined;
+            validateTrack?: string;
+            validate?: string;
+            register?: string;
         };
     } | undefined;
     build?: {
@@ -830,11 +1195,30 @@ export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build'
             compile: string;
             validate: string;
             getLabel: string;
-            decompile?: string | undefined;
-            branches?: string | undefined;
+            decompile?: string;
+            branches?: string;
         };
     } | undefined;
 };
+
+// @public (undocumented)
+export interface StepBuildDeclaration {
+    // (undocumented)
+    branches?: string;
+    // (undocumented)
+    compile: string;
+    // (undocumented)
+    decompile?: string;
+    // (undocumented)
+    getLabel: string;
+    // (undocumented)
+    relation?: {
+        field: string;
+        targetEntity: string;
+    };
+    // (undocumented)
+    validate: string;
+}
 
 // @public
 export interface StepCatalogEntry {
@@ -852,6 +1236,42 @@ export interface StepCatalogEntry {
     readonly packId: string;
     // (undocumented)
     readonly type: string;
+}
+
+// @public (undocumented)
+export interface StepDSLMeta {
+    // (undocumented)
+    defaultLabel?: string;
+    // (undocumented)
+    helpers?: string;
+    // (undocumented)
+    primaryField?: string;
+    // (undocumented)
+    references?: Record<string, string>;
+}
+
+// @public (undocumented)
+export interface StepEntry {
+    // (undocumented)
+    build?: StepBuildDeclaration;
+    // (undocumented)
+    dsl?: StepDSLMeta;
+    // (undocumented)
+    fe?: StepFrontendDeclaration;
+    // (undocumented)
+    kind?: 'step' | 'trigger';
+    // (undocumented)
+    node: {
+        label: string;
+        defaultLabel?: string;
+        defaults?: Record<string, unknown>;
+    };
+    // (undocumented)
+    runtime?: StepRuntimeDeclaration;
+    // (undocumented)
+    trigger?: StepTriggerDeclaration;
+    // (undocumented)
+    types?: string;
 }
 
 // @public
@@ -886,6 +1306,40 @@ export interface StepLayoutDeclaration {
     hasInput?: boolean;
     // (undocumented)
     usesExitCount?: boolean;
+}
+
+// @public (undocumented)
+export interface StepRuntimeDeclaration {
+    // (undocumented)
+    handler?: string;
+    // (undocumented)
+    isAsync?: true;
+    // (undocumented)
+    spawnsSubflow?: true;
+    // (undocumented)
+    sync?: true;
+    // (undocumented)
+    waits?: true;
+}
+
+// @public (undocumented)
+export interface StepTriggerDeclaration {
+    // (undocumented)
+    compile: string;
+    // (undocumented)
+    decompile: string;
+    // (undocumented)
+    persistent?: boolean;
+    // (undocumented)
+    queryFields?: string[];
+    // (undocumented)
+    register?: string;
+    // (undocumented)
+    trackField: string;
+    // (undocumented)
+    validate?: string;
+    // (undocumented)
+    validateTrack?: string;
 }
 
 // @public

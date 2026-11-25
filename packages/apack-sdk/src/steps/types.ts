@@ -273,8 +273,8 @@ export interface TriggerRuntimeContext {
  * Step Definition
  *─────────────────────────────────────────────────────────────────*/
 
-export type { StepDSLMeta } from '../build/manifest.ts';
-import type { StepDSLMeta } from '../build/manifest.ts';
+export type { StepDSLMeta } from '../framework/declaration-types.ts';
+import type { StepDSLMeta } from '../framework/declaration-types.ts';
 import type { CallOptions } from '../events/index.ts';
 
 export interface StepDefinition {

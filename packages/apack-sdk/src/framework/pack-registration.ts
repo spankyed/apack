@@ -124,7 +124,7 @@ export interface PackRegistration {
   /** Content writers for the entity types this pack owns (apack.json `content.writers`) */
   contentWriters?: Record<string, import('../content/writers.ts').ContentWriter>;
   /** The pack's appliers, one per content key (apack.json `content.sources`), which `importCompiledContent` runs for the pack's compiled content */
-  appliers?: import('../utils/apply.ts').ContentApplier[];
+  appliers?: import('../utils/apply-types.ts').ContentApplier[];
   dependencies?: Record<string, string>;
   /** Pack-owned preference groups declared inline in extensions.settings. */
   settings?: Record<string, import('./settings-definition.ts').SettingsDefinition>;

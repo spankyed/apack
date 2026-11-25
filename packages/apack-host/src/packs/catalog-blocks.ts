@@ -1,4 +1,4 @@
-import type { PackCatalogSnapshot } from './catalog.ts';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
 import type { BlockCatalogEntry, BlockDeclaration, DeclarationData } from '@apackdev/sdk/framework';
 
 /** Input kind and facet references are data; resolving them does not load a component or backend. */

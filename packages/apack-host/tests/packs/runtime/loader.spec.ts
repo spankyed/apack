@@ -35,12 +35,12 @@ function makePack(
   manifest: Record<string, unknown>,
   featuresSource = '{}',
 ) {
-  const declarationRevision = _declarationRevision(manifest as PackManifest);
+  const declarationRevision = _declarationRevision(manifest as unknown as PackManifest);
   const packDir = path.join(packsDir, id);
   fs.mkdirSync(path.join(packDir, 'runtime'), { recursive: true });
   fs.writeFileSync(path.join(packDir, 'apack.json'), JSON.stringify(manifest));
   fs.mkdirSync(path.join(packDir, 'types'), { recursive: true });
-  fs.writeFileSync(path.join(packDir, PACK_LAYOUT.snapshot), JSON.stringify({ declarationRevision, format: PACK_SNAPSHOT_FORMAT, manifest, eventContracts: eventContractsFixture(manifest as PackManifest), types: { entities: {}, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} }));
+  fs.writeFileSync(path.join(packDir, PACK_LAYOUT.snapshot), JSON.stringify({ declarationRevision, format: PACK_SNAPSHOT_FORMAT, manifest, eventContracts: eventContractsFixture(manifest as unknown as PackManifest), types: { entities: {}, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} }));
   fs.writeFileSync(path.join(packDir, 'runtime', 'index.cjs'), `module.exports = { registration: { id: ${JSON.stringify(manifest.id)}, declarationRevision: '${declarationRevision}', features: ${featuresSource} } };`);
   fs.writeFileSync(path.join(packDir, 'runtime', 'fe.js'), 'export default {};');
   sealPack(packDir);

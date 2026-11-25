@@ -9,7 +9,7 @@ export { HOST } from '../refs.ts';
 export { hostDeclaration, hostSurfaceDeclarations } from '../features/declaration.ts';
 export type { PackFERegistration } from '@apackdev/sdk/fe';
 export { describeFailure, type ShellClient, type ShellConnection, type ShellFailure } from './client.ts';
-export type { LoadedPackEntry } from '../packs/layout.ts';
+export type { LoadedPackEntry } from '../packs/layout-types.ts';
 export { runWindowStorageMigrations, type WindowStorageMigration, type WindowStorage } from './window-storage/index.ts';
 export type { ShellPackFrontends } from './pack-frontends.ts';
 
@@ -35,6 +35,6 @@ export { settingsProblems, isEqual } from '../features/settings/document.ts';
 export { compileSettingsCatalog } from '../features/settings/validation.ts';
 
 export { createWindowPackCatalog, type WindowPackCatalogIO } from './pack-catalog.ts';
-export type { PackCatalogFrame, PackCatalogSnapshot } from '../packs/catalog.ts';
+export type { PackCatalogFrame, PackCatalogSnapshot } from '../packs/catalog-types.ts';
 
 export type { FrontendAdmission } from './frontend-admission.ts';

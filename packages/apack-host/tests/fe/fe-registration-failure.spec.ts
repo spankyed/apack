@@ -22,7 +22,7 @@ describe('a surface', () => {
   it('is refused when its key is no feature id, and nothing of the pack is registered', () => {
     const registry = createNativeFrontendTestRegistry();
     expect(() => registry.registerFixture(registration('memo-pack', { features: { memos: { surface: surface('Memos') }, 'other-pack/notes': { surface: surface('Notes') } } })))
-      .toThrow('features.other-pack/notes');
+      .toThrow('feature "other-pack/notes" isn\'t a feature id');
     expect(registry.getRegisteredSurfaces()).toEqual([]);
     expect(registry.unregisterPackFE('memo-pack')).toEqual([]);
   });

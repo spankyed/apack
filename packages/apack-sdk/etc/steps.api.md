@@ -8,7 +8,6 @@ import type { AnyActorRef } from 'xstate';
 import type { BaseEntity } from '@elmdb/ears';
 import { EARS as EARS_2 } from '@elmdb/ears';
 import type { ShortCode } from '@elmdb/ears';
-import { z } from 'zod';
 
 // @public
 export function collapseRecord(entries: FieldMapping[] | undefined): Record<string, MapEntry> | undefined;
@@ -259,7 +258,16 @@ export interface StepDefinition {
 }
 
 // @public (undocumented)
-export type StepDSLMeta = z.infer<typeof StepDSLMetaSchema>;
+export interface StepDSLMeta {
+    // (undocumented)
+    defaultLabel?: string;
+    // (undocumented)
+    helpers?: string;
+    // (undocumented)
+    primaryField?: string;
+    // (undocumented)
+    references?: Record<string, string>;
+}
 
 // @public (undocumented)
 export interface StepFEFacet {

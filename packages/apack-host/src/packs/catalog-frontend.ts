@@ -1,4 +1,4 @@
-import type { PackCatalogSnapshot } from './catalog.ts';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
 import type { FrontendCatalogEntry, DeclarationData, FrontendDeclaration } from '@apackdev/sdk/framework';
 
 /** Frontend identities are shared data even when no implementation is eligible or loaded. */

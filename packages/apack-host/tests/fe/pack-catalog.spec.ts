@@ -105,6 +105,18 @@ describe('window declaration catalog', () => {
     reader.dispose(); expect(reader.surfaces()).toEqual([]);
   });
 
+  it('refuses invalid native event contracts and entity destinations before connection', () => {
+    expect(() => createWindowPackCatalog({ subscribe: () => () => {} }, [{
+      id: 'host',
+      features: { shell: { description: 'Shell.' } },
+      eventContracts: { shell: { system: { incoming: ['A', 'A'], outgoing: [] } } },
+    }])).toThrow('unique');
+    expect(() => createWindowPackCatalog({ subscribe: () => () => {} }, [{
+      id: 'host',
+      entityDestinations: { Action: 'missing' },
+    }])).toThrow('Entity destination "Action" names feature "missing"');
+  });
+
   it('accepts data without executable registration and keeps an immutable owned snapshot', () => {
     const { reader, catalog, sessions, wire } = fixture();
     catalog.setNative([{ id: 'native-pack', features: { view: { description: 'Feature declaration fixture.', surface: { label: 'Cold', state: 'src/state.ts' } } } }]);

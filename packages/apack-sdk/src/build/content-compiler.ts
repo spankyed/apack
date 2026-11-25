@@ -1,9 +1,11 @@
-import type { ContentReference } from './content-references.ts';
+import type { ContentIndex, ContentIndexEntry, ContentReference } from './content-index-types.ts';
+
+export type { ContentIndex, ContentIndexEntry } from './content-index-types.ts';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { PackConfig, CompilePackOptions, CompilePackResult, PackModuleLoader } from './types.ts';
 import type { StepDefinition } from '../steps/types.ts';
-import type { PackContentPreviewItem } from './preview.ts';
+import type { PackContentPreviewItem } from '../framework/preview-types.ts';
 import { parseContentIndex } from './content-index.ts';
 import { importPackModule } from './module-loader.ts';
 import { EARS } from '../types/entities.ts';
@@ -65,27 +67,6 @@ export interface SpecialtyCompiler<T = unknown> {
   items(data: T): PackContentPreviewItem[];
   /** Static dependency inspection; absence means analysis is unavailable, never that there are no references. */
   references?(data: T, context: CompilationContext): ContentReference[];
-}
-
-/** `content.json` in the compiled directory: what each content key holds */
-export interface ContentIndex {
-  version: 1;
-  /** The pack that compiled the content: the content keys it writes name it, so two packs' items never share an entity */
-  packId: string;
-  entries: ContentIndexEntry[];
-}
-
-export interface ContentIndexEntry {
-  key: string;
-  /** Written into the database (a compile-only entry is read by pack code instead) */
-  written: boolean;
-  /** Fields that name a record: include sets and previews use the first */
-  identity?: string[];
-  count: number;
-  /** Top-level items, named as include sets name them */
-  items: PackContentPreviewItem[];
-  /** Known static/computed references. Omitted for compilers without an analyzer; static analysis is not exhaustive. */
-  references?: ContentReference[];
 }
 
 export { CONTENT_INDEX_FILE };

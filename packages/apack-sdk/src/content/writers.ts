@@ -1,5 +1,5 @@
 import { EARS } from '../types/entities.ts';
-import type { ContentItem } from '../build/content/items.ts';
+import type { ContentItem } from './item-types.ts';
 import { boundHost } from '../runtime/host-runtime.ts';
 import { collectionContentWriter, documentContentWriter } from './document-writers.ts';
 

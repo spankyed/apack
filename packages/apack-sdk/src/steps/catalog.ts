@@ -2,7 +2,7 @@ import { boundHost } from '../runtime/host-runtime.ts';
 import { declarationJson } from '../framework/declaration-data.ts';
 import { selectCatalogDeclaration, selectCatalogDeclarations } from '../framework/catalog-selection.ts';
 import type { DeclarationData, StepCatalogEntry } from '../framework/catalog-view.ts';
-import type { StepEntry } from '../build/manifest.ts';
+import type { StepEntry } from '../framework/declaration-types.ts';
 import type { StepDefinition } from './types.ts';
 
 /** Accepted backend implementation, with its owned declaration and actual runtime generation. */

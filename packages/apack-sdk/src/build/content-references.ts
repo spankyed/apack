@@ -1,12 +1,6 @@
-import type { ContentIndex } from './content-compiler.ts';
+import type { ContentIndex, ContentItemIdentity } from './content-index-types.ts';
 
-export interface ContentItemIdentity { key: string; item: string }
-
-/** A declared reference in compiled content; computed targets remain explicit rather than guessed. */
-export type ContentReference = { item: string; path: string } & (
-  | { kind: 'static'; target: ContentItemIdentity }
-  | { kind: 'dynamic'; target: { key: string } }
-);
+export type { ContentItemIdentity, ContentReference } from './content-index-types.ts';
 
 export interface ContentReferenceInspection {
   source: ContentItemIdentity;

@@ -46,8 +46,8 @@ Each directory is one `package.json` export (`./<dir>` → `src/<dir>/index.ts`)
 
 `apack pack build` (`packages/apack-cli/src/commands/build.ts`) runs these pieces in order: `parseManifest`, then codegen (`generatePackFiles`), then `buildPackConfigFromManifest` and `compilePack`. It writes the snapshot and bundles itself; the FE bundler is `apack-cli/src/build/fe-bundler.ts`, not an SDK module.
 
-- **Manifest schema** (`../framework/declaration-schema.ts`): the Zod `ManifestSchema` is the single source for `apack.json`.
-  - `manifest.ts` derives `PackManifest` and the other types with `z.infer`. It also defines `PackSnapshot` (with `provenance`: every entity, relation kind, command and surface the pack's tree declares, and which pack declares each), `PackProvenance`, `PROVENANCE_KINDS` and `_mergeProvenance()`/`_buildProvenance()` — one table and one reader, so a new kind of declared name is a line rather than a type pair and a reader — plus `PackFlowHelpers`, `contentFile`/`contentPath` and `CONTENT_COMPILERS_FILE`.
+- **Manifest schema** (`../framework/declaration-schema.ts`): the Zod `ManifestSchema` is the runtime validator and JSON Schema source for `apack.json`, checked bidirectionally at compile time against the plain TypeScript declaration interfaces in `../framework/declaration-types.ts`.
+  - `manifest.ts` re-exports `PackManifest`, `PackSnapshot`, `PackProvenance`, `PackFlowHelpers`, and related plain types from `../framework/declaration-types.ts` (so runtime/framework consumers do not pull Zod into their typecheck or bundles), and defines `PROVENANCE_KINDS` and `_mergeProvenance()`/`_buildProvenance()` — one table and one reader, so a new kind of declared name is a line rather than a type pair and a reader — plus `contentFile`/`contentPath` and `CONTENT_COMPILERS_FILE`.
   - The cross-field rules live in `superRefine`:
     - A `content.sources` format must name a `content.formats` entry or `<dependency>:<name>`.
     - `content.writers` may name only the pack's own `entities`.

@@ -6,7 +6,7 @@
 import { createFormatApplier } from './format-applier.ts';
 import { SDK_ENTITIES } from '../types/sdk-entities.ts';
 import type { ContentApplier } from '../utils/apply.ts';
-import type { ContentEditPolicy } from '../framework/declaration-schema.ts';
+import type { ContentEditPolicy } from '../framework/declaration-types.ts';
 
 export interface DocumentApplierOptions {
   /** The entry's `onUserEdit`; see `ContentSourceSchema` */

@@ -3,7 +3,7 @@ import type { EARS } from '@elmdb/ears';
 // the shell reads. The renderer implements it over its API client; tests pass a fake.
 import type { Message } from '@apackdev/sdk/events';
 import type { FeClient } from '@apackdev/sdk/runtime';
-import type { LoadedPackEntry } from '../packs/layout.ts';
+import type { LoadedPackEntry } from '../packs/layout-types.ts';
 
 /**
  * Why the backend failed: a message, or an error with its stack, which the error page shows as a message over the

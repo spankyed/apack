@@ -1,30 +1,17 @@
 import { _packEntityTypes, _packRanks, _packRelationTypes, _packWeightedKinds, _packRoles, type PackDataDeclarations, type PackEntityDeclaration } from '../framework/data-declaration.ts';
 import * as path from 'path';
-import type { z } from 'zod';
 import { resolveName } from '../ids/refs.ts';
 import type {
-  ManifestSchema, FeatureEntrySchema, LifecycleConfigSchema, MigrationDeclarationSchema, ContentSourceSchema, ContentFormatSchema,
-  StepEntrySchema, StepDSLMetaSchema, DslEntrySchema, PackPermissionSchema,
-} from '../framework/declaration-schema.ts';
+  ContentFormatConfig, ContentSourceConfig, DslEntry, PackDependencySnapshot, PackFeature, PackFeatureEntry,
+  PackFlowHelpers, PackLifecycleConfig, PackManifest, PackMigrationDeclaration, PackPermission, PackProvenance,
+  PackSnapshot, PackSurfaceEntry, PackSystemEntry, PackTypeManifest, ProvenanceKind, StepDSLMeta, StepEntry,
+} from '../framework/declaration-types.ts';
 
-// Types derive from the shared authored/native declaration grammar.
-
-export type PackManifest = z.infer<typeof ManifestSchema>;
-export type PackFeatureEntry = z.infer<typeof FeatureEntrySchema>;
-export type PackLifecycleConfig = z.infer<typeof LifecycleConfigSchema>;
-export type PackMigrationDeclaration = z.infer<typeof MigrationDeclarationSchema>;
-export type ContentSourceConfig = z.infer<typeof ContentSourceSchema>;
-export type ContentFormatConfig = z.infer<typeof ContentFormatSchema>;
-export type StepEntry = z.infer<typeof StepEntrySchema>;
-export type StepDSLMeta = z.infer<typeof StepDSLMetaSchema>;
-export type DslEntry = z.infer<typeof DslEntrySchema>;
-export type PackPermission = z.infer<typeof PackPermissionSchema>;
-
-export type PackSystemEntry = NonNullable<PackFeatureEntry['system']>;
-export type PackSurfaceEntry = NonNullable<PackFeatureEntry['surface']>;
-
-/** A feature with the id it is declared under: what everything reading a manifest's features works with */
-export type PackFeature = PackFeatureEntry & { id: string };
+export type {
+  ContentFormatConfig, ContentSourceConfig, DslEntry, PackDependencySnapshot, PackFeature, PackFeatureEntry,
+  PackFlowHelpers, PackLifecycleConfig, PackManifest, PackMigrationDeclaration, PackPermission, PackProvenance,
+  PackSnapshot, PackSurfaceEntry, PackSystemEntry, PackTypeManifest, ProvenanceKind, StepDSLMeta, StepEntry,
+};
 
 /**
  * A manifest's features as a list, each carrying the id it is keyed by. `features` is a map, so a duplicate
@@ -59,51 +46,6 @@ export function packFeatures(manifest: { features?: Record<string, PackFeatureEn
  * covers, and fails when that list changes so the change is decided rather than missed.
  */
 export const PACK_SNAPSHOT_FORMAT = 1;
-
-export interface PackTypeManifest {
-  entities: Record<string, string>;
-  relKinds: Record<string, string>;
-  roles: Record<string, string>;
-}
-
-export interface PackSnapshot {
-  /** Identifies the same declared data in generated backend/frontend bindings. */
-  declarationRevision: string;
-  types: PackTypeManifest;
-  /** Dependent-facing TypeScript declaration bundles, keyed by facade name. */
-  facades: Record<string, string>;
-  /** Entity type to local destination feature, materialized from declared surface contract types. */
-  entityDestinations: Record<string, string>;
-  /** Compiled names for every declared endpoint; absent only when there are no endpoints. */
-  eventContracts?: import('../framework/event-contracts.ts').PackEventContracts;
-  manifest: PackManifest;
-  /** Self-contained Monaco declarations keyed by DSL name; required for every declared Monaco target. */
-  dslDefinitions?: Record<string, string>;
-  /** Materialized articles; required when the manifest declares help. */
-  help?: import('../framework/pack-help.ts').HelpDocument[];
-  /** The `PACK_SNAPSHOT_FORMAT` of the CLI that wrote it; a snapshot without one predates the format */
-  format: number;
-  sdkVersion?: string;
-  /**
-   * What everything this pack's tree declares is declared by: kind → name → the pack declaring it.
-   *
-   * A snapshot has to tell a dependent about the whole tree, not just this pack, because a dependent
-   * sees only its direct dependencies' snapshots. Without it, a dependent of two packs that share an
-   * ancestor sees the ancestor's names arriving from both and reads that as two packs declaring the
-   * same name — a collision that isn't one. Every pack depends on the base pack, so that is every
-   * diamond.
-   *
-   * Every kind — entities, relation kinds, commands, surfaces — goes through one algorithm,
-   * `_mergeProvenance`, and `PROVENANCE_KINDS` is where a new kind costs a line rather than a
-   * differently-shaped field with a reader of its own.
-   */
-  provenance?: PackProvenance;
-  /** The pack's flow helpers, which dependents' generated flow helpers re-export */
-  flowHelpers?: PackFlowHelpers;
-}
-
-/** Type-data inspection retains the recorded stamp when present; it does not authorize execution. */
-export type PackDependencySnapshot = Omit<PackSnapshot, 'format'> & { format?: number };
 
 /**
  * A build whose snapshot is in another format than `PACK_SNAPSHOT_FORMAT`: what's wrong, and which side is older, since
@@ -165,12 +107,14 @@ export const PROVENANCE_KINDS = {
   tiptapExtensions: (m: ProvenanceManifest) => Object.values(m.extensions?.textEditor ?? {}).flatMap(surface => Object.keys(surface.extensions ?? {})),
   // Keyed by ref, so a dependent reusing one of its dependency's feature ids keeps both apart
   surfaces: (m: ProvenanceManifest, packId: string) => Object.entries(m.features ?? {}).filter(([, f]) => f.surface).map(([id]) => resolveName(id, packId)),
-} as const;
+} as const satisfies Record<ProvenanceKind, (m: ProvenanceManifest, packId: string) => string[]>;
 
-export type ProvenanceKind = keyof typeof PROVENANCE_KINDS;
-
-/** Declared name → the pack that declares it, per kind. Absent kinds declared nothing. */
-export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, string>>>;
+type _Asserted<T extends true> = T;
+export type _ProvenanceKindsExact = _Asserted<
+  Exclude<keyof typeof PROVENANCE_KINDS, ProvenanceKind> extends never
+    ? (Exclude<ProvenanceKind, keyof typeof PROVENANCE_KINDS> extends never ? true : false)
+    : false
+>;
 
 /** The parts of a manifest `PROVENANCE_KINDS` reads; a `PackManifest` satisfies it */
 export interface ProvenanceManifest extends PackDataDeclarations {
@@ -247,19 +191,6 @@ export function _buildProvenance(
     if (Object.keys(declaredBy).length > 0) provenance[kind] = declaredBy;
   }
   return provenance;
-}
-
-/**
- * A pack's generated flow helpers (src/__generated__/flow-helpers.ts: a helper per step, custom
- * step helpers and trigger track builders, its dependencies' included), bundled by `apack pack build`.
- */
-export interface PackFlowHelpers {
-  /** The names the module exports */
-  exports: string[];
-  /** The ES module; only packages stay imports */
-  module: string;
-  /** Its declarations; only packages stay imports */
-  types: string;
 }
 
 /** The bundle of a pack's content compiler modules, in its build dir: dependents compile its formats with it */
