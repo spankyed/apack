@@ -1,10 +1,10 @@
 <template>
-  <div class="flex flex-col h-full bg-neutral-900">
+  <div class="flex flex-col h-full bg-neutral-900" :class="{ 'thread-dashboard': !inline }">
     <template v-if="!inline">
       <ThreadsHeader />
       <!-- Tab Bar -->
       <div class="flex shrink-0 items-center border-b border-neutral-800 bg-neutral-900 overflow-hidden" data-onboarding-id="agent-thread-tabs">
-        <TabBar :tabs="threads.data.tabs" :activeTabId="threads.data.activeTabId" :tabGroups="threads.data.tabGroups" />
+        <TabBar class="dashboard-tabs" :tabs="threads.data.tabs" :activeTabId="threads.data.activeTabId" :tabGroups="threads.data.tabGroups" />
       </div>
     </template>
 
@@ -39,3 +39,29 @@ const { state: threads, send } = useState(actor);
 
 const currentTab = computed(() => threads.value.data.tabs.find(tab => tab.id === threads.value.data.activeTabId));
 </script>
+
+<style scoped>
+.thread-dashboard {
+  container: thread-dashboard / size;
+}
+
+/* Keep both tab groups reachable when the composer leaves the dashboard a short split. */
+@container thread-dashboard (max-height: 8rem) {
+  .dashboard-tabs {
+    flex-direction: row;
+  }
+
+  .dashboard-tabs :deep([data-container="pinned"]) {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(34%, 14rem);
+    border-block-end-width: 0;
+    border-inline-end-width: 1px;
+  }
+
+  .dashboard-tabs :deep([data-container="main"]) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+</style>
