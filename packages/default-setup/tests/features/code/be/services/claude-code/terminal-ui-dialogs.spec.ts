@@ -169,6 +169,37 @@ it('queues native clear-context continuation and resolves with the native denial
   expect(f.context.getAppState()).toMatchObject({ initialMessage: { clearContext: true, resetTrigger: 'plan_mode_exit', mode: 'auto', message: { content: expect.stringContaining('# Original plan') } } })
   expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny' })
 })
+it.each([false, true])('revalidates an edited clear-context plan before clearing Auto (policy changed: %s)', async policyChanged => {
+  const f = planFixture()
+  const state = f.context.getAppState()
+  state.settings.showClearContextOnPlanAccept = true
+  state.toolPermissionContext.isAutoModeAvailable = false
+  f.native.planAuto.yp = () => f.native.planAuto.Fx.mock.calls.length === 0
+  let savedPlan = ''
+  Object.assign(f.native.runtime, { rat: vi.fn() })
+  Object.assign(f.native, { planStore: {
+    async ATo(_path: string, plan: string) {
+      savedPlan = plan
+      if (policyChanged) state.toolPermissionContext.isAutoModeAvailable = true
+    },
+    async bYe() { return savedPlan },
+  } })
+  const dialog = await f.snapshot()
+  const response = f.reply(dialog, { choice: 'yes-accept-edits', plan: '# Edited plan' })
+  if (policyChanged) {
+    await expect(response).rejects.toThrow('Native plan changed while saving')
+    expect(f.native.planAuto.Fx).not.toHaveBeenCalled()
+    expect(f.answer).not.toHaveBeenCalled()
+    return
+  }
+  await response
+  expect(savedPlan).toBe('# Edited plan')
+  expect(f.native.planAuto.Fx).toHaveBeenCalledWith(false)
+  expect(f.context.getAppState()).toMatchObject({
+    initialMessage: { clearContext: true, mode: 'acceptEdits', message: { planContent: '# Edited plan' } },
+  })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny' })
+})
 it('passes an edited, reviewable plan through the native tool input only', async () => {
   const f = planFixture(), dialog = await f.snapshot()
   await expect(f.reply(dialog, { plan: 'UNSAFE replacement' })).rejects.toThrow('cannot be reviewed')

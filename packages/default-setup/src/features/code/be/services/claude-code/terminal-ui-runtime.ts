@@ -1007,12 +1007,18 @@ async function answerPlan(n,d,request){
  if(request.plan!==undefined&&(enter||d.planFacts.empty||typeof request.plan!=='string'||request.plan.length>200000||n.questionText.VL(request.plan)))throw Error('Native plan cannot be reviewed');
  const plan=edited?request.plan:d.payload.plan,state=d.context.getAppState(),permission=state.toolPermissionContext;
  if(enter){const row=n.planConsent.kTe('plan');if(!row||!n.planConsent.hv(row))throw Error('Native plan entry is unavailable');n.questionOptions.Sye(permission.mode,'plan');d.store.answer(d.item.id,{behavior:'allow',updatedInput:{},permissionUpdates:row.applies});return;}
+ // Revalidate after native file I/O and before changing the mode facts in the revision.
+ if(option.clearContext&&edited&&typeof d.payload.planFilePath==='string'){
+  await n.planStore.ATo(d.payload.planFilePath,plan,d.context.storageV5);
+  n.runtime.rat(d.context.storageV5);
+  if(await n.planStore.bYe(d.context.agentId,d.context.storageV5)!==plan)throw Error('Native revised plan could not be saved');
+  if(nativeDialog(n,d.item.kind).revision!==d.revision)throw Error('Native plan changed while saving');
+ }
  if(option.mode!=='auto'&&n.planAuto.yp()){
   n.planAuto.Fx(false);n.questionOptions.EN(true);
   d.context.setAppState(current=>({...current,toolPermissionContext:{...n.planNormalize.vSe(current.toolPermissionContext),prePlanMode:undefined}}));
  }
  if(option.clearContext){
-  if(edited&&typeof d.payload.planFilePath==='string'){await n.planStore.ATo(d.payload.planFilePath,plan,d.context.storageV5);n.runtime.rat(d.context.storageV5);if(await n.planStore.bYe(d.context.agentId,d.context.storageV5)!==plan)throw Error('Native revised plan could not be saved');if(nativeDialog(n,d.item.kind).revision!==d.revision)throw Error('Native plan changed while saving');}
   const pointer=n.runtime.Cf(d.sessionId),teamHint=n.planTool.Cxn(n.planTeams.is());
   // Original xit queues the native reset, then resolves this tool as denied.
   d.context.setAppState(current=>({...current,initialMessage:{message:{...n.runtime.Ae({content:'Implement the following plan:\n\n'+plan+'\n\nIf you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: '+pointer+teamHint+(feedback?'\n\nUser feedback on this plan: '+feedback:''),origin:{kind:'auto-continuation'}}),planContent:plan,queueSkipAttachments:true},clearContext:true,resetTrigger:'plan_mode_exit',mode:option.mode}}));
