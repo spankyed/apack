@@ -348,8 +348,8 @@ export class AppGitRepository extends GitRepository {
     return true
   }
 
-  override async pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
-    await super.pullBranch(onProgress).catch((error: unknown) => { throw remoteFailure('pull', error) })
+  override async pullBranch(onProgress?: (progress: GitProgress) => void, signal?: AbortSignal): Promise<void> {
+    await super.pullBranch(onProgress, signal).catch((error: unknown) => { throw remoteFailure('pull', error) })
     // A pull fetched already; `suspend` sets the timer again from it
     this.lastFetchTimestamp = Date.now()
     this.suspend(false)

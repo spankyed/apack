@@ -2697,7 +2697,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "detached-head", "no-remote", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text", "moved-since", "nothing-to-undo", "no-longer-kept"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "detached-head", "no-remote", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text", "moved-since", "nothing-to-undo", "no-longer-kept", "no-upstream", "stale-hunk", "output-too-large"];
 
 interface GhPRComment {
     id: string;
