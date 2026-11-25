@@ -1,7 +1,7 @@
 import { type DeclarationData, type NativePackDeclaration, _stepBackendParts } from '@apackdev/sdk/framework';
 import { _packEntityTypes, _packRelationTypes, _packRoles, declaredContentKeys } from '@apackdev/sdk/framework';
 import { lifecycleBindingProblem } from './lifecycle-binding.ts';
-import type { PackManifest, StepEntry } from '@apackdev/sdk/build';
+import type { PackManifest, StepEntry } from '@apackdev/pack-format';
 import { isPlainObject } from '@apackdev/sdk/utils/pure';
 import { namedBindings, sameKeys, sameNames } from './binding-shape.ts';
 import { isDeepStrictEqual } from 'node:util';

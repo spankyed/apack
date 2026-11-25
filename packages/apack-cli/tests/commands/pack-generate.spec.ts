@@ -1,5 +1,5 @@
-import * as sdkBuild from '@apackdev/sdk/build';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import * as sdkBuild from '@apackdev/pack-build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,7 +8,8 @@ import { bundlePackTypes } from '../../src/build/types-bundler';
 import { dependencyTypes } from '../../src/commands/generate';
 import { readDependencyBuild, PACK_LAYOUT } from '@apackdev/host/packs';
 import { assertGeneratedCurrent, generateEntries } from '../../src/commands/generate-entries';
-import { PACK_SNAPSHOT_FORMAT, PACK_TYPES_FACADE, type PackManifest, type PackSnapshot } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT, type PackManifest, type PackSnapshot } from '@apackdev/pack-format';
+import { PACK_TYPES_FACADE } from '@apackdev/pack-build';
 
 const compilation = {
   hash: 'test-compiler',

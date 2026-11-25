@@ -198,6 +198,8 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
       repoFile('LICENSE'),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),
       pkgFile('apack-host', 'src'), pkgFile('apack-host', 'package.json'),
+      pkgFile('apack-pack-format', 'src'), pkgFile('apack-pack-format', 'package.json'),
+      pkgFile('apack-pack-build', 'src'), pkgFile('apack-pack-build', 'package.json'),
       ...Object.values(INLINED_FROM).flatMap((inlined) => inlined(at))],
     outputs: [pkgFile(pkg, 'dist', 'package', 'package.json'), pkgFile(pkg, 'dist', 'package', 'dist'),
       pkgFile(pkg, 'dist', 'package', 'LICENSE'),
@@ -213,7 +215,13 @@ export function buildUnitsIn(root: string): Record<string, BuildUnit> {
     '@apackdev/ui': compiled(at, 'apack-ui', at.pkgFile('apack-ui', 'tsdown.config.ts'), at.repoFile('scripts', 'build-ui-package.ts'),
       at.pkgFile('apack-ui', 'scripts', 'exports.ts')),
     '@apackdev/testing': bundled(at, 'apack-testing'),
-    '@apackdev/cli': bundled(at, 'apack-cli', 'bin', 'templates'),
+    '@apackdev/cli': (() => {
+      const unit = bundled(at, 'apack-cli', 'bin', 'templates');
+      return {
+        inputs: [...unit.inputs, at.pkgFile('apack-pack-format', 'apack.schema.json')],
+        outputs: [...unit.outputs, at.pkgFile('apack-cli', 'dist', 'package', 'apack.schema.json')],
+      };
+    })(),
   };
 }
 

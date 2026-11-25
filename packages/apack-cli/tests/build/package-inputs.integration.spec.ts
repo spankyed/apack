@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import * as sdkBuild from '@apackdev/sdk/build';
+import * as sdkBuild from '@apackdev/pack-build';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { callCli, preparePack, packageJson, tsconfig } from '../_support/pack-builds.ts';
 import { assertGeneratedCurrent } from '../../src/commands/generate-entries.ts';

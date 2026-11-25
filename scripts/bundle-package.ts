@@ -32,6 +32,8 @@ interface BundleConfig {
   sharedExternalEntries?: Record<string, string>;
   /** Extra files copied verbatim into the published package */
   copy?: string[];
+  /** Extra repo-relative files copied into the published package (dest → repo-relative source) */
+  copyFromRepo?: Record<string, string>;
   /** Emit dist/<entry>.d.ts for each entry */
   declarations?: boolean;
   /** Fields replacing the workspace ones in the published package.json */
@@ -43,6 +45,7 @@ const CONFIGS: Record<string, BundleConfig> = {
     entries: { cli: 'src/index.ts', 'build-worker': 'src/build/build-worker.ts', 'frontend-worker': 'src/build/frontend-worker.ts' },
     commonjsEntries: { 'compiler-startup': 'src/build/compiler-startup.ts' },
     copy: ['bin/apack.mjs', 'bin/compiler-windows.ps1', 'bin/compiler-helper-job.ps1', 'bin/compiler-pe-context.ps1', 'bin/compiler-pe-process.ps1', 'bin/compiler-source-hooks.mjs', 'bin/compiler-startup-coordinator.mjs', 'bin/compiler-startup-loader.mjs', 'bin/compiler-import.cjs', 'templates'],
+    copyFromRepo: { 'apack.schema.json': 'packages/apack-pack-format/apack.schema.json' },
     manifest: { bin: { apack: 'bin/apack.mjs' } },
   },
   '@apackdev/testing': {
@@ -74,6 +77,9 @@ function publishedPaths(config: BundleConfig, pkgDir: string): [string, string][
     if (fs.existsSync(from) && fs.statSync(from).isDirectory()) {
       for (const inside of filesUnder(from)) paths.push(['a copied file', path.join(file, inside)]);
     } else paths.push(['a copied file', file]);
+  }
+  for (const dest of Object.keys(config.copyFromRepo ?? {})) {
+    paths.push(['a copied file', dest]);
   }
   return paths;
 }
@@ -121,9 +127,17 @@ const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
  */
 const FROM_RELEASES = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => repositoryOf(name) !== undefined));
 const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...FROM_RELEASES].map((name) => ({ name, manifest: workspaceManifest(name) }));
-const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
+const PRIVATE_INLINED = [
+  ['@apackdev/host', 'apack-host'],
+  ['@apackdev/pack-format', 'apack-pack-format'],
+  ['@apackdev/pack-build', 'apack-pack-build'],
+] as const;
+const privateInlinedPkgs = PRIVATE_INLINED.map(([, dir]) =>
+  JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', dir, 'package.json'), 'utf-8')));
+const PRIVATE_NAMES = PRIVATE_INLINED.map(([name]) => name);
+const PRIVATE_SET = new Set<string>(PRIVATE_NAMES);
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
-const INLINED = new Set([...SHARED, ...FROM_RELEASES, '@apackdev/host']);
+const INLINED = new Set([...SHARED, ...FROM_RELEASES, ...PRIVATE_NAMES]);
 
 const builtins = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
@@ -138,23 +152,23 @@ const externalizeAllButInlined: Plugin = {
 };
 
 function versionOf(name: string): string {
-  // The package's own ranges win; inlined shared-instance and host code brings their ranges
+  // The package's own ranges win; inlined shared-instance and private workspace code brings their ranges
   const sources: Array<Record<string, string> | undefined> = [
     pkg.dependencies, pkg.peerDependencies,
     ...inlinedPkgs.flatMap(({ manifest }) => [manifest.dependencies, manifest.peerDependencies]),
-    hostPkg.dependencies,
+    ...privateInlinedPkgs.map((manifest) => manifest.dependencies),
   ];
   for (const source of sources) {
     if (source?.[name]) return source[name];
   }
-  throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the inlined packages nor @apackdev/host declares`);
+  throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the inlined packages nor private workspaces declare`);
 }
 
 const externalizeAllButHost: Plugin = {
   name: 'externalize-all-but-host',
   setup(b) {
     b.onResolve({ filter: /^[^./]/ }, (args) => {
-      if (args.kind === 'entry-point' || packageName(args.path) === '@apackdev/host') return undefined;
+      if (args.kind === 'entry-point' || PRIVATE_SET.has(packageName(args.path))) return undefined;
       return { path: args.path, external: true };
     });
   },
@@ -272,8 +286,8 @@ async function main(): Promise<void> {
       dependencies[shared.name] = shared.version;
     }
   }
-  // The private host package and what the SDK takes from a release are inlined, never installed
-  delete dependencies['@apackdev/host'];
+  // Private workspace packages and what the SDK takes from a release are inlined, never installed
+  for (const name of PRIVATE_NAMES) delete dependencies[name];
   for (const name of FROM_RELEASES) delete dependencies[name];
 
   for (const file of config.copy ?? []) {
@@ -284,6 +298,11 @@ async function main(): Promise<void> {
     // throws EISDIR on one, which is how this was found rather than shipped empty.
     if (fs.statSync(from).isDirectory()) fs.cpSync(from, dest, { recursive: true });
     else fs.copyFileSync(from, dest);
+  }
+  for (const [destRel, repoRel] of Object.entries(config.copyFromRepo ?? {})) {
+    const dest = path.join(stagedDir, destRel);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(path.join(repoRoot, repoRel), dest);
   }
 
   if (config.declarations) {

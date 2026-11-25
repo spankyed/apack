@@ -2,7 +2,7 @@ import type {
   HelpDocument, NativePackDeclaration, PackEventContracts, PackManifest, PackSnapshot, SettingsDefinition, SurfaceDeclaration,
 } from '@apackdev/sdk/framework';
 import type { FeatureRef } from '@apackdev/sdk/ids';
-import type { PackIntegrity } from './layout-paths.ts';
+import type { PackIntegrity } from '@apackdev/pack-format';
 
 export type CatalogData<T> = T extends object ? { readonly [K in keyof T]: CatalogData<T[K]> } : T;
 

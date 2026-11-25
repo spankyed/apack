@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/apack-pack-build.tsbuildinfo",
+    "target": "ES2024",
+    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "customConditions": ["@apackdev/source"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

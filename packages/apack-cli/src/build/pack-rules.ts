@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';
-import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@apackdev/sdk/build';
+import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@apackdev/pack-format';
 import { ownModuleFindings, type OwnModuleSpecifier } from '@apackdev/host/build/own-module-specifiers';
 import { readSubpathImports } from '@apackdev/host/build/subpath-imports';
 // The key itself, not a copy of it: one declaration, so a rename there renames what this refuses

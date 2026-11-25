@@ -38,6 +38,8 @@ export interface UnitSuite {
 
 export const UNIT_SUITES: readonly UnitSuite[] = [
   { workspace: '@apackdev/sdk', dir: 'apack-sdk', kind: 'host' },
+  { workspace: '@apackdev/pack-format', dir: 'apack-pack-format', kind: 'host' },
+  { workspace: '@apackdev/pack-build', dir: 'apack-pack-build', kind: 'host' },
   { workspace: '@app/default-setup', dir: 'default-setup', kind: 'pack' },
   { workspace: '@apackdev/cli', dir: 'apack-cli', kind: 'host' },
   { workspace: '@apackdev/host', dir: 'apack-host', kind: 'host' },

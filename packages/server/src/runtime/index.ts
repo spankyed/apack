@@ -9,7 +9,7 @@ import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { loadAppPacks, startPacks } from '@apackdev/host/packs/runtime';
 // The app's own features: its registration, and the systems it runs for them
 import {

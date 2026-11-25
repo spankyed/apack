@@ -8,10 +8,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import {
-  buildPackConfigFromManifest, compilePack, formatEntities, generatePackFiles, parseManifest, resolveContentSources,
-  type PackManifest, type PackSnapshot, type ContentDependency,
-} from '@apackdev/sdk/build';
+import { buildPackConfigFromManifest, compilePack, formatEntities, generatePackFiles, resolveContentSources, type ContentDependency } from '@apackdev/pack-build';
+import { parseManifest, type PackManifest, type PackSnapshot } from '@apackdev/pack-format';
 import { createDocumentsApplier, createFormatApplier } from '@apackdev/sdk/content';
 import { untypedCreate } from '@apackdev/sdk/ears';
 import type { EARS } from '#generated/ears.ts';

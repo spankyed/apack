@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { renderTemplate } from '../../templates.ts';
 import { regenerateAfterScaffold } from '../generate-entries';
 import { writeIfNotExists, logCreated, parseFlag, hasFlag } from './write';
-import { MIGRATION_TARGET_PATTERN, type MigrationLine } from '@apackdev/sdk/build';
+import { MIGRATION_TARGET_PATTERN, type MigrationLine } from '@apackdev/pack-format';
 import { readManifest, addMigration as addMigrationToManifest } from './manifest';
 
 const HELP = `

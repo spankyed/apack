@@ -1,4 +1,4 @@
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -7,7 +7,7 @@ import { recordHostCompatibility, sealPackBuild } from '@apackdev/host/packs';
 import { install } from '../../src/commands/pack-install';
 import { uninstall } from '../../src/commands/pack-uninstall';
 import { publishRunningApp, findDatabaseWriter } from '@apackdev/host/database';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 

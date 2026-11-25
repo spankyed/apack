@@ -10,7 +10,7 @@
 // Writing stays out: only `facade-report --update` writes the report, and the build never does.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PACK_TYPES_FACADE } from '@apackdev/sdk/build';
+import { PACK_TYPES_FACADE } from '@apackdev/pack-build';
 import { PACK_LAYOUT, readPackBuild } from '@apackdev/host/packs';
 import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
 import ts from 'typescript';

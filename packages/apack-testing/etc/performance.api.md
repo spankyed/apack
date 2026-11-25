@@ -55,7 +55,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
         scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
-        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        outcome: "incomplete" | "failed" | "passed" | "cancelled";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -65,7 +65,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
         scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
-        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        outcome: "incomplete" | "failed" | "passed" | "cancelled";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -266,8 +266,8 @@ export const processReportSchema: z.ZodObject<{
         metrics: z.ZodArray<z.ZodObject<{
             name: z.ZodString;
             unit: z.ZodEnum<{
-                bytes: "bytes";
                 count: "count";
+                bytes: "bytes";
                 seconds: "seconds";
             }>;
             before: z.ZodNumber;
@@ -334,7 +334,7 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            outcome: "incomplete" | "failed" | "passed" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -356,7 +356,7 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            outcome: "incomplete" | "failed" | "passed" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -390,7 +390,7 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            outcome: "incomplete" | "failed" | "passed" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -412,7 +412,7 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            outcome: "incomplete" | "failed" | "passed" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -440,7 +440,7 @@ export function readPerformanceRun(directory: string, measured?: number): {
         scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
-        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        outcome: "incomplete" | "failed" | "passed" | "cancelled";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -520,9 +520,9 @@ export const trialSchema: z.ZodObject<{
     index: z.ZodNumber;
     warmup: z.ZodBoolean;
     outcome: z.ZodEnum<{
+        incomplete: "incomplete";
         failed: "failed";
         passed: "passed";
-        incomplete: "incomplete";
         cancelled: "cancelled";
     }>;
     durationMs: z.ZodOptional<z.ZodNumber>;
@@ -586,8 +586,8 @@ export const trialSchema: z.ZodObject<{
             metrics: z.ZodArray<z.ZodObject<{
                 name: z.ZodString;
                 unit: z.ZodEnum<{
-                    bytes: "bytes";
                     count: "count";
+                    bytes: "bytes";
                     seconds: "seconds";
                 }>;
                 before: z.ZodNumber;

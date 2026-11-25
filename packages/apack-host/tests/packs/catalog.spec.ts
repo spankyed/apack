@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import { resolveName } from '@apackdev/sdk/ids';
 import type { SettingsDefinition } from '@apackdev/sdk/framework';
 import { hostDeclaration } from '../../src/features/declaration.ts';

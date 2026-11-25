@@ -7,7 +7,7 @@ import { packRecord, packRecords, type PackRecord } from './installed.ts';
 import { errorMessage, hasOwn } from '@apackdev/sdk/utils/pure';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { PACK_LAYOUT, readPackBuild, type PackBuild } from './layout.ts';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 
 const logger = createLogger('pack-discovery');
 

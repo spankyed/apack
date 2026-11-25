@@ -1,5 +1,5 @@
 {
-  "$schema": "../apack-sdk/apack.schema.json",
+  "$schema": "../apack-pack-format/apack.schema.json",
   "id": "default-setup",
   "name": "Default Setup",
   "version": "0.1.0",

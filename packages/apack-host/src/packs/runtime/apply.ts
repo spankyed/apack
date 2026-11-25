@@ -4,7 +4,7 @@ import * as crypto from 'crypto';
 import { createLogger } from '@apackdev/sdk/logger';
 import { PACK_LAYOUT, packContentFiles } from '../layout.ts';
 import { recordApplyOutcomes } from '../installed.ts';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import { appliedContent, appState } from '../../app-state/index.ts';
 import { applyRecord, importCompiledContent } from '@apackdev/sdk/utils';
 import { describeContentKey } from '@apackdev/sdk/content';

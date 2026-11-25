@@ -8,3 +8,17 @@ export interface ContentItem {
   children?: ContentItem[];
   [field: string]: unknown;
 }
+
+/** The compiled form of a generic content entry: `<key>.content.json` */
+export interface CompiledContentFile {
+  records: ContentItem[];
+}
+
+/** Record keys that describe the record rather than being written as fields */
+export const RECORD_KEYS: ReadonlySet<string> = new Set(['entity', 'children']);
+
+/** A record's label: what include sets and previews name it by */
+export function itemLabel(record: ContentItem, identity: readonly string[] = []): string {
+  const field = identity.find((name) => name !== 'parent');
+  return String((field ? record[field] : undefined) ?? record.name ?? record.title ?? record.label ?? '');
+}

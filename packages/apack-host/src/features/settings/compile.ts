@@ -6,7 +6,7 @@ import {
   type SettingsProblem,
   type SettingsValidator,
 } from '@apackdev/sdk/framework';
-import type { PackDiagnostic } from '@apackdev/sdk/build';
+import type { PackDiagnostic } from '@apackdev/pack-format';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const ajvOptions = { strict: true, allErrors: true, useDefaults: false, coerceTypes: false, removeAdditional: false } as const;

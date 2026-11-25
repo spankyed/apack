@@ -9,7 +9,7 @@ import { dropAttribute, resetTestData, startTestRuntime, testPacks } from '../..
 import { childContentKey, createFormatApplier, describeContentKey, driftedFieldParts, contentKeyPrefix } from '../../src/content/format-applier.ts';
 import type { ContentWriter } from '../../src/content/writers.ts';
 import { _getMediaPath, applyRecord, type ApplyRecord, type ImportMode } from '../../src/utils/index.ts';
-import type { ContentItem } from '../../src/build/content/items.ts';
+import type { ContentItem } from '../../src/content/item-types.ts';
 import type { EARS } from '../../src/types/entities.ts';
 import { defineEars, type UntypedSchema } from '@elmdb/ears';
 

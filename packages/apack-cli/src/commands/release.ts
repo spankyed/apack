@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import * as semver from 'semver';
 import { Octokit } from '@octokit/rest';
 import { findPackRoot, readManifest } from '../utils';
-import { parseManifest } from '@apackdev/sdk/build';
+import { parseManifest } from '@apackdev/pack-format';
 import { settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { resolveDeps } from './generate';
 import { runPackBuild } from '../build/build-process.ts';

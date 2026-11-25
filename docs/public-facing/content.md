@@ -558,13 +558,13 @@ The file holds an array of records (or `{ "records": [...] }`); a record may car
 
 ### Compiler modules
 
-When a source needs parsing that field sources can't express, give the format a `compiler` module instead of a built-in `format`. Its default export gets a `ContentCompileContext` (`key`, `path`: the entry's absolute path, `packDir`: the writing pack's directory, `format`) and returns records, or a promise of them, each tagged with its `entity`:
+When a source needs parsing that field sources can't express, give the format a `compiler` module instead of a built-in `format`. Its default export gets a `ContentCompileContext` (`key`, `path`: the entry's absolute path, `packDir`: the writing pack's directory, `format`, `compileMarkdownTree`) and returns records, or a promise of them, each tagged with its `entity`:
 
 ```typescript
 // src/content/compilers/glossary.ts
-import { compileMarkdownTree, type ContentCompileContext, type ContentItem } from '@apackdev/sdk/build';
+import type { ContentCompileContext, ContentItem } from '@apackdev/sdk/build';
 
-export default function compileGlossary({ path, format }: ContentCompileContext): ContentItem[] {
+export default function compileGlossary({ path, format, compileMarkdownTree }: ContentCompileContext): ContentItem[] {
   // Skip the format's media directory, if it has one
   return compileMarkdownTree(path, { media: format.media }).map((item) => ({
     entity: 'Term',

@@ -1,5 +1,5 @@
 import { boundFeHost } from '../runtime/fe-host.ts';
-import type { StepEntry } from '../build/manifest.ts';
+import type { StepEntry } from '../framework/declaration-types.ts';
 import type { DeclarationData } from '../framework/catalog-view.ts';
 import type { StepDefinition } from '../steps/types.ts';
 

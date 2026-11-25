@@ -6,7 +6,7 @@ import { satisfies } from 'semver';
 import { defineSystem } from '@apackdev/sdk/framework';
 import { broadcast, tell } from '../../../events.ts';
 import { getAppVersion, resolveAppEnvironment } from '@apackdev/sdk/env';
-import { PACK_SNAPSHOT_FORMAT, parsePackDependency } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT, parsePackDependency } from '@apackdev/pack-format';
 import { HOST_PACK_ID, PACK_ID_PATTERN, resolveName } from '@apackdev/sdk/ids';
 import { packRecord, packRecords, recordInstalled, recordUpdateInstalled, setPackEnabled } from '../../../packs/installed.ts';
 import { reportError } from '@apackdev/sdk/logger';

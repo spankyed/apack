@@ -1,9 +1,9 @@
+import * as path from 'node:path';
 import { flowRepository } from '../repositories/flow-repository.ts';
 import { promptRepository } from '../repositories/prompt-repository.ts';
 import { findRelations, boundEars as ears, untypedWrite } from '../ears/index.ts';
 import { sdkEntities } from '../ears/sdk-entities.ts';
 import { loadJSON, selectsAll, type ContentApplier, type ApplyContext, type ApplyResult, type AppliedItem } from '../utils/index.ts';
-import { contentPath } from '../build/manifest.ts';
 import { compile as compileFlowDSL } from '../build/compilers/flow-compiler.ts';
 import { validate } from '../build/compilers/flow-dsl-validator.ts';
 import { isFlowConfig, type FlowDSL } from '../build/compilers/flow-types.ts';
@@ -104,7 +104,7 @@ export function createFlowApplier(options: FlowApplierOptions = {}): ContentAppl
     key: 'flows',
     apply(ctx: ApplyContext): ApplyResult {
       const counts: ApplyResult = { created: 0, updated: 0, skipped: 0 };
-      const flowsDSL: any = loadJSON(contentPath(ctx.compiledDir, 'flows'));
+      const flowsDSL: any = loadJSON(path.join(ctx.compiledDir, 'flows.content.json'));
       if (!flowsDSL) {
         ctx.log('  compiled flows not found, skipping flows');
         return counts;

@@ -1,6 +1,6 @@
 import { eventContractsFixture } from '../packs/runtime/build-fixture.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { createContributionCatalog } from '../../src/packs/catalog.ts';
 import type { PackCatalogFrame } from '../../src/packs/catalog.ts';
 import { createWindowPackCatalog } from '../../src/fe/pack-catalog.ts';

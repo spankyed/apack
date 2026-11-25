@@ -1,6 +1,6 @@
 import { eventContractsFixture } from './build-fixture.ts';
 import { sealBuild, sealPack } from './build-fixture.ts';
-import { _declarationRevision, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, type PackManifest } from '@apackdev/pack-format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registry } from './test-host.ts';
 import * as fs from 'fs';
@@ -13,7 +13,7 @@ import { appliedContent, appState } from '../../../src/app-state/index.ts';
 import { readAppPackSources } from '../../../src/packs/app-sources.ts';
 import { getLoadedPackEntries } from '../../../src/packs/layout.ts';
 import { resetTestData, testRootEvents as rootEvents } from '@apackdev/sdk/testing';
-import { PACK_SNAPSHOT_FORMAT, contentFile } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT, contentFile } from '@apackdev/pack-format';
 import type { ApplyRecord } from '@apackdev/sdk/utils';
 import { recordInstalled, setPackEnabled, readInstalledPacks } from '../../../src/packs/installed.ts';
 import { _appDirOf } from '@apackdev/sdk/env';

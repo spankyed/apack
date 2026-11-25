@@ -35,6 +35,8 @@ export default defineConfig({
      */
     projects: [
       'packages/apack-sdk',
+      'packages/apack-pack-format',
+      'packages/apack-pack-build',
       'packages/apack-cli',
       'packages/apack-host',
       'packages/server',

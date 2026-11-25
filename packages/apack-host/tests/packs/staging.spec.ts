@@ -11,7 +11,7 @@ import { readInstalledPacks, writeInstalledPacks } from '../../src/packs/install
 const recordedPacks = () => readInstalledPacks();
 
 import { readHostCompatibility } from '../../src/packs/host-info.ts';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 

@@ -136,7 +136,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
     expect(await resolveFromConsumer('@apackdev/sdk/repositories')).toBe(pathToFileURL(fs.realpathSync(path.join(sdk, 'dist', 'repositories', 'index.js'))).href);
     const shipped = fs.readdirSync(path.join(sdk, 'dist'), { recursive: true }).map(String);
     // What the tarball shipped: npm nests the SDK's own dependencies beside it, under its node_modules
-    expect(fs.readdirSync(sdk).filter((entry) => entry !== 'node_modules').sort()).toEqual(['LICENSE', 'apack.schema.json', 'dist', 'package.json']);
+    expect(fs.readdirSync(sdk).filter((entry) => entry !== 'node_modules').sort()).toEqual(['LICENSE', 'dist', 'package.json']);
     // Source maps would point at src, which isn't published
     expect(shipped.filter((f) => f.endsWith('.map'))).toEqual([]);
   });

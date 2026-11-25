@@ -18,7 +18,7 @@ const declaration = nativePackDeclarationFixture({ id: 'repository-fixture', ste
 for (const [type, step] of Object.entries(declaration.steps ?? {})) testPacks.stepDeclarations.set(type, {
   type, packId: declaration.id, origin: 'native', enabled: true, declaration: step,
 });
-const { contentPath } = await import('../../src/build/manifest.ts');
+const contentPath = (dir: string, name: string) => path.join(dir, `${name}.content.json`);
 
 let tmp: string | undefined;
 // The applier reads and writes the installed engine: a fresh one per test

@@ -15,7 +15,7 @@ import { packBuildRevision, shippedPackRevision } from './layout.ts';
 import { appSettingsDefinition } from '../features/settings/be/app-definition.ts';
 import { hasOwn } from '@apackdev/sdk/utils/pure';
 import { isDeepStrictEqual } from 'node:util';
-import { parseSnapshot, ManifestSchema, _declarationRevision, _helpDataProblem, _namingRefusedValue, _nativePackDeclarationProblem, type PackManifest } from '@apackdev/sdk/build';
+import { parseSnapshot, ManifestSchema, _declarationRevision, _helpDataProblem, _namingRefusedValue, _nativePackDeclarationProblem, type PackManifest } from '@apackdev/pack-format';
 import { _settingsJsonProblems, type SettingsDefinition, type SettingsCatalog, type HelpDocument, type HelpCatalog, type NativePackDeclaration } from '@apackdev/sdk/framework';
 import { compileSettingsDefinition, nativeDeclarationSettingsProblem, settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 import type { FeatureRef } from '@apackdev/sdk/ids';

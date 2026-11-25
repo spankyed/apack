@@ -14,7 +14,7 @@ import {
   removeDevServerMarker,
   writeDevServerMarker,
 } from '../../src/packs/dev-server.ts';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 
 let tmp: string;
 let userDataDir: string;
