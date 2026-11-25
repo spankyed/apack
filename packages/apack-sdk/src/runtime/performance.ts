@@ -1,4 +1,4 @@
-import { _isHostBound, boundHost } from './host-runtime.ts';
+import { _isBackendHostBound, _boundBackendHost } from './backend-port.ts';
 import { _isFeHostBound, boundFeHost } from './fe-host.ts';
 
 /** Standard trace context only; never stored alongside business data. */
@@ -70,7 +70,7 @@ export interface PerformanceExecution {
 /** @internal The currently bound process/window resource, absent when recording is unavailable. */
 export function _performanceExecution(): PerformanceExecution | undefined {
   if (_isFeHostBound()) return boundFeHost().diagnostics;
-  if (_isHostBound()) return boundHost().diagnostics?.performance;
+  if (_isBackendHostBound()) return _boundBackendHost().diagnostics?.performance;
   return undefined;
 }
 

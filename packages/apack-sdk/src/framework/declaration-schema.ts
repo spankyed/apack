@@ -15,8 +15,7 @@ import { RESERVED_ATTRIBUTES, RESERVED_ENTITY_TYPES } from '@elmdb/ears';
 import { _reservedEntries } from '../types/reserved-names.ts';
 import { HOST_PACK_ID } from '../ids/refs.ts';
 import { FEATURE_ID_PATTERN, PACK_ID_PATTERN } from '../ids/refs.ts';
-import { _compileSettingsDefinition, _SettingsDefaultsError } from './settings-validation.ts';
-import { _settingsJsonProblems } from './settings-json.ts';
+import { _assertSettingsDefinitionStructure, _settingsJsonProblems } from './settings-json.ts';
 import type { SettingsDefinition } from './settings-definition.ts';
 import type { PackMigrations } from './pack-registration.ts';
 import { providerCapabilities, type EmbeddingModelId } from '../services/models.ts';
@@ -228,18 +227,10 @@ const SettingsDefinitionShape = {
 } satisfies Record<keyof SettingsDefinition, z.ZodTypeAny>;
 
 const SettingsDefinitionValueSchema = z.object(SettingsDefinitionShape).strict();
-const SettingsDefinitionSchema = z.preprocess((raw, ctx) => {
-  // Validate original JSON: record decoding can discard an own __proto__ default before semantic checks.
-  if (SettingsDefinitionValueSchema.safeParse(raw).success) {
-    try { _compileSettingsDefinition(raw as SettingsDefinition); }
-    catch (error) {
-      if (error instanceof _SettingsDefaultsError) {
-        for (const problem of error.problems) ctx.addIssue({ code: 'custom', path: ['defaults', ...problem.path], message: problem.message });
-      } else ctx.addIssue({ code: 'custom', path: ['schema'], message: error instanceof Error ? error.message : String(error) });
-    }
-  }
-  return raw;
-}, SettingsDefinitionValueSchema);
+const SettingsDefinitionSchema = SettingsDefinitionValueSchema.superRefine((definition, ctx) => {
+  try { _assertSettingsDefinitionStructure(definition as SettingsDefinition); }
+  catch (error) { ctx.addIssue({ code: 'custom', path: ['schema'], message: error instanceof Error ? error.message : String(error) }); }
+});
 
 function checkDefaultSurfaceClaims(features: Record<string, { surface?: { default?: boolean } }> | undefined, ctx: z.RefinementCtx): void {
   // Which surface opens first is one surface's annotation, so a pack naming two has said nothing

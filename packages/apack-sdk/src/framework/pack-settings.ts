@@ -1,5 +1,5 @@
 import type { SettingsDefinition } from './settings-definition.ts';
-import { boundHost } from '../runtime/host-runtime.ts';
+import { _boundBackendHost } from '../runtime/backend-port.ts';
 
 /** Data-only definitions for every settings owner, including disabled installed packs. */
 export interface SettingsCatalog {
@@ -11,5 +11,5 @@ export interface SettingsCatalog {
 }
 
 export function getSettingsCatalog(): SettingsCatalog {
-  return boundHost().packs.settingsCatalog();
+  return _boundBackendHost().packs.settingsCatalog();
 }

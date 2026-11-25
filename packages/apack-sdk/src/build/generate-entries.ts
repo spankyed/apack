@@ -434,6 +434,7 @@ export interface GenerateEntriesOptions {
   packRoot: string;
   depTypes?: Map<string, PackTypeManifest>;
   depSnapshots?: Map<string, PackDependencySnapshot>;
+  validateSettings?: (definition: import('../framework/settings-definition.ts').SettingsDefinition) => void;
 }
 
 export async function generatePackFiles(
@@ -1374,7 +1375,7 @@ export const {
     const groups = Object.entries(manifest.extensions?.settings ?? {});
     // Isolate referenced schema types too: two groups may both define a type named Project.
     const groupTypes = await Promise.all(groups.map(async ([name, definition]) =>
-      `declare namespace __PackSettings_${toPascalCase(name)} {\n${await generateSettingsTypes(definition, 'Value')}\n}`));
+      `declare namespace __PackSettings_${toPascalCase(name)} {\n${await generateSettingsTypes(definition, 'Value', { validate: opts.validateSettings })}\n}`));
     const features = packFeatures(manifest).filter(f => f.settings);
     const restricted = (kind: 'feature' | 'pack') => [...depSnapshots].flatMap(([packId, snapshot]) => {
       const declarations = kind === 'feature'
@@ -1383,7 +1384,7 @@ export const {
       return declarations.filter(([, definition]) => definition.access === 'owner').map(([id]) => dataLiteral(`${packId}/${id}`));
     }).join(' | ') || 'never';
     const featureTypes = await Promise.all(features.map(async f =>
-      `declare namespace __FeatureSettings_${toPascalCase(f.id)} {\n${await generateSettingsTypes(f.settings!, 'Value')}\n}`));
+      `declare namespace __FeatureSettings_${toPascalCase(f.id)} {\n${await generateSettingsTypes(f.settings!, 'Value', { validate: opts.validateSettings })}\n}`));
     const entries = features.map(f => `  '${f.id}': __FeatureSettings_${toPascalCase(f.id)}.Value;`);
     const groupDeps = depTypeImports('PackGroupSettings');
     const groupQualified = depIds.map(id => `{ [K in keyof ${depAlias(id, 'PackGroupSettings')} & string as \`${id}/\${K}\`]: ${depAlias(id, 'PackGroupSettings')}[K] }`);

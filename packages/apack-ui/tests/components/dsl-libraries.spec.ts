@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import ts from 'typescript';
-import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
+import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing/fe';
 import type { DslCatalogEntry } from '@apackdev/sdk/framework';
 import { acquireDslLibraries, disposeDslLibraries } from '../../src/components/internal/dsl-libraries.ts';
 import { getDslTypeFromPath, getLanguageFromPath, initializeMonaco, setupMonacoForFile, resetMonacoState } from '../../src/components/monaco-config.ts';

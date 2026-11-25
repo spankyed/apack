@@ -13,6 +13,7 @@ import { DOWNLOAD_TIMEOUT_MS, fetchReleaseAsset, githubFetch, type GitHubRelease
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { parseManifest } from '@apackdev/sdk/build';
+import { settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import type { PackManifest } from '@apackdev/sdk/build';
@@ -104,7 +105,10 @@ function readValidManifest(dir: string): PackManifest {
     throw new Error('apack.json is not valid JSON');
   }
 
-  const { diagnostics } = parseManifest(raw);
+  const parsed = parseManifest(raw);
+  const diagnostics = parsed.diagnostics.length > 0
+    ? parsed.diagnostics
+    : settingsDeclarationDiagnostics(raw as PackManifest);
   if (diagnostics.length > 0) {
     throw new Error(`Invalid apack.json:\n${diagnostics.map(({ message }) => `  - ${message}`).join('\n')}`);
   }

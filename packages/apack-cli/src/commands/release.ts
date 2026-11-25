@@ -6,6 +6,7 @@ import * as semver from 'semver';
 import { Octokit } from '@octokit/rest';
 import { findPackRoot, readManifest } from '../utils';
 import { parseManifest } from '@apackdev/sdk/build';
+import { settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { resolveDeps } from './generate';
 import { runPackBuild } from '../build/build-process.ts';
 import { withBuildSignals } from '../build/build-signals.ts';
@@ -141,7 +142,8 @@ export async function preflight(root: string, options: { local: boolean; run: Ru
 
   const raw = readManifest(root);
   const { diagnostics: manifestErrors } = parseManifest(raw);
-  errors.push(...manifestErrors.map(({ message }) => `apack.json: ${message}`));
+  const settingsErrors = manifestErrors.length === 0 ? settingsDeclarationDiagnostics(raw) : [];
+  errors.push(...[...manifestErrors, ...settingsErrors].map(({ message }) => `apack.json: ${message}`));
   if (!raw.hostVersion) errors.push('apack.json: hostVersion is required for releases (e.g. ">=0.3.0")');
 
   try {

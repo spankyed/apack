@@ -71,6 +71,9 @@ export interface ArtifactDeclaration {
 }
 
 // @internal
+export function _assertSettingsDefinitionStructure(definition: SettingsDefinition): void;
+
+// @internal
 export const _BASELINE_HOST_SERVICE_NAMES: readonly ["logger", "emitter", "repository", "settings"];
 
 // @public (undocumented)
@@ -123,9 +126,6 @@ export interface CommandsExtensionDeclaration {
     // (undocumented)
     onUserEdit?: ContentEditPolicy;
 }
-
-// @internal
-export function _compileSettingsDefinition(definition: SettingsDefinition): SettingsValidator;
 
 // @public
 export type ComponentTarget = string | {
