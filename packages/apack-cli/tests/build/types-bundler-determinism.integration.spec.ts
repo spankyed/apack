@@ -85,17 +85,20 @@ async function buildFacade(parent: string, name: string, modules: string, signal
 }
 
 describe.skipIf(!PACKAGES_BUILT)('facade bundle determinism (needs dist: npm run packages:build)', () => {
-  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'facade-determinism-'));
+  let parent: string | undefined;
+  let published: string | undefined;
   let active: Promise<string> | undefined;
   afterAll(async () => {
     await active?.catch(() => {});
-    fs.rmSync(parent, { recursive: true, force: true });
+    for (const dir of [parent, published]) if (dir) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('is identical from the workspace and from the packed tarballs a consumer installs', { meta: cpuBudget(60_000 + 2 * 180_000 + 20_000) }, async ({ signal }) => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), 'facade-determinism-'));
     active = buildFacade(parent, 'workspace', path.join(REPO_ROOT, 'node_modules'), signal);
     const fromWorkspace = await active;
-    active = buildFacade(parent, 'packed', path.join(installPublishedPackages(), 'node_modules'), signal);
+    published = installPublishedPackages();
+    active = buildFacade(parent, 'packed', path.join(published, 'node_modules'), signal);
     const fromPacked = await active;
     expect(fromWorkspace).toContain('QueryBuilder');
     expect(fromPacked).toBe(fromWorkspace);
