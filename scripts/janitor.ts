@@ -16,7 +16,10 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { type IncrementalUnit, type ProfileOutput, limitsFor, planIdleProfileClearing, planIncrementalEviction, planTmpRemoval } from './lib/janitor-policy.ts';
+import {
+  type IncrementalUnit, type ProfileOutput, type SystemTmpEntry, classifySystemTmpName, limitsFor,
+  planIdleProfileClearing, planIncrementalEviction, planSystemTmpRemoval, planTmpRemoval,
+} from './lib/janitor-policy.ts';
 import { REPOSITORIES } from './lib/external-packages.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
@@ -120,13 +123,18 @@ function sweepRust(checkouts: string[], budget: number, sweepDays: number): void
   }
 }
 
-/** A profile directory's size and when anything was last compiled into it: the newest of the directories a build adds to */
-function profileOutput(profileDir: string): ProfileOutput {
-  const sized = run('du', ['-sk', profileDir]);
+/** When anything was last compiled into a profile directory: the newest of the directories a build adds to */
+function profileBuiltMs(profileDir: string): number {
   const added = ['deps', '.fingerprint', 'build', 'incremental'].flatMap((name) => {
     try { return [fs.statSync(path.join(profileDir, name)).mtimeMs]; } catch { return []; }
   });
-  return { profileDir, bytes: Number(sized.stdout.split('\t')[0]) * 1024, builtMs: added.length > 0 ? Math.max(...added) : fs.statSync(profileDir).mtimeMs };
+  return added.length > 0 ? Math.max(...added) : fs.statSync(profileDir).mtimeMs;
+}
+
+/** A profile directory's size and when anything was last compiled into it */
+function profileOutput(profileDir: string): ProfileOutput {
+  const sized = run('du', ['-sk', profileDir]);
+  return { profileDir, bytes: Number(sized.stdout.split('\t')[0]) * 1024, builtMs: profileBuiltMs(profileDir) };
 }
 
 /**
@@ -147,6 +155,94 @@ function clearIdleProfiles(checkouts: string[], idleMs: number | undefined): voi
       ['find', profile.profileDir, '-mindepth', '1', '-maxdepth', '1', '!', '-name', '.cargo-lock', '-exec', 'rm', '-rf', '{}', '+']);
     say(outcome === 'held' ? `  skipped ${profile.profileDir}: cargo is building there`
       : outcome === 'done' ? `  cleared ${gb(profile.bytes)} from ${profile.profileDir}` : `  could not clear ${profile.profileDir}`);
+  }
+}
+
+function pidIsLive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+}
+
+function authoringOwnerLive(dir: string): boolean {
+  let pid = Number.NaN;
+  try { pid = Number(fs.readFileSync(path.join(dir, 'owner'), 'utf8').trim()); } catch { return false; }
+  return Number.isSafeInteger(pid) && pid > 0 && pidIsLive(pid);
+}
+
+function authoringCheckoutExists(dir: string): boolean | undefined {
+  let checkout: string;
+  try { checkout = fs.readFileSync(path.join(dir, 'checkout'), 'utf8').trim(); } catch { return undefined; }
+  return checkout.length > 0 ? fs.existsSync(checkout) : undefined;
+}
+
+/** Makes every directory under `dir` owner-writable so read-only compiler stores inside a work dir can be removed */
+function makeWritable(dir: string): void {
+  let stat: fs.Stats;
+  try { stat = fs.lstatSync(dir); } catch { return; }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) return;
+  try { fs.chmodSync(dir, 0o700); } catch { return; }
+  for (const entry of fs.readdirSync(dir)) makeWritable(path.join(dir, entry));
+}
+
+function systemTmpEntries(tmpRoot: string): SystemTmpEntry[] {
+  let names: string[];
+  try { names = fs.readdirSync(tmpRoot); } catch { return []; }
+  const entries: SystemTmpEntry[] = [];
+  for (const name of names) {
+    const kind = classifySystemTmpName(name);
+    if (!kind) continue;
+    const at = path.join(tmpRoot, name);
+    let stat: fs.Stats;
+    try { stat = fs.lstatSync(at); } catch { continue; }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
+    let activityMs = stat.mtimeMs;
+    if (kind === 'cargo-mutants') {
+      const target = path.join(at, 'target');
+      if (fs.existsSync(target)) {
+        for (const profile of profileDirs(target)) {
+          try { activityMs = Math.max(activityMs, profileBuiltMs(profile)); } catch {}
+        }
+      }
+      entries.push({ name, path: at, kind, activityMs });
+    } else if (kind === 'apack-authoring') {
+      try { activityMs = Math.max(activityMs, fs.statSync(path.join(at, 'owner')).mtimeMs); } catch {}
+      entries.push({
+        name, path: at, kind, activityMs,
+        ownerLive: authoringOwnerLive(at),
+        checkoutExists: authoringCheckoutExists(at),
+      });
+    } else {
+      entries.push({ name, path: at, kind, activityMs });
+    }
+  }
+  return entries;
+}
+
+function sweepSystemTmp(idleMs: number | undefined): void {
+  const tmpRoot = os.tmpdir();
+  const entries = systemTmpEntries(tmpRoot);
+  const stale = planSystemTmpRemoval(entries, idleMs, Date.now());
+  if (stale.length === 0) return;
+  say(`system tmp: ${dry ? 'would remove' : 'removing'} ${stale.length} of ${entries.length} owned directories in ${tmpRoot}`);
+  for (const entry of stale) {
+    if (dry) { say(`  would remove ${entry.path}`); continue; }
+    if (entry.kind === 'cargo-mutants') {
+      const target = path.join(entry.path, 'target');
+      const locks = fs.existsSync(target) ? profileDirs(target).map((dir) => path.join(dir, '.cargo-lock')) : [];
+      if (locks.length > 0) {
+        const { outcome } = underLocks(locks, ['rm', '-rf', entry.path]);
+        say(outcome === 'held' ? `  skipped ${entry.path}: cargo is building there`
+          : outcome === 'done' ? `  removed ${entry.path}` : `  could not remove ${entry.path}`);
+        continue;
+      }
+    }
+    try {
+      if (entry.kind === 'apack-authoring') makeWritable(entry.path);
+      fs.rmSync(entry.path, { recursive: true, force: true });
+      say(`  removed ${entry.path}`);
+    } catch (error) {
+      say(`  could not remove ${entry.path}: ${(error as Error).message}`);
+    }
   }
 }
 
@@ -230,6 +326,7 @@ else {
     sweepRust(checkouts, limits.incrementalBudgetBytes, limits.sweepDays);
     clearIdleProfiles(checkouts, limits.idleProfileMs);
     sweepTestTmp(checkouts);
+    sweepSystemTmp(limits.idleProfileMs);
   } else {
     say(`swept nothing: ${refused instanceof Error ? refused.message : String(refused)}`);
   }
