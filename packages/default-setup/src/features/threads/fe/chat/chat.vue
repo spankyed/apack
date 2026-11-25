@@ -272,7 +272,7 @@ import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
 import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
-import { provide, ref, computed, watch, watchPostEffect, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { provide, ref, shallowReactive, computed, watch, watchPostEffect, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
 import { claudeMcpTaskStatusLabel } from '#features/code/common/native-mcp-task.ts'
 import { readClaudeDecisionPauseScope, type ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createScrollPositioning } from './scroll-positioning.ts'
@@ -388,13 +388,15 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
 }, { flush: 'post' })
 const currentMode = computed(() => threads.value.data.mode)
 const currentThread = computed(() => threads.value.data.currentThread)
-const nativeQuotaDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && view.state?.ownerId === nativeComposerOwner.value?.ownerId && view.state?.notice?.kind === 'cold_resume_quota' && view.state.notice.sessionId === currentThread.value?.context?.claudeCode?.sessionId))
-const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
+const nativeQuotaDecisionPending = computed(() => !nativeSessionBackgrounded.value && presentedTerminalViews.value.some(view => view.threadId === currentThread.value?.id && view.state?.ownerId === nativeComposerOwner.value?.ownerId && view.state?.notice?.kind === 'cold_resume_quota' && view.state.notice.sessionId === currentThread.value?.context?.claudeCode?.sessionId))
+const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && presentedTerminalViews.value.some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
 const nativeSessionBackgrounded = computed(() => { const native = currentThread.value?.context?.claudeCode; return currentMode.value === 'Claude Code' && !!native?.nativeContinuation && native.nativeContinuation.sessionId === native.sessionId })
 const nativeBackgroundReplyActive = computed(() => nativeSessionBackgrounded.value && nativeBackgroundComposing.value && !nativeTerminalActive.value)
 const allMessages = computed(() => (threads.value.data.currentThread?.messages || []) as MessageEntity[]);
 const nativeTerminalViews = computed(() => threads.value.data.nativeTerminalViews)
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
+const presentedTerminalViews = computed(() => Object.entries(nativeTerminalViews.value)
+  .filter(([mountId, view]) => !view.queueComposer || mountId === nativeUiMount.value?.mountId).map(([, view]) => view))
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => !nativeSessionBackgrounded.value && nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
 // Native panels can disappear before their foreground work releases input.
@@ -641,7 +643,7 @@ function editNativePrompt(edit: import('#generated/types.ts').ClaudePromptEdit) 
 }
 let heartbeat: ReturnType<typeof setInterval> | undefined
 let stopNativeUiWatch: (() => void) | undefined
-function detachNativeUi() {
+function detachNativeUi(nextThreadId = currentThread.value?.id) {
   nativeClientSequence=0
   if (heartbeat) clearInterval(heartbeat)
   heartbeat = undefined
@@ -654,9 +656,20 @@ function detachNativeUi() {
     const resumeKey = threads.value.data.nativeUiViews[mount.mountId]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({ ...mount, resumeKey })
     unmountView('CLAUDE_UI_UNMOUNT', mount)
-    unmountView('CLAUDE_TERMINAL_UNMOUNT', mount)
+    const pending = pendingNativeSends.get(mount.threadId)
+    if (pending?.mount.mountId !== mount.mountId) unmountView('CLAUDE_TERMINAL_UNMOUNT', mount)
+    else if (mount.threadId === nextThreadId) {
+      finishNativeSend(pending)
+      pending.reject(new Error('Claude conversation view changed'))
+    } else {
+      // The drawing and controls retire immediately. The originating terminal
+      // lease is only retained long enough for the submitted message to settle.
+      pending.retire = setTimeout(() => {
+        finishNativeSend(pending)
+        pending.reject(new Error('Claude did not confirm the message'))
+      }, 20_000)
+    }
   }
-  pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }
 provide(claudeTranscriptLayout, event => { const mount = nativeUiMount.value; if (mount) send({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...mount, ...event }) })
 provide(claudeClientReturnFocus,()=>mainComposer.value?.focus())
@@ -675,8 +688,8 @@ function pressNativeUi(actionId: string, href?: string) {
   if (mount) send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 function mountNativeUi() {
-  detachNativeUi()
   const threadId = currentThread.value?.id, owner = taskView.value?.[1].state
+  detachNativeUi(threadId)
   if (!threadId || !currentThread.value?.context?.claudeCode || nativeTerminalActive.value || agentSelection.value || owner?.ownerId && owner.view?.kind !== 'main') return
   nativeUiMount.value = { threadId, mountId: crypto.randomUUID() }
   renewNativeUi()
@@ -692,7 +705,16 @@ onMounted(() => {
   window.addEventListener('blur', renewNativeUi)
   stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0, () => !!agentSelection.value], mountNativeUi, { immediate: true })
 })
-onUnmounted(() => { window.removeEventListener('focus', renewNativeUi); window.removeEventListener('blur', renewNativeUi); stopNativeUiWatch?.(); detachNativeUi() })
+onUnmounted(() => {
+  window.removeEventListener('focus', renewNativeUi)
+  window.removeEventListener('blur', renewNativeUi)
+  stopNativeUiWatch?.()
+  detachNativeUi()
+  for (const pending of pendingNativeSends.values()) {
+    finishNativeSend(pending)
+    pending.reject(new Error('Claude conversation view closed'))
+  }
+})
 watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), renewNativeUi, { flush: 'post' })
 const scrollPositioning = createScrollPositioning(callback => requestAnimationFrame(callback), id => cancelAnimationFrame(id))
 watch(() => currentThread.value?.id, () => scrollPositioning.reset(), { flush: 'sync' })
@@ -726,7 +748,7 @@ const isBusy = computed(() => nativeSessionBackgrounded.value ? false : nativeCo
 const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd
 })
-const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
+const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => !view.queueComposer && mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
 const workflowTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'workflow').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const managedTasks = computed(() => { const owner = nativeComposerOwner.value; return owner?.tasks.filter(task => task.kind === 'managed').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const mcpTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'mcp').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
@@ -962,45 +984,64 @@ function pauseNativeQuestion(identity: import('#features/code/be/services/claude
 }
 
 let nativeSendRevision = 0
-const pendingNativeSend = ref<{ ownerId: string; sessionId: string; revision: number; threadId: string; stageRevision?: string; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
+interface PendingNativeSend {
+  mount: { threadId: string; mountId: string }
+  ownerId: string
+  sessionId: string
+  revision: number
+  stageRevision?: string
+  retire?: ReturnType<typeof setTimeout>
+  resolve(result?: ClaudeComposerSubmitResult): void
+  reject(error: Error): void
+}
+const pendingNativeSends = shallowReactive(new Map<string, PendingNativeSend>())
+const pendingNativeSend = computed(() => pendingNativeSends.get(currentThread.value?.id ?? ''))
+function finishNativeSend(pending: PendingNativeSend) {
+  pendingNativeSends.delete(pending.mount.threadId)
+  if (pending.retire !== undefined) clearTimeout(pending.retire)
+  if (nativeUiMount.value?.mountId !== pending.mount.mountId) unmountView('CLAUDE_TERMINAL_UNMOUNT', pending.mount)
+}
 function submitNativeMessage(text: string, references: MessageReferences): Promise<ClaudeComposerSubmitResult> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
   if (nativeQuotaDecisionPending.value) return Promise.reject(new Error('Choose how to continue before sending'))
   if (!mount || !owner || pendingNativeSend.value) return Promise.reject(new Error('Claude input is not ready'))
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
-    pendingNativeSend.value = { ownerId: owner.ownerId, sessionId: owner.sessionId, revision, threadId: mount.threadId, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject }
+    pendingNativeSends.set(mount.threadId, { ownerId: owner.ownerId, sessionId: owner.sessionId, revision, mount, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject })
     send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, sessionId: owner.sessionId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
     pendingScrollOnSend.value = true
   })
 }
-watch(nativeComposerView, view => {
-  const pending = pendingNativeSend.value
-  if (!pending) return
+watch(nativeTerminalViews, views => {
+  for (const pending of pendingNativeSends.values()) {
+    settleNativeSend(pending, views[pending.mount.mountId])
+  }
+})
+function settleNativeSend(pending: PendingNativeSend, view: typeof nativeComposerView.value) {
   if (view?.state?.ownerId !== pending.ownerId || ['exited', 'error'].includes(view.state.status)) {
-    pendingNativeSend.value = undefined; pending.reject(new Error('Claude conversation owner changed')); return
+    finishNativeSend(pending); pending.reject(new Error('Claude conversation owner changed')); return
   }
   const result = view.submission
   if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision) {
     // A request that has not been admitted cannot follow the owner into the next session.
     // A matching pending command can reset its own session and still acknowledge completion.
     if (view.state.sessionId !== pending.sessionId) {
-      pendingNativeSend.value = undefined
+      finishNativeSend(pending)
       pending.reject(new Error(CLAUDE_STALE_DRAFT_MESSAGE))
     }
     return
   }
   if (result.status === 'pending') return
-  pendingNativeSend.value = undefined
+  finishNativeSend(pending)
   if (result.status === 'accepted') {
-    if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.threadId, pending.stageRevision)
+    if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.mount.threadId, pending.stageRevision)
     if (result.command?.kind === 'review') pending.resolve({ review: result.command })
     else if (result.command?.kind === 'confirmation') pending.resolve({ commandPending: true, revision: result.revision })
     else if (result.command?.kind === 'ultraplan_settled' && result.command.draft) pending.resolve({ returnedDraft: result.command.draft })
     else pending.resolve(result.receipt || result.command?.kind === 'direct_message' ? { queued: result.receipt?.queued === true } : undefined)
   }
   else pending.reject(new Error(result.problem ?? 'Claude did not accept the message'))
-})
+}
 const statusLine = computed(() => {
   const cwd = statusLineCwd.value
   if (!cwd) return undefined

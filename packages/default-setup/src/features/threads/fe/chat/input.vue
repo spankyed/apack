@@ -267,11 +267,10 @@
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
-import { trackNativeSubmittedDraft, waitForSubmittedDraftComposition } from './native-submitted-draft.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE } from '#features/code/common/native-prompt-limits.ts'
 import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
-import { bindClaudeWindowDraft } from './native-window-draft.ts'
-import { ref, shallowRef, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { bindClaudeWindowDraft, trackClaudeWindowSubmittedDraft } from './native-window-draft.ts'
+import { ref, shallowRef, shallowReactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, BookOpen, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
@@ -494,7 +493,9 @@ watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
 
 const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
-const submitting = ref(false)
+const composerDraftOwner = computed(() => JSON.stringify([props.currentThread?.id ?? null, props.currentThread?.context?.claudeCode?.sessionId ?? null]))
+const submittingThreads = shallowReactive(new Set<string | undefined>())
+const submitting = computed(() => submittingThreads.has(props.currentThread?.id))
 const submissionProblem = ref<string>()
 const nativeCopyRequired = 'Choose Use native interface, then return to the conversation and send /copy.'
 const isNativeCopyCommand = (text: string) => /^\/copy(?:[ \t]+[^\r\n]*)?$/.test(text)
@@ -551,7 +552,7 @@ const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.p
 // belong to the originating conversation. Only committed draft state is restored.
 watch([() => tiptapRef.value?.editor, () => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId], ([editor, threadId, sessionId], _previous, cleanup) => {
   if (editor) {
-    cleanup(bindClaudeWindowDraft(editor, JSON.stringify([threadId ?? null, sessionId ?? null]), { persistent: !!threadId && !!sessionId }))
+    cleanup(bindClaudeWindowDraft(editor, composerDraftOwner.value, { persistent: !!threadId && !!sessionId }))
   }
 }, { flush: 'post' })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
@@ -1042,7 +1043,8 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
   if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch.value, revision = bridge.revision
-  submitting.value = true; submissionProblem.value = undefined
+  const threadId = props.currentThread?.id
+  submittingThreads.add(threadId); submissionProblem.value = undefined
   try {
     if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge
       || epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
@@ -1050,7 +1052,7 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
     if (result && 'review' in result) throw new Error(`Claude requested input review before opening ${label}. Use ${command} to review it.`)
   } catch (error) {
     if (epoch === composerEpoch.value) submissionProblem.value = error instanceof Error ? error.message : `Claude ${label} could not be opened`
-  } finally { submitting.value = false }
+  } finally { submittingThreads.delete(threadId) }
 }
 
 watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch.value++ })
@@ -1062,10 +1064,10 @@ const handleSubmit = async () => {
   const epoch = composerEpoch.value, bridge = promptEditor
   const threadId = props.currentThread?.id
   let nativeSubmission: { doc: ProseMirrorNode; sessionId: string } | undefined
-  let submittedDraft: ReturnType<typeof trackNativeSubmittedDraft> | undefined
-  let nativeMessageAccepted = false
+  let submittedDraft: ReturnType<typeof trackClaudeWindowSubmittedDraft> | undefined
   if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
-  submitting.value = true
+  const draftOwner = composerDraftOwner.value
+  submittingThreads.add(threadId)
   submissionProblem.value = undefined
   queuedNotice.value = false
   rejectedNativeDraft.value = undefined
@@ -1095,7 +1097,7 @@ const handleSubmit = async () => {
       submissionProblem.value = nativeCopyRequired
       return
     }
-    if (props.nativeSubmit && !appCommand) submittedDraft = trackNativeSubmittedDraft(editor, doc)
+    if (props.nativeSubmit && !appCommand) submittedDraft = trackClaudeWindowSubmittedDraft(draftOwner, editor)
     const attachmentRefs = await attachments.collect(entityId)
     if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const references: MessageReferences = {
@@ -1119,6 +1121,20 @@ const handleSubmit = async () => {
       const sessionId = props.currentThread?.context?.claudeCode?.sessionId
       if (sessionId) nativeSubmission = { doc, sessionId }
       const result = await props.nativeSubmit(md, references)
+      if (result && 'queued' in result) {
+        // The receipt owns the submitted document and attachment identities,
+        // even when the originating composer is now hidden.
+        attachments.clear()
+        sentHistory.value.push(md)
+        saveHistory(sentHistory.value)
+        if (epoch === composerEpoch.value) {
+          queuedNotice.value = props.isBusy && result.queued
+          historyIndex.value = -1
+          lastClearedContent.value = null
+        }
+        await submittedDraft?.accept()
+        return
+      }
       if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
       if (result && 'review' in result) {
         if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').setContent(result.review.text).run(); submissionProblem.value = `Removed ${result.review.removed} invisible characters. Review and send again.` }
@@ -1140,11 +1156,6 @@ const handleSubmit = async () => {
         } }
         return
       }
-      if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
-      if (result && 'queued' in result) {
-        nativeMessageAccepted = true
-        queuedNotice.value = props.isBusy && result.queued
-      }
     } else {
       emit('send-message', md, references)
     }
@@ -1153,19 +1164,10 @@ const handleSubmit = async () => {
     saveHistory(sentHistory.value)
     historyIndex.value = -1
     lastClearedContent.value = null
-    if (nativeMessageAccepted && editor.view.composing) {
-      const mountId = props.nativePrompt?.mountId, attachmentId = props.nativePrompt?.attachmentId
-      const current = () => epoch === composerEpoch.value && !editor.isDestroyed && tiptapRef.value?.editor === editor
-        && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachmentId
-      await waitForSubmittedDraftComposition(editor, current)
-      if (!current()) return
-    }
     if (editor.state.doc === doc) {
       editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
       messageContent.value = ''
       hasTextContent.value = false
-    } else if (nativeMessageAccepted) {
-      submittedDraft?.removeAcceptedPrefix()
     }
     attachments.clear()
   } catch (error) {
@@ -1177,7 +1179,7 @@ const handleSubmit = async () => {
     if (epoch === composerEpoch.value) submissionProblem.value = message
   } finally {
     submittedDraft?.dispose()
-    submitting.value = false
+    submittingThreads.delete(threadId)
   }
 }
 

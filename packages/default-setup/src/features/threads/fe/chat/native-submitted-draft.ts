@@ -1,40 +1,48 @@
 import type { Editor, EditorEvents } from '@tiptap/core'
 import type { Node } from '@tiptap/pm/model'
-import { Selection } from '@tiptap/pm/state'
+import { Selection, type EditorState } from '@tiptap/pm/state'
 import { watch } from 'vue'
 
-export function trackNativeSubmittedDraft(editor: Editor, submitted: Node) {
+export function createNativeSubmittedDraft(submitted: Node) {
   const boundary = Selection.atEnd(submitted).head
-  let prefixUntouched = editor.state.doc === submitted
-  const record = ({ transaction, appendedTransactions }: EditorEvents['transaction']) => {
-    for (const change of [transaction, ...appendedTransactions]) {
-      for (const step of change.mapping.maps) {
-        step.forEach(from => {
-          if (from < boundary) prefixUntouched = false
-        })
-      }
-    }
-  }
-  editor.on('transaction', record)
+  let prefixUntouched = true
   return {
-    dispose: () => { editor.off('transaction', record) },
-    removeAcceptedPrefix() {
-      if (!prefixUntouched || editor.view.composing) return
-      const { doc, tr } = editor.state
-      if (doc.eq(submitted)) {
-        editor.chain().setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false).clearContent(true).run()
-        return
+    observe({ transaction, appendedTransactions }: EditorEvents['transaction']) {
+      for (const change of [transaction, ...appendedTransactions]) {
+        for (const step of change.mapping.maps) {
+          step.forEach(from => {
+            if (from < boundary) prefixUntouched = false
+          })
+        }
       }
+    },
+    transaction(state: EditorState) {
+      if (!prefixUntouched) return
+      const { doc, tr } = state
+      const original = submitted.type.schema === state.schema ? submitted : state.schema.nodeFromJSON(submitted.toJSON())
+      tr.setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false)
+      if (doc.eq(original)) return tr.delete(0, doc.content.size)
       // A new block may start outside the final text block's closing tokens.
       // Prefer the outermost cut that leaves exactly the submitted document.
-      for (let end = Math.min(submitted.content.size, doc.content.size - 1); end >= boundary; end--) {
-        if (!doc.cut(0, end).eq(submitted)) continue
+      for (let end = Math.min(original.content.size, doc.content.size - 1); end >= boundary; end--) {
+        if (!doc.cut(0, end).eq(original)) continue
         tr.delete(0, end)
-        if (tr.doc.eq(doc.cut(end))) {
-          editor.view.dispatch(tr.setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false))
-        }
+        if (tr.doc.eq(doc.cut(end))) return tr
         return
       }
+    },
+  }
+}
+
+export function trackNativeSubmittedDraft(editor: Editor, submitted: Node) {
+  const draft = createNativeSubmittedDraft(submitted)
+  editor.on('transaction', draft.observe)
+  return {
+    dispose: () => { editor.off('transaction', draft.observe) },
+    removeAcceptedPrefix() {
+      if (editor.view.composing) return
+      const transaction = draft.transaction(editor.state)
+      if (transaction) editor.view.dispatch(transaction)
     },
   }
 }
@@ -63,5 +71,6 @@ export function waitForSubmittedDraftComposition(editor: Editor, current: () => 
     editor.on('destroy', finish)
     editor.on('transaction', scheduleCheck)
     dom.addEventListener('compositionend', scheduleCheck)
+    scheduleCheck()
   })
 }

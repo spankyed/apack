@@ -80,6 +80,46 @@ it('keeps draft text, selection and attachments with their own conversation', as
   expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['second.txt'])
 })
 
+it.each(['hidden', 'reopened', 'refused'] as const)('settles the originating text and media when the draft is %s', async outcome => {
+  const f = mount(async () => 'apack-media://image')
+  const receipt = deferred<{ queued: boolean }>()
+  const original = f.state.currentThread
+  const nativeSubmit = vi.fn(() => receipt.promise)
+  f.state.nativeSubmit = nativeSubmit
+  await nextTick()
+  editor.commands.setContent('already sent')
+  attachments.pendingFiles.value.push(file('sent.txt'))
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledExactlyOnceWith('already sent', { files: [file('sent.txt')] }))
+
+  f.state.currentThread = { id: 'thread-other', messages: [] }
+  await nextTick()
+  editor.commands.setContent('unrelated draft')
+  attachments.pendingFiles.value.push(file('other.txt'))
+  if (outcome === 'reopened') {
+    f.state.currentThread = original
+    await vi.waitFor(() => expect(editor.state.doc.textContent).toBe('already sent'))
+    editor.commands.insertContentAt(editor.state.doc.content.size, '<p><strong>new material</strong></p>')
+    attachments.pendingFiles.value.push(file('new.txt'))
+  }
+  if (outcome === 'refused') receipt.reject(new Error('Claude refused the message'))
+  else receipt.resolve({ queued: false })
+  await receipt.promise.catch(() => undefined)
+  await nextTick()
+  if (outcome !== 'reopened') {
+    expect(editor.state.doc.textContent).toBe('unrelated draft')
+    expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['other.txt'])
+    f.state.currentThread = original
+  }
+  const expected = { hidden: '', reopened: 'new material', refused: 'already sent' }[outcome]
+  const files = { hidden: [], reopened: ['new.txt'], refused: ['sent.txt'] }[outcome]
+  await vi.waitFor(() => {
+    expect(editor.state.doc.textContent).toBe(expected)
+    expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(files)
+  })
+  if (outcome === 'reopened') expect(editor.getHTML()).toBe('<p><strong>new material</strong></p>')
+})
+
 it('returns a clipboard image to its originating draft if reading finishes after switching threads', async () => {
   const f = mount(async () => undefined)
   let finishReading: () => void = () => { throw new Error('No clipboard read was started') }
