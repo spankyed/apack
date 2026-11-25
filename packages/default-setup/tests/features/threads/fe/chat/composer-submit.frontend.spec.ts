@@ -15,7 +15,7 @@ let app: App | undefined
 let previousElectronApi: PropertyDescriptor | undefined
 vi.mock('#features/threads/fe/chat/composables/useAttachments.ts', async importActual => {
   const actual = await importActual<typeof import('#features/threads/fe/chat/composables/useAttachments.ts')>()
-  return { ...actual, useAttachments: () => { attachments = actual.useAttachments(); return attachments } }
+  return { ...actual, useAttachments: (threadId: () => string | undefined) => { attachments = actual.useAttachments(threadId); return attachments } }
 })
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
   const { defineComponent, h, onUnmounted } = await import('vue')
@@ -49,6 +49,54 @@ function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
 }
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
+
+it('keeps attachments on the thread that owns the draft', async () => {
+  const f = mount(async () => 'apack-media://image')
+  const firstThread = f.state.currentThread
+  attachments.pendingFiles.value.push(file('first.txt'))
+
+  f.state.currentThread = { id: 'thread-two', messages: [] }
+  await nextTick()
+  expect(attachments.pendingFiles.value).toEqual([])
+  attachments.pendingFiles.value.push(file('second.txt'))
+
+  f.state.currentThread = firstThread
+  await nextTick()
+  expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['first.txt'])
+  f.submit()
+  await vi.waitFor(() => expect(f.send).toHaveBeenCalledExactlyOnceWith('first', { files: [file('first.txt')] }))
+  expect(attachments.pendingFiles.value).toEqual([])
+
+  f.state.currentThread = { id: 'thread-two', messages: [] }
+  await nextTick()
+  expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['second.txt'])
+})
+
+it('returns a clipboard image to its originating draft if reading finishes after switching threads', async () => {
+  const f = mount(async () => undefined)
+  let finishReading: () => void = () => { throw new Error('No clipboard read was started') }
+  vi.stubGlobal('FileReader', class {
+    result = 'data:image/png;base64,YQ=='
+    onload?: () => void
+    readAsDataURL() { finishReading = () => this.onload?.() }
+  })
+  const firstThread = f.state.currentThread
+  const event = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clipboardData', {
+    value: { items: [{ type: 'image/png', getAsFile: () => new File(['a'], 'release.png', { type: 'image/png' }) }] },
+  })
+  f.root.querySelector('[data-onboarding-id="agent-chat-input"]')!.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(true)
+
+  f.state.currentThread = { id: 'thread-two', messages: [] }
+  await nextTick()
+  finishReading()
+  expect(attachments.pendingImages.value).toEqual([])
+
+  f.state.currentThread = firstThread
+  await nextTick()
+  expect(attachments.pendingImages.value).toEqual([image('release 1.png')])
+})
 
 it('withdraws idle Claude offers at composition start before the document changes', async () => {
   const f = mount(async () => undefined)
@@ -196,6 +244,7 @@ it('sends once during upload and preserves newer typing and attachments', async 
 it.each(['thread', 'mode', 'phase'] as const)('retires an upload after %s ownership changes without clearing the draft', async owner => {
   let finish!: (url: string) => void
   const f = mount(() => new Promise<string>(resolve => { finish = resolve }))
+  const originatingThread = f.state.currentThread
   attachments.pendingImages.value = [image('old.png')]; f.submit()
   if (owner === 'thread') f.state.currentThread = { id: 'thread-two', messages: [] }
   else if (owner === 'mode') f.state.currentMode = 'Other mode'
@@ -204,7 +253,12 @@ it.each(['thread', 'mode', 'phase'] as const)('retires an upload after %s owners
   editor.commands.setContent('another thread draft'); finish('/media/old.png'); await new Promise<void>(resolve => setImmediate(resolve))
   expect(f.send).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled()
   expect(editor.state.doc.textContent).toBe('another thread draft')
-  expect(attachments.pendingImages.value).toHaveLength(1)
+  if (owner === 'thread') {
+    expect(attachments.pendingImages.value).toEqual([])
+    f.state.currentThread = originatingThread
+    await nextTick()
+  }
+  expect(attachments.pendingImages.value).toEqual([image('old.png')])
 })
 
 it('keeps failed uploads available for retry and clears the successful unchanged draft', async () => {

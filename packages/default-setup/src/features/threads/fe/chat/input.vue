@@ -704,7 +704,7 @@ const {
   pendingImages, pendingFiles, hasAttachments,
   handlePaste, handleFileDrop, addImageFromUrl, removeImage, restoreQueuedImages, openFilePicker, removeFile,
   captureAttachments, restoreFromReferences,
-} = useAttachments()
+} = useAttachments(() => props.currentThread?.id)
 function canPresentIdleComposerNotice() {
   const editor = tiptapRef.value?.editor
   return !!editor && !hasTextContent.value && editor.isEmpty && !composerComposing.value && !hasAttachments.value && !hostPopupActive.value && !submitting.value

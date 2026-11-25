@@ -37,9 +37,28 @@ function isImageFile(fileName: string): boolean {
   return IMAGE_EXTENSIONS.has(ext)
 }
 
-export function useAttachments() {
-  const pendingImages = ref<PendingImage[]>([])
-  const pendingFiles = ref<PendingFile[]>([])
+function attachmentDraft() {
+  return { images: ref<PendingImage[]>([]), files: ref<PendingFile[]>([]) }
+}
+
+export function useAttachments(threadId: () => string | undefined) {
+  // The composer stays mounted across conversations. In-flight reads, uploads and
+  // pickers belong to the draft that started them, even after its tab is hidden.
+  const drafts = new Map<string | undefined, ReturnType<typeof attachmentDraft>>()
+  const activeDraft = () => {
+    const owner = threadId()
+    let draft = drafts.get(owner)
+    if (!draft) { draft = attachmentDraft(); drafts.set(owner, draft) }
+    return draft
+  }
+  const pendingImages = computed({
+    get: () => activeDraft().images.value,
+    set: images => { activeDraft().images.value = images },
+  })
+  const pendingFiles = computed({
+    get: () => activeDraft().files.value,
+    set: files => { activeDraft().files.value = files },
+  })
 
   const hasAttachments = computed(() => pendingImages.value.length > 0 || pendingFiles.value.length > 0)
 
@@ -52,18 +71,19 @@ export function useAttachments() {
     return `${base} ${counter}${ext}`
   }
 
-  const addPendingImage = (blob: Blob, fileName?: string) => {
-    const batchNames = new Set(pendingImages.value.map(img => img.name))
+  const addPendingImage = (draft: ReturnType<typeof attachmentDraft>, blob: Blob, fileName?: string) => {
     const ext = blob.type.split('/')[1] || 'png'
-    const name = getUniqueName(fileName || `image.${ext}`, batchNames)
     const reader = new FileReader()
     reader.onload = () => {
-      pendingImages.value = [...pendingImages.value, { dataUrl: reader.result as string, name }]
+      const names = new Set(draft.images.value.map(image => image.name))
+      const name = getUniqueName(fileName || `image.${ext}`, names)
+      draft.images.value = [...draft.images.value, { dataUrl: reader.result as string, name }]
     }
     reader.readAsDataURL(blob)
   }
 
   const addImageFromUrl = async (src: string) => {
+    const draft = activeDraft()
     try {
       const response = await fetch(src)
       if (!response.ok) return
@@ -71,7 +91,7 @@ export function useAttachments() {
       if (blob.size === 0 || blob.size > MAX_IMAGE_SIZE) return
       const mime = blob.type || EXT_TO_MIME[new URL(src).pathname.split('.').pop()?.toLowerCase() ?? '']
       if (!mime) return
-      addPendingImage(blob.type ? blob : new Blob([blob], { type: mime }))
+      addPendingImage(draft, blob.type ? blob : new Blob([blob], { type: mime }))
     } catch (err) {
       console.error('Failed to fetch pasted image:', err)
     }
@@ -80,12 +100,13 @@ export function useAttachments() {
   const handlePaste = (event: ClipboardEvent) => {
     const items = event.clipboardData?.items
     if (!items) return
+    const draft = activeDraft()
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         event.preventDefault()
         const file = item.getAsFile()
         if (!file || !ALLOWED_IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_SIZE) continue
-        addPendingImage(file, file.name || undefined)
+        addPendingImage(draft, file, file.name || undefined)
       }
     }
   }
@@ -109,6 +130,7 @@ export function useAttachments() {
     if (!files?.length) return
     const getPath = window.electronAPI?.fileUtils?.getPathForFile
     if (!getPath) return
+    const draft = activeDraft()
     const newFiles = await Promise.all(Array.from(files).map(async (file) => {
       const p = getPath(file) as string
       if (!p) return null
@@ -126,10 +148,11 @@ export function useAttachments() {
       return { name, path: p, typeLabel: getFileTypeLabel(name), isImage: isImg, previewUrl }
     }))
     const valid: PendingFile[] = newFiles.filter((f) => f !== null)
-    if (valid.length) pendingFiles.value = [...pendingFiles.value, ...valid]
+    if (valid.length) draft.files.value = [...draft.files.value, ...valid]
   }
 
   const openFilePicker = async () => {
+    const draft = activeDraft()
     const result = await window.electronAPI?.fileUtils.selectPath({
       type: 'file',
       allowMultiple: true,
@@ -150,7 +173,7 @@ export function useAttachments() {
       }
       return { name, path: p, typeLabel: getFileTypeLabel(name), isImage: isImg, previewUrl }
     }))
-    pendingFiles.value = [...pendingFiles.value, ...newFiles]
+    draft.files.value = [...draft.files.value, ...newFiles]
   }
 
   const removeFile = (i: number) => {
@@ -159,8 +182,9 @@ export function useAttachments() {
 
   /** Snapshot both values and identities before any upload yields to later composer edits. */
   const captureAttachments = () => {
-    const images = pendingImages.value.map(item => ({ item, dataUrl: item.dataUrl, name: item.name }))
-    const capturedFiles = pendingFiles.value.slice()
+    const draft = activeDraft()
+    const images = draft.images.value.map(item => ({ item, dataUrl: item.dataUrl, name: item.name }))
+    const capturedFiles = draft.files.value.slice()
     const files: FileReference[] = capturedFiles.map(f => ({ name: f.name, path: f.path, typeLabel: f.typeLabel, isImage: f.isImage }))
     return {
       async collect(entityId: string): Promise<MessageReferences | undefined> {
@@ -177,14 +201,15 @@ export function useAttachments() {
       },
       clear() {
         const imageItems = new Set(images.map(image => image.item)), fileItems = new Set(capturedFiles)
-        pendingImages.value = pendingImages.value.filter(image => !imageItems.has(image))
-        pendingFiles.value = pendingFiles.value.filter(file => !fileItems.has(file))
+        draft.images.value = draft.images.value.filter(image => !imageItems.has(image))
+        draft.files.value = draft.files.value.filter(file => !fileItems.has(file))
       },
     }
   }
 
   /** Restore pending attachments from a persisted MessageReferences (e.g. on revert). */
   const restoreFromReferences = async (refs: MessageReferences) => {
+    const draft = activeDraft()
     // Restore images — fetch uploaded URLs back into data URLs for the pending state
     if (refs.images?.length) {
       await Promise.all(refs.images.map(async (img) => {
@@ -196,7 +221,7 @@ export function useAttachments() {
           const mime = blob.type || 'image/png'
           const reader = new FileReader()
           reader.onload = () => {
-            pendingImages.value = [...pendingImages.value, { dataUrl: reader.result as string, name: img.name }]
+            draft.images.value = [...draft.images.value, { dataUrl: reader.result as string, name: img.name }]
           }
           reader.readAsDataURL(blob.type ? blob : new Blob([blob], { type: mime }))
         } catch { /* image no longer accessible */ }
@@ -217,7 +242,7 @@ export function useAttachments() {
         }
         return { name: f.name, path: f.path, typeLabel: f.typeLabel, isImage: f.isImage, previewUrl }
       }))
-      pendingFiles.value = [...pendingFiles.value, ...restored]
+      draft.files.value = [...draft.files.value, ...restored]
     }
   }
 
