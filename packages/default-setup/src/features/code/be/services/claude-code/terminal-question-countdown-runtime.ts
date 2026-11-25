@@ -24,7 +24,9 @@ function readNativeQuestionCountdown(n,d){
  const clock=nativeFunctionName('Fve'),clockHash='c5acf89f8fe4e33025ba8218fd1efa085a47b70968bb168524eba0d65f035037';
  const clocks=countdownFibers(renderers[0].child,f=>f.memoizedProps?.enabled===true&&questionCountdownProducer(f,clock,clockHash),2048);
  if(clocks.length!==1)return;
+ // Wrapper components forward the same children; only the committed Ink host owns the text.
  const text=countdownFibers(clocks[0].child,f=>{
+  if(f.type!=='ink-text')return false;
   const c=f.memoizedProps?.children;
   return Array.isArray(c)&&c.length===3&&c[0]==='auto-continue in '&&Number.isSafeInteger(c[1])&&c[1]>=0&&c[1]<=600&&c[2]==='s · any key to stay';
  },64);
