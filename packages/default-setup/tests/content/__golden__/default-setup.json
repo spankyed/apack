@@ -1327,6 +1327,11 @@
             "description": "Tools always denied",
             "required": false
           },
+          "jsonSchema": {
+            "type": "object",
+            "description": "Native JSON Schema for this conversation. Changing or omitting it starts a new Claude process in the same saved session.",
+            "required": false
+          },
           "systemPrompt": {
             "type": "string",
             "description": "Extra system prompt to append",
