@@ -231,6 +231,22 @@ it('keeps transition input gated, permits cancellation and retires detached inpu
   expect(raw.key).toHaveBeenCalledTimes(1)
 })
 
+it('releases reported focus before retiring the Claude terminal drawing', () => {
+  const mounted = mountNativeTerminal('focus-owner', { id: 'focus-session', target: null }, root(), vi.fn())
+  const view = f.views.at(-1)!
+  const raw = f.sources.at(-1)!
+
+  view.source.focus(true)
+  mounted.setInputBlocked(true)
+  view.unmount.mockImplementationOnce(() => view.source.focus(false))
+  mounted.detach()
+  expect(raw.focus.mock.calls).toEqual([[true], [false]])
+
+  view.source.focus(true)
+  view.source.focus(false)
+  expect(raw.focus.mock.calls).toEqual([[true], [false]])
+})
+
 it('recovers mounted drawings once on a previously working shared connection and retires old input', () => {
   const hostA = root(),
     hostB = root(),

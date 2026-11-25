@@ -961,12 +961,12 @@ function nativeConnection(target: string | null, retry = true): NativeConnection
   return current
 }
 function disposeNativeDrawing(entry: NativeEntry) {
+  entry.view.dispose()
   entry.lease = undefined
   entry.drawing = undefined
   entry.container = undefined
   entry.resize = undefined
   clearTimeout(entry.timer)
-  entry.view.dispose()
   entry.host?.remove()
   entry.host = undefined
 }
@@ -977,11 +977,12 @@ function ownedNativeInput(
   drawing: object
 ): TerminalSource {
   const kept = new Map<PropertyKey, unknown>(),
-    allowed = () =>
+    ownsInput = () =>
       entry.drawing === drawing &&
       !entry.connection.closed &&
-      !!entry.lease &&
-      !entry.inputBlocked
+      !!entry.lease,
+    allowed = () => ownsInput() && !entry.inputBlocked
+  let reportedFocus = false
   return new Proxy(source, {
     get(target, key) {
       if (kept.has(key)) return kept.get(key)
@@ -1006,7 +1007,14 @@ function ownedNativeInput(
           allowed()
             ? value.apply(target, args)
             : Promise.reject(new Error('Native input is changing'))
-      else if (['text', 'pointer', 'focus'].includes(String(key)))
+      else if (key === 'focus')
+        call = (gained: boolean) => {
+          // Let the current view release focus during a transition, even with keys blocked.
+          if (!ownsInput() || (gained ? entry.inputBlocked : !reportedFocus)) return
+          value.call(target, gained)
+          reportedFocus = gained
+        }
+      else if (key === 'text' || key === 'pointer')
         call = (...args: unknown[]) => {
           if (allowed()) value.apply(target, args)
         }
@@ -1128,11 +1136,11 @@ export function mountNativeTerminal(
     },
     detach() {
       if (target.lease !== lease) return
+      target.view.unmount()
       target.lease = undefined
       target.container = undefined
       target.resize = undefined
       clearTimeout(target.timer)
-      target.view.unmount()
       target.host?.remove()
       target.host = undefined
     },
