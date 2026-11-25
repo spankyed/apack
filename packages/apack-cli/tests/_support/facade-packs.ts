@@ -363,28 +363,38 @@ async function addBaseStep(dir: string): Promise<void> {
     + '\n/** A node type that doesn\'t narrow nodeType and adds no required field */\nexport interface NoteNode extends NodeBase {\n  note?: string;\n}\n');
 }
 
-async function buildPacks(published: boolean, dependencyStamp?: { format?: number; sdkVersion?: string }): Promise<string> {
+async function buildPacks(
+  published: boolean,
+  dependencyStamp?: { format?: number; sdkVersion?: string },
+): Promise<{ parent: string; installed?: string }> {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'facade-typing-'));
-  const modules = published ? path.join(installPublishedPackages(), 'node_modules') : path.join(REPO_ROOT, 'node_modules');
-  for (const [name, files] of [['base-pack', BASE_PACK], ['app-pack', APP_PACK]] as const) {
-    const dir = preparePack(parent, name, files, modules);
-    if (name === 'base-pack') await addBaseStep(dir);
-    // produces: the built pack whose snapshot and declarations the tests read
-    const build = await callCli(dir, 'build');
-    if (build.code !== 0) throw new Error(`apack pack build failed in ${name}:\n${build.output}`);
-    if (name === 'base-pack' && dependencyStamp) {
-      const file = path.join(dir, 'dist/types/snapshot.json');
-      const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'));
-      Object.assign(snapshot, dependencyStamp);
-      fs.writeFileSync(file, JSON.stringify(snapshot));
-      fs.writeFileSync(path.join(dir, 'dist/runtime/index.cjs'), 'throw new Error("Dependency runtime must not execute for type inspection");');
-      fs.writeFileSync(path.join(dir, 'dist/build/steps.build.mjs'), 'throw new Error("Dependency build code must not execute for type inspection");');
-      sealPackBuild(path.join(dir, 'dist'), snapshot.manifest, snapshot.sdkVersion);
-    }
+  let installed: string | undefined;
+  try {
+    installed = published ? installPublishedPackages() : undefined;
+    const modules = installed ? path.join(installed, 'node_modules') : path.join(REPO_ROOT, 'node_modules');
+    for (const [name, files] of [['base-pack', BASE_PACK], ['app-pack', APP_PACK]] as const) {
+      const dir = preparePack(parent, name, files, modules);
+      if (name === 'base-pack') await addBaseStep(dir);
+      // produces: the built pack whose snapshot and declarations the tests read
+      const build = await callCli(dir, 'build');
+      if (build.code !== 0) throw new Error(`apack pack build failed in ${name}:\n${build.output}`);
+      if (name === 'base-pack' && dependencyStamp) {
+        const file = path.join(dir, 'dist/types/snapshot.json');
+        const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'));
+        Object.assign(snapshot, dependencyStamp);
+        fs.writeFileSync(file, JSON.stringify(snapshot));
+        fs.writeFileSync(path.join(dir, 'dist/runtime/index.cjs'), 'throw new Error("Dependency runtime must not execute for type inspection");');
+        fs.writeFileSync(path.join(dir, 'dist/build/steps.build.mjs'), 'throw new Error("Dependency build code must not execute for type inspection");');
+        sealPackBuild(path.join(dir, 'dist'), snapshot.manifest, snapshot.sdkVersion);
+      }
 
+    }
+    write(path.join(parent, 'app-pack'), { 'src/consumer.ts': CONSUMER });
+    return { parent, installed };
+  } catch (error) {
+    for (const dir of [parent, installed]) if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
   }
-  write(path.join(parent, 'app-pack'), { 'src/consumer.ts': CONSUMER });
-  return parent;
 }
 
 /**
@@ -556,8 +566,11 @@ afterEach(() => new Promise<void>((resolve) => { setImmediate(resolve); }));
 
   describe.skipIf(published && !PACKAGES_BUILT)(`generated facades with a dependency ('${name}')`, () => {
   let parent: string;
-  beforeAll(async () => { parent = await buildPacks(published, dependencyStamp); });
-  afterAll(() => { if (parent) fs.rmSync(parent, { recursive: true, force: true }); });
+  let installed: string | undefined;
+  beforeAll(async () => { ({ parent, installed } = await buildPacks(published, dependencyStamp)); });
+  afterAll(() => {
+    for (const dir of [parent, installed]) if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
 
   it("writes the dependency's facade types into its snapshot", () => {
     const snapshot = JSON.parse(fs.readFileSync(path.join(parent, 'base-pack', 'dist', PACK_LAYOUT.snapshot), 'utf-8'));

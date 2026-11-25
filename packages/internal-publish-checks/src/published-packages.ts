@@ -103,31 +103,36 @@ function npm(args: readonly string[], cwd: string): void {
  */
 export function installPublishedPackages(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-published-'));
-  const tarballs = path.join(root, '.tarballs');
-  fs.mkdirSync(tarballs);
-  // `packTree` rather than npm by hand: one declaration of this, shared with `packages:check`, which needs the same
-  // tarball for `attw` and must not pack it inside the tree it is checking
-  const packed = (dir: string) => `file:${packTree(dir, tarballs)}`;
-  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-    name: 'consumer', private: true, type: 'module',
-    dependencies: {
-      // Node's types, which the compiles here name (`types: ['node']`), at the version this repository compiles with
-      '@types/node': installedVersion('@types/node'),
-      // What `ai`'s `@ai-sdk/provider` declarations import (`json-schema`) and don't declare: a consumer that checks
-      // library declarations installs it, as one compiling against the AI SDK has to
-      '@types/json-schema': installedVersion('@types/json-schema'),
-      // The optional peers too, at the range each package names: declared, so a declaration may name one, and a
-      // consumer reaching the types that do has installed it
-      ...Object.fromEntries(Object.values(PACKED_PACKAGES).flatMap((dir) => optionalPeers(dir))),
-      ...Object.fromEntries(Object.entries(PACKED_PACKAGES).map(([name, dir]) => [`@apackdev/${name}`, packed(dir)])),
-    },
-    overrides: Object.fromEntries(ELMDB_PACKAGES.map((name) => {
-      const spec = rootOverrides()[name]!;
-      return [name, spec.startsWith('file:') ? packed(path.resolve(REPO_ROOT, spec.slice('file:'.length))) : spec];
-    })),
-  }));
-  npm(['install', '--install-strategy=nested', '--prefer-offline', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], root);
-  return root;
+  try {
+    const tarballs = path.join(root, '.tarballs');
+    fs.mkdirSync(tarballs);
+    // `packTree` rather than npm by hand: one declaration of this, shared with `packages:check`, which needs the same
+    // tarball for `attw` and must not pack it inside the tree it is checking
+    const packed = (dir: string) => `file:${packTree(dir, tarballs)}`;
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: 'consumer', private: true, type: 'module',
+      dependencies: {
+        // Node's types, which the compiles here name (`types: ['node']`), at the version this repository compiles with
+        '@types/node': installedVersion('@types/node'),
+        // What `ai`'s `@ai-sdk/provider` declarations import (`json-schema`) and don't declare: a consumer that checks
+        // library declarations installs it, as one compiling against the AI SDK has to
+        '@types/json-schema': installedVersion('@types/json-schema'),
+        // The optional peers too, at the range each package names: declared, so a declaration may name one, and a
+        // consumer reaching the types that do has installed it
+        ...Object.fromEntries(Object.values(PACKED_PACKAGES).flatMap((dir) => optionalPeers(dir))),
+        ...Object.fromEntries(Object.entries(PACKED_PACKAGES).map(([name, dir]) => [`@apackdev/${name}`, packed(dir)])),
+      },
+      overrides: Object.fromEntries(ELMDB_PACKAGES.map((name) => {
+        const spec = rootOverrides()[name]!;
+        return [name, spec.startsWith('file:') ? packed(path.resolve(REPO_ROOT, spec.slice('file:'.length))) : spec];
+      })),
+    }));
+    npm(['install', '--install-strategy=nested', '--prefer-offline', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], root);
+    return root;
+  } catch (error) {
+    fs.rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 /**
