@@ -7,4 +7,4 @@ export const claudeClientInput: InjectionKey<(id:string,event:ClaudeUiClientInpu
 export const claudeClientReturnFocus: InjectionKey<() => void> = Symbol('claude-client-return-focus')
 
 /** Visibility of the app-owned host; hiding it does not release native sandbox holders. */
-export const claudeClientVisible: InjectionKey<ComputedRef<boolean>> = Symbol('claude-client-visible')
+export const claudeNativeSiteVisible: InjectionKey<ComputedRef<boolean>> = Symbol('claude-native-site-visible')

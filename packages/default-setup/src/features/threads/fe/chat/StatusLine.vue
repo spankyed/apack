@@ -29,7 +29,7 @@ import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#gene
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
-import { claudeClientVisible } from './native-client-input.ts'
+import { claudeNativeSiteVisible } from './native-client-input.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
@@ -42,7 +42,7 @@ const permissionLabels: Record<PermissionMode, string> = { default: 'Default', a
 const ideContext = computed(() => props.nativeUi?.ide ? {...props.nativeUi.ide} : undefined)
 const toolsOpen = ref(false)
 const toolsToggle = ref<HTMLButtonElement | null>(null)
-provide(claudeClientVisible, computed(() => toolsOpen.value))
+provide(claudeNativeSiteVisible, computed(() => toolsOpen.value))
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))
 const displayPath = computed(() => {
   if (!isWorkspacePath.value) return props.statusLine
@@ -190,7 +190,9 @@ watch([hasContent, toolsExpanded], ([available, expanded]) => {
   if (expanded) return
   // Read the old DOM before Vue removes the active control or hides the site.
   const active = document.activeElement
-  const wasInSite = !!nativeSite.value?.contains(active)
+  const popupId = active?.closest<HTMLElement>('[role="listbox"][data-state="open"]')?.id
+  const wasInSite = !!nativeSite.value?.contains(active) || !!popupId && !!nativeSite.value
+    && [...nativeSite.value.querySelectorAll<HTMLElement>('[role="combobox"][data-native-focus-id]')].some(element => element.getAttribute('aria-controls') === popupId)
   const toggleIsLeaving = !available && active === toolsToggle.value
   composing.value = false
   releaseNativeFocus()

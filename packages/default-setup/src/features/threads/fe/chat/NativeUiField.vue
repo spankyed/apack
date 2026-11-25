@@ -4,13 +4,13 @@
       <span v-if="node.label" class="native-field-label min-w-0 text-[11px] leading-4 tracking-wide">{{ node.label }}</span>
       <span v-if="node.kind === 'input'" :style="{ visibility: focused ? 'visible' : 'hidden' }" :aria-hidden="!focused" class="native-field-hint shrink-0 whitespace-nowrap text-[10px]">Enter: {{ node.submitLabel }}</span>
     </span>
-    <SelectRoot v-if="node.kind === 'select'" :model-value="selectToken">
+    <SelectRoot v-if="node.kind === 'select'" :model-value="selectToken" :open="visible && selectOpen" @update:open="selectOpen = visible && $event">
       <SelectTrigger :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :aria-label="node.label || 'Claude selection'"
         class="flex h-9 min-w-0 max-w-full items-center justify-between gap-3 rounded-lg border border-current bg-transparent px-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @keydown.stop>
         <span class="truncate">{{ selectedLabel }}</span><span aria-hidden="true">⌄</span>
       </SelectTrigger>
       <SelectPortal>
-        <SelectContent position="popper" :side-offset="4" :style="{ ...fieldTheme, color: 'var(--native-field-text)' }" class="native-field z-50 max-h-[min(20rem,var(--reka-select-content-available-height))] min-w-[var(--reka-select-trigger-width)] overflow-hidden rounded-lg border border-current bg-[var(--native-field-inverse)] p-1 shadow-lg">
+        <SelectContent position="popper" :side-offset="4" @close-auto-focus="restoreSelectFocus" :style="{ ...fieldTheme, color: 'var(--native-field-text)' }" class="native-field z-50 max-h-[min(20rem,var(--reka-select-content-available-height))] min-w-[var(--reka-select-trigger-width)] overflow-hidden rounded-lg border border-current bg-[var(--native-field-inverse)] p-1 shadow-lg">
           <SelectViewport>
             <SelectItem v-for="(option, index) in node.options" :key="option.value" :value="optionToken(index)" @select="pickToken(optionToken(index))" class="cursor-default rounded px-3 py-2 text-[13px] outline-none data-[highlighted]:bg-[var(--native-field-text)] data-[highlighted]:text-[var(--native-field-inverse)]">
               <SelectItemText>{{ option.label }}</SelectItemText>
@@ -28,10 +28,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, inject, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { SelectRoot, SelectTrigger, SelectPortal, SelectContent, SelectViewport, SelectItem, SelectItemText } from 'reka-ui'
 import type { CSSProperties } from 'vue'
 import { claudeUiColor } from './native-ui-paint.ts'
+import { claudeNativeSiteVisible } from './native-client-input.ts'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 const props = defineProps<{ node: Extract<ClaudeUiNode, { kind: 'input' | 'select' }> }>()
 const emit = defineEmits<{ field: [event: ClaudeUiFieldEvent] }>()
@@ -90,6 +91,13 @@ onBeforeUnmount(() => { sizeObserver?.disconnect(); window.removeEventListener('
 const nativeInputLimit = 16384
 const problem = ref<string>()
 const draft = ref(props.node.value)
+const visible = inject(claudeNativeSiteVisible, computed(() => true))
+const selectOpen = ref(false)
+watch(visible, value => { if (!value) selectOpen.value = false })
+function restoreSelectFocus(event: Event) {
+  // Reka normally returns focus to the trigger. A retired surface owns that decision.
+  if (!visible.value || !field.value?.isConnected) event.preventDefault()
+}
 const selectHasValue = computed(() => props.node.kind === 'select' && props.node.options.some(option => option.value === draft.value))
 // Private option tokens preserve every native value, including the empty string.
 const optionToken = (index: number) => 'option-' + index
@@ -132,7 +140,7 @@ function compositionEnd(event: CompositionEvent) {
   if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement.value; lastChangeValue = replacement.value; replacement = undefined; problem.value = undefined }
 }
 function pickToken(token: unknown) {
-  if (props.node.kind !== 'select' || typeof token !== 'string') return
+  if (!visible.value || !selectOpen.value || props.node.kind !== 'select' || typeof token !== 'string') return
   const index = props.node.options.findIndex((_, index) => optionToken(index) === token)
   if (index < 0) return
   draft.value = props.node.options[index]!.value

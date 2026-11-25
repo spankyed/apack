@@ -8,11 +8,11 @@
 </template>
 <script setup lang="ts">
 import {computed,inject,ref,onMounted,onBeforeUnmount,watch,nextTick,type CSSProperties} from 'vue'
-import {claudeClientInput,claudeClientReturnFocus,claudeClientVisible} from './native-client-input.ts'
+import {claudeClientInput,claudeClientReturnFocus,claudeNativeSiteVisible} from './native-client-input.ts'
 import type {ClaudeUiNode} from '#features/code/be/services/claude-code/ui-presentation.ts'
 import type {ClaudeUiClientInput} from '#features/code/be/services/claude-code/ui-controls.ts'
 const props=defineProps<{node:Extract<ClaudeUiNode,{kind:'client'}>}>()
-const visible=inject(claudeClientVisible,computed(()=>true))
+const visible=inject(claudeNativeSiteVisible,computed(()=>true))
 const returnFocus=inject(claudeClientReturnFocus,undefined)
 const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),textInput=ref<HTMLTextAreaElement|null>(null),compositionPreview=ref(''),measure=ref<HTMLElement|null>(null)
 const dimension=(value:number|string|undefined,unit:string)=>typeof value==='number'?`${value}${unit}`:value

@@ -244,6 +244,28 @@ it('uses native select values and leaves the message composer untouched', async 
 })
 
 
+it('retires a portalled native Select popup when session tools collapse', async () => {
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0, actionId: 'choice',
+    focusId: 'mode-choice', label: 'Mode', value: 'a', autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })
+  const select = f.root.querySelector<HTMLElement>('[role=combobox]')!
+  const toggle = f.root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')!
+  select.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  await vi.waitFor(() => expect(document.body.querySelector('[role=listbox][data-state=open]')).not.toBeNull())
+  expect(f.root.querySelector('[role=listbox]')).toBeNull()
+
+  const option = document.body.querySelector<HTMLElement>('[role=option]')!
+  toggle.click()
+  await nextTick()
+  expect(document.body.querySelector('[role=listbox][data-state=open]')).toBeNull()
+  option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  expect(f.field).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+  toggle.click()
+  await nextTick()
+  expect(select.getAttribute('aria-expanded')).toBe('false')
+  expect(select.textContent).toContain('Alpha')
+})
+
 it('renders native Markdown through the existing viewer and sends owned link clicks to Claude', async () => {
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'markdown', text: '**Native heading**\n\n[Open](https://example.com/)\n\n<script>bad()</script>', dim: false, actionId: 'markdown-action' } } })
   await vi.waitFor(() => expect(f.root.querySelector('strong')).not.toBeNull())
