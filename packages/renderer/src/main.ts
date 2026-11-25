@@ -7,9 +7,9 @@ import type { Actor } from 'xstate';
 import App from './views/App.vue'
 import './style.css'
 import './boot/monaco';
-// highlight.js's stylesheet is global (.hljs, pre code.hljs), so the app owns it: imported from
-// @apackdev/ui it would ship again inside every build.bundleUi pack and restyle code everywhere.
+// The desktop owns shared syntax and math styles so bundled packs reuse one stylesheet and font set.
 import 'highlight.js/styles/github-dark.css'
+import 'katex/dist/katex.min.css'
 import { hostFrontend } from '@/views/packs/surface';
 import { createAppShell } from '@/runtime/shell';
 import { HOST, installFromProtocol, runWindowStorageMigrations } from '@apackdev/host/fe';

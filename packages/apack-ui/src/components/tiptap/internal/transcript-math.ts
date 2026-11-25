@@ -4,7 +4,6 @@ import type { MarkdownSerializerState } from 'prosemirror-markdown'
 import type MarkdownIt from 'markdown-it'
 import { tex } from '@mdit/plugin-tex'
 import katex from 'katex'
-import 'katex/dist/katex.min.css'
 
 const activeParses = new WeakMap<Editor, boolean>()
 const parserState = new WeakMap<MarkdownIt, boolean>()

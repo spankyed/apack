@@ -41,6 +41,7 @@
     "@vue-flow/core": "^1.44.0",
     "@xstate/vue": "^4.0.2",
     "highlight.js": "^11.11.1",
+    "katex": "0.19.1",
     "lowlight": "^3.3.0",
     "lucide-vue-next": "^0.503.0",
     "monaco-editor": "^0.55.1",
