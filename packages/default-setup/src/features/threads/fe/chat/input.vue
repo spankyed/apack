@@ -135,6 +135,7 @@
 
         <!-- Keep the background explanation and actions visible while the draft scrolls. -->
         <div class="sticky bottom-0 z-10 shrink-0 bg-[#202022]">
+          <p v-if="unconfirmedSend" class="px-4 pt-2 text-xs leading-relaxed text-amber-200" role="status">{{ unconfirmedSend }}</p>
           <p v-if="nativeDraftTooLong" role="status" class="px-4 pt-2 text-xs leading-relaxed text-amber-200">{{ nativePromptProblem }}</p>
           <p v-if="nativeBackgrounded" role="status" data-background-note-hint class="px-4 pt-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
           <div data-composer-toolbar class="flex shrink-0 items-center justify-between gap-3 px-3 pb-3 pt-2 text-neutral-500">
@@ -266,7 +267,7 @@
 
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
-import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { ClaudeSendUnconfirmedError, type ClaudeComposerSubmitResult } from './native-submit.ts'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE } from '#features/code/common/native-prompt-limits.ts'
 import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft, trackClaudeWindowSubmittedDraft } from './native-window-draft.ts'
@@ -494,6 +495,8 @@ watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
 const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const composerDraftOwner = computed(() => JSON.stringify([props.currentThread?.id ?? null, props.currentThread?.context?.claudeCode?.sessionId ?? null]))
+const unconfirmedSends = shallowReactive(new Map<string, string>())
+const unconfirmedSend = computed(() => unconfirmedSends.get(composerDraftOwner.value))
 const submittingThreads = shallowReactive(new Set<string | undefined>())
 const submitting = computed(() => submittingThreads.has(props.currentThread?.id))
 const submissionProblem = ref<string>()
@@ -1120,6 +1123,7 @@ const handleSubmit = async () => {
       if (props.nativeSendWaiting) throw new Error(CLAUDE_BUSY_DRAFT_MESSAGE)
       const sessionId = props.currentThread?.context?.claudeCode?.sessionId
       if (sessionId) nativeSubmission = { doc, sessionId }
+      unconfirmedSends.delete(draftOwner)
       const result = await props.nativeSubmit(md, references)
       if (result && 'queued' in result) {
         // The receipt owns the submitted document and attachment identities,
@@ -1172,6 +1176,10 @@ const handleSubmit = async () => {
     attachments.clear()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Message could not be sent'
+    if (error instanceof ClaudeSendUnconfirmedError) {
+      unconfirmedSends.set(draftOwner, message)
+      return
+    }
     if (nativeSubmission && threadId === props.currentThread?.id && tiptapRef.value?.editor === editor
       && !editor.isDestroyed && editor.state.doc.eq(nativeSubmission.doc)) {
       rejectedNativeDraft.value = { ...nativeSubmission, sessionChanged: message === CLAUDE_STALE_DRAFT_MESSAGE }

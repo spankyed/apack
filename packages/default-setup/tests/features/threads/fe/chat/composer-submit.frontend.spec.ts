@@ -7,6 +7,7 @@ import type { ClaudePromptReply, ClaudePromptCompletionReply, ClaudeUiMountState
 import type { Editor } from '@tiptap/core'
 import type { useAttachments } from '#features/threads/fe/chat/composables/useAttachments.ts'
 import ChatInput from '#features/threads/fe/chat/input.vue'
+import { ClaudeSendUnconfirmedError } from '#features/threads/fe/chat/native-submit.ts'
 
 const surface = { id: 'default-setup/threads', sessionId: 'composer-fixture', getSnapshot: () => ({ context: { commands: [{ name: 'cc-model', placeholder: 'Model' }] } }) }
 let editor: Editor
@@ -118,6 +119,45 @@ it.each(['hidden', 'reopened', 'refused'] as const)('settles the originating tex
     expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(files)
   })
   if (outcome === 'reopened') expect(editor.getHTML()).toBe('<p><strong>new material</strong></p>')
+})
+
+it('shows an expired Send only in its original session and retires it on the next explicit Send', async () => {
+  const f = mount(async () => undefined)
+  const receipt = deferred<{ queued: boolean }>()
+  const original = f.state.currentThread
+  original.context = { claudeCode: { sessionId: 'original-expiry-session' } }
+  const nativeSubmit = vi.fn().mockReturnValueOnce(receipt.promise).mockResolvedValue({ queued: false })
+  f.state.nativeSubmit = nativeSubmit
+  await nextTick()
+  editor.commands.setContent('unconfirmed draft')
+  attachments.pendingFiles.value.push(file('kept.txt'))
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledExactlyOnceWith('unconfirmed draft', { files: [file('kept.txt')] }))
+
+  const other = { id: 'different-thread', messages: [], context: { claudeCode: { sessionId: 'unrelated-expiry-session' } } }
+  f.state.currentThread = other
+  receipt.reject(new ClaudeSendUnconfirmedError())
+  await nextTick()
+  const warning = 'Send unconfirmed. Check the conversation before trying again.'
+  expect(f.root.textContent).not.toContain(warning)
+
+  f.state.currentThread = original
+  await vi.waitFor(() => {
+    expect(f.root.textContent).toContain(warning)
+    expect(editor.state.doc.textContent).toBe('unconfirmed draft')
+    expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['kept.txt'])
+  })
+  f.state.currentThread = { ...original, context: { claudeCode: { sessionId: 'replacement-expiry-session' } } }
+  await nextTick()
+  expect(f.root.textContent).not.toContain(warning)
+  f.state.currentThread = original
+  await vi.waitFor(() => expect(f.root.textContent).toContain(warning))
+  editor.commands.setContent('check the next result')
+  f.submit()
+  await vi.waitFor(() => {
+    expect(nativeSubmit).toHaveBeenCalledTimes(2)
+    expect(f.root.textContent).not.toContain(warning)
+  })
 })
 
 it('returns a clipboard image to its originating draft if reading finishes after switching threads', async () => {

@@ -316,7 +316,7 @@ import NativeMainCommand from './NativeMainCommand.vue'
 import NativeManagedTasks from './NativeManagedTasks.vue'
 import NativeMcpForm from './NativeMcpForm.vue'
 import NativeMcpUrl from './NativeMcpUrl.vue'
-import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { ClaudeSendUnconfirmedError, type ClaudeComposerSubmitResult } from './native-submit.ts'
 import { CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
@@ -666,7 +666,7 @@ function detachNativeUi(nextThreadId = currentThread.value?.id) {
       // lease is only retained long enough for the submitted message to settle.
       pending.retire = setTimeout(() => {
         finishNativeSend(pending)
-        pending.reject(new Error('Claude did not confirm the message'))
+        pending.reject(new ClaudeSendUnconfirmedError())
       }, 20_000)
     }
   }
