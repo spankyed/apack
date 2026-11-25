@@ -1,25 +1,10 @@
 {
+  "extends": "../../tsconfig.dom.json",
   "compilerOptions": {
-    "noUnusedLocals": true,
-    // Typechecking only, so the .tsbuildinfo is the whole point: a re-run with nothing changed reuses it
-    // instead of reparsing. `incremental` works with `noEmit`; `composite` does not, which is why this
-    // is not project references (docs/goals/goal-test-tiers.md).
-    "incremental": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/apack-testing.tsbuildinfo",
-    // Workspace @apackdev/* sources import .ts files by name
-    "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    // Workspace @apackdev/* packages resolve to source (see their package.json exports)
-    "customConditions": ["@apackdev/source"],
-    "target": "ES2024",
-    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "types": ["node"]
+    "noEmit": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "bin/**/*.mjs"]
 }

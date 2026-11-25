@@ -1,16 +1,12 @@
 {
+  // Dependencies resolve to their published declarations, not their source: API Extractor analyses
+  // .d.ts files, and a dependency read as source is followed into it instead of being reported as
+  // an import. Run npm run packages:build first.
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2024",
     "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    // Dependencies resolve to their published declarations, not their source: API Extractor analyses
-    // .d.ts files, and a dependency read as source is followed into it instead of being reported as
-    // an import. Run npm run packages:build first.
-    "allowImportingTsExtensions": true,
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "declaration": true,
     "emitDeclarationOnly": true,
     "declarationDir": ".temp/api-types",

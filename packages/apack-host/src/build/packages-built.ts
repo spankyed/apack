@@ -76,7 +76,13 @@ const checkoutPaths = (root: string): CheckoutPaths => ({
  * inline it, and each unit's declared paths are part of its own fingerprint, so editing one unit's input set
  * invalidates that unit alone.
  */
-const sharedInputs = ({ repoFile }: CheckoutPaths): string[] => [repoFile('package.json'), repoFile('package-lock.json')];
+const sharedInputs = ({ repoFile }: CheckoutPaths): string[] => [
+  repoFile('package.json'),
+  repoFile('package-lock.json'),
+  repoFile('tsconfig.base.json'),
+  repoFile('tsconfig.node.json'),
+  repoFile('tsconfig.dom.json'),
+];
 
 export interface BuildUnit {
   /** Files and directories the build reads, absolute; a directory is walked */

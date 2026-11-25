@@ -1,22 +1,9 @@
 {
+  "extends": "../../tsconfig.node.json",
   "compilerOptions": {
-    "noUnusedLocals": true,
-    // Typechecking only, so the .tsbuildinfo is the whole point: a re-run with nothing changed reuses it
-    // instead of reparsing. `incremental` works with `noEmit`; `composite` does not, which is why this
-    // is not project references (docs/goals/goal-test-tiers.md).
-    "incremental": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/server.tsbuildinfo",
-    // Workspace @apackdev/* packages resolve to source (see their package.json exports)
-    "customConditions": ["@apackdev/source"],
-    // Their sources import .ts files by name; this config emits, which requires rewriteRelativeImportExtensions too
-    "allowImportingTsExtensions": true,
+    // Workspace sources import .ts files by name; this config emits, which requires rewriteRelativeImportExtensions too
     "rewriteRelativeImportExtensions": true,
-    "erasableSyntaxOnly": true,
-    "target": "ES2024",
-    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "outDir": "dist",
