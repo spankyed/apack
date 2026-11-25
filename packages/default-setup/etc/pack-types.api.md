@@ -2808,6 +2808,11 @@ interface ClaudeNativeQuestionHoldRequest {
     sessionId: string;
     clientId: string;
     renderToken: string;
+    partial?: {
+        sequence: number;
+        answer: ClaudeQuestionPartialAnswer;
+        images?: readonly ClaudeQuestionImage[];
+    };
 }
 
 type ClaudeNativeQuestionRender = z.infer<typeof ClaudeNativeQuestionRenderSchema>;
@@ -3460,6 +3465,16 @@ declare const ClaudeQuestionImagesSchema: z.ZodArray<z.ZodObject<{
     data: z.ZodString;
 }, z.core.$strict>>;
 
+type ClaudeQuestionPartialAnswer = z.infer<typeof ClaudeQuestionPartialAnswerSchema>;
+
+declare const ClaudeQuestionPartialAnswerSchema: z.ZodObject<{
+    answers: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>>;
+    annotations: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodObject<{
+        preview: z.ZodOptional<z.ZodString>;
+        notes: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>>>;
+}, z.core.$strict>;
+
 type ClaudeQuestionPresentation = z.infer<typeof ClaudeQuestionPresentationSchema>;
 
 declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
@@ -3680,6 +3695,7 @@ type ClaudeTerminalViewRequest = {
 } & ({
     type: 'CLAUDE_TERMINAL_MOUNT';
     queueComposer?: boolean;
+    presence?: WindowPresence;
 } | {
     type: 'CLAUDE_TERMINAL_UNMOUNT';
 } | {
@@ -3715,9 +3731,9 @@ type ClaudeTerminalViewRequest = {
     revision: number;
     taskId: string;
 } & ({
-    operation: 'background' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'stop';
+    operation: 'inspect' | 'pause_workflow' | 'resume_workflow' | 'stop';
 } | {
-    operation: 'foreground';
+    operation: 'background' | 'foreground';
     fromAgent?: ClaudeNativeAgentViewSource;
 } | {
     operation: 'input' | 'send';
@@ -4285,6 +4301,7 @@ interface ClaudeUiQuestionFrame {
     token?: string;
     pending?: boolean;
     problem?: string;
+    countdownSeconds?: number;
     shownInput?: Record<string, unknown>;
     presentation?: ClaudeQuestionPresentation;
     body: {
@@ -4565,6 +4582,15 @@ type ClaudeUiViewRequest = ({
     threadId: string;
     mountId: string;
     scope: ClaudeDecisionPauseScope;
+} | {
+    type: 'CLAUDE_UI_QUESTION_PARTIAL';
+    threadId: string;
+    mountId: string;
+    messageId: string;
+    token: string;
+    sequence: number;
+    answer: ClaudeQuestionPartialAnswer;
+    images?: readonly ClaudeQuestionImage[];
 } | {
     type: 'CLAUDE_UI_QUESTION_ANSWER';
     threadId: string;
@@ -9874,8 +9900,8 @@ interface TerminalTab extends OpenFile {
 type Thinking = z.infer<typeof ThinkingSchema>;
 
 declare const ThinkingSchema: z.ZodEnum<{
-    disabled: "disabled";
     enabled: "enabled";
+    disabled: "disabled";
     adaptive: "adaptive";
 }>;
 
@@ -10390,6 +10416,7 @@ interface ToolActivityEntry {
     nativeResult?: {
         uuid: string;
         sessionId: string;
+        outputFile?: string;
     };
     /** Optional full details revealed when the row is expanded. */
     handbacks?: ClaudeAgentHandback[];
@@ -10623,6 +10650,13 @@ declare const UserStreamLineSchema: z.ZodObject<{
 interface WatcherHandle {
     readonly [gitHandle]: 'watcher';
 }
+
+type WindowPresence = {
+    ownerId: string;
+    sessionId: string;
+    focused: boolean;
+    terminal: boolean;
+};
 
 interface WorktreeEntry {
     path: string;
@@ -12781,8 +12815,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

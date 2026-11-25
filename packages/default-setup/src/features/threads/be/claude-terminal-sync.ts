@@ -7,6 +7,7 @@ import { broadcast } from '#generated/events.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import { projectClaudeTerminalHistory } from './claude-terminal-history.ts'
+import { nativeBashOutputFile } from './claude-bash-output.ts'
 import { sendBlockMessage, updateMessageBlock, updateMessageState } from './services/chat.ts'
 import { updateChatState } from './services/threads.ts'
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
@@ -39,7 +40,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean; queuedPrompt?: boolean; timestamp?: number; order?: number }>()
   const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
-  const results = new Map<string, { text: string; error: boolean; uuid?: string; agentId?: string; assistantUuid?: string }>()
+  const results = new Map<string, { text: string; error: boolean; uuid?: string; agentId?: string; assistantUuid?: string; bashOutputFile?: string }>()
   const agentRows = new Map<string, ClaudeNativeJournalEntry>()
   let lastTaskSnapshot = ''
   let disposed = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
@@ -129,7 +130,10 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           const agent = owner.state.tasks.find(agent => agent.id === result.agentId)
           if (agent) item.nativeAgent = { ...agent, ownerId: owner.state.ownerId, sessionId: owner.state.sessionId }
         }
-        if (result?.uuid) item.nativeResult = { uuid: result.uuid, sessionId: row.sessionId }
+        if (result?.uuid) {
+          item.nativeResult = { uuid: result.uuid, sessionId: row.sessionId,
+            ...(item.tool === 'Bash' && result.bashOutputFile ? { outputFile: result.bashOutputFile } : {}) }
+        }
         if (result) { item.status = result.error ? 'error' : 'ok'; item.outputSummary = result.text.slice(0, 200); item.details = { ...item.details, output: result.text } }
         else if (['exited', 'error'].includes(owner.state.status)) { item.status = 'error'; item.details = { ...item.details, error: 'Native session ended before a result was recorded' } }
         else pendingTools.set(key, entry)
@@ -177,7 +181,10 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
               const nativeResult = object(entry.row.toolUseResult)
               const singleResult = message.content.filter(value => object(value)?.type === 'tool_result').length === 1
               const agentId = singleResult && typeof nativeResult?.agentId === 'string' && nativeResult.agentId.length > 0 && nativeResult.agentId.length <= 256 ? nativeResult.agentId : undefined
+              const bashOutputFile = singleResult && block.is_error !== true
+                ? nativeBashOutputFile(entry.sessionId, nativeResult, text) : undefined
               results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true, ...(typeof entry.row.uuid === 'string' ? { uuid: entry.row.uuid } : {}),
+                ...(bashOutputFile ? { bashOutputFile } : {}),
                 ...(agentId && typeof entry.row.sourceToolAssistantUUID === 'string' ? { agentId, assistantUuid: entry.row.sourceToolAssistantUUID } : {}) })
             }
           }

@@ -95,6 +95,11 @@
           </span>
         </div>
         <NativeToolDrawing component="ToolProgress" :tool-use-id="entry.id" />
+        <button v-if="entry.nativeResult?.outputFile" type="button"
+          class="mb-1 inline-flex items-center gap-1.5 rounded-md border border-neutral-700 px-2 py-1 text-xs text-blue-300 hover:bg-neutral-700/40 focus-visible:outline focus-visible:outline-blue-400"
+          @click="openSurface('code', { type: 'explorer.OPEN_FILE', path: entry.nativeResult.outputFile })">
+          <ArrowRight class="h-3 w-3 shrink-0" />Open full output
+        </button>
         <NativeToolDrawing v-if="entry.nativeResult" component="ToolResult" :tool-use-id="entry.id" class="mt-1">
           <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="detailsFor(entry)?.output || detailsFor(entry)?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
         </NativeToolDrawing>

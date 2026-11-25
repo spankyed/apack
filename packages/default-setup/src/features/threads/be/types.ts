@@ -137,7 +137,7 @@ export interface ToolActivityEntry {
   /** Native agent matched by structured journal identity, independent of the Agent call's launch result. */
   nativeAgent?: { id: string; ownerId?: string; sessionId?: string; name: string; status: string; statusText?: string; canStop?: boolean };
   /** Exact original result row; structured output remains owned by the native process. */
-  nativeResult?: { uuid: string; sessionId: string };
+  nativeResult?: { uuid: string; sessionId: string; outputFile?: string };
   /** Optional full details revealed when the row is expanded. */
   handbacks?: import('#features/code/common/native-handback.ts').ClaudeAgentHandback[];
   details?: { input?: unknown; output?: string; error?: string };

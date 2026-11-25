@@ -1,6 +1,7 @@
 import type { EntityId } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import { projectClaudeTerminalHistory } from './claude-terminal-history.ts';
+import { nativeBashOutputFile } from './claude-bash-output.ts';
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 
 /** Import canonical native rows without acquiring or persisting live drawing capabilities. */
@@ -34,7 +35,13 @@ export function importClaudeSessionMessages({threadId, transcript, sessionId}: {
           const text = typeof result.content === 'string' ? result.content : Array.isArray(result.content) ? result.content.map(object).filter(value => value?.type === 'text').map(value => value?.text).join('\n') : '';
           tool.status = result.is_error === true ? 'error' : 'ok';
           tool.outputSummary = text.slice(0, 200); tool.details = {...tool.details, output: text};
-          if (typeof resultRow?.uuid === 'string') tool.nativeResult = {uuid: resultRow.uuid, sessionId};
+          if (typeof resultRow?.uuid === 'string') {
+            const content = object(resultRow.message)?.content;
+            const singleResult = Array.isArray(content) && content.filter(value => object(value)?.type === 'tool_result').length === 1;
+            const outputFile = tool.tool === 'Bash' && tool.status === 'ok' && singleResult
+              ? nativeBashOutputFile(sessionId, resultRow.toolUseResult, text) : undefined;
+            tool.nativeResult = { uuid: resultRow.uuid, sessionId, ...(outputFile ? { outputFile } : {}) };
+          }
         } else {
           tool.status = 'error'; tool.details = {...tool.details, error: 'Saved session has no recorded result'};
         }
