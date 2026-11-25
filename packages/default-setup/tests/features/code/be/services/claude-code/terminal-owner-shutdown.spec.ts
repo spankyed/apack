@@ -65,6 +65,8 @@ it('signals nothing more once the terminal has already exited',async()=>{
  expect(x.signal.mock.calls).toHaveLength(sent)
 })
 
+vi.mock('#features/code/be/services/claude-code/native-executable-review.ts', () => ({ assertReviewedClaudeNativeExecutable: vi.fn() }))
+
 it('checks early preload registration once the broker returns the terminal handle', async () => {
  let releaseOpen!: () => void
  let markRequested!: () => void

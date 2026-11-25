@@ -26,6 +26,7 @@ import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeN
 import { stat } from 'node:fs/promises'
 import { clearClaudeTeammateCheckpoint, createClaudeTeammateRecovery, identifyClaudeRecoveryPane, saveClaudeTeammateCheckpoint, type ClaudeRecoveryPane } from './teammate-recovery.ts'
 import { resolveClaudeExecutable } from './native-executable.ts'
+import { assertReviewedClaudeNativeExecutable } from './native-executable-review.ts'
 import { projectClaudeTerminalImageReferences } from './terminal-image-reference.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
@@ -138,6 +139,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const executable = await resolveClaudeExecutable(options.cliPath ?? await resolveForService('claude-code'), options.cwd, env.PATH)
   if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
   if (!(await stat(options.cwd)).isDirectory()) throw new Error('Native terminal working directory is unavailable')
+  await assertReviewedClaudeNativeExecutable(executable, options.signal)
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
   // Claude uses these markers to select the teammate backend. The outer iTerm2 or tmux pane does not own this PTY.

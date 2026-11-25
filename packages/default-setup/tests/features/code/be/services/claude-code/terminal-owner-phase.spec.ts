@@ -2,6 +2,8 @@ import { tmpdir } from 'node:os'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import { nativeSession } from '../../_support/native-terminal.ts'
 
+vi.mock('#features/code/be/services/claude-code/native-executable-review.ts', () => ({ assertReviewedClaudeNativeExecutable: vi.fn() }))
+
 const f = vi.hoisted(() => {
   vi.resetModules()
   return { metadata: {permissionMode:'default',modelSelection:undefined as string|undefined}, open: vi.fn(), request: vi.fn(), submit: vi.fn(), update: vi.fn(), projection: { sessionId:'11111111-1111-1111-1111-111111111111', tasks: [] } }

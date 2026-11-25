@@ -44,6 +44,8 @@ it('does not restore form state from an operation completed after owner exit', a
   await expect(action).rejects.toThrow('exited'); expect(owner.state.mcpForm).toBeUndefined()
 })
 
+vi.mock('#features/code/be/services/claude-code/native-executable-review.ts', () => ({ assertReviewedClaudeNativeExecutable: vi.fn() }))
+
 it('retires only the captured MCP request after an already admitted field operation', async () => {
   const { prepared, owner, form, request } = await fixture()
   try {

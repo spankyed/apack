@@ -2,14 +2,19 @@ import { claudeNativeLinuxBindings } from './native-platform-bindings.ts'
 
 const macBinary = '5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37'
 
+export function reviewedClaudeNativeBinary(platform: string): string | undefined {
+  if (platform === 'darwin') return macBinary
+  if (platform === claudeNativeLinuxBindings.platform) return claudeNativeLinuxBindings.binarySha256
+}
+
 /** Runs inside the original CLI; platform admission is by exact executable bytes, never env flags. */
-export const claudeNativePlatformRuntime = `const nativeLinuxBindings=${JSON.stringify(claudeNativeLinuxBindings)};\n` + String.raw`
+export const claudeNativePlatformRuntime = `const nativeDarwinBinary='${macBinary}';\nconst nativeLinuxBindings=${JSON.stringify(claudeNativeLinuxBindings)};\n` + String.raw`
 let nativePlatformChecked=false,nativeRuntimePlatform;
 const nativeModulePromises=new Map();
 function readClaudeNativePlatform(){
  if(!nativePlatformChecked){
   const binary=createHash('sha256').update(readFileSync(process.execPath)).digest('hex');
-  if(process.platform==='darwin'&&binary==='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37')nativeRuntimePlatform={platform:'darwin',binarySha256:binary};
+  if(process.platform==='darwin'&&binary===nativeDarwinBinary)nativeRuntimePlatform={platform:'darwin',binarySha256:binary};
   else if(process.platform===nativeLinuxBindings.platform&&binary===nativeLinuxBindings.binarySha256)nativeRuntimePlatform=nativeLinuxBindings;
   nativePlatformChecked=true;
  }

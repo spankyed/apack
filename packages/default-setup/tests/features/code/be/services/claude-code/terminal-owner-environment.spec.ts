@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import { nativeSession } from '../../_support/native-terminal.ts'
 
+vi.mock('#features/code/be/services/claude-code/native-executable-review.ts', () => ({ assertReviewedClaudeNativeExecutable: vi.fn() }))
+
 const native = vi.hoisted(() => { vi.resetModules(); return { open: vi.fn(), uiRequest: vi.fn(), closeBridge: vi.fn(async () => {}) } })
 vi.mock('#generated/services.ts', () => ({ services: { terminal: { open: native.open } } }))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: native.closeBridge, ready: true, uiTransport: { request: native.uiRequest, subscribe: () => () => {}, promptHosts: {} }, projection: { sessionId: '11111111-1111-1111-1111-111111111111', tasks: [] }, session: { metadata: undefined } }) }))

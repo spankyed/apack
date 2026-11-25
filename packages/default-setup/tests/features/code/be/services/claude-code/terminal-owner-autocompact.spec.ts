@@ -44,6 +44,8 @@ it('still retires the card after an original final decision', async () => {
   } finally { await prepared.dispose() }
 })
 
+vi.mock('#features/code/be/services/claude-code/native-executable-review.ts', () => ({ assertReviewedClaudeNativeExecutable: vi.fn() }))
+
 it('reads startup policy consent only after the original observer owns the process', async () => {
   const { prepared, owner, notice } = await fixture()
   try {
