@@ -1,5 +1,5 @@
-import { Node } from '@tiptap/core'
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { Node, type Editor } from '@tiptap/core'
+import { DOMParser as PromptDOMParser, type Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin } from '@tiptap/pm/state'
 import { Mapping } from '@tiptap/pm/transform'
 import type { MarkdownSerializerState } from 'prosemirror-markdown'
@@ -8,6 +8,13 @@ import { captureClaudePromptDocument, type ClaudePromptDocument, type ClaudeProm
 
 interface ClaudeSourceReference { text: string; reference: ContextReference; from?: number }
 type PositionedSourceReference = ClaudeSourceReference & { from: number }
+
+export function parseClaudePromptMarkdown(editor: Editor, text: string): ProseMirrorNode {
+  const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
+  const template = document.createElement('template')
+  template.innerHTML = parser.parse(text)
+  return PromptDOMParser.fromSchema(editor.schema).parse(template.content)
+}
 
 /** Literal Markdown is needed when a native caret addresses syntax hidden by rich nodes. */
 export const ClaudePromptSource = Node.create({
@@ -18,6 +25,7 @@ export const ClaudePromptSource = Node.create({
   renderHTML: () => ['div', { 'data-claude-prompt-source': '', style: 'white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace' }, 0],
   addStorage: () => ({ markdown: { serialize(state: MarkdownSerializerState, node: ProseMirrorNode) { state.write(node.textContent); state.closeBlock(node) } } }),
   addProseMirrorPlugins() {
+    const parse = (text: string) => parseClaudePromptMarkdown(this.editor, text)
     return [new Plugin({
       appendTransaction(transactions, previous, current) {
         if (!transactions.some(transaction => transaction.docChanged)) return
@@ -31,7 +39,7 @@ export const ClaudePromptSource = Node.create({
           const next = current.doc.nodeAt(mapped.pos)
           // Full source rewrites and restored drafts supply their own reference metadata.
           if (mapped.deleted || next?.type !== node.type || next.attrs.references !== node.attrs.references) return false
-          const retained = retainedReferences(node).flatMap(value => {
+          const mappedReferences = retainedReferences(node).flatMap(value => {
             const start = position + 1 + value.from
             const from = mapping.mapResult(start, 1)
             const to = mapping.mapResult(start + value.text.length, -1)
@@ -40,6 +48,9 @@ export const ClaudePromptSource = Node.create({
               || next.textContent.slice(offset, offset + value.text.length) !== value.text) return []
             return [{ ...value, from: offset }]
           })
+          const retained = mappedReferences.length && next.textContent !== node.textContent
+            ? activeSourceReferences(next.textContent, mappedReferences, parse)
+            : mappedReferences
           if (retained.length !== node.attrs.references.length || retained.some((value, index) => value.from !== node.attrs.references[index].from))
             update.setNodeMarkup(mapped.pos, undefined, { ...next.attrs, references: retained })
           return false
@@ -96,18 +107,48 @@ export function claudePromptSourceReferences(node: ProseMirrorNode): ContextRefe
   return retainedReferences(node).map(value=>({...value.reference}))
 }
 
+/** Confirm each occurrence is an active reference, including when identical text appears elsewhere. */
+function activeSourceReferences(text: string, references: readonly PositionedSourceReference[], parse: (text: string) => ProseMirrorNode): PositionedSourceReference[] {
+  let prefix = 'apackReferenceProbe'
+  while (text.includes(prefix)) prefix += 'Z'
+  const expected = new Map<string, PositionedSourceReference>()
+  const parts: string[] = []
+  let from = 0
+  for (const [index, value] of [...references].sort((left, right) => left.from - right.from).entries()) {
+    if (!value.text.startsWith('[')) continue
+    const label = value.from + 1
+    const marker = `${prefix}${index}Z`
+    parts.push(text.slice(from, label), marker)
+    expected.set(marker, value)
+    from = label
+  }
+  parts.push(text.slice(from))
+  // The marker belongs to a link label only if the regular editor parser recognizes the link.
+  const markerAtLabelStart = new RegExp(`^${prefix}\\d+Z`)
+  const active = new Set<PositionedSourceReference>()
+  try {
+    parse(parts.join('')).descendants(node => {
+      if (node.type.name !== 'reference' || typeof node.attrs.label !== 'string') return
+      const marker = markerAtLabelStart.exec(node.attrs.label)?.[0]
+      const reference = marker ? expected.get(marker) : undefined
+      if (reference && reference.reference.refType === node.attrs.refType && reference.reference.refId === node.attrs.refId) active.add(reference)
+    })
+  } catch { return [] }
+  return references.filter(reference => active.has(reference))
+}
+
 /** Keep exact source/caret. Ordinary edits retain atom identity; explicit replacement may withdraw it. */
-export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, allowAtomReplacement = false): ReturnType<typeof rewriteClaudePromptDocument> {
+export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse: (text: string) => ProseMirrorNode, allowAtomReplacement = false): ReturnType<typeof rewriteClaudePromptDocument> {
   const type=snapshot.doc.type.schema.nodes.claudePromptSource
   if (!type || !Number.isInteger(frame.cursor) || frame.cursor<0 || frame.cursor>frame.text.length) return
   const references: ClaudeSourceReference[]=[]
   let unmappable=false
-  snapshot.doc.descendants((node,position)=>{
+  if (!allowAtomReplacement) snapshot.doc.descendants((node,position)=>{
     if (node.type.name==='claudePromptSource') { references.push(...retainedReferences(node));return false }
     if (!node.isAtom || node.isText) return
     // A hard break carries text, not an opaque reference identity. Full fills may explicitly replace other atoms.
     if (node.type.name==='hardBreak' && node.isInline) return false
-    if (node.type.name!=='reference' || !node.isInline) { if (!allowAtomReplacement) unmappable=true;return false }
+    if (node.type.name!=='reference' || !node.isInline) { unmappable=true;return false }
     const start=captureClaudePromptDocument(snapshot.doc,position,serialize),end=captureClaudePromptDocument(snapshot.doc,position+node.nodeSize,serialize)
     if (!start || !end || end.cursor<=start.cursor) { unmappable=true;return false }
     references.push({text:start.text.slice(start.cursor,end.cursor),reference:{...node.attrs} as ContextReference})
@@ -115,8 +156,9 @@ export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame:
   })
   if (unmappable) return
   const retained = positionSourceReferences(frame.text, references)
-  if (!allowAtomReplacement && retained.length !== references.length) return
+  if (retained.length !== references.length) return
   try {
+    if (retained.length && activeSourceReferences(frame.text, retained, parse).length !== retained.length) return
     const content=frame.text?snapshot.doc.type.schema.text(frame.text):undefined
     const doc=snapshot.doc.type.create(null,type.create({references:retained},content)),position=frame.cursor+1
     if (serialize(doc)!==frame.text) return

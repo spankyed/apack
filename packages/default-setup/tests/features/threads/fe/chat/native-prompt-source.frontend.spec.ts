@@ -7,7 +7,7 @@ import { bindClaudePromptEditor } from '#features/threads/fe/chat/native-prompt-
 let editor: Editor
 const reference=Node.create({name:'reference',inline:true,group:'inline',atom:true,
   addAttributes:()=>({refType:{default:'thread'},refId:{default:'thread-id'},shortCode:{default:'T-1'},label:{default:'Context'}}),
-  parseHTML:()=>[{tag:'a[href="apack-ref://thread/thread-id"]'}],renderHTML:()=>['a',{href:'apack-ref://thread/thread-id'},'Context'],
+  parseHTML:()=>[{tag:'a[href="apack-ref://thread/thread-id"]',getAttrs:node=>({label:node.textContent})}],renderHTML:()=>['a',{href:'apack-ref://thread/thread-id'},'Context'],
   addStorage:()=>({markdown:{serialize(state:{write(text:string):void}){state.write('[Context](apack-ref://thread/thread-id)')}}}),
 })
 beforeEach(()=>{editor=new Editor({extensions:[StarterKit,Markdown,ClaudePromptSource,reference],content:'seed'})})
@@ -102,6 +102,52 @@ it('keeps a positioned source reference and exact decoration when Claude inserts
   } finally { bridge.dispose() }
 })
 
+it.each([
+  { kind: 'a fenced block', wrap: (text: string) => `\`\`\`md\n${text}\n\`\`\`` },
+  { kind: 'inline code', wrap: (text: string) => `\`${text}\`` },
+  { kind: 'inline code beside an equivalent link', wrap: (text: string) => `\`${text}\` beside [Context](<apack-ref://thread/thread-id>)` },
+])('refuses a native rewrite that turns a reference into a code example in $kind', async ({ wrap }) => {
+  editor.commands.setContent({
+    type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Use ' }, { type: 'reference' }, { type: 'text', text: ' today' },
+    ] }],
+  })
+  const before = editor.state.doc
+  const original = text()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text: `# Heading\n\n${wrap(original)}`, cursor: 1,
+    } })
+    expect(editor.state.doc).toBe(before)
+    expect(text()).toBe(original)
+    expect(await bridge.settle()).toBe(false)
+  } finally { bridge.dispose() }
+})
+
+it.each(['person', 'native'])('withdraws context when a %s edit opens a code fence around a literal source reference', by => {
+  editor.commands.setContent({
+    type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Use ' }, { type: 'reference' }, { type: 'text', text: ' today' },
+    ] }],
+  })
+  const source = '# Heading\n\n' + text()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: source, cursor: 1 } })
+    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toHaveLength(1)
+    const fence = '~~~md\n'
+    if (by === 'native') {
+      editor.commands.setTextSelection(3)
+      bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: fence + source, cursor: fence.length } })
+    } else {
+      editor.view.dispatch(editor.state.tr.insertText(fence, 1))
+    }
+    expect(text()).toBe(fence + source)
+    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+  } finally { bridge.dispose() }
+})
+
 it('refuses native atom removal rather than silently dropping context metadata',async()=>{
   editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'reference'}]}]})
   const before=editor.state.doc,bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
@@ -129,6 +175,20 @@ it('allows an explicit reverse replace to withdraw old reference context in lite
   expect(bridge.fillDraft({mode:'replace',text:source},bridge.revision)).toBe(true)
   expect(text()).toBe(source);expect(bridge.readDraft()).toEqual({text:source,cursor:source.length})
   expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([]);bridge.dispose()
+})
+
+it('keeps an explicit replacement containing a former link inside code free of reference metadata', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'reference' }] }] })
+  const token = text()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: '# Heading\n\n' + token, cursor: 1 } })
+    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toHaveLength(1)
+    const replacement = '\`\`\`md\n' + token + '\n\`\`\`'
+    expect(bridge.fillDraft({ mode: 'replace', text: replacement }, bridge.revision)).toBe(true)
+    expect(text()).toBe(replacement)
+    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+  } finally { bridge.dispose() }
 })
 
 it('carries textual hard breaks and reference identity through literal append and insert fills',()=>{

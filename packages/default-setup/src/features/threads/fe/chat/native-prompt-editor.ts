@@ -1,9 +1,8 @@
 import type { Editor } from '@tiptap/core'
 import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
-import { rewriteClaudePromptSource } from './native-prompt-source.ts'
+import { parseClaudePromptMarkdown, rewriteClaudePromptSource } from './native-prompt-source.ts'
 import { createClaudePromptSuggestion } from './native-prompt-suggestion.ts'
 import { createClaudePromptDecorations, drawClaudePromptDecorations } from './native-prompt-decorations.ts'
-import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
 import type { ClaudePromptHostRequest } from '#generated/types.ts'
 import { TextSelection } from '@tiptap/pm/state'
 import type { ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow } from '#generated/types.ts'
@@ -13,12 +12,7 @@ import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePro
 export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; ownsMenuFocus?(element: Element): boolean; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean; viewport?: HTMLElement | null }) {
   const serialize = (doc: import('@tiptap/pm/model').Node): string =>
     (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
-  const parse = (text: string) => {
-    const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
-    const template = document.createElement('template')
-    template.innerHTML = parser.parse(text)
-    return PromptDOMParser.fromSchema(editor.schema).parse(template.content)
-  }
+  const parse = (text: string) => parseClaudePromptMarkdown(editor, text)
   const decorations = createClaudePromptDecorations()
   editor.registerPlugin(decorations.plugin)
   const suggestion = createClaudePromptSuggestion()
@@ -190,7 +184,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const parseFill = (value: string) => { try { return parse(value) } catch (error) { parserRefused = true; throw error } }
     // Replacing a literal draft must also release reference metadata from its former text.
     const replacesSource = input.mode === 'replace' && snapshot.doc.firstChild?.type.name === 'claudePromptSource'
-    let next: ReturnType<typeof rewriteClaudePromptDocument> = replacesSource ? rewriteClaudePromptSource(snapshot, { text, cursor }, serialize, true) : undefined
+    let next: ReturnType<typeof rewriteClaudePromptDocument> = replacesSource ? rewriteClaudePromptSource(snapshot, { text, cursor }, serialize, parseFill, true) : undefined
     next ??= rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parseFill, runs.flatMap(run => [run.start, run.end]))
     if (parserRefused) return
     if (!next && input.mode === 'replace') {
@@ -201,17 +195,13 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       } catch { return }
       if (parserRefused) return
     }
-    next ??= rewriteClaudePromptSource(snapshot, { text, cursor }, serialize, input.mode === 'replace')
+    next ??= rewriteClaudePromptSource(snapshot, { text, cursor }, serialize, parseFill, input.mode === 'replace')
     if (!next) {
       let atoms = false
       snapshot.doc.descendants(node => { if (node.isAtom && !node.isText) atoms = true })
       if (atoms && input.mode !== 'replace') return
-      // Parse through the existing Markdown extension, once, into an inert template.
-      const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
       try {
-        const template = document.createElement('template')
-        template.innerHTML = parser.parse(text)
-        const doc = PromptDOMParser.fromSchema(editor.schema).parse(template.content)
+        const doc = parse(text)
         const position = findClaudePromptPosition(doc, cursor, serialize)
         if (serialize(doc) !== text || position === undefined) return
         next = { doc, position }
@@ -319,7 +309,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (editor.state.doc !== snapshot.doc || !editor.state.selection.eq(selection)) { finishPending(false); return }
       if (reply.status === 'error') { onProblem(reply.message); finishPending(false); return }
       if (reply.frame.superseded) { finishPending(false); return }
-      const next = rewriteClaudePromptDocument(snapshot, reply.frame, serialize, parse, reply.frame.decorations?.flatMap(run => [run.start, run.end])) ?? rewriteClaudePromptSource(snapshot, reply.frame, serialize)
+      const next = rewriteClaudePromptDocument(snapshot, reply.frame, serialize, parse, reply.frame.decorations?.flatMap(run => [run.start, run.end])) ?? rewriteClaudePromptSource(snapshot, reply.frame, serialize, parse)
       if (!next) { onProblem('Claude prompt rewrite cannot be represented without changing editor structure'); finishPending(false); return }
       applying = true
       try {
