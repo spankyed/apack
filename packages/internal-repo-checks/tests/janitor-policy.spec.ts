@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type IncrementalUnit, type ProfileOutput, type SystemTmpEntry, CRITICAL_FREE_BYTES, IN_USE_WINDOW_MS, LOW_FREE_BYTES,
   classifySystemTmpName, limitsFor, planIdleProfileClearing, planIncrementalEviction, planSystemTmpRemoval, planTmpRemoval,
-  TEST_TMP_AGE_MS,
+  psHasCargoMutants, TEST_TMP_AGE_MS,
 } from '../../../scripts/lib/janitor-policy.ts';
 
 const GB = 1024 ** 3;
@@ -73,14 +73,29 @@ describe('planTmpRemoval', () => {
 });
 
 describe('classifySystemTmpName', () => {
-  it('classifies only owned temp directory prefixes and rejects unrelated names', () => {
+  it('classifies only owned temp directory prefixes and rejects unrelated or UID-scoped names', () => {
     expect(classifySystemTmpName('cargo-mutants-elmdb-U6J3Dy.tmp')).toBe('cargo-mutants');
     expect(classifySystemTmpName('apack-published-wRh16J')).toBe('apack-published');
     expect(classifySystemTmpName(`apack-authoring-${'a'.repeat(64)}`)).toBe('apack-authoring');
+    expect(classifySystemTmpName('apack-starter-role-switch.cg4odhqQ')).toBe('apack-scratch');
+    expect(classifySystemTmpName('apack-claude-post-clear-resume.Z7AlgZ')).toBe('apack-scratch');
+    expect(classifySystemTmpName('cc-child-1234-abc')).toBe('apack-scratch');
+    expect(classifySystemTmpName('apack-claude-background-501')).toBeUndefined();
+    expect(classifySystemTmpName('claude-501')).toBeUndefined();
+    expect(classifySystemTmpName('cc-socks')).toBeUndefined();
     expect(classifySystemTmpName('apack-authoring-unrelated')).toBeUndefined();
     expect(classifySystemTmpName(`apack-authoring-${'a'.repeat(63)}`)).toBeUndefined();
     expect(classifySystemTmpName(`apack-authoring-${'g'.repeat(64)}`)).toBeUndefined();
     expect(classifySystemTmpName('node-compile-cache')).toBeUndefined();
+  });
+});
+
+describe('psHasCargoMutants', () => {
+  it('detects cargo-mutants on macOS full paths and Linux comms while ignoring other processes and self', () => {
+    expect(psHasCargoMutants('  101 /Users/dev/.cargo/bin/cargo-mutants\n', 999)).toBe(true);
+    expect(psHasCargoMutants('  202 cargo-mutants\n', 999)).toBe(true);
+    expect(psHasCargoMutants('  303 /usr/bin/node\n  304 cargo\n', 999)).toBe(false);
+    expect(psHasCargoMutants('  999 cargo-mutants\n', 999)).toBe(false);
   });
 });
 
@@ -93,7 +108,7 @@ describe('planSystemTmpRemoval', () => {
     extra: Partial<Pick<SystemTmpEntry, 'ownerLive' | 'checkoutExists'>> = {},
   ): SystemTmpEntry => ({ name, path: `/tmp/${name}`, kind, activityMs: NOW - ageMs, ...extra });
 
-  it('removes orphaned cargo-mutants copies past the in-use window even while the disk has room, and keeps active ones', () => {
+  it('removes orphaned cargo-mutants copies past the in-use window when no cargo-mutants process is running, and skips all when one is', () => {
     const { idleProfileMs } = limitsFor(LOW_FREE_BYTES * 2);
     const entries = [
       entry('cargo-mutants-orphaned.tmp', 'cargo-mutants', 2 * HOUR),
@@ -101,21 +116,24 @@ describe('planSystemTmpRemoval', () => {
     ];
     expect(planSystemTmpRemoval(entries, idleProfileMs, NOW).map((e) => e.name)).toEqual(['cargo-mutants-orphaned.tmp']);
     expect(planSystemTmpRemoval(entries, 0, NOW).map((e) => e.name)).toEqual(['cargo-mutants-orphaned.tmp']);
+    expect(planSystemTmpRemoval(entries, 0, NOW, { cargoMutantsRunning: true })).toEqual([]);
   });
 
-  it('removes apack-published leftovers after a day when roomy, tightening to idleProfileMs when low without cutting active runs', () => {
+  it('removes apack-published and apack-scratch leftovers after a day when roomy, tightening when low without cutting active runs', () => {
     const entries = [
       entry('apack-published-old', 'apack-published', 2 * TEST_TMP_AGE_MS),
-      entry('apack-published-halfday', 'apack-published', 13 * HOUR),
-      entry('apack-published-recent', 'apack-published', 3 * HOUR),
+      entry('apack-starter-old.abc123', 'apack-scratch', 2 * TEST_TMP_AGE_MS),
+      entry('apack-claude-halfday.xyz789', 'apack-scratch', 13 * HOUR),
+      entry('cc-child-recent', 'apack-scratch', 3 * HOUR),
       entry('apack-published-running', 'apack-published', HOUR / 2),
+      entry('apack-starter-running', 'apack-scratch', HOUR / 2),
     ];
     expect(planSystemTmpRemoval(entries, limitsFor(LOW_FREE_BYTES * 2).idleProfileMs, NOW).map((e) => e.name))
-      .toEqual(['apack-published-old']);
+      .toEqual(['apack-published-old', 'apack-starter-old.abc123']);
     expect(planSystemTmpRemoval(entries, limitsFor(LOW_FREE_BYTES - 1).idleProfileMs, NOW).map((e) => e.name))
-      .toEqual(['apack-published-old', 'apack-published-halfday']);
+      .toEqual(['apack-published-old', 'apack-starter-old.abc123', 'apack-claude-halfday.xyz789']);
     expect(planSystemTmpRemoval(entries, limitsFor(CRITICAL_FREE_BYTES - 1).idleProfileMs, NOW).map((e) => e.name))
-      .toEqual(['apack-published-old', 'apack-published-halfday', 'apack-published-recent']);
+      .toEqual(['apack-published-old', 'apack-starter-old.abc123', 'apack-claude-halfday.xyz789', 'cc-child-recent']);
   });
 
   it('never removes live-owned apack-authoring dirs, sweeps gone checkouts immediately, and reclaims idle checkouts only when low', () => {

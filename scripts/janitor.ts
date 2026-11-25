@@ -18,7 +18,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   type IncrementalUnit, type ProfileOutput, type SystemTmpEntry, classifySystemTmpName, limitsFor,
-  planIdleProfileClearing, planIncrementalEviction, planSystemTmpRemoval, planTmpRemoval,
+  planIdleProfileClearing, planIncrementalEviction, planSystemTmpRemoval, planTmpRemoval, psHasCargoMutants,
 } from './lib/janitor-policy.ts';
 import { REPOSITORIES } from './lib/external-packages.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
@@ -123,12 +123,27 @@ function sweepRust(checkouts: string[], budget: number, sweepDays: number): void
   }
 }
 
+/** Newest mtime of `dir` and its direct children (without following symlinks) */
+function newestChildMs(dir: string): number {
+  let newest = 0;
+  try { newest = fs.lstatSync(dir).mtimeMs; } catch { return 0; }
+  let names: string[];
+  try { names = fs.readdirSync(dir); } catch { return newest; }
+  for (const name of names) {
+    try { newest = Math.max(newest, fs.lstatSync(path.join(dir, name)).mtimeMs); } catch {}
+  }
+  return newest;
+}
+
 /** When anything was last compiled into a profile directory: the newest of the directories a build adds to */
 function profileBuiltMs(profileDir: string): number {
-  const added = ['deps', '.fingerprint', 'build', 'incremental'].flatMap((name) => {
-    try { return [fs.statSync(path.join(profileDir, name)).mtimeMs]; } catch { return []; }
-  });
-  return added.length > 0 ? Math.max(...added) : fs.statSync(profileDir).mtimeMs;
+  const added = [
+    ...['deps', 'build'].flatMap((name) => {
+      try { return [fs.lstatSync(path.join(profileDir, name)).mtimeMs]; } catch { return []; }
+    }),
+    ...['.fingerprint', 'incremental'].map((name) => newestChildMs(path.join(profileDir, name))).filter((ms) => ms > 0),
+  ];
+  return added.length > 0 ? Math.max(...added) : fs.lstatSync(profileDir).mtimeMs;
 }
 
 /** A profile directory's size and when anything was last compiled into it */
@@ -218,30 +233,61 @@ function systemTmpEntries(tmpRoot: string): SystemTmpEntry[] {
   return entries;
 }
 
+/** Whether any `cargo-mutants` process is running on this host (fails closed as true if `ps` fails) */
+function cargoMutantsRunning(): boolean {
+  const probe = run('ps', ['-A', '-o', 'pid=,comm=']);
+  if (probe.error || probe.status !== 0) return true;
+  return psHasCargoMutants(probe.stdout, process.pid);
+}
+
+/** Unique temp roots to inspect: `os.tmpdir()` plus `/tmp` when they resolve to different directories (macOS) */
+function systemTmpRoots(): string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of [os.tmpdir(), '/tmp']) {
+    let real: string;
+    try { real = fs.realpathSync(candidate); } catch { continue; }
+    if (seen.has(real)) continue;
+    seen.add(real);
+    roots.push(real);
+  }
+  return roots;
+}
+
 function sweepSystemTmp(idleMs: number | undefined): void {
-  const tmpRoot = os.tmpdir();
-  const entries = systemTmpEntries(tmpRoot);
-  const stale = planSystemTmpRemoval(entries, idleMs, Date.now());
-  if (stale.length === 0) return;
-  say(`system tmp: ${dry ? 'would remove' : 'removing'} ${stale.length} of ${entries.length} owned directories in ${tmpRoot}`);
-  for (const entry of stale) {
-    if (dry) { say(`  would remove ${entry.path}`); continue; }
-    if (entry.kind === 'cargo-mutants') {
-      const target = path.join(entry.path, 'target');
-      const locks = fs.existsSync(target) ? profileDirs(target).map((dir) => path.join(dir, '.cargo-lock')) : [];
-      if (locks.length > 0) {
-        const { outcome } = underLocks(locks, ['rm', '-rf', entry.path]);
-        say(outcome === 'held' ? `  skipped ${entry.path}: cargo is building there`
-          : outcome === 'done' ? `  removed ${entry.path}` : `  could not remove ${entry.path}`);
-        continue;
+  const mutantsLive = cargoMutantsRunning();
+  for (const tmpRoot of systemTmpRoots()) {
+    const entries = systemTmpEntries(tmpRoot);
+    const stale = planSystemTmpRemoval(entries, idleMs, Date.now(), { cargoMutantsRunning: mutantsLive });
+    if (stale.length === 0) continue;
+    say(`system tmp: ${dry ? 'would remove' : 'removing'} ${stale.length} of ${entries.length} owned directories in ${tmpRoot}`);
+    for (const entry of stale) {
+      if (dry) { say(`  would remove ${entry.path}`); continue; }
+      if (entry.kind === 'cargo-mutants') {
+        const target = path.join(entry.path, 'target');
+        const locks = fs.existsSync(target) ? profileDirs(target).map((dir) => path.join(dir, '.cargo-lock')) : [];
+        if (locks.length > 0) {
+          const { outcome } = underLocks(locks, ['rm', '-rf', entry.path]);
+          say(outcome === 'held' ? `  skipped ${entry.path}: cargo is building there`
+            : outcome === 'done' ? `  removed ${entry.path}` : `  could not remove ${entry.path}`);
+          continue;
+        }
       }
-    }
-    try {
-      if (entry.kind === 'apack-authoring') makeWritable(entry.path);
-      fs.rmSync(entry.path, { recursive: true, force: true });
-      say(`  removed ${entry.path}`);
-    } catch (error) {
-      say(`  could not remove ${entry.path}: ${(error as Error).message}`);
+      try {
+        if (entry.kind === 'apack-authoring') makeWritable(entry.path);
+        fs.rmSync(entry.path, { recursive: true, force: true });
+        say(`  removed ${entry.path}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EACCES' || (error as NodeJS.ErrnoException).code === 'EPERM') {
+          try {
+            makeWritable(entry.path);
+            fs.rmSync(entry.path, { recursive: true, force: true });
+            say(`  removed ${entry.path}`);
+            continue;
+          } catch {}
+        }
+        say(`  could not remove ${entry.path}: ${(error as Error).message}`);
+      }
     }
   }
 }

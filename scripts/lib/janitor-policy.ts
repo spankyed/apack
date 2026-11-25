@@ -3,9 +3,10 @@
 // Everything it may remove is a build cache or temporary work directory that a build or test makes again: a Rust
 // checkout's incremental compilation sessions, its stale artifacts and — when the disk is low — the whole build output
 // of a checkout nothing has compiled in for a while, the temporary directories an elmdb checkout's tests leave in its
-// `tmp/`, and orphaned `cargo-mutants-*`, `apack-published-*` and `apack-authoring-*` directories in the system temp dir.
+// `tmp/`, and orphaned `cargo-mutants-*`, `apack-published-*`, `apack-authoring-*`, and `apack-starter-*` /
+// `apack-claude-*` / `cc-child-*` scratch directories in the system temp dirs (`os.tmpdir()` and `/tmp`).
 // Nothing else is in reach — not Docker volumes, whose data may be another session's evidence
-// (docs/references/guides/docker-storage.md), and not logs.
+// (docs/references/guides/docker-storage.md), not UID-scoped session directories, and not logs.
 
 const GB = 1024 ** 3;
 const HOUR = 3_600_000;
@@ -109,14 +110,34 @@ export interface TmpEntry { name: string; mtimeMs: number }
 export const planTmpRemoval = (entries: readonly TmpEntry[], now: number): TmpEntry[] =>
   entries.filter((entry) => entry.name !== '.gitignore' && now - entry.mtimeMs > TEST_TMP_AGE_MS);
 
-export type SystemTmpKind = 'cargo-mutants' | 'apack-published' | 'apack-authoring';
+export type SystemTmpKind = 'cargo-mutants' | 'apack-published' | 'apack-authoring' | 'apack-scratch';
 
-/** Classifies a directory name in `os.tmpdir()` that the janitor owns, or `undefined` for everything else */
+/**
+ * Classifies a directory name in `os.tmpdir()` or `/tmp` that the janitor owns, or `undefined` for everything else.
+ * UID-scoped directories such as `apack-claude-background-501` or `claude-501` are never classified as scratch.
+ */
 export function classifySystemTmpName(name: string): SystemTmpKind | undefined {
   if (name.startsWith('cargo-mutants-')) return 'cargo-mutants';
   if (name.startsWith('apack-published-')) return 'apack-published';
   if (/^apack-authoring-[0-9a-f]{64}$/.test(name)) return 'apack-authoring';
+  if (name.startsWith('apack-starter-') || name.startsWith('cc-child-')) return 'apack-scratch';
+  if (name.startsWith('apack-claude-') && !/-\d+$/.test(name)) return 'apack-scratch';
   return undefined;
+}
+
+/** Whether `ps -A -o pid=,comm=` output lists a running `cargo-mutants` process (excluding `selfPid` if given) */
+export function psHasCargoMutants(psOutput: string, selfPid?: number): boolean {
+  for (const rawLine of psOutput.split('\n')) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    const match = /^(\d+)\s+(.+)$/.exec(trimmed);
+    if (!match) continue;
+    const [, pidText, comm] = match;
+    if (selfPid !== undefined && Number(pidText) === selfPid) continue;
+    const base = comm!.trim().split('/').at(-1);
+    if (base === 'cargo-mutants') return true;
+  }
+  return false;
 }
 
 export interface SystemTmpEntry {
@@ -131,12 +152,18 @@ export interface SystemTmpEntry {
   checkoutExists?: boolean;
 }
 
+export interface SystemTmpPlanOptions {
+  /** Whether any `cargo-mutants` process is running on this host (skips all `cargo-mutants-*` sweeps when true) */
+  cargoMutantsRunning?: boolean;
+}
+
 /**
- * Orphaned temporary directories in `os.tmpdir()` that are safe to reclaim:
- * - `cargo-mutants-*`: a clean run removes its own temp copy, so any copy with no build activity past
- *   `IN_USE_WINDOW_MS` (and whose `.cargo-lock` files are unheld) was stranded by a killed run.
- * - `apack-published-*`: integration suites remove their own copy in `afterAll`; leftovers past `TEST_TMP_AGE_MS`
- *   (tightened to `idleProfileMs` when the disk is low, never below `IN_USE_WINDOW_MS`) are removed.
+ * Orphaned temporary directories in `os.tmpdir()` and `/tmp` that are safe to reclaim:
+ * - `cargo-mutants-*`: never removed while any `cargo-mutants` process is running (Cargo releases `.cargo-lock` once
+ *   tests start, and a machine sleep can push a live run past `IN_USE_WINDOW_MS`); otherwise any copy with no build
+ *   activity past `IN_USE_WINDOW_MS` (and whose `.cargo-lock` files are unheld) was stranded by a killed run.
+ * - `apack-published-*` and `apack-scratch` (`apack-starter-*`, `apack-claude-*`, `cc-child-*`): leftovers past
+ *   `TEST_TMP_AGE_MS` (tightened to `idleProfileMs` when the disk is low, never below `IN_USE_WINDOW_MS`) are removed.
  * - `apack-authoring-<sha256>`: never removed while its recorded owner PID is live; removed when its checkout is
  *   gone, or — when the disk is low — once idle past `idleProfileMs` (at least `IN_USE_WINDOW_MS`).
  */
@@ -144,13 +171,14 @@ export function planSystemTmpRemoval(
   entries: readonly SystemTmpEntry[],
   idleProfileMs: number | undefined,
   now: number,
+  options: SystemTmpPlanOptions = {},
 ): SystemTmpEntry[] {
   const lowDiskWindow = idleProfileMs === undefined ? undefined : Math.max(idleProfileMs, IN_USE_WINDOW_MS);
   return entries.filter((entry) => {
     if (entry.ownerLive) return false;
     const age = now - entry.activityMs;
-    if (entry.kind === 'cargo-mutants') return age > IN_USE_WINDOW_MS;
-    if (entry.kind === 'apack-published') return age > (lowDiskWindow ?? TEST_TMP_AGE_MS);
+    if (entry.kind === 'cargo-mutants') return !options.cargoMutantsRunning && age > IN_USE_WINDOW_MS;
+    if (entry.kind === 'apack-published' || entry.kind === 'apack-scratch') return age > (lowDiskWindow ?? TEST_TMP_AGE_MS);
     if (entry.checkoutExists === false) return true;
     return lowDiskWindow !== undefined && age > lowDiskWindow;
   });
