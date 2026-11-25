@@ -59,8 +59,8 @@ export function createClaudeTranscriptMessageHost(options: {
   const entries = new Map<string, Entry>()
   let groups: ClaudeUiToolGroup[] = [], placements: (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[] = [], readingGroups=false, groupsAgain=false
   let timestamps: ClaudeTranscriptTimestamp[] = [], timestampRevision = 0, timestampReading = false
-  let managedSettingsRevision = 0
-  let managedSettingsDiagnostics: import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[]=[]
+  let managedSettingsRevision = 0, readingManagedSettings = false, managedSettingsAgain = false
+  let managedSettingsDiagnostics: import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[] = []
   let diagnostics: import('./ui-controls.ts').ClaudeUiDiagnosticAttachment[] = [], readingDiagnostics=false, diagnosticsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
   let disposal: Promise<void> | undefined
@@ -139,11 +139,27 @@ export function createClaudeTranscriptMessageHost(options: {
       try { next=await options.ui.diagnostics(options.client.client_id,80) } catch { /* An unavailable owner withdraws the old diagnostic presentation. */ }
       if(!current())return
       if(JSON.stringify(next)!==JSON.stringify(diagnostics)){diagnostics=next;publish()}
-      let managed:import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[]=[]
-      try{managed=await options.ui.managedSettingsDiagnostics(options.client.client_id)}catch{ /* A detached/unavailable source cannot supply fresh warning authority. */ }
-      if(!current())return
-      if(JSON.stringify(managed)!==JSON.stringify(managedSettingsDiagnostics)){managedSettingsDiagnostics=managed;publish()}
     } finally { readingDiagnostics=false;if(diagnosticsAgain){diagnosticsAgain=false;void refreshDiagnostics()} }
+  }
+  async function refreshManagedSettings() {
+    if (!current() || !started) return
+    if (readingManagedSettings) { managedSettingsAgain = true; return }
+    readingManagedSettings = true
+    const revision = managedSettingsRevision
+    try {
+      let next: import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[] = []
+      try { next = await options.ui.managedSettingsDiagnostics(options.client.client_id) } catch { /* Source unavailable. */ }
+      if (current() && revision === managedSettingsRevision && JSON.stringify(next) !== JSON.stringify(managedSettingsDiagnostics)) {
+        managedSettingsDiagnostics = next
+        publish()
+      }
+    } finally {
+      readingManagedSettings = false
+      if (managedSettingsAgain) {
+        managedSettingsAgain = false
+        void refreshManagedSettings()
+      }
+    }
   }
   function schedule() {
     if (!started || !current() || rendering || scheduled) return
@@ -234,7 +250,7 @@ export function createClaudeTranscriptMessageHost(options: {
       return diagnostics.flatMap(diagnostic=>{const anchor=diagnostic.anchorIds.map(id=>rows.find(row=>row.uuid===id||'assistantUuid' in row&&row.assistantUuid===id||'resultUuid' in row&&row.resultUuid===id)).find(Boolean);return anchor?[{...diagnostic,messageId:anchor.messageId}]:[]})
     },
     get timestamps() { return current() ? timestamps : [] },
-    start() { started = true; refresh(); void refreshGroups();void refreshDiagnostics();void refreshTimestamps() },
+    start() { started = true; refresh(); void refreshGroups(); void refreshDiagnostics(); void refreshManagedSettings(); void refreshTimestamps() },
     refresh,
     receive(line: Record<string, unknown>) {
       if (!current()) return
@@ -244,11 +260,16 @@ export function createClaudeTranscriptMessageHost(options: {
       }
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.managed_settings_diagnostics === true) {
         managedSettingsRevision++
+        // A warning from the preceding revision is no longer actionable in this view.
+        managedSettingsDiagnostics = []
         publish()
-        void refreshDiagnostics()
+        void refreshManagedSettings()
         return
       }
-      if(line.type==='attachment'||line.type==='assistant'||line.type==='user'||line.type==='conversation_reset'||line.type==='system'&&line.subtype==='ui_invalidate')void refreshDiagnostics()
+      if (line.type === 'attachment' || line.type === 'assistant' || line.type === 'user' || line.type === 'conversation_reset' || line.type === 'system' && line.subtype === 'ui_invalidate') {
+        void refreshDiagnostics()
+        void refreshManagedSettings()
+      }
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
         if(line.tool_groups===true||line.composer_placements===true||line.terminal_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}
         const snapshot = line.client_snapshot === true

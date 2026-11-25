@@ -380,6 +380,48 @@ it('refreshes managed warnings and publishes policy changes even with no warning
   expect(f.publish).not.toHaveBeenCalled()
   await f.host.dispose()
 })
+it('withdraws the old warning and ignores a managed settings read from before invalidation', async () => {
+  const f = fixture()
+  const update = { type: 'system', subtype: 'ui_invalidate', event: 'ui.render', managed_settings_diagnostics: true }
+  type Rows = Awaited<ReturnType<typeof f.ui.managedSettingsDiagnostics>>
+  const warning = { file: 'managed settings', path: '', message: 'Old warning', severity: 'warning' as const }
+  const stale = Promise.withResolvers<Rows>()
+  const fresh = Promise.withResolvers<Rows>()
+  f.ui.managedSettingsDiagnostics.mockResolvedValueOnce([warning])
+    .mockImplementationOnce(() => stale.promise).mockImplementationOnce(() => fresh.promise)
+  f.host.start()
+  await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.managedSettingsDiagnostics).toEqual([warning])
+  f.host.receive({type:'attachment'})
+  await vi.advanceTimersByTimeAsync(1)
+  expect(f.ui.managedSettingsDiagnostics).toHaveBeenCalledTimes(2)
+  f.host.receive(update)
+  expect(f.host.managedSettingsDiagnostics).toEqual([])
+  stale.resolve([{...warning, message:'Superseded warning'}])
+  await vi.advanceTimersByTimeAsync(1)
+  expect(f.host.managedSettingsDiagnostics).toEqual([])
+  expect(f.ui.managedSettingsDiagnostics).toHaveBeenCalledTimes(3)
+  fresh.resolve([{...warning, message:'Current warning'}])
+  await vi.advanceTimersByTimeAsync(1)
+  expect(f.host.managedSettingsDiagnostics).toEqual([{...warning, message:'Current warning'}])
+  await f.host.dispose()
+})
+
+it('refreshes managed settings even while a transcript diagnostic read is held', async () => {
+  const f = fixture()
+  const held = Promise.withResolvers<Awaited<ReturnType<typeof f.ui.diagnostics>>>()
+  f.ui.diagnostics.mockImplementationOnce(() => held.promise)
+  f.host.start()
+  await vi.advanceTimersByTimeAsync(50)
+  const warning = { file: 'policy drop-in', path: '', message: 'Current warning', severity: 'warning' as const }
+  f.ui.managedSettingsDiagnostics.mockResolvedValue([warning])
+  f.host.receive({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', managed_settings_diagnostics: true })
+  await vi.advanceTimersByTimeAsync(1)
+  expect(f.host.managedSettingsDiagnostics).toEqual([warning])
+  held.resolve([])
+  await f.host.dispose()
+})
+
 it('does not publish a managed policy diagnostic reply after its view is disposed', async () => {
   const f=fixture();let finish!:(rows:Awaited<ReturnType<typeof f.ui.managedSettingsDiagnostics>>)=>void
   f.ui.managedSettingsDiagnostics.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));f.host.start();await vi.advanceTimersByTimeAsync(50)
