@@ -160,8 +160,9 @@ it('keeps native control activation from inserting navigation mid-click', async 
   const viewport = ref<HTMLElement | null>(null), content = ref<HTMLElement | null>(null), following = ref(true)
   const root = document.createElement('div'); document.body.append(root)
   const pressed = vi.fn()
+  let controller!: ReturnType<typeof useNativeTranscriptViewport>
   const app = createApp({ setup() {
-    useNativeTranscriptViewport({ viewport, content, owner: () => 'session', active: () => true, onFollowingChange: value => { following.value = value } })
+    controller = useNativeTranscriptViewport({ viewport, content, owner: () => 'session', active: () => true, onFollowingChange: value => { following.value = value } })
     return () => h('div', [h('div', { ref: viewport }, h('div', { ref: content }, h('article', { 'data-message-id': 'reply' }, h('button', { onClick: pressed }, 'Update preview')))), ...following.value ? [] : [h('nav', 'Latest message')]])
   } })
   app.mount(root)
@@ -176,6 +177,8 @@ it('keeps native control activation from inserting navigation mid-click', async 
     observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0)
     button.dispatchEvent(new Event('pointerup', { bubbles: true })); button.click(); expect(pressed).toHaveBeenCalledTimes(1)
     element.scrollTop = 480; element.dispatchEvent(new Event('scroll')); await nextTick()
+    // Conversation rendering reacts to the callback even though the navigation has not changed.
+    controller.refreshFollowing()
     observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0); expect(element.scrollTop).toBe(480)
     expect(root.querySelector('nav')).toBeNull()
     element.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 })); await nextTick()
@@ -183,5 +186,7 @@ it('keeps native control activation from inserting navigation mid-click', async 
     element.scrollTop = 520; element.dispatchEvent(new Event('scroll')); await nextTick()
     observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0); expect(element.scrollTop).toBe(520)
     expect(root.querySelector('nav')).not.toBeNull()
+    controller.followLatest()
+    expect(frames.size).toBe(1)
   } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
 })

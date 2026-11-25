@@ -1381,10 +1381,13 @@ function onMessagesRendered() {
   if (isThreadLoad || pendingScrollOnSend.value) {
     pendingScrollOnSend.value = false
     forceScrollToBottom()
+  } else if (nativeHistory) {
+    // A rendered callback may come from a transcript control that paused native following.
+    nativeViewport.refreshFollowing()
   } else if (isNearBottom.value) {
     scrollToBottom('smooth')
     requestAnimationFrame(() => {
-      if (isNearBottom.value) scrollToBottom('instant')
+      if (!currentThread.value?.context?.claudeCode && isNearBottom.value) scrollToBottom('instant')
     })
   }
 }
@@ -1403,7 +1406,7 @@ watch(allMessages, async () => {
 watch(messagesContent, (el, _, onCleanup) => {
   if (!el) return
   const observer = new ResizeObserver(() => {
-    if (isBusy.value && isNearBottom.value) {
+    if (!currentThread.value?.context?.claudeCode && isBusy.value && isNearBottom.value) {
       scrollToBottom('instant')
     }
   })

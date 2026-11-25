@@ -31,12 +31,12 @@ export function useNativeTranscriptViewport(options: {
   active(): boolean
   onFollowingChange?(following: boolean): void
 }) {
-  let requestFollow: (() => void) | undefined, requestPause: (() => void) | undefined
+  let requestFollow: (() => void) | undefined, requestPause: (() => void) | undefined, refreshFollowing: (() => void) | undefined
   let disconnect: (() => void) | undefined, frame: number | undefined, epoch = 0
   let retained: { viewport: HTMLElement; content: HTMLElement; owner: string; following: boolean; top: number } | undefined, suspended = false
   const cancel = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined }
   watch([options.viewport, options.content, options.owner, options.active], ([viewport, content, owner, active]) => {
-    disconnect?.(); disconnect = undefined; requestFollow = undefined; requestPause = undefined; cancel(); const current = ++epoch
+    disconnect?.(); disconnect = undefined; requestFollow = undefined; requestPause = undefined; refreshFollowing = undefined; cancel(); const current = ++epoch
     if (!viewport || !content || !owner) { retained = undefined; suspended = !active; return }
     if (!active) { suspended = true; return }
     const returning = suspended
@@ -51,9 +51,10 @@ export function useNativeTranscriptViewport(options: {
     setFollowing(following)
     const valid = () => epoch === current && options.viewport.value === viewport && options.owner() === owner && options.active() && viewport.clientHeight > 0
     const positionLatest = () => {
-      if (frame !== undefined) return
+      if (!following || frame !== undefined) return
       frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
     }
+    refreshFollowing = positionLatest
     const positionReader = () => {
       if (frame !== undefined) return
       frame = requestAnimationFrame(() => {
@@ -128,6 +129,6 @@ export function useNativeTranscriptViewport(options: {
       })
     }
   }, { flush: 'post' })
-  onBeforeUnmount(() => { epoch++; requestFollow = undefined; requestPause = undefined; disconnect?.(); cancel() })
-  return { followLatest: () => requestFollow?.(), pauseFollowing: () => requestPause?.() }
+  onBeforeUnmount(() => { epoch++; requestFollow = undefined; requestPause = undefined; refreshFollowing = undefined; disconnect?.(); cancel() })
+  return { followLatest: () => requestFollow?.(), pauseFollowing: () => requestPause?.(), refreshFollowing: () => refreshFollowing?.() }
 }
