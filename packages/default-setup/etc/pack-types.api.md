@@ -4443,7 +4443,8 @@ type PermissionHandler = (request: CanUseToolRequest) => PermissionDecision | Pr
  *
  * The CLI is fast-moving and routinely adds fields; every object schema uses
  * `.passthrough()` so unknown fields survive round-trips and we only validate
- * the bits we actually read. Inferred TS types are exported next to each schema.
+ * the bits we actually read. Explicit TS types are exported next to each schema
+ * so pack-types.d.ts stays free of Zod types.
  *
  * Source of truth for field shapes: the stream-json writer at
  * `src/cli/structuredIO.ts` and the SDK Zod schemas at

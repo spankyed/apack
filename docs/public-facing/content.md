@@ -865,6 +865,6 @@ data or be created by an applier. Analysis is static and non-exhaustive; an omit
 means analysis is unavailable, while an empty list means no known references were found. Action and
 prompt JavaScript bodies are not analyzed yet.
 
-Build tooling can use `inspectContentReferences` and `findContentDependents` from `@apackdev/sdk/build`
-for missing-target and rename/removal review. These operate on index data only and never execute a
-pack. Known incoming references do not rule out additional computed or runtime dependencies.
+Use `apack pack info --json` for missing-target and rename/removal review. It operates on compiled
+index data only and never executes a pack. Known incoming references do not rule out additional
+computed or runtime dependencies.

@@ -18,7 +18,7 @@ const encoder = new TextEncoder();
 export function sha256Hex(input: string): string {
   const bytes = encoder.encode(input);
   const bitLen = bytes.length * 8;
-  const paddedLen = (((bytes.length + 9 + 63) >> 6) << 6);
+  const paddedLen = Math.ceil((bytes.length + 9) / 64) * 64;
   const padded = new Uint8Array(paddedLen);
   padded.set(bytes);
   padded[bytes.length] = 0x80;

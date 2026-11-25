@@ -256,10 +256,13 @@ const RULE_LIST = [
   },
   {
     key: 'host-imports',
-    rule: "A pack doesn't import the host's private @apackdev/host package, which is not installed for a pack; "
-      + 'use @apackdev/sdk',
-    check(view, _place) {
-      return view.specifiers.filter(({ text }) => /^@apackdev\/host(\/|$)/.test(text))
+    rule: "A pack doesn't import private apack host or tooling packages (@apackdev/host, @apackdev/pack-format, "
+      + '@apackdev/pack-build), which are not installed for a pack; use @apackdev/sdk',
+    check(view, place) {
+      const pattern = place.packRelative.startsWith('src/')
+        ? /^@apackdev\/(?:host|pack-format|pack-build)(\/|$)/
+        : /^@apackdev\/host(\/|$)/;
+      return view.specifiers.filter(({ text }) => pattern.test(text))
         .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
     },
   },

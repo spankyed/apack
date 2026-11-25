@@ -62,4 +62,28 @@ describe('previewPackContent', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-preview-'));
     expect(() => previewPackContent(root!)).toThrow(/has no content\.json/);
   });
+
+  it('rejects malformed content.json entries/items and strips unknown fields', () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'content-preview-'));
+    testPacks.appliers.set('demo', [noopApplier('glossary')]);
+    const write = (data: unknown) => fs.writeFileSync(path.join(root!, 'content.json'), JSON.stringify(data));
+
+    write({ version: 1, packId: 'demo', entries: [
+      { key: 'glossary', written: true, count: 1, items: [{ key: 'A' }] },
+      { key: 'glossary', written: true, count: 1, items: [{ key: 'B' }] },
+    ] });
+    expect(() => previewPackContent(root!)).toThrow(/duplicate entry key/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: -1, items: [] }] });
+    expect(() => previewPackContent(root!)).toThrow(/malformed entry/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: 1, items: [{ key: 123 }] }] });
+    expect(() => previewPackContent(root!)).toThrow(/malformed item/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: 1, items: [{ key: 'A', childCount: -2 }] }] });
+    expect(() => previewPackContent(root!)).toThrow(/invalid childCount/);
+
+    write({ version: 1, packId: 'demo', entries: [{ key: 'glossary', written: true, count: 1, items: [{ key: 'A', extra: 'secret' }] }] });
+    expect(previewPackContent(root!).content.glossary).toEqual([{ key: 'A' }]);
+  });
 });
