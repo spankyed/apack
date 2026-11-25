@@ -38,7 +38,7 @@
       <p v-if="!editor.rows.length" role="status" class="text-xs text-neutral-400">Claude Code has provided no available controls.</p>
     </div>
     <div v-else-if="editor.kind === 'information'" data-native-settings-editor-body class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"><p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-300">{{ editor.description }}</p></div>
-    <form v-else data-native-settings-editor-body class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" @submit.prevent="emit('save', { ...drafts })">
+    <form v-else :id="formId" data-native-settings-editor-body class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" @submit.prevent="emit('save', { ...drafts })">
       <p v-if="editor.description" class="whitespace-pre-wrap break-words text-xs text-neutral-400"><NativeConsentDisclosure :text="editor.description" :links="editor.consent?.links" /></p>
       <p v-if="editor.consent?.problem" role="alert" class="whitespace-pre-wrap break-words text-sm text-amber-200">{{ editor.consent.problem }}</p>
       <label v-for="field in editor.fields" :key="field.key" class="block text-xs text-neutral-300">
@@ -47,7 +47,7 @@
       </label>
       <p v-if="editor.live && previewDirty" role="status" class="text-xs text-neutral-400">{{ previewProblem ? 'Preview could not update. Refresh to retry.' : 'Updating preview…' }}</p>
       <p v-else-if="editor.live?.feedback" :role="editor.live.feedback.tone === 'error' ? 'alert' : 'status'" class="whitespace-pre-wrap break-words text-sm" :class="editor.live.feedback.tone === 'error' ? 'text-amber-200' : 'text-emerald-300'">{{ editor.live.feedback.text }}</p>
-      <button type="submit" :disabled="pending || submitDisabled" class="rounded-lg bg-blue-600 px-4 py-2 text-xs text-white disabled:opacity-40">{{ editor.submitLabel }}</button>
+      <button v-if="!formId" type="submit" :disabled="pending" class="rounded-lg bg-blue-600 px-4 py-2 text-xs text-white disabled:opacity-40">{{ editor.submitLabel }}</button>
     </form>
   </section>
 </template>
@@ -57,7 +57,7 @@ import NativeThemePreview from './NativeThemePreview.vue'
 import NativeConsentDisclosure from './NativeConsentDisclosure.vue'
 import NativePermissionText from './NativePermissionText.vue'
 import type { ClaudeSettingsEditor } from '#features/code/common/native-settings.ts'
-const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string; hideHeader?: boolean; resetEpoch?: number; submitDisabled?: boolean; previewProblem?: boolean; previewPending?: boolean }>()
+const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string; hideHeader?: boolean; formId?: string; resetEpoch?: number; previewProblem?: boolean; previewPending?: boolean }>()
 const emit = defineEmits<{ 'theme-edit': [value: string]; 'theme-reset': [value: string]; change:[formId:string,key:string,value:string]; 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
 const drafts = ref<Record<string, string>>({}),dirty=reactive(new Set<string>()),composing=reactive(new Set<string>()),lastEmitted=new Map<string,string>()
 const previewDirty=computed(()=>dirty.size>0||composing.size>0)

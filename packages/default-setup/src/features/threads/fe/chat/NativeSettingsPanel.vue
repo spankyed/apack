@@ -7,7 +7,7 @@
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in frame.tabs" :key="tab" type="button" :aria-current="activeTab === tab ? 'page' : undefined" :disabled="pending" class="rounded-lg px-3 py-2 text-xs text-neutral-400 hover:bg-white/5 disabled:opacity-40" :class="activeTab === tab ? 'bg-white/10 text-white' : ''" @click="operate({kind:'tab',tab})">{{ tab }}</button>
     </nav>
-    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="editorPending" :reset-epoch="liveForm.resetEpoch.value" :submit-disabled="!!(state.snapshot.editor.kind === 'form' && state.snapshot.editor.live) && !liveForm.canSubmit.value" :preview-problem="state.status === 'error'" :preview-pending="liveForm.busy.value" :hide-header="subject !== 'settings'" :cancel-label="subject === 'model' && state.snapshot.refreshPending ? 'Cancel model change' : undefined" @set-group="(key, value) => editorCommand({action:'setGroup',key,value})" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @theme-edit="editorCommand({action:'themeEdit',value:$event})" @theme-reset="editorCommand({action:'themeReset',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @change="(formId,key,value) => editorCommand({action:'change',formId,key,value})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
+    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="editorPending" :reset-epoch="liveForm.resetEpoch.value" :form-id="editorFormId" :preview-problem="state.status === 'error'" :preview-pending="liveForm.busy.value" :hide-header="subject !== 'settings'" :cancel-label="subject === 'model' && state.snapshot.refreshPending ? 'Cancel model change' : undefined" @set-group="(key, value) => editorCommand({action:'setGroup',key,value})" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @theme-edit="editorCommand({action:'themeEdit',value:$event})" @theme-reset="editorCommand({action:'themeReset',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @change="(formId,key,value) => editorCommand({action:'change',formId,key,value})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
     <p v-else-if="subject !== 'settings'" role="status" class="min-h-0 flex-1 overflow-auto p-4 text-sm text-neutral-400">Loading {{ subject === 'theme' ? 'theme' : 'model' }} controls…</p>
     <template v-else-if="activeTab === 'Config'">
     <div class="shrink-0 border-b border-white/5 px-4 py-3">
@@ -69,16 +69,18 @@
       <p v-if="state?.problem" role="alert" class="min-w-0 flex-1 break-words text-amber-200">{{ state.problem }}</p>
       <p v-else-if="footerStatus" role="status" class="text-neutral-400">{{ footerStatus }}</p>
       <button type="button" :disabled="pending" class="ml-auto rounded-lg px-3 py-2 text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="emit('operate', { kind: 'read' })">Refresh</button>
+      <button v-if="state?.snapshot?.editor?.kind === 'form'" type="submit" :form="editorFormId" :disabled="editorPending || formSubmitDisabled" class="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40">{{ state.snapshot.editor.submitLabel }}</button>
     </footer>
   </section>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import NativeSettingsStats from './NativeSettingsStats.vue'
 import NativeSettingsEditor from './NativeSettingsEditor.vue'
 import { useNativeSettingsForm } from './native-settings-form.ts'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
 const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' | 'theme' | 'credits' }>(), {subject:'settings'})
+const editorFormId = useId()
 const panelTitle = computed(() => props.subject === 'credits' ? 'Claude Code usage credits' : props.subject === 'model' ? 'Claude Code model' : props.subject === 'theme' ? 'Claude Code theme' : 'Claude Code settings')
 const closeLabel = computed(() => {
   if(props.subject==='settings')return 'Close settings'
@@ -98,6 +100,10 @@ function operate(action: {kind:'tab';tab:'Status'|'Config'|'Usage'|'Stats'} | {k
   if (!pending.value && props.state?.snapshot) emit('operate', {...action,revision:props.state.snapshot.revision})
 }
 const liveForm=useNativeSettingsForm(()=>props.state,action=>emit('operate',action))
+const formSubmitDisabled = computed(() => {
+  const editor = props.state?.snapshot?.editor
+  return editor?.kind === 'form' && !!editor.live && !liveForm.canSubmit.value
+})
 const pending = computed(() => props.state?.status === 'pending' || props.state?.snapshot?.commitPending === true || liveForm.busy.value)
 const editorPending=computed(()=>pending.value&&!liveForm.editing.value)
 const footerStatus=computed(()=>{

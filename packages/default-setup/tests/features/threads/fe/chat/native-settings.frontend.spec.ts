@@ -104,7 +104,9 @@ it('routes original editor opening, form Save and pending Cancel through the cur
   expect(operations.at(-1)).toEqual({kind:'open',revision:'d'.repeat(64),key:'advanced'})
   state.state.snapshot!.editor={kind:'form',revision:'e'.repeat(64),title:'Original advanced editor',submitLabel:'Save native',fields:[{key:'value',label:'Original field',value:'original'}]};state.state.snapshot!.frame!.hidden=true;await nextTick()
   const input=root.querySelector<HTMLInputElement>('[aria-label="Claude Code setting editor"] input')!;input.value='edited';input.dispatchEvent(new Event('input'));await nextTick()
-  root.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));expect(operations.at(-1)).toEqual({kind:'editor',revision:'d'.repeat(64),editorRevision:'e'.repeat(64),command:{action:'save',values:{value:'edited'}}})
+  const form=root.querySelector('form')!, submit=root.querySelector<HTMLButtonElement>('footer button[type="submit"]')!
+  expect(submit.form).toBe(form);expect(form.contains(submit)).toBe(false)
+  submit.click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'d'.repeat(64),editorRevision:'e'.repeat(64),command:{action:'save',values:{value:'edited'}}})
   state.state.status='pending';await nextTick();[...root.querySelectorAll('button')].find(button=>button.textContent==='Cancel')!.click()
   expect(operations.at(-1)).toEqual({kind:'editor',revision:'d'.repeat(64),editorRevision:'e'.repeat(64),command:{action:'cancel'}})
  }finally{app.unmount();root.remove()}
