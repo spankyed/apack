@@ -44,7 +44,7 @@
           </template>
         </ClaudeNativeSession>
         <NativeMemoryPanel v-if="showMemory && memoryTarget" :key="memoryTarget.attachmentId" :target="memoryTarget" :busy="nativeComposerOwner?.busy" :managed-settings-revision="nativeUiDrawing?.managedSettingsRevision" @close="closeMemory" />
-        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && !focusedAgent && !agentSelection && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
+        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && !focusedAgent && !agentSelection && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreNativeComposerFocus" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
             <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
@@ -53,7 +53,7 @@
         </section>
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :panel-decision-pending="!!pendingNativePlan || !!pendingNativeQuestion" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent">
-          <template #decision>
+          <template #decision="{ restoreFocus }">
             <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
               <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
                 @respond="respondNativePlan"
@@ -63,7 +63,7 @@
               <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeDecisionMount" :can-clarify="!!nativeDecisionMount"
                 @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
                 @respond="answerNativeQuestion"
-                @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
+                @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" @return-focus="restoreFocus" />
             </div>
           </template>
         </NativeAgentView>
@@ -162,7 +162,7 @@
             <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeDecisionMount" :can-clarify="!!nativeDecisionMount"
               @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
               @respond="answerNativeQuestion"
-              @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
+              @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" @return-focus="restoreNativeComposerFocus" />
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
@@ -419,13 +419,15 @@ function recheckManagedSettings() {
   if (!mount || owner?.view?.kind !== 'main' || !canRecheckManagedSettings.value) return
   send({type:'CLAUDE_TERMINAL_POLICY_RECHECK', ...mount, ownerId:owner.ownerId, sessionId:owner.sessionId, viewRevision:owner.view.revision})
 }
-function restoreManagedSettingsFocus() {
+function restoreNativeComposerFocus() {
   const mount = nativeUiMount.value, editor = mainComposer.value
   if (!mount || !editor) return
   void nextTick(() => {
     if (document.hasFocus() && document.activeElement === document.body && nativeUiMount.value === mount
       && mainComposer.value === editor && !nativeTerminalActive.value && !focusedAgent.value && !agentSelection.value
-      && !nativeBackgroundReplyActive.value && !nativeUiDrawing.value?.managedSettingsDiagnostics?.length) editor.focus()
+      && !nativeBackgroundReplyActive.value && !nativeUiDrawing.value?.managedSettingsDiagnostics?.length
+      && !pendingNativeQuestion.value && !pendingNativeApproval.value && !pendingNativePlan.value
+      && !mainCommandView.value) editor.focus()
   })
 }
 const nativeQueueSendAvailable = computed(() => {

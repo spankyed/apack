@@ -17,7 +17,7 @@
       <span aria-current="page" class="px-1 text-neutral-200">{{ displayName }}</span>
     </nav>
     <NativeManagedSettingsNotice v-if="active && managedSettingsDiagnostics?.length" :diagnostics="managedSettingsDiagnostics"
-      :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreManagedSettingsFocus" />
+      :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" @return-focus="restoreComposerFocus" />
     <details v-show="!panelActive && !panelDecisionPending" v-if="state?.agent?.metadata" class="native-agent-details mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
     <p v-show="!panelDecisionPending" v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
     <NativeIdePanel v-show="!panelDecisionPending" v-if="panelActive && state?.agentInput?.panel?.commandName === 'ide'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${displayName}`" @operate="settings" @close="panelInput()" />
@@ -74,7 +74,7 @@
     <p v-if="selectedOwner && state?.agent?.externalPane && state.agent.status === 'running'" class="mx-4 mb-2 text-xs text-neutral-400">Reply directly in the teammate’s terminal pane.</p>
     <NativeAgentComposer v-show="!panelActive && !approvalPending && !panelDecisionPending" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || approvalPending || panelDecisionPending || !selectedOwner || returning || stopping || panelActive || commandActive || !canFocusInput || state?.status === 'disconnected' || state?.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
-    <slot name="decision" />
+    <slot name="decision" :restore-focus="restoreComposerFocus" />
   </section>
 </template>
 <script setup lang="ts">
@@ -179,7 +179,7 @@ function recheckManagedSettings() {
   const {ownerId, sessionId, taskId, revision: viewRevision} = props.target
   sendToThreads({type:'CLAUDE_TERMINAL_POLICY_RECHECK', ...terminalIdentity(), ownerId, sessionId, taskId, viewRevision})
 }
-function restoreManagedSettingsFocus() {
+function restoreComposerFocus() {
   const mount = uiMount.value
   void nextTick(() => {
     if (document.hasFocus() && document.activeElement === document.body && mount && uiMount.value === mount && props.active && selectedOwner.value

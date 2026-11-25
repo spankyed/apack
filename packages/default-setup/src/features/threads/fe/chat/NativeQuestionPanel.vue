@@ -51,15 +51,15 @@
     <footer>
       <div class="decision-status">
         <button type="button" class="quiet" :disabled="props.disabled || readingImages" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
-        <button v-if="canClarify && current" type="button" class="quiet" :disabled="disabled || hasUnsupportedClarificationDraft" :title="hasUnsupportedClarificationDraft ? 'Submit answers to include your general response or notes.' : undefined" @click="submit(false, 'clarify')">Chat about this</button>
+        <button v-if="canClarify && current" type="button" class="quiet" :disabled="actionDisabled || hasUnsupportedClarificationDraft" :aria-disabled="pending || undefined" :title="hasUnsupportedClarificationDraft ? 'Submit answers to include your general response or notes.' : undefined" @click="submit(false, 'clarify')">Chat about this</button>
         <span v-if="pending" role="status" class="muted">Waiting for Claude…</span>
       </div>
       <div class="navigation">
-        <button v-if="canReject" type="button" :disabled="disabled" @click="emit('reject')">Reject question</button>
+        <button v-if="canReject" type="button" :disabled="actionDisabled" :aria-disabled="pending || undefined" @click="reject">Reject question</button>
         <button v-if="step > 0" type="button" :disabled="disabled" @click="step--">Back</button>
-        <button v-if="parsed && current" type="button" :disabled="disabled" @click="skip">Skip</button>
-        <button v-if="parsed && step + 1 === parsed.questions.length && parsed.questions.every(question => typeof question.kind === 'string')" type="button" :disabled="disabled" @click="submit(true)">Ask again</button>
-        <button v-if="parsed && current" type="button" class="primary" :disabled="disabled" @click="advance">{{ step + 1 === parsed.questions.length ? 'Submit answers' : 'Next' }}</button>
+        <button v-if="parsed && current" type="button" :disabled="actionDisabled" :aria-disabled="pending || undefined" @click="skip">Skip</button>
+        <button v-if="parsed && step + 1 === parsed.questions.length && parsed.questions.every(question => typeof question.kind === 'string')" type="button" :disabled="actionDisabled" :aria-disabled="pending || undefined" @click="submit(true)">Ask again</button>
+        <button v-if="parsed && current" type="button" class="primary" :disabled="actionDisabled" :aria-disabled="pending || undefined" @click="advance">{{ step + 1 === parsed.questions.length ? 'Submit answers' : 'Next' }}</button>
       </div>
     </footer>
   </section>
@@ -74,6 +74,8 @@ import { CLAUDE_QUESTION_IMAGE_BYTES, CLAUDE_QUESTION_IMAGE_COUNT, CLAUDE_QUESTI
 const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; canClarify?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
 const imageProblem = ref(''), readingImages = ref(false)
 const disabled = computed(() => props.disabled || props.pending === true || readingImages.value)
+// Keep the last action focused while Claude processes it. Its handler still rejects duplicate input.
+const actionDisabled = computed(() => disabled.value && !props.pending)
 const displayError = computed(() => describeClaudeUiProblem(props.error, 'decision'))
 const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer, decision?: 'clarify', images?: ClaudeQuestionImage[]]; started: [token?: string]; pause: []; reject: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
@@ -193,6 +195,7 @@ function submit(followUp = false, decision?: 'clarify') {
   else if (decision) emit('respond', answer, decision)
   else emit('respond', answer)
 }
+function reject() { if (!disabled.value) emit('reject') }
 function advance() {
   if (disabled.value || !parsed.value || numberInput.value && !numberInput.value.reportValidity()) return
   markStarted()
@@ -242,7 +245,7 @@ footer { display:flex; flex:none; justify-content:space-between; align-items:cen
 .question-images li img { width:28px; height:28px; object-fit:contain; }
 .question-images li span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .question-images li button { padding:4px 6px; }
-button.primary { background:#e5e5e5; color:#202020; } button.quiet { background:transparent; color:#aaa; } button:disabled { opacity:.5; cursor:default; }
+button.primary { background:#e5e5e5; color:#202020; } button.quiet { background:transparent; color:#aaa; } button:disabled, button[aria-disabled='true'] { opacity:.5; cursor:default; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline:2px solid #93c5fd; outline-offset:2px; }
 .native-tool-notice { flex:none; max-height:6rem; overflow:auto; overflow-wrap:anywhere; margin:0; padding:8px 12px; color:#aaa; font-size:11px; }
 </style>

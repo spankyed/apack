@@ -47,7 +47,7 @@ it('blocks decisions while its native frame is pending and exposes retry errors 
  const root=document.createElement('div');document.body.append(root);const reject=vi.fn(),pause=vi.fn(),pending=ref(true),app=createApp({render:()=>h(NativeQuestionDrawing,{frame,pending:pending.value,canReject:true,onReject:reject,onPause:pause})});app.mount(root)
  try{
   const button=()=>[...root.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent==='Reject question')!
-  expect(button().disabled).toBe(true);button().click();expect(reject).not.toHaveBeenCalled()
+  expect(button().getAttribute('aria-disabled')).toBe('true');button().click();expect(reject).not.toHaveBeenCalled()
   expect(root.querySelector('[role="status"]')?.textContent).toBe('Waiting for Claude…');expect(root.querySelector('[aria-label="Question details"]')?.getAttribute('aria-busy')).toBe('true')
   const cancel=[...root.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent==='Cancel')!
   expect(cancel.disabled).toBe(false);cancel.click()
@@ -87,3 +87,41 @@ it('keeps the originally held draft token and text through an ordinary same-ques
   expect(pause).toHaveBeenCalledExactlyOnceWith({messageId:'question',token:'held-token'});
  }finally{app.unmount();root.remove()}
 });
+
+
+it.each(['answering', 'outside', 'inactive window'] as const)('returns composer focus only for the active question control (%s)', async position => {
+  const frame: ClaudeUiQuestionFrame = {
+    messageId: 'question', id: 'dialog', revision: 'revision', draftActionId: 'draft', token: 'drawing',
+    shownInput: { questions: [{ question: 'What should the release note mention?', header: 'Release', kind: 'text' }] },
+    body: { status: 'live', tree: { kind: 'unsupported', component: 'engine' } },
+  }
+  const root = document.body.appendChild(document.createElement('div'))
+  const showing = ref(true)
+  const pending = ref(false)
+  const respond = vi.fn(() => { pending.value = true })
+  const returnFocus = vi.fn()
+  const app = createApp({
+    render: () => h('div', [
+      showing.value ? h(NativeQuestionDrawing, { frame, pending: pending.value, onRespond: respond, onReturnFocus: returnFocus }) : null,
+      h('button', { type: 'button' }, 'Outside'),
+    ]),
+  })
+  app.mount(root)
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(position !== 'inactive window')
+  try {
+    const buttons = [...root.querySelectorAll('button')]
+    const submit = buttons.find(node => node.textContent === 'Submit answers')!
+    submit.focus()
+    submit.click()
+    await nextTick()
+    expect(document.activeElement).toBe(submit)
+    expect(submit.getAttribute('aria-disabled')).toBe('true')
+    submit.click()
+    expect(respond).toHaveBeenCalledOnce()
+    if (position === 'outside') buttons.find(node => node.textContent === 'Outside')!.focus()
+    showing.value = false
+    await nextTick()
+    if (position === 'answering') expect(returnFocus).toHaveBeenCalledOnce()
+    else expect(returnFocus).not.toHaveBeenCalled()
+  } finally { windowFocus.mockRestore(); app.unmount(); root.remove() }
+})
