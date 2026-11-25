@@ -1,27 +1,12 @@
 {
+  "extends": "../../tsconfig.node.json",
   "compilerOptions": {
-    "noUnusedLocals": true,
-    // Typechecking only, so the .tsbuildinfo is the whole point: a re-run with nothing changed reuses it
-    // instead of reparsing. `incremental` works with `noEmit`; `composite` does not, which is why this
-    // is not project references (docs/goals/goal-test-tiers.md).
-    "incremental": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/internal-repo-checks.tsbuildinfo",
-    // The specs import `scripts/` and workspace @apackdev/* sources, which name .ts files
-    "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    // Repo tooling includes .mjs entry points; their JSDoc types are part of the tests’ imports.
+    // Repo tooling includes .mjs entry points; their JSDoc types are part of the tests' imports.
     "allowJs": true,
-    // Workspace @apackdev/* packages resolve to source (see their package.json exports)
-    "customConditions": ["@apackdev/source"],
-    "target": "ES2024",
-    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "types": ["node"]
+    "noEmit": true
   },
   "include": ["tests/**/*.ts", "../../scripts/lib/spdx.d.ts"]
 }

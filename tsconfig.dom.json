@@ -1,0 +1,17 @@
+{
+  // Preset for workspace packages that use DOM / Web APIs alongside Node.
+  "extends": "./tsconfig.node.json",
+  "files": [],
+  "compilerOptions": {
+    "lib": [
+      "ES2024",
+      "ESNext.Collection",
+      "ESNext.Iterator",
+      "ESNext.Promise",
+      "ESNext.Error",
+      "ESNext.Disposable",
+      "DOM",
+      "DOM.Iterable"
+    ]
+  }
+}

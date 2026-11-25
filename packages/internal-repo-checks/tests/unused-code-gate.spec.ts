@@ -143,7 +143,7 @@ describe('every workspace is checked for unused code', () => {
    */
   describe('reads the flag rather than something that resembles it', () => {
     it('reports a config that drops the flag', () => {
-      const real = path.join(REPO_ROOT, 'packages', 'apack-host', 'tsconfig.json');
+      const real = path.join(REPO_ROOT, 'packages', 'default-setup', 'tsconfig.json');
       const read = ts.readConfigFile(real, ts.sys.readFile);
       const options = (read.config as { compilerOptions: Record<string, unknown> }).compilerOptions;
       expect(options.noUnusedLocals, 'the file this mutates has stopped setting the flag literally').toBe(true);
