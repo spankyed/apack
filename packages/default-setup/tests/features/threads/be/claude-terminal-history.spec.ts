@@ -250,3 +250,28 @@ it('restores the caption of a native queued document using its replay UUID and o
     expect(projectClaudeTerminalHistory({sessionId, row: {...queued, ...excluded}})).toBeUndefined()
   }
 })
+
+it('keeps native goal verdicts as session-bound system rows and suppresses sentinels', () => {
+  const attachment = { type: 'goal_status', met: true, condition: 'Review the checklist', reason: 'Reviewed.',
+    durationMs: 1540, iterations: 1, tokens: 10 }
+  const native = { ...row, type: 'attachment', entrypoint: 'cli', attachment }
+  expect(projectClaudeTerminalHistory({ sessionId, row: native })).toMatchObject({
+    uuid, sessionId, sender: 'system', text: 'Goal achieved', blocks: [],
+    context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId }, claudeNativeGoalVerdict: {
+      outcome: 'achieved', condition: attachment.condition, reason: attachment.reason, durationMs: 1540, iterations: 1, tokens: 10,
+    } },
+  })
+  for (const [fields, text] of [
+    [{ met: false }, 'Goal not yet met… continuing'],
+    [{ met: false, failed: true }, 'Goal could not be achieved'],
+  ] as const) {
+    expect(projectClaudeTerminalHistory({ sessionId, row: { ...native, attachment: { ...attachment, ...fields } } }))
+      .toMatchObject({ text, sender: 'system' })
+  }
+  for (const fields of [
+    { sentinel: true }, { failed: true }, { condition: '' }, { durationMs: -1 }, { tokens: '10' }, { reason: {} },
+  ]) expect(projectClaudeTerminalHistory({ sessionId, row: { ...native, attachment: { ...attachment, ...fields } } })).toBeUndefined()
+  for (const fields of [
+    { sessionId: uuid }, { isSidechain: true }, { agentId: 'child' }, { parent_tool_use_id: 'tool' }, { isMeta: true },
+  ]) expect(projectClaudeTerminalHistory({ sessionId, row: { ...native, ...fields } })).toBeUndefined()
+})

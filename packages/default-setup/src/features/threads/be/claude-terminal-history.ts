@@ -52,6 +52,26 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
 } | undefined {
   const source = entry.row
   const attachment = object(source.attachment)
+  if (source.type === 'attachment' && attachment?.type === 'goal_status') {
+    if (source.sessionId !== entry.sessionId || source.isSidechain === true || source.agentId !== undefined
+      || source.parent_tool_use_id || source.isMeta === true || (source.entrypoint !== 'cli' && source.entrypoint !== 'sdk-cli')
+      || typeof source.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(source.uuid)
+      || (attachment.sentinel !== undefined && attachment.sentinel !== false)
+      || typeof attachment.met !== 'boolean' || (attachment.failed !== undefined && typeof attachment.failed !== 'boolean')
+      || (attachment.met && attachment.failed === true)
+      || typeof attachment.condition !== 'string' || !attachment.condition.trim() || attachment.condition.length > 4000
+      || (attachment.reason !== undefined && (typeof attachment.reason !== 'string' || attachment.reason.length > 32_768))) return
+    const counters = [attachment.durationMs, attachment.iterations, attachment.tokens]
+    if (counters.some(value => value !== undefined && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0))) return
+    const outcome = attachment.failed ? 'failed' : attachment.met ? 'achieved' : 'continuing'
+    const text = outcome === 'failed' ? 'Goal could not be achieved' : outcome === 'achieved' ? 'Goal achieved' : 'Goal not yet met… continuing'
+    const timestamp = typeof source.timestamp === 'string' ? Date.parse(source.timestamp) : Number.NaN
+    return { uuid: source.uuid, sessionId: entry.sessionId, sender: 'system', text, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: source.uuid, claudeTerminalMessage: { uuid: source.uuid, sessionId: entry.sessionId },
+        claudeNativeGoalVerdict: { outcome, condition: attachment.condition, reason: attachment.reason,
+          durationMs: attachment.durationMs, iterations: attachment.iterations, tokens: attachment.tokens } } }
+  }
   if (source.type === 'attachment' && attachment?.type === 'queued_command') {
     const origin = object(attachment.origin)
     const uuid = attachment.source_uuid ?? source.uuid

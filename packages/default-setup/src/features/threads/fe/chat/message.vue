@@ -55,6 +55,16 @@
         </div>
       </div>
 
+      <details v-else-if="nativeGoalVerdict" :data-native-goal-verdict="nativeGoalVerdict.outcome"
+        class="min-w-0 rounded-md border border-white/10 px-3 py-2">
+        <summary class="cursor-pointer rounded text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          :class="nativeGoalVerdict.outcome === 'achieved' ? 'text-emerald-400' : nativeGoalVerdict.outcome === 'failed' ? 'text-amber-300' : 'text-neutral-300'">
+          {{ message.text }}<span v-if="nativeGoalMetrics" class="ml-2 font-normal text-neutral-400">{{ nativeGoalMetrics }}</span>
+        </summary>
+        <p class="mt-2 whitespace-pre-wrap text-sm text-neutral-200 [overflow-wrap:anywhere]">{{ nativeGoalVerdict.condition }}</p>
+        <p v-if="nativeGoalVerdict.reason" class="mt-1 whitespace-pre-wrap text-xs text-neutral-400 [overflow-wrap:anywhere]">{{ nativeGoalVerdict.reason }}</p>
+      </details>
+
       <!-- System message: non-interactive aside -->
       <div v-else-if="isSystem" class="text-xs italic py-1 px-2 text-neutral-500">
         {{ message.text }}
@@ -416,6 +426,22 @@ const nativeTeammateReports = computed(() => {
   if (!props.isClaudeCodeThread || !isSystem.value || !Array.isArray(reports)) return []
   return reports.filter((report): report is { title: string; body: string } =>
     typeof report?.title === 'string' && typeof report?.body === 'string')
+})
+const nativeGoalVerdict = computed(() => {
+  const verdict = props.message.context?.claudeNativeGoalVerdict as {
+    outcome?: unknown; condition?: unknown; reason?: string; durationMs?: number; iterations?: number; tokens?: number
+  } | undefined
+  if (props.isClaudeCodeThread && isSystem.value && typeof verdict?.condition === 'string'
+    && (verdict.outcome === 'achieved' || verdict.outcome === 'failed' || verdict.outcome === 'continuing')) return verdict
+})
+const nativeGoalMetrics = computed(() => {
+  const verdict = nativeGoalVerdict.value
+  if (!verdict || verdict.outcome === 'continuing') return ''
+  const parts: string[] = []
+  if (typeof verdict.durationMs === 'number') parts.push(Math.round(verdict.durationMs / 1000) + 's')
+  if (typeof verdict.iterations === 'number') parts.push(verdict.iterations + (verdict.iterations === 1 ? ' turn' : ' turns'))
+  if (typeof verdict.tokens === 'number') parts.push(verdict.tokens.toLocaleString() + ' tokens')
+  return parts.join(' · ')
 })
 const nativeCompaction = computed(() => {
   const kind = props.message.context?.claudeNativeCompaction
