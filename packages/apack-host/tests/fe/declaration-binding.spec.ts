@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PackFERegistration } from '@apackdev/sdk/fe';
 import { createMachine } from 'xstate';
 import { Extension } from '@tiptap/core';
-import { ManifestSchema, type PackManifest } from '@apackdev/sdk/build';
+import { ManifestSchema, type PackManifest } from '@apackdev/pack-format';
 
 import { frontendBindingProblem } from '../../src/fe/declaration-binding.ts';
 

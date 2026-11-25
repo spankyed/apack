@@ -39,6 +39,8 @@
   },
   "dependencies": {
     "@apackdev/host": "*",
+    "@apackdev/pack-build": "*",
+    "@apackdev/pack-format": "*",
     "@apackdev/sdk": "*",
     "ajv": "^8.20.0",
     "tsx": "^4.23.15",

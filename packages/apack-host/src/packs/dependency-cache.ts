@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-import { parseDependencySnapshot, type PackDependencySnapshot } from '@apackdev/sdk/build';
+import { parseDependencySnapshot, type PackDependencySnapshot } from '@apackdev/pack-format';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { replaceDir } from '../replace-dir.ts';
 import { holdExclusiveLock } from '../exclusive-lock.ts';

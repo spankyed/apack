@@ -1,4 +1,6 @@
+/** @internal Pattern for `path#exportName` module export references. */
 export const _MODULE_REFERENCE_PATTERN = /^([^#]+)#([A-Za-z_$][\w$]*)$/;
+/** @internal Pattern for whole-module paths without an export selector. */
 export const _MODULE_PATH_PATTERN = /^[^#]+$/;
 
 /** @internal A whole-module contribution has no export selector. */

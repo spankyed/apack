@@ -1,6 +1,6 @@
 import { createLogger } from '@apackdev/sdk/logger';
 import { resolveAppEnvironment, getAppVersion } from '@apackdev/sdk/env';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { HOST_PACK_ID } from '@apackdev/sdk/ids';
 import type { PackRegistry } from '../registry.ts';
 import { installPackFromLocal } from '../installer.ts';

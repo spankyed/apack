@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { _packEntities, inspectContentReferences, type ContentIndex } from '@apackdev/sdk/build';
+import { _packEntities } from '@apackdev/sdk/framework';
+import { inspectContentReferences } from '@apackdev/pack-build';
+import type { ContentIndex } from '@apackdev/pack-format';
 import { PACK_LAYOUT, readPackBuild, type PackBuild } from '@apackdev/host/packs';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { findPackRoot, readValidManifest } from '../utils';

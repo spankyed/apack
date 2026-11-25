@@ -3,7 +3,7 @@ import { startTestRuntime, resetTestData, nativePackDeclarationFixture } from '@
 import { getStepBinding, getStepDeclaration, stepRegistry, type StepDefinition, type TriggerFacet } from '@apackdev/sdk/steps';
 import { captureStepBinding } from '../../src/packs/step-bindings.ts';
 import { actionRepository, flowRepository } from '@apackdev/sdk/repositories';
-import { _declarationRevision, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, type PackManifest } from '@apackdev/pack-format';
 import { createPackRegistry, type PackOrigin } from '../../src/packs/registry.ts';
 
 // Backend reader tests use actual registry admission and an in-memory engine.

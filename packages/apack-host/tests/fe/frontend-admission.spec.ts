@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { createMachine } from 'xstate';
-import { _nativePackDeclarationProblem } from '@apackdev/sdk/build';
+import { _nativePackDeclarationProblem } from '@apackdev/pack-format';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import type { PackFERegistration, SettingsPort } from '@apackdev/sdk/fe';
 import { hostDeclaration } from '../../src/features/declaration.ts';

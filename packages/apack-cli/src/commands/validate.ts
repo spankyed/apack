@@ -1,10 +1,9 @@
-import { _packServiceSelection, _parseServiceReference } from '@apackdev/sdk/framework';
+import { _packServiceSelection } from '@apackdev/pack-format';
+import { _parseServiceReference } from '@apackdev/sdk/framework';
 import { HOST_PACK_ID } from '@apackdev/sdk/ids';
 import * as path from 'node:path';
-import {
-  generatePackFiles, packValidation, validateManifest, validatePackSources,
-  type PackDiagnostic, type PackValidation, type SkippedPackCheck,
-} from '@apackdev/sdk/build';
+import { generatePackFiles, validateManifest, validatePackSources } from '@apackdev/pack-build';
+import { packValidation, type PackDiagnostic, type PackValidation, type SkippedPackCheck } from '@apackdev/pack-format';
 import { compileSettingsDefinition, settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { dependencyTypes, type ResolvedDeps } from './generate';
 import { inspectDependencies, type DependencyInspection } from '../build/dependency-inspection.ts';

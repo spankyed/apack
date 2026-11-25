@@ -4,7 +4,7 @@ import { _packEntityTypes, _packRanks, _packRelationRules, _packRelationTypes, _
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AppEnvironment } from '@apackdev/sdk/env';
-import { parseManifest, parseSnapshot, type PackManifest } from '@apackdev/sdk/build';
+import { parseManifest, parseSnapshot, type PackManifest } from '@apackdev/pack-format';
 import { readInstalledPacks } from '../packs/installed.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, SDK_SHORT_CODES, _withSdkIndexes } from '@apackdev/sdk/types';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';

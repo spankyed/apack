@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 import { bindSettingsRequest } from '@apackdev/host/settings';
 import type { Message } from '@apackdev/sdk/events';

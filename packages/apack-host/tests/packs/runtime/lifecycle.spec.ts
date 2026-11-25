@@ -3,7 +3,7 @@ import { createMachine } from 'xstate';
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 import { writeInstalledPackFixture } from './build-fixture.ts';
 import { sealBuild } from './build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,7 +14,7 @@ import { resetTestData } from '@apackdev/sdk/testing';
 import { registry } from './test-host.ts';
 import { appliedContent, appState } from '../../../src/app-state/index.ts';
 
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_LAYOUT } from '../../../src/packs/layout.ts';
 import { createNativePackTestRegistry } from '@apackdev/host/testing';

@@ -3,7 +3,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { cacheDependency, readCachedDependency, readDependencyBuild } from '../../src/packs/dependency-cache.ts';
 import { PACK_LAYOUT, sealPackBuild } from '../../src/packs/layout.ts';
 

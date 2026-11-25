@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { _assertSettingsDefinitionStructure, type SettingsDefinition } from '@apackdev/sdk/framework';
-import { generateSettingsTypes } from '@apackdev/sdk/build';
+import { generateSettingsTypes } from '@apackdev/pack-build';
 import { compileSettingsDefinition, settingsDeclarationDiagnostics } from '../../../src/features/settings/compile.ts';
 
 const definition: SettingsDefinition = {

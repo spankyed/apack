@@ -9,10 +9,9 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { registerContentRuntime, resetTestData, startTestRuntime } from '../../src/testing/index.ts';
 import type { ContentRuntime } from '../../src/framework/content-runtime.ts';
-import { compileBuiltinFormat } from '../../src/build/content/items.ts';
 import { createFormatApplier } from '../../src/content/format-applier.ts';
 import { findRelations } from '@apackdev/sdk/ears';
-import type { PackManifest } from '../../src/build/manifest.ts';
+import type { PackManifest } from '../../src/framework/declaration-types.ts';
 
 const DEFAULT_SETUP = path.resolve(import.meta.dirname, '../../../default-setup');
 const FACET = path.join(DEFAULT_SETUP, 'dist', 'build', 'content-runtime.mjs');
@@ -35,15 +34,18 @@ describe.skipIf(!built)("a built pack's content runtime", () => {
 
   it("registers the pack's repositories and content writers, so applying goes through them", async () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(DEFAULT_SETUP, 'apack.json'), 'utf-8')) as PackManifest;
-    const source = path.join(dir, 'notes');
-    fs.mkdirSync(path.join(source, 'plan'), { recursive: true });
-    fs.writeFileSync(path.join(source, 'intro.md'), '---\ntitle: Intro\n---\nSee the [plan](apack-ref://note/Note-plan-target).\n');
-    fs.writeFileSync(path.join(source, 'plan', 'index.md'), '---\ntitle: Plan\ntype: tasklist\n---\nSteps.\n');
-    fs.writeFileSync(path.join(source, 'plan', 'first.md'), '---\ntype: task\n---\nDo it.\n');
     const compiled = path.join(dir, 'compiled');
     fs.mkdirSync(compiled);
     fs.writeFileSync(path.join(compiled, 'content.json'), JSON.stringify({ version: 1, packId: 'default-setup', entries: [] }));
-    fs.writeFileSync(path.join(compiled, 'notes.content.json'), JSON.stringify({ records: compileBuiltinFormat('notes', manifest.content!.formats!.notes, source) }));
+    fs.writeFileSync(path.join(compiled, 'notes.content.json'), JSON.stringify({
+      records: [
+        { entity: 'Note', title: 'Intro', content: 'See the [plan](apack-ref://note/Note-plan-target).\n', contentHash: 'h-intro' },
+        {
+          entity: 'Note', title: 'Plan', type: 'tasklist', content: 'Steps.\n', contentHash: 'h-plan',
+          children: [{ entity: 'Note', title: 'first', type: 'task', content: 'Do it.\n', contentHash: 'h-first' }],
+        },
+      ],
+    }));
 
     const format = manifest.content!.formats!.notes;
     const counts = createFormatApplier({ key: 'notes', entities: ['Note'], identity: format.identity, relKind: format.tree?.relKind }).apply({ compiledDir: compiled, log: () => {} });

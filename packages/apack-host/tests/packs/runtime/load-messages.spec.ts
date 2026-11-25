@@ -9,7 +9,7 @@ import { registry } from './test-host.ts';
 import { PACK_LOAD_MESSAGES, packRegistered } from '../../../src/packs/load-messages.ts';
 import { loadSingleExternalPack, registerExternalPacks } from '../../../src/packs/runtime/loader.ts';
 import { PACK_LAYOUT } from '../../../src/packs/layout.ts';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { sealPack } from './build-fixture.ts';
 import { testRootEvents } from '@apackdev/sdk/testing';
 

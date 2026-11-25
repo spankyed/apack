@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { importCompiledContent, type AppliedItem, type ApplyRecord } from '@apackdev/sdk/utils';
-import { CONTENT_INDEX_FILE } from '@apackdev/sdk/build';
+import { CONTENT_INDEX_FILE } from '@apackdev/pack-format';
 import { contentEntity } from '@apackdev/sdk/content';
 import { type EARS } from '@apackdev/sdk';
 import { untypedQuery as query, untypedWrite } from '@apackdev/sdk/ears';

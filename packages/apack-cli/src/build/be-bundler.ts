@@ -2,7 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { APP_ONLY_EXPORTS, HOST_RESOLVED_BINARIES, SHARED_DEPS, sharedInstanceExternals } from '@apackdev/host/build/shared-deps';
-import { CONTENT_COMPILERS_FILE, STEPS_BUILD_MODULE, WORKERS_DIR } from '@apackdev/sdk/build';
+import { CONTENT_COMPILERS_FILE } from '@apackdev/pack-format';
+import { STEPS_BUILD_MODULE, WORKERS_DIR } from '@apackdev/pack-build';
 import { checkContentRuntimeLoads } from './content-runtime-check';
 import type { RecordReads } from './build-reads';
 import type { RecordBuildOutput } from './build-outputs.ts';
@@ -387,9 +388,9 @@ export async function bundlePackContentRuntime(
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 /**
- * Fails the bundle when pack code imports @apackdev/host, the app's private package, or an export only the
- * app loads (`APP_ONLY_EXPORTS`, the elmdb databases): installed apack doesn't provide them to packs, so
- * they would only fail later, at load. Packs use @apackdev/sdk.
+ * Fails the bundle when pack code imports private apack packages (`@apackdev/host`, `@apackdev/pack-format`,
+ * `@apackdev/pack-build`) or an export only the app loads (`APP_ONLY_EXPORTS`, the elmdb databases):
+ * installed apack doesn't provide them to packs, so they would only fail later, at load. Packs use @apackdev/sdk.
  */
 export function rejectHostImportsPlugin(): import('esbuild').Plugin {
   const appOnly = new RegExp(`^(?:${Object.keys(APP_ONLY_EXPORTS).map(escapeRegExp).join('|')})$`);
@@ -397,8 +398,12 @@ export function rejectHostImportsPlugin(): import('esbuild').Plugin {
     name: 'reject-host-imports',
     setup(build) {
       const importedFrom = (importer: string) => path.relative(process.cwd(), importer) || importer;
-      build.onResolve({ filter: /^@apackdev\/host(?:\/|$)/ }, (args) => ({
-        errors: [{ text: `${args.path} is the app's private host package; packs import @apackdev/sdk instead (imported from ${importedFrom(args.importer)})` }],
+      build.onResolve({ filter: /^@apackdev\/(?:host|pack-format|pack-build)(?:\/|$)/ }, (args) => ({
+        errors: [{
+          text: args.path.startsWith('@apackdev/host')
+            ? `${args.path} is the app's private host package; packs import @apackdev/sdk instead (imported from ${importedFrom(args.importer)})`
+            : `${args.path} is a private apack tooling package; packs import @apackdev/sdk instead (imported from ${importedFrom(args.importer)})`,
+        }],
       }));
       build.onResolve({ filter: appOnly }, (args) => ({
         errors: [{ text: `${args.path} is only for the app (${APP_ONLY_EXPORTS[args.path]}); packs can't import it (imported from ${importedFrom(args.importer)})` }],

@@ -141,9 +141,9 @@ mkdir -p src/content/glossary src/content/notes
 printf -- '---\nterm: Pack\n---\nA bundle of features.\n' > src/content/glossary/pack.md
 mkdir -p src/content/compilers
 cat > src/content/compilers/glossary.ts <<'TS'
-import { compileMarkdownTree, type ContentCompileContext, type ContentItem } from '@apackdev/sdk/build';
+import type { ContentCompileContext, ContentItem } from '@apackdev/sdk/build';
 
-export default function compileGlossary({ path }: ContentCompileContext): ContentItem[] {
+export default function compileGlossary({ path, compileMarkdownTree }: ContentCompileContext): ContentItem[] {
   return compileMarkdownTree(path).map((item) => ({ entity: 'DemoPack', term: String(item.frontmatter.term), definition: item.body.trim() }));
 }
 TS
@@ -197,10 +197,11 @@ import { Output } from 'ai';
 import { z } from 'zod';
 import { services } from '#generated/services.ts';
 
+export interface DigestResult { summary: string; tags: string[] }
 const Digest = z.object({ summary: z.string(), tags: z.array(z.string()) });
 
 export const digestService = {
-  async digest(text: string): Promise<z.infer<typeof Digest>> {
+  async digest(text: string): Promise<DigestResult> {
     const { output } = await services.inference.generateText({
       model: 'openai:gpt-5-mini',
       prompt: `Digest: ${text}`,

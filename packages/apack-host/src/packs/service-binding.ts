@@ -1,7 +1,7 @@
 import { _captureHostServices, type SecretsAdmin, type SecretsService, type SettingsService, type PackServiceAccess } from '@apackdev/sdk/services';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import type { SettingsTarget } from '@apackdev/sdk/types';
-import type { _packServiceSelection } from '@apackdev/sdk/framework';
+import type { _packServiceSelection } from '@apackdev/pack-format';
 
 type Selection = ReturnType<typeof _packServiceSelection>;
 interface ProviderService {

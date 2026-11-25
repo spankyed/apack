@@ -18,6 +18,12 @@ export interface CollectionItem extends ContentItem {
 }
 
 // @public
+export interface CompiledContentFile {
+    // (undocumented)
+    records: ContentItem[];
+}
+
+// @public
 export interface ContentEntity {
     // (undocumented)
     contentHash?: string;
@@ -31,6 +37,27 @@ export interface ContentEntity {
 export function contentEntity(entityType: string | undefined, key: string): ContentEntity | undefined;
 
 // @public
+export interface ContentIndex {
+    // (undocumented)
+    entries: ContentIndexEntry[];
+    packId: string;
+    // (undocumented)
+    version: 1;
+}
+
+// @public (undocumented)
+export interface ContentIndexEntry {
+    // (undocumented)
+    count: number;
+    identity?: string[];
+    items: PackContentPreviewItem[];
+    // (undocumented)
+    key: string;
+    references?: ContentReference[];
+    written: boolean;
+}
+
+// @public
 export interface ContentItem {
     // (undocumented)
     [field: string]: unknown;
@@ -40,6 +67,14 @@ export interface ContentItem {
     contentHash?: string;
     // (undocumented)
     entity?: string;
+}
+
+// @public (undocumented)
+export interface ContentItemIdentity {
+    // (undocumented)
+    item: string;
+    // (undocumented)
+    key: string;
 }
 
 // @public
@@ -55,6 +90,20 @@ export interface ContentMatch {
     // (undocumented)
     id: EARS.EntityId;
 }
+
+// @public
+export type ContentReference = {
+    item: string;
+    path: string;
+} & ({
+    kind: 'static';
+    target: ContentItemIdentity;
+} | {
+    kind: 'dynamic';
+    target: {
+        key: string;
+    };
+});
 
 // @public
 export interface ContentWriteContext {
@@ -161,6 +210,9 @@ export function parseDocumentSections(body: string): ContentSection[];
 
 // @public
 export function previewPackContent(directory: string): PackContentPreview;
+
+// @public
+export const RECORD_KEYS: ReadonlySet<string>;
 
 // @public
 export function removeContentEntity(entityType: string, id: EARS_2.EntityId): void;

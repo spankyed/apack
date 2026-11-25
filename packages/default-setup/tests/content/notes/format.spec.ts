@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { compileBuiltinFormat } from '@apackdev/sdk/build';
+import { compileBuiltinFormat } from '@apackdev/pack-build';
 
 const manifest = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../../apack.json'), 'utf-8'));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-format-'));

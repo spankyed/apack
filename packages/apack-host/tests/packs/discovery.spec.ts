@@ -1,5 +1,5 @@
 import { writeInstalledPackFixture } from './runtime/build-fixture.ts';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

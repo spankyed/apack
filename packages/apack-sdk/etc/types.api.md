@@ -398,6 +398,9 @@ export const SDK_ROW_RULES: {
 };
 
 // @public
+export const SDK_SHAPED_ENTITIES: readonly ["Flow", "Node", "Action", "Prompt", "Document", "Collection"];
+
+// @public
 export const SDK_SHORT_CODES: {
     readonly Flow: "FLW";
     readonly Action: "ACT";

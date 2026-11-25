@@ -1,6 +1,6 @@
 import { _packEntityTypes } from '@apackdev/sdk/framework';
 import { writeInstalledPackFixture, sealPack, sealBuild, eventContractsFixture } from '../../../packs/runtime/build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -17,7 +17,7 @@ import { createPacksSystem, type InstalledPackSummary } from '../../../../src/fe
 import { activatePack } from '../../../../src/packs/runtime/lifecycle.ts';
 import { loadAppPacks } from '../../../../src/packs/runtime/loader.ts';
 import { reloadPackById } from '../../../../src/packs/runtime/reload.ts';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { readPackBuild, createPackArchive, stagePack } from '../../../../src/packs/layout.ts';
 import { PACK_LAYOUT } from '../../../../src/packs/layout.ts';
 import { applyPacks } from '../../../../src/packs/runtime/apply.ts';

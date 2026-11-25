@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatManifest } from '../src/manifest-writer.ts';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 
 describe('manifest formatting', () => {
   it('canonicalizes structural fields without changing contribution or data order', () => {

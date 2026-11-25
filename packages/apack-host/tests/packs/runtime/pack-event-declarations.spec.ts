@@ -1,5 +1,5 @@
 import { sealPack } from './build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 // A pack declares which event types each of its surfaces receives, and the bus checks every send against
 // that declaration. It reaches the app on the registration the pack's runtime bundle exports, so what this
 // pins is that loading a pack doesn't lose it: a surface with no declaration is read as one whose pack was
@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { registry } from './test-host.ts';
 import { loadExternalPacks, registerExternalPacks } from '../../../src/packs/runtime/loader.ts';
 import { SURFACE_EVENT_TYPES } from '@apackdev/sdk/events';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_LAYOUT } from '../../../src/packs/layout.ts';
 

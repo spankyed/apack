@@ -1,4 +1,4 @@
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import { writeManifest } from '../manifest-writer.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,7 +14,7 @@ import { cliVersion, readManifest, sdkVersion } from '../utils';
 const MANIFEST_TEMPLATE = (name: string): PackManifest => {
   const pascalName = name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('');
   return {
-    $schema: './node_modules/@apackdev/sdk/apack.schema.json',
+    $schema: './node_modules/@apackdev/cli/apack.schema.json',
     id: name,
     name: name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
     version: '0.1.0',

@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { expect, it } from 'vitest';
-import { ManifestSchema } from '@apackdev/sdk/build';
+import { ManifestSchema } from '@apackdev/pack-format';
 import { addCommand } from '../../src/commands/add/command.ts';
 import { addDocument } from '../../src/commands/add/document.ts';
 

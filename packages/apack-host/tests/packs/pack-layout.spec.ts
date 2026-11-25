@@ -1,5 +1,5 @@
 import { eventContractsFixture, sealBuild } from './runtime/build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
@@ -19,7 +19,7 @@ import {
   verifyPack,
 } from '../../src/packs/layout.ts';
 import { installPack, installPackFromGitHub, installPackFromLocal, installPackFromUrl, uninstallPack } from '../../src/packs/installer.ts';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { packBuildRevision, readPackAsset } from '../../src/packs/assets.ts';
 

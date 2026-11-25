@@ -1,5 +1,5 @@
 import { _packEntityTypes, _packRelationTypes } from '@apackdev/sdk/framework';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 // A pack `apack pack init` scaffolds installs, and the app's pack loader loads it.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -9,7 +9,7 @@ import { startTestRuntime } from '@apackdev/sdk/testing';
 import { createPackRegistry, installPackFromLocal } from '@apackdev/host/packs';
 import { loadExternalPacks } from '@apackdev/host/packs/runtime';
 import { init } from '../../src/commands/init';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 

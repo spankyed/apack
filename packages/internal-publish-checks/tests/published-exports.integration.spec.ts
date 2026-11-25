@@ -37,10 +37,8 @@ const execFileAsync = execFileWhileWorking;
 describe.skipIf(!PACKAGES_BUILT)('published package exports', () => {
   it.each(CONSUMER_MATRIX)('all resolve to declarations under TypeScript $tsc, moduleResolution $moduleResolution', async ({ tsc, moduleResolution }) => {
     const specifiers = [...codeExports('sdk'), ...codeExports('ui')];
-    // Every export is code but these: the manifests and the schema. A new export without declarations lands
-    // in this list and fails here. The SDK's source-only `./runtime/internals` is not among them because the
-    // published manifest has no such entry — `publishedManifest` drops one the source condition was the whole of
-    expect(nonCodeExports('sdk')).toEqual(['./package.json', './apack.schema.json']);
+    // Every export is code but package.json. A new export without declarations lands in this list and fails here.
+    expect(nonCodeExports('sdk')).toEqual(['./package.json']);
     expect(nonCodeExports('ui')).toEqual(['./package.json']);
     expect(specifiers).toEqual(expect.arrayContaining(['@apackdev/sdk/repositories', '@apackdev/sdk/events', '@apackdev/sdk/templates', '@apackdev/ui/components/tiptap/TiptapEditor']));
     // Packs send with @apackdev/sdk/events; the host's transport and API client aren't an entry

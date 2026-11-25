@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createBuildOutputs } from '../../src/build/build-outputs.ts';
 import { bundleDslDefs, monacoDefsFile, withoutRenameSuffixes } from '../../src/build/dsl-defs';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 
 /**
  * The DSL editors load the declarations `apack pack build` writes, with no node_modules behind them: a

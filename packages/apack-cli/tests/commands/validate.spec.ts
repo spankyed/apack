@@ -2,13 +2,14 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { _declarationRevision, generatePackFiles } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
+import { generatePackFiles } from '@apackdev/pack-build';
 import { inspectDependencies } from '../../src/build/dependency-inspection.ts';
 import { validate, validatePack } from '../../src/commands/validate';
 
 vi.mock('../../src/build/dependency-inspection.ts', () => ({ inspectDependencies: vi.fn() }));
-vi.mock('@apackdev/sdk/build', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/sdk/build')>(), generatePackFiles: vi.fn(),
+vi.mock('@apackdev/pack-build', async importOriginal => ({
+  ...await importOriginal<typeof import('@apackdev/pack-build')>(), generatePackFiles: vi.fn(),
 }));
 
 let root: string;

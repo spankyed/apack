@@ -3,22 +3,8 @@ import { writePackBuildInputs, PACK_BUILD_INPUTS_FILE } from '@apackdev/host/bui
 import { _packEntityTypes, _packRelationTypes, _packRoles } from '@apackdev/sdk/framework';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  compilePack,
-  buildPackConfigFromManifest,
-  PACK_TYPES_FACADE,
-  GENERATED_ENTITY_DESTINATIONS_FILE,
-  GENERATED_EVENT_CONTRACTS_FILE,
-  PACK_SNAPSHOT_FORMAT,
-  entitiesWithoutShapes,
-  CONTENT_COMPILERS_FILE,
-  WORKERS_DIR,
-  _buildProvenance,
-  parseSnapshot,
-  compileHelp,
-  _declarationRevision,
-  type CompilePackOptions, type PackConfig, type PackSnapshot, type PackTypeManifest, type ContentDependency,
-} from '@apackdev/sdk/build';
+import { compilePack, buildPackConfigFromManifest, PACK_TYPES_FACADE, GENERATED_ENTITY_DESTINATIONS_FILE, GENERATED_EVENT_CONTRACTS_FILE, entitiesWithoutShapes, WORKERS_DIR, compileHelp, type CompilePackOptions, type PackConfig, type ContentDependency } from '@apackdev/pack-build';
+import { PACK_SNAPSHOT_FORMAT, CONTENT_COMPILERS_FILE, _buildProvenance, parseSnapshot, _declarationRevision, type PackSnapshot, type PackTypeManifest } from '@apackdev/pack-format';
 import { findFEEntry, bundlePackFE } from '../build/fe-bundler';
 import { apackScope, dslInputsHash, typesInputsHash, readPhaseCache, reuseProblem, takeForward, writeStamps, type PhaseStamp } from '../build/phase-cache';
 import { refusePackRuleViolations } from '../build/pack-rules.ts';
