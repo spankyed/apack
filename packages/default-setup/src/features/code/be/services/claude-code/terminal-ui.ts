@@ -34,14 +34,14 @@ export function createClaudeTerminalUiTransport(options: {
     // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
     detach(id) { hosts.delete(id); for (const pending of [...hostRequests.values()]) if (pending.clientId === id) pending.cancel() },
   }
-  let stagingQuestionImages = false
-  async function answerWithImages(value: Record<string, unknown> & { subtype: string }, owner: { pid: number; sessionId: string }) {
+  const stagingQuestionImages = new Set<string>()
+  async function withQuestionImages(value: Record<string, unknown> & { subtype: string }, owner: { pid: number; sessionId: string }) {
     const images = ClaudeQuestionImagesSchema.parse(value.question_images)
-    if (typeof value.render_token !== 'string' || stagingQuestionImages) throw new Error('A live native question drawing is required to attach images')
+    if (typeof value.render_token !== 'string' || stagingQuestionImages.has(value.subtype)) throw new Error('A live native question drawing is required to attach images')
     const mediaId = randomUUID()
     const directory = join(dirname(options.socketPath), 'question-media-' + mediaId)
     const stagingEpoch = epoch
-    stagingQuestionImages = true
+    stagingQuestionImages.add(value.subtype)
     let created = false
     try {
       await mkdir(directory, { mode: 0o700 })
@@ -53,7 +53,7 @@ export function createClaudeTerminalUiTransport(options: {
       if (closed || epoch !== stagingEpoch || current?.pid !== owner.pid || current.sessionId !== owner.sessionId) throw new Error('Native question owner changed while attaching images')
       return await transport.request({ ...value, question_images: undefined, question_media: { id: mediaId, types: images.map(image => image.mediaType) } })
     } finally {
-      stagingQuestionImages = false
+      stagingQuestionImages.delete(value.subtype)
       if (created) await rm(directory, { force: true, recursive: true })
     }
   }
@@ -62,7 +62,7 @@ export function createClaudeTerminalUiTransport(options: {
     request(value) {
       const owner = options.current()
       if (closed || !owner) return Promise.reject(new Error('Native UI owner is unavailable'))
-      if (value.subtype === 'apack_answer_question_dialog' && value.question_images !== undefined) return answerWithImages(value, owner)
+      if (value.question_images !== undefined && (value.subtype === 'apack_answer_question_dialog' || value.subtype === 'apack_hold_question_dialog' && value.partial !== undefined)) return withQuestionImages(value, owner)
       if (pending.size >= 64) return Promise.reject(new Error('Native UI request limit reached'))
       if (value.subtype === 'ui_detach' && typeof value.client_id === 'string') promptHosts.detach(value.client_id)
       if (value.subtype === 'ui_attach' && typeof value.client_id === 'string') value = { ...value, answers: promptHosts.answers(value.client_id) }

@@ -1069,12 +1069,12 @@ function stageNativeQuestionPartial(n,d,frame,partial){
      const originalInput=result?.updatedInput;
      // Only the original AFK builder supplies the host timeout field. Manual and raw answers keep their own input.
      if(result?.behavior==='allow'&&Number.isSafeInteger(originalInput?.afkTimeoutMs)&&originalInput.afkTimeoutMs>0&&
-       Object.keys(originalInput.answers??{}).length===0){
+       Object.keys(originalInput.answers??{}).length===0&&!result.contentBlocks?.length){
       const view=clientViewKey(n);
       const draft=view&&[...owners.values()].findLast(value=>clients.has(value.frame.client)&&
        clientViews.get(value.frame.client)===view&&frozenQuestionFrames.get(value.frame.client)===value.frame);
       if(draft)result={...result,updatedInput:{...originalInput,answers:draft.answers??{},
-       annotations:{...draft.annotations,...originalInput.annotations}}};
+       annotations:{...draft.annotations,...originalInput.annotations}},...(draft.contentBlocks?.length?{contentBlocks:draft.contentBlocks}:{})};
      }
     }catch{ /* An unavailable desktop view leaves the original timeout result intact. */ }
     restore();
@@ -1088,7 +1088,8 @@ function stageNativeQuestionPartial(n,d,frame,partial){
  }
  if((staged.owners.get(frame.client)?.sequence??0)>=partial.sequence)return;
  staged.owners.delete(frame.client);
- staged.owners.set(frame.client,{frame,sequence:partial.sequence,answers:admitted.input.answers,annotations:admitted.input.annotations});
+ const draft={frame,sequence:partial.sequence,answers:admitted.input.answers,annotations:admitted.input.annotations};
+ staged.owners.set(frame.client,draft);return draft;
 }
 // Pinned AskUserQuestion clarification builder (Darwin $rt / Linux zrt).
 function questionClarification(n,payload,shown,admitted){
@@ -1463,7 +1464,15 @@ async function control(request,abort){
   const frame=holdQuestionFrame(d,request.render_token,request.client_id);
   if(request.partial!==undefined){
    if(frame.token!==request.render_token||!clientViewCurrent(n,frame.client))throw Error('Native partial question view changed');
-   stageNativeQuestionPartial(n,d,frame,request.partial);
+   const draft=stageNativeQuestionPartial(n,d,frame,request.partial);
+   if(draft&&request.question_media!==undefined){
+    const contentBlocks=await questionMedia(n,d,request.question_media);
+    abort.signal.throwIfAborted();
+    const fresh=nativeDialog(n,'permission_ask_user_question');
+    if(fresh.item!==d.item||fresh.revision!==d.revision||!clientViewCurrent(n,frame.client)||
+      frozenQuestionFrames.get(frame.client)!==frame)throw Error('Native partial question changed while preparing attachments');
+    if(nativeQuestionPartials.get(d.store)?.owners.get(frame.client)===draft)draft.contentBlocks=contentBlocks;
+   }
   }
   return {held:true};
  }

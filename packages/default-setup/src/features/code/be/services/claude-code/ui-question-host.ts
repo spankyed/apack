@@ -6,12 +6,13 @@ import type { ClaudeUiOwner } from './ui-mount.ts'
 import type { ClaudeUiFieldEvent, ClaudeUiNode, ClaudeUiQuestionFrame, ClaudeUiQuestionRow } from './ui-presentation.ts'
 
 const same = (a: ClaudeUiQuestionRow, b?: ClaudeUiQuestionRow) => !!b && a.messageId === b.messageId && a.id === b.id && a.revision === b.revision && a.sessionId === b.sessionId && a.requestId === b.requestId
+const partialProblem = 'Claude did not save this partial answer for auto-continue.'
 function inert(node: ClaudeUiNode): ClaudeUiNode {
   if (node.kind === 'button' || node.kind === 'markdown') { const { actionId: _, ...rest } = node; return rest }
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-type Entry = { partialSequence?: number; countdownSequence?: number; row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
+type Entry = { partialSequence?: number; stagingPartial?: Promise<void>; countdownSequence?: number; row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
 
 /** A question drawing belongs to this view and the still-pending native dialog. */
 export function createClaudeQuestionHost(options: {
@@ -89,18 +90,25 @@ export function createClaudeQuestionHost(options: {
       if (Array.isArray(event.instances) && !event.instances.some(value => value && typeof value === 'object' && (value as Record<string, unknown>).component === 'AskUserQuestion' && (value as Record<string, unknown>).instance_id === entry!.row.requestId)) return
       invalidate()
     },
-    async stagePartial(messageId: string, token: string, sequence: number, answer: ClaudeQuestionPartialAnswer) {
+    async stagePartial(messageId: string, token: string, sequence: number, answer: ClaudeQuestionPartialAnswer, images?: readonly ClaudeQuestionImage[]) {
       const target = entry
       if (!target || !valid(target) || !options.source || target.row.messageId !== messageId ||
           !Number.isSafeInteger(sequence) || sequence <= (target.partialSequence ?? 0)) return
       target.partialSequence = sequence
       try {
         await target.holding
+        while (target.stagingPartial) await target.stagingPartial.catch(() => {})
         if (!valid(target) || target.partialSequence !== sequence || token !== (target.heldToken ?? target.frame.token)) return
-        await options.source.hold({ ...target.row, clientId: options.client.client_id, renderToken: token, partial: { sequence, answer } })
+        const staging = options.source.hold({ ...target.row, clientId: options.client.client_id, renderToken: token, partial: { sequence, answer, ...(images ? { images } : {}) } })
+        target.stagingPartial = staging
+        try { await staging } finally { if (target.stagingPartial === staging) target.stagingPartial = undefined }
+        if (valid(target) && target.partialSequence === sequence && target.frame.problem === partialProblem) {
+          target.frame.problem = undefined
+          publish()
+        }
       } catch {
         if (valid(target) && target.partialSequence === sequence) {
-          target.frame.problem = 'Claude did not save this partial answer for auto-continue.'
+          target.frame.problem = partialProblem
           publish()
         }
       }

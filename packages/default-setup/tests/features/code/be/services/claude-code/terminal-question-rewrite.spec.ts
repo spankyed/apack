@@ -50,11 +50,13 @@ it('uses the latest staged answers only for the original unanswered timeout and 
   expect(store.answer).toBe(originalAnswer)
   expect(unsubscribe).toHaveBeenCalledOnce()
 
-  stage({}, dialog, frame, { sequence: 3, answer: { answers: { First: 'Operators' } } })
+  const draft = stage({}, dialog, frame, { sequence: 3, answer: { answers: { First: 'Operators' } } })
+  const contentBlocks = [{type: 'image', source: {type: 'base64', data: 'cG5n', media_type: 'image/png'}}]
+  draft.contentBlocks = contentBlocks
   const timeout = { behavior: 'allow', updatedInput: { answers: {}, afkTimeoutMs: 60000 } }
   store.answer(item.id, timeout)
   expect(originalAnswer).toHaveBeenLastCalledWith(item.id, { behavior: 'allow',
-    updatedInput: { answers: { First: 'Operators' }, annotations: {}, afkTimeoutMs: 60000 } })
+    updatedInput: { answers: { First: 'Operators' }, annotations: {}, afkTimeoutMs: 60000 }, contentBlocks })
   expect(timeout.updatedInput.answers).toEqual({})
   expect(store.answer).toBe(originalAnswer)
 })

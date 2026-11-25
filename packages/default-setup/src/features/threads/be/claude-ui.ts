@@ -440,9 +440,10 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
         event.messageId.length > 512 || !validId(event.token) || !event.answer ||
         JSON.stringify(event.answer).length > 131072) return
     const answer = ClaudeQuestionPartialAnswerSchema.safeParse(event.answer)
-    if (!answer.success) return
+    const images = event.images === undefined ? undefined : ClaudeQuestionImagesSchema.safeParse(event.images)
+    if (!answer.success || images && !images.success) return
     bind(view)
-    void view.mount?.stageQuestionPartial(event.messageId, event.token, event.sequence, answer.data)
+    void view.mount?.stageQuestionPartial(event.messageId, event.token, event.sequence, answer.data, images?.data)
     return
   }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {

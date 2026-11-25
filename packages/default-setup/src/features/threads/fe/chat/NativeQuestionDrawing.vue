@@ -1,7 +1,7 @@
 <template>
   <div v-for="shown in [frame]" ref="drawing" :key="JSON.stringify([shown?.messageId, shown?.id, shown?.revision, shown?.draftActionId])" class="question-drawing" :class="{ 'with-extension': wrapped }" :tabindex="wrapped ? 0 : -1" :role="wrapped ? 'region' : undefined" :aria-label="wrapped ? 'Claude Code question and context' : undefined" @keydown="key" @focusin="revealAnswer" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
     <NativeUiNode v-if="shown?.body.status === 'live' && shown.shownInput && shown.token" :node="shown.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
-      <template #engine><NativeQuestionPanel :key="JSON.stringify([shown.messageId, shown.id, shown.revision, shown.draftActionId])" :card="shown.shownInput" :presentation="shown.presentation" :countdown-seconds="shown.countdownSeconds" :render-token="shown.token" :cancel-label="cancelLabel" :can-reject="canReject" :can-clarify="canClarify" @reject="reject(shown)" :disabled="!!disabled || !!shown.pending" :pending="pending || !!shown.pending" :error="error ?? shown.problem" @started="token => started(shown, token)" @partial="(answer, sequence) => partial(shown, answer, sequence)" @respond="(answer, decision, images) => respond(shown, answer, decision, images)" @pause="pause(shown)" /></template>
+      <template #engine><NativeQuestionPanel :key="JSON.stringify([shown.messageId, shown.id, shown.revision, shown.draftActionId])" :card="shown.shownInput" :presentation="shown.presentation" :countdown-seconds="shown.countdownSeconds" :render-token="shown.token" :cancel-label="cancelLabel" :can-reject="canReject" :can-clarify="canClarify" @reject="reject(shown)" :disabled="!!disabled || !!shown.pending" :pending="pending || !!shown.pending" :error="error ?? shown.problem" @started="token => started(shown, token)" @partial="(answer, sequence, images) => partial(shown, answer, sequence, images)" @respond="(answer, decision, images) => respond(shown, answer, decision, images)" @pause="pause(shown)" /></template>
     </NativeUiNode>
     <section v-else role="status" class="p-4 text-xs text-neutral-400">{{ shown?.body.status === 'error' ? shown.body.message : 'Loading native question…' }}</section>
   </div>
@@ -15,7 +15,7 @@ import NativeQuestionPanel from './NativeQuestionPanel.vue'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 const props = defineProps<{ frame?: ClaudeUiQuestionFrame; cancelLabel?: string; canReject?: boolean; canClarify?: boolean; disabled?: boolean; pending?: boolean; error?: string }>()
-const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; started: [token: string, identity: ClaudeUiQuestionAnswerIdentity]; partial: [answer: ClaudeQuestionPartialAnswer, sequence: number, identity: ClaudeUiQuestionAnswerIdentity]; respond: [answer: ClaudeQuestionAnswer, identity: ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: ClaudeQuestionImage[]]; reject: [identity: ClaudeUiQuestionAnswerIdentity]; pause: [identity: ClaudeUiQuestionAnswerIdentity]; 'return-focus': [] }>()
+const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; started: [token: string, identity: ClaudeUiQuestionAnswerIdentity]; partial: [answer: ClaudeQuestionPartialAnswer, sequence: number, identity: ClaudeUiQuestionAnswerIdentity, images?: readonly ClaudeQuestionImage[]]; respond: [answer: ClaudeQuestionAnswer, identity: ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: ClaudeQuestionImage[]]; reject: [identity: ClaudeUiQuestionAnswerIdentity]; pause: [identity: ClaudeUiQuestionAnswerIdentity]; 'return-focus': [] }>()
 const drawing = ref<HTMLElement[]>([])
 const wrapped = computed(() => props.frame?.body.status === 'live' && props.frame.body.tree.kind === 'box')
 let draftFrame: ClaudeUiQuestionAnswerIdentity | undefined
@@ -29,9 +29,9 @@ function rendered(shown?: ClaudeUiQuestionFrame): ClaudeUiQuestionAnswerIdentity
   if (!shown || !sameQuestion(props.frame, shown)) return
   return draftFrame?.messageId === shown.messageId ? draftFrame : shown.token ? {messageId: shown.messageId, token: shown.token} : undefined
 }
-function partial(shown: ClaudeUiQuestionFrame | undefined, answer: ClaudeQuestionPartialAnswer, sequence: number) {
+function partial(shown: ClaudeUiQuestionFrame | undefined, answer: ClaudeQuestionPartialAnswer, sequence: number, images?: readonly ClaudeQuestionImage[]) {
   const identity = rendered(shown)
-  if (identity) emit('partial', answer, sequence, identity)
+  if (identity) emit('partial', answer, sequence, identity, images)
 }
 function respond(shown: ClaudeUiQuestionFrame | undefined, answer: ClaudeQuestionAnswer, decision?: 'clarify', images?: ClaudeQuestionImage[]) { const identity = rendered(shown); if (identity) emit('respond', answer, identity, decision, images) }
 function reject(shown?: ClaudeUiQuestionFrame) { const identity=rendered(shown);if(identity)emit('reject',identity) }

@@ -918,10 +918,10 @@ function startNativeQuestionDraft(token: string, identity: import('#features/cod
   nativeQuestionDraft.value = { actionId, token }
   editNativeQuestion({ actionId, revision: 1, kind: 'change', value: token })
 }
-function stageNativeQuestionPartial(answer: import('#features/code/common/native-question.ts').ClaudeQuestionPartialAnswer, sequence: number, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
+function stageNativeQuestionPartial(answer: import('#features/code/common/native-question.ts').ClaudeQuestionPartialAnswer, sequence: number, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, images?: readonly import('#features/code/common/native-question.ts').ClaudeQuestionImage[]) {
   const mount = nativeDecisionMount.value
   if (mount && pendingNativeQuestion.value?.frame && pendingNativeQuestion.value.messageId === identity.messageId) {
-    send({ type: 'CLAUDE_UI_QUESTION_PARTIAL', ...mount, ...identity, sequence, answer })
+    send({ type: 'CLAUDE_UI_QUESTION_PARTIAL', ...mount, ...identity, sequence, answer, ...(images ? { images } : {}) })
   }
 }
 function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: import('#features/code/common/native-question.ts').ClaudeQuestionImage[]) {

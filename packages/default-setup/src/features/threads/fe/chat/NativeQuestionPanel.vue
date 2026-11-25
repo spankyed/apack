@@ -78,7 +78,7 @@ const disabled = computed(() => props.disabled || props.pending === true || read
 // Keep the last action focused while Claude processes it. Its handler still rejects duplicate input.
 const actionDisabled = computed(() => disabled.value && !props.pending)
 const displayError = computed(() => describeClaudeUiProblem(props.error, 'decision'))
-const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer, decision?: 'clarify', images?: ClaudeQuestionImage[]]; started: [token?: string]; partial: [answer: ClaudeQuestionPartialAnswer, sequence: number]; pause: []; reject: [] }>()
+const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer, decision?: 'clarify', images?: ClaudeQuestionImage[]]; started: [token?: string]; partial: [answer: ClaudeQuestionPartialAnswer, sequence: number, images?: readonly ClaudeQuestionImage[]]; pause: []; reject: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
 watch(() => [JSON.stringify(props.card), props.presentation, props.renderToken], () => {
   if (!answering.value) { acceptedCard.value = props.card; acceptedPresentation.value = props.presentation; acceptedToken.value = props.renderToken }
@@ -92,7 +92,7 @@ const questionId = useId()
 type DraftImage = ClaudeQuestionImage & { id: string; name: string; size: number }
 const drafts = reactive<{ selected: string[]; custom: string; customOpen: boolean; notes: string; images: DraftImage[]; numberConfirmed: boolean }[]>([])
 type ParsedQuestion = NonNullable<typeof parsed.value>['questions'][number]
-const partialSteps = new Map<number, ReturnType<typeof readStep>>()
+const partialSteps = new Map<number, ReturnType<typeof readStep> & { images: ClaudeQuestionImage[] }>()
 let partialSequence = 0
 watch(() => JSON.stringify(acceptedCard.value), () => { const card = parsed.value; partialSteps.clear(); generalResponse.value = ''; step.value = 0; drafts.splice(0, drafts.length, ...(card?.questions.map(question => ({ selected: [], custom: question.kind === 'number' && question.defaultValue !== undefined ? String(question.defaultValue) : '', customOpen: false, notes: '', images: [], numberConfirmed: false })) ?? [])) }, { immediate: true })
 const current = computed(() => parsed.value?.questions[step.value])
@@ -188,7 +188,7 @@ function readStep(question: ParsedQuestion, draft: (typeof drafts)[number], incl
 function commitPartialStep(skipped = false) {
   if (!current.value || !parsed.value) return
   if (skipped) partialSteps.delete(step.value)
-  else partialSteps.set(step.value, readStep(current.value, state.value, true))
+  else partialSteps.set(step.value, { ...readStep(current.value, state.value, true), images: questionImages(state.value.images) })
   const answers: NonNullable<ClaudeQuestionPartialAnswer['answers']> = Object.create(null)
   const annotations: NonNullable<ClaudeQuestionPartialAnswer['annotations']> = Object.create(null)
   for (const [index, draft] of partialSteps) {
@@ -196,7 +196,13 @@ function commitPartialStep(skipped = false) {
     if (draft.answer !== undefined) answers[question] = draft.answer
     if (draft.annotation) annotations[question] = draft.annotation
   }
-  emit('partial', { answers, annotations }, ++partialSequence)
+  const images = [...partialSteps].sort(([left], [right]) => left - right).flatMap(([, draft]) => draft.images)
+  const sequence = ++partialSequence
+  if (images.length) emit('partial', { answers, annotations }, sequence, images)
+  else emit('partial', { answers, annotations }, sequence)
+}
+function questionImages(images: DraftImage[]): ClaudeQuestionImage[] {
+  return images.map(({ mediaType, data }) => ({ mediaType, data }))
 }
 function submit(followUp = false, decision?: 'clarify') {
   if (!parsed.value || disabled.value) return
@@ -213,7 +219,7 @@ function submit(followUp = false, decision?: 'clarify') {
     if (stepValues.annotation) annotations[question.question] = stepValues.annotation
   })
   const answer = { answers, annotations, ...(generalResponse.value.trim() ? { response: generalResponse.value.trim() } : {}), ...(followUp ? { followUp: true } : {}) }
-  const images = drafts.flatMap(draft => draft.images.map(({ mediaType, data }) => ({ mediaType, data })))
+  const images = drafts.flatMap(draft => questionImages(draft.images))
   if (images.length) emit('respond', answer, decision, images)
   else if (decision) emit('respond', answer, decision)
   else emit('respond', answer)

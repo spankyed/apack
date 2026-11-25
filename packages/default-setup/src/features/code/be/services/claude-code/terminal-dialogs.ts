@@ -85,7 +85,7 @@ export interface ClaudeNativeQuestionHoldRequest {
   sessionId: string
   clientId: string
   renderToken: string
-  partial?: { sequence: number; answer: ClaudeQuestionPartialAnswer }
+  partial?: { sequence: number; answer: ClaudeQuestionPartialAnswer; images?: readonly ClaudeQuestionImage[] }
 }
 
 /** Native-owned Bash decisions; standing choices retain original callbacks and policy gates. */
