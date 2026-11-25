@@ -50,3 +50,58 @@ it.each(['input', 'textarea'])('retires stale selection for collapsed, oversized
     prime(); foreign.value = 'other owner'; foreign.focus(); foreign.setSelectionRange(0, 5); expect(reader.read()).toBeUndefined()
   } finally { app.unmount(); focus.mockRestore(); root.remove(); foreign.remove() }
 })
+
+it.each(['removed', 'hidden', 'reused'] as const)('refuses a cached selection from a %s transcript row', async change => {
+  const root = document.createElement('div')
+  document.body.append(root)
+  let reader!: ReturnType<typeof provideClaudeUiSelection>
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  root.getClientRects = () => [{ width: 500 }] as unknown as DOMRectList
+  const app = createApp({
+    setup() {
+      reader = provideClaudeUiSelection(() => root)
+      return () => h('div', { 'data-native-assistant': 'first-reply' }, 'Release notes')
+    },
+  })
+  app.mount(root)
+  try {
+    const row = root.firstElementChild!
+    const selection = document.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(row)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    expect(reader.read()).toEqual({ text: 'Release notes', instance_id: 'first-reply' })
+    selection.removeAllRanges()
+    expect(reader.read()?.text).toBe('Release notes')
+    if (change === 'removed') row.remove()
+    if (change === 'hidden') row.setAttribute('aria-hidden', 'true')
+    if (change === 'reused') row.setAttribute('data-native-assistant', 'new-reply')
+    expect(reader.read()).toBeUndefined()
+  } finally { app.unmount(); focus.mockRestore(); root.remove() }
+})
+
+it('withholds a cached field selection when the original field value changes', () => {
+  const root = document.createElement('div')
+  document.body.append(root)
+  let reader!: ReturnType<typeof provideClaudeUiSelection>
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  root.getClientRects = () => [{ width: 500 }] as unknown as DOMRectList
+  const app = createApp({
+    setup() {
+      reader = provideClaudeUiSelection(() => root)
+      return () => [h('input', { value: 'Release notes' }), h('button', 'Read selection')]
+    },
+  })
+  app.mount(root)
+  try {
+    const field = root.querySelector('input')!, button = root.querySelector('button')!
+    field.focus()
+    field.setSelectionRange(0, 7)
+    expect(reader.read()).toEqual({ text: 'Release' })
+    button.focus()
+    expect(reader.read()).toEqual({ text: 'Release' })
+    field.value = 'Current draft'
+    expect(reader.read()).toBeUndefined()
+  } finally { app.unmount(); focus.mockRestore(); root.remove() }
+})

@@ -5,6 +5,9 @@ interface ClaudeSelectionReader { read(): SelectionText | undefined; clear(): vo
 const selectionReader: InjectionKey<ClaudeSelectionReader> = Symbol('claude-ui-selection')
 const rows = '[data-native-agent-message],[data-native-selection-row],[data-native-user],[data-native-assistant],[data-native-summary],[data-native-command-output],[data-native-tool-use],[data-native-tool-result],[data-native-tool-group],[data-native-tool-progress]'
 const element = (node: Node | null) => node instanceof Element ? node : node?.parentElement
+function isSelectable(scope: HTMLElement, node: Node): boolean {
+  return scope.contains(node) && !element(node)?.closest('[inert],[hidden],[aria-hidden="true"]')
+}
 function rowId(start: Node | null, end: Node | null): string | undefined {
   const row = element(start)?.closest(rows)
   if (!row || element(end)?.closest(rows) !== row) return undefined
@@ -13,29 +16,40 @@ function rowId(start: Node | null, end: Node | null): string | undefined {
 
 /** Retain the person's selection when the native action that reads it takes browser focus. */
 export function provideClaudeUiSelection(root: () => HTMLElement | null): ClaudeSelectionReader {
-  let saved: SelectionText | undefined, alive = true
+  let saved: { value: SelectionText; current(scope: HTMLElement): boolean } | undefined
+  let alive = true
   const clear = () => { saved = undefined }
   const capture = () => {
     const scope = root()
-    if (!alive || !scope || !scope.getClientRects().length || !document.hasFocus()) return undefined
+    if (!alive || !scope?.isConnected || !scope.getClientRects().length || !document.hasFocus()) { clear(); return undefined }
     const field = document.activeElement
     if (field instanceof HTMLInputElement && field.type === 'password') { clear(); return undefined }
     if ((field instanceof HTMLInputElement && ['text', 'search', 'url', 'tel'].includes(field.type) || field instanceof HTMLTextAreaElement)) {
-      if (!scope.contains(field)) { clear(); return undefined }
+      if (!isSelectable(scope, field)) { clear(); return undefined }
       const start = field.selectionStart, end = field.selectionEnd
-      if (start !== null && end !== null && end > start) {
-        const text = field.value.slice(start, end), instance_id = rowId(field, field)
-        saved = text.length <= 1000000 ? { text, ...(instance_id ? { instance_id } : {}) } : undefined
-        return saved
-      }
-      clear(); return undefined
+      if (start === null || end === null || end <= start || end - start > 1_000_000) { clear(); return undefined }
+      const text = field.value.slice(start, end), instance_id = rowId(field, field)
+      const value = { text, ...(instance_id ? { instance_id } : {}) }
+      saved = { value, current: scope => isSelectable(scope, field) && field.type !== 'password'
+        && rowId(field, field) === instance_id && field.value.slice(start, end) === text }
+      return value
     }
     const selected = document.getSelection()
-    if (!selected || selected.isCollapsed || !selected.anchorNode || !selected.focusNode) return saved
-    if (!scope.contains(selected.anchorNode) || !scope.contains(selected.focusNode) || element(selected.anchorNode)?.closest('[inert],[aria-hidden="true"]') || element(selected.focusNode)?.closest('[inert],[aria-hidden="true"]')) { clear(); return undefined }
-    const text = selected.toString(), instance_id = rowId(selected.anchorNode, selected.focusNode)
-    saved = text && text.length <= 1000000 ? { text, ...(instance_id ? { instance_id } : {}) } : undefined
-    return saved
+    if (!selected || selected.isCollapsed || !selected.anchorNode || !selected.focusNode) {
+      if (saved?.current(scope)) return saved.value
+      clear(); return undefined
+    }
+    const { anchorNode, focusNode } = selected
+    if (!isSelectable(scope, anchorNode) || !isSelectable(scope, focusNode)) { clear(); return undefined }
+    const text = selected.toString(), instance_id = rowId(anchorNode, focusNode)
+    if (!text || text.length > 1_000_000) { clear(); return undefined }
+    const value = { text, ...(instance_id ? { instance_id } : {}) }
+    const ranges = Array.from({ length: selected.rangeCount }, (_, index) => selected.getRangeAt(index).cloneRange())
+    // Browser focus can collapse the selection while an action reads it. Retain the text
+    // only while its original content belongs to this view and still represents that range.
+    saved = { value, current: scope => isSelectable(scope, anchorNode) && isSelectable(scope, focusNode)
+      && rowId(anchorNode, focusNode) === instance_id && ranges.map(range => range.toString()).join('') === text }
+    return value
   }
   const reader: ClaudeSelectionReader = { read: capture, clear }
   provide(selectionReader, reader)
