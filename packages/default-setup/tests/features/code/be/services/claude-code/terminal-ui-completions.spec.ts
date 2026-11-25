@@ -94,6 +94,52 @@ it('keeps original indexed file rows distinct from plugin replacement ranges', a
   expect(files).toHaveBeenCalledOnce()
 })
 
+it('asks the native index to recover once when the tracked build replaced an earlier merge', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
+  const originalContext = { surface: 'terminal', toolContext: () => ({ storageV5: 'owner-storage' }) }
+  const autocomplete = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';autocomplete', {
+    AbortController, originalContext, clientViewCurrent: () => true,
+  }) as (native: unknown, client: string, box: { text: string; cursor: number }) => Promise<unknown>
+  const index = {
+    cacheGeneration: 1, indexLoadCount: 3, loadedTrackedSignature: 'tracked', loadedMergedSignature: null,
+    normalizedTrackedInputs: { cwd: '/project' }, lastRefreshMs: 100,
+  }
+  const files = vi.fn(async (_index: typeof index, query: string) =>
+    index.lastRefreshMs === 0 && query === 'release-not'
+      ? [{ displayText: 'release-notes.md' }] : [])
+  const usesIndex = vi.fn(() => false)
+  const native = {
+    fileSuggestions: { RSe: index, s5t: files },
+    fileSuggestionUsesIndex: usesIndex,
+    session: { rwt: () => undefined },
+  }
+  const draft = { text: '@release-not', cursor: 12 }
+
+  expect(await autocomplete(native, 'current', draft)).toEqual({ suggestions: [], start: 0 })
+  expect(files).toHaveBeenCalledOnce()
+  expect(index.lastRefreshMs).toBe(100)
+
+  usesIndex.mockReturnValue(true)
+  index.indexLoadCount = 2
+  expect(await autocomplete(native, 'current', draft)).toEqual({ suggestions: [], start: 0 })
+  expect(files).toHaveBeenCalledTimes(2)
+  expect(index.lastRefreshMs).toBe(100)
+
+  index.indexLoadCount = 3
+  expect(await autocomplete(native, 'current', draft)).toEqual({
+    start: 0,
+    suggestions: [{ label: 'release-notes.md', text: '@release-notes.md ', replacement: { start: 0, end: 12 } }],
+  })
+  expect(files).toHaveBeenCalledTimes(4)
+  expect(files).toHaveBeenLastCalledWith(index, 'release-not', true, 'owner-storage')
+
+  index.lastRefreshMs = 100
+  expect(await autocomplete(native, 'current', draft)).toEqual({ suggestions: [], start: 0 })
+  expect(files).toHaveBeenCalledTimes(5)
+  expect(index.lastRefreshMs).toBe(100)
+})
+
 it('withdraws results from a file suggestion provider retired by managed policy', async () => {
   const start = claudeTerminalUiRuntime.indexOf('const nativeAtPathChars=')
   const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')

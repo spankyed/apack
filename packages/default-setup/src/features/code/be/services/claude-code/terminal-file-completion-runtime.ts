@@ -200,6 +200,18 @@ function nativeReferenceRows(n,context,files,query,listed){
   ...matches.map(({item,score})=>({item,score:(score??0.5)+(item.type==='resource'?0.15:0)}))]
   .sort((a,b)=>a.score-b.score).slice(0,15).map(row=>row.item);
 }
+const fileIndexRetries=new WeakMap();
+async function readNativeFileIndex(source,query,storage,current){
+ const index=source.RSe;
+ const rows=await source.s5t(index,query,true,storage);
+ if(!current())return [];
+ const tracked=index.fileListRefreshPromise,untracked=index.untrackedFetchPromise;
+ if(!tracked&&!untracked)return rows;
+ await tracked;
+ await (index.untrackedFetchPromise??untracked);
+ if(!current())return [];
+ return source.s5t(index,query,true,storage);
+}
 async function nativeFileCompletions(n,clientId,token,abort,fileScopeCurrent){
  if(!token||token.query.length>4096||!n.fileSuggestions||abort.signal.aborted||!clientViewCurrent(n,clientId)||!fileScopeCurrent())return [];
  const binding=originalContext??n.runtime.ey();
@@ -221,17 +233,19 @@ async function nativeFileCompletions(n,clientId,token,abort,fileScopeCurrent){
  }
  let rows=templateRows;
  if(!rows){
-  const index=n.fileSuggestions.RSe;
-  rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
+  const source=n.fileSuggestions,index=source.RSe;
+  rows=await readNativeFileIndex(source,token.query,storageV5,current);
   if(!current())return [];
-  const tracked=index.fileListRefreshPromise,untracked=index.untrackedFetchPromise;
-  if(tracked||untracked){
-   await tracked;
-   await (index.untrackedFetchPromise??untracked);
+  // The cold untracked load can finish before the tracked build replaces it and clears the merged signature.
+  // Let Claude refresh once with its tracked signature already installed, so it can merge the untracked files.
+  if(!rows.length&&n.fileSuggestionUsesIndex?.()&&index.normalizedTrackedInputs&&
+     index.loadedTrackedSignature&&index.loadedMergedSignature===null&&
+     index.indexLoadCount>index.cacheGeneration+1&&fileIndexRetries.get(index)!==index.cacheGeneration){
+   fileIndexRetries.set(index,index.cacheGeneration);
+   index.lastRefreshMs=0;
+   rows=await readNativeFileIndex(source,token.query,storageV5,current);
    if(!current())return [];
-   rows=await n.fileSuggestions.s5t(index,token.query,true,storageV5);
   }
-  if(!current())return [];
   rows=nativeReferenceRows(n,context,rows,token.query,listed);
  }
  const offers=new Map();
