@@ -11,8 +11,8 @@ export const claudeTerminalClientRuntime = String.raw`function runNativeClientAc
 }
 // Claude's native callback table is process-wide. Give each desktop registry its own
 // drawing request IDs, then restore the original ID when its Client posts a message.
-function createDesktopNativeClientRegistry(runtime){
- const prefix=randomUUID()+':',originalPort=runtime.A3r();
+function createDesktopNativeClientRegistry(runtime,originalPort=runtime.A3r()){
+ const prefix=randomUUID()+':';
  const registry=runtime.x3r({port:{
   ...originalPort,
   post(id,value,reply){

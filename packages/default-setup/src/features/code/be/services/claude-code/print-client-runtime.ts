@@ -52,12 +52,12 @@ function initialize(){return initialization??=(async()=>{
  engine=await import('/$bunfs/root/chunk-c7wcn77x.js');gate=await import('/$bunfs/root/chunk-wn0572jb.js');clients=await import('/$bunfs/root/chunk-e980bbar.js');roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
  const originalRender=engine.I9e.run;
  engine.I9e.run=function(value){return Reflect.apply(originalRender,this,[nativePrintToolRender(value,source.ey(),session.q())]);};
- const registry=()=>clients.x3r({port:clients.A3r({run:({plugin,message})=>engine.I9e.clientMessage({plugin,component:message.component,requestId:message.requestId,key:message.element,module:message.module,data:message.data}).then(value=>value??{})})});
+ const registry=()=>createDesktopNativeClientRegistry(clients,clients.A3r({run:({plugin,message})=>engine.I9e.clientMessage({plugin,component:message.component,requestId:message.requestId,key:message.element,module:message.module,data:message.data}).then(value=>value??{})}));
  host=createNativeClientHost(registry,invalidate,clients.R3r,{
   current:entry=>{const scope=scopes.get(scopeKey(entry.client,entry.component,entry.requestId));return scope&&scope.revision===entry.instanceRevision&&roster.Kw.list().some(client=>client.clientId===entry.client);},
   eligible:entry=>{const scope=scopes.get(scopeKey(entry.client,entry.component,entry.requestId));return engine.FPe(entry.plugin)&&scope?.hashes[entry.plugin]===engine.I9e.clientModule(entry.plugin)?.hash;},
   dispatch:value=>engine.I9e.clientPress(value),
-  run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}
+  run:value=>runNativeClientAction(engine,value)
  });
 })();}
 function validSite(value){if(!value||typeof value.client_id!=='string'||!/^[A-Za-z0-9._-]{1,64}$/.test(value.client_id)||typeof value.component!=='string'||typeof value.instance_id!=='string'||value.component.length>256||value.instance_id.length>256)throw Error('Invalid print Client scope');}
