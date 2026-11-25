@@ -10,7 +10,7 @@ import { createClaudeTeammateRecovery, readClaudeTeammateCheckpoint } from '#fea
 import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts';
 import { createClaudeTerminalViews, type TeammateReconnectAuthority } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
-import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews, operateClaudeMemory } from './claude-ui.ts';
+import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews, operateClaudeMemory, disconnectClaudeThemePickers } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
 import { broadcast, sendToWindow, tell } from '#generated/events.ts';
@@ -133,7 +133,10 @@ const terminalViews = createClaudeTerminalViews({
 registerThreadTeardown(key => terminalViews.clear(key));
 
 export function startClaudeTerminalViews(): () => void {
-  const unsubscribe = onConnectionEnded(client => terminalViews.disconnect(client));
+  const unsubscribe = onConnectionEnded(client => {
+    terminalViews.disconnect(client);
+    disconnectClaudeThemePickers(client);
+  });
   return () => {
     unsubscribe();
     terminalViews.clear();

@@ -47,9 +47,14 @@ async function nativeAgentPanel(n,request){
  process.stdin.unshift(request.text);process.stdin.emit('readable');
  return {open:!entry.closed};
 }
-async function retireNativeAgentCommands(clientId){
+async function retireNativeAgentCommands(n,clientId){
  const retired=[];
- for(const entry of agentCommandDialogs.values())if((clientId===undefined||entry.clientId===clientId)&&!entry.answered&&!entry.closed){entry.answered=true;try{entry.cancel();retired.push(entry.done);}catch{entry.closed=true;agentCommandDialogs.delete(entry.id);} }
+ for(const entry of agentCommandDialogs.values())if((clientId===undefined||entry.clientId===clientId)&&!entry.answered&&!entry.closed){
+  let themeCancelled=false;
+  try{themeCancelled=cancelRetiredNativeThemePicker(n,entry);}catch{/* unavailable picker; retire its original dialog below */}
+  entry.answered=true;
+  try{if(!themeCancelled)entry.cancel();retired.push(entry.done);}catch{entry.closed=true;agentCommandDialogs.delete(entry.id);}
+ }
  await Promise.allSettled(retired);
  for(const [id,entry] of agentCommandDialogs)if((clientId===undefined||entry.clientId===clientId)&&entry.closed)agentCommandDialogs.delete(id);
 }

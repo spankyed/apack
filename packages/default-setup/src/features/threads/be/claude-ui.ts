@@ -53,6 +53,12 @@ export async function releaseClaudeUiViews(client: string, threadId: string): Pr
   for (const [key, view] of views) if (view.client === client && view.threadId === threadId) drop(key, view)
   await Promise.all([...retiring].filter(view => view.client === client && view.threadId === threadId).map(view => view.done))
 }
+/** An abandoned theme preview affects the shared writer even during the reconnect grace period. */
+export function disconnectClaudeThemePickers(client: string): void {
+  for (const [key, view] of views) {
+    if (view.client === client && view.mount?.hasThemePicker) drop(key, view, true)
+  }
+}
 const viewTransitions = new Map<string, number>()
 /** Native Agent selection is shared by the session, so every window must release its old host. */
 export async function suspendClaudeUiThreadViews(threadId: string): Promise<() => void> {

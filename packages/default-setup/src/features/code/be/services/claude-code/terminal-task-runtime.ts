@@ -121,7 +121,7 @@ async function nativeTaskControl(n,binding,request,abort,current){
    if(!matches)throw Error('The native view changed; return again');
   };
   requireSource();
-  await retireNativeAgentCommands();current();requireSource();
+  await retireNativeAgentCommands(n);current();requireSource();
   if(typeof binding.view?.show!=='function'||await binding.view.show({})!=='shown')throw Error('Native main view is unavailable');
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};

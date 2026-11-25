@@ -326,6 +326,11 @@ export function mountClaudeUi(options: {
       return refresh
     },
     dispose,
+    get hasThemePicker() {
+      const editor = agentInput?.settings?.snapshot?.editor
+      return agentInput?.status === 'panel' && agentInput.panel?.commandName === 'theme'
+        && editor?.kind === 'choice' && editor.canPreview === true
+    },
     async submitParentCommand(revision: number, text: string, hasReferences: boolean): Promise<import('./ui-controls.ts').ClaudeParentCommandResult> {
       await ready
       if (owner.nativeView || !attached || !current()) throw new Error('Claude composer is not attached')

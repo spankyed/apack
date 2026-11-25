@@ -12,6 +12,18 @@ function nativeThemeCache(fiber,length){
  const rows=fiber.updateQueue?.memoCache?.data?.filter(row=>Array.isArray(row)&&row.length===length);
  if(rows?.length!==1)throw Error('Native theme presentation changed');return rows[0];
 }
+// A picker Cancel restores its preview; dismissing the dialog alone leaves that palette live.
+function cancelRetiredNativeThemePicker(n,entry){
+ if(entry.commandName!=='theme'||entry.themeCreation||entry.themeCommit)return false;
+ const owner=nativeThemeCommandFrame(n,entry);
+ const pickers=nativeModelFibers(owner).filter(fiber=>nativeThemePanelHashes.picker.includes(nativeModelFunctionHash(fiber.type)));
+ if(pickers.length!==1)return false;
+ const picker=pickers[0],cache=nativeThemeCache(picker,109);
+ const cancel=cache[15];
+ if(typeof cancel!=='function'||cache[14]!==picker.memoizedProps.onCancel)return false;
+ cancel();
+ return true;
+}
 async function readNativeThemePanel(n,entry,signal){
  signal?.throwIfAborted();const owner=nativeThemeCommandFrame(n,entry),fibers=nativeModelFibers(owner);
  const matches=fibers.flatMap(fiber=>{const hash=nativeModelFunctionHash(fiber.type),kind=['editor','picker'].find(kind=>nativeThemePanelHashes[kind].includes(hash));return kind?[{fiber,kind}]:[];});
