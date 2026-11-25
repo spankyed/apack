@@ -1,8 +1,8 @@
-import { PackConsumptionSchema, _serviceProviderProblem, _SERVICE_NAME_PATTERN } from './service-consumption.ts';
+import { _HOST_SERVICE_NAMES, _serviceProviderProblem, _SERVICE_NAME_PATTERN, type PackConsumption } from './service-consumption.ts';
 import { dslDefinitionsProblem } from './dsl-declarations.ts';
 import { declarationRecord } from './declaration-record.ts';
 import { hasOwn } from '../utils/shared.ts';
-import { _eventContractsProblem } from './event-contracts.ts';
+import { _eventContractsProblem, _parseEventContractsShape, type PackEventContracts } from './event-contracts.ts';
 import type { PackLifecycleDeclaration } from './lifecycle-declaration.ts';
 export { LIFECYCLE_HOOK_NAMES } from './lifecycle-declaration.ts';
 import { _packEntities, _packEntityTypes, _packRelationTypes, _packRoles, _SHORT_CODE_PATTERN, _WIRE_NAME_PATTERN, _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, _SEARCH_STEM_LANGUAGES, type PackDataDeclarations } from './data-declaration.ts';
@@ -15,7 +15,8 @@ import { RESERVED_ATTRIBUTES, RESERVED_ENTITY_TYPES } from '@elmdb/ears';
 import { _reservedEntries } from '../types/reserved-names.ts';
 import { HOST_PACK_ID } from '../ids/refs.ts';
 import { FEATURE_ID_PATTERN, PACK_ID_PATTERN } from '../ids/refs.ts';
-import { _compileSettingsDefinition, _SettingsDefaultsError, _settingsJsonProblems } from './settings-validation.ts';
+import { _compileSettingsDefinition, _SettingsDefaultsError } from './settings-validation.ts';
+import { _settingsJsonProblems } from './settings-json.ts';
 import type { SettingsDefinition } from './settings-definition.ts';
 import type { PackMigrations } from './pack-registration.ts';
 import { providerCapabilities, type EmbeddingModelId } from '../services/models.ts';
@@ -23,8 +24,29 @@ import type { ReferenceDeclarations } from './reference-declaration.ts';
 import { _entityDestinationsProblem, type SurfaceDeclaration } from './surface-declaration.ts';
 import type { FrontendDeclaration, TextEditorExtensionsDeclaration } from './frontend-declaration.ts';
 import type { StepFrontendDeclaration, StepLayoutDeclaration } from './step-frontend-declaration.ts';
+import {
+  CONTENT_EDIT_POLICIES, MIGRATION_TARGET_PATTERN, PACK_PERMISSIONS, SPECIALTY_CONTENT_KEYS,
+  type ArtifactDeclaration, type BlockDeclaration, type ContentFormatConfig, type ContentSourceConfig,
+  type DslDeclaration, type MigrationLine, type PackFeatureEntry, type PackLifecycleConfig, type PackManifest,
+  type PackMigrationDeclaration, type PackMigrationsDeclaration, type PackPermission, type StepDSLMeta, type StepEntry,
+} from './declaration-types.ts';
+import type { NativePackDeclaration } from './pack-catalog.ts';
 
 export { FEATURE_ID_PATTERN };
+
+const packPattern = PACK_ID_PATTERN.source.slice(1, -1);
+const servicePattern = _SERVICE_NAME_PATTERN.source.slice(1, -1);
+const dependencyServiceRefPattern = new RegExp(`^(?!${HOST_PACK_ID}/)${packPattern}/${servicePattern}$`);
+const hostRefs = _HOST_SERVICE_NAMES.map(name => `${HOST_PACK_ID}/${name}` as const);
+
+const PackConsumptionSchema = z.object({
+  services: z.array(z.union([
+    z.enum(hostRefs as [typeof hostRefs[number], ...typeof hostRefs[number][]]),
+    z.string().regex(dependencyServiceRefPattern, 'Must name a service as "<provider-pack>/<service>"'),
+  ])).refine(refs => new Set(refs).size === refs.length, 'Consumed service references must be unique')
+    .describe('Required service refs (provider-pack/service). Use the listed host refs for host APIs. Other providers must be this pack or direct dependencies, and must directly declare the service.')
+    .readonly(),
+}).strict().describe('Supported API dependencies. Logger, emitter, repository, caller-bound settings and this pack\'s own services are implicit. This is not a resource permission or security sandbox.').readonly();
 
 /** Rejects a pack's entries that use a name or value the SDK owns, naming each */
 const notSdkOwned = (owned: Record<string, string>) => (declared: Record<string, string>, ctx: z.RefinementCtx, path: PropertyKey[] = []) => {
@@ -246,19 +268,14 @@ function checkFrontendClaims(frontend: FrontendDeclaration | undefined, ctx: z.R
 
 /** @internal Host composition admits shared declaration data independently of executable bindings. */
 const PackVersionSchema = z.string().regex(_PACK_VERSION_PATTERN, 'Must be a complete SemVer version').refine(_validPackVersion, 'Must be a complete SemVer version');
-const EventNamesSchema = z.array(z.string().min(1)).refine(names => new Set(names).size === names.length, 'Event names must be unique');
-export const _EventContractsSchema = declarationRecord(z.string().regex(FEATURE_ID_PATTERN), z.object({
-  system: z.object({
-    incoming: EventNamesSchema,
-    outgoing: EventNamesSchema,
-    // Each declared ask, with the failure kinds its contract gives it: an ask is an event the system receives
-    asks: declarationRecord(z.string().min(1), EventNamesSchema).optional(),
-  }).strict().refine(
-    system => Object.keys(system.asks ?? {}).every(ask => system.incoming.includes(ask)),
-    'Every ask must be among the incoming events',
-  ).optional(),
-  surface: z.object({ receives: EventNamesSchema }).strict().optional(),
-}).strict());
+export const _EventContractsSchema: z.ZodType<PackEventContracts, unknown> = z.unknown().transform((raw, ctx): PackEventContracts => {
+  try {
+    return _parseEventContractsShape(raw);
+  } catch (error) {
+    ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : String(error) });
+    return z.NEVER;
+  }
+});
 
 export const _NativePackDeclarationSchema = z.object({
   id: z.string().regex(PACK_ID_PATTERN),
@@ -418,39 +435,6 @@ export const DslEntrySchema = z.object({
   inline: z.array(z.string()).describe('Packages whose declarations are bundled into the editor definitions, besides @apackdev/* and the pack\'s own modules. The editor loads no node_modules, so a type it needs from another package belongs here.').optional(),
 }).strict();
 
-/**
- * Content keys compiled by the SDK's own compilers; they take a path, as a string or `{ path }`. Each writes
- * entities the SDK owns: `documents` a tree of Documents in Collections, and `commands` the same tree with
- * every Document a command list unless it says otherwise.
- */
-export const SPECIALTY_CONTENT_KEYS: readonly string[] = ['actions', 'prompts', 'flows', 'documents', 'commands'];
-
-/**
- * The content key the commands a manifest declares are compiled under.
- *
- * It is reserved rather than named by the pack, because the pack never writes the entry: declaring
- * `extensions.commands` is what creates it. A pack may not declare a source of this name — it would be
- * two entries wanting one compiled file — and it is not `commands`, which is the key a pack's own directory of
- * command documents compiles under, so a pack may declare both.
- */
-export const DECLARED_COMMANDS_KEY = 'declared-commands';
-
-/**
- * The content keys a manifest declares: its `content.sources`, plus the reserved one its
- * `extensions.commands` creates.
- *
- * **Every check that asks what a pack declared has to ask this**, because the shorthand declares an entry
- * the pack wrote no source for — the compiled index, the applier keys the runtime may carry, and the
- * installed layout each derived the answer separately, and a reserved key is invisible to all three
- * unless they share one.
- */
-export function declaredContentKeys(manifest: { content?: { sources?: Record<string, unknown> }; extensions?: { commands?: unknown } }): string[] {
-  return [
-    ...Object.keys(manifest.content?.sources ?? {}),
-    ...(manifest.extensions?.commands ? [DECLARED_COMMANDS_KEY] : []),
-  ];
-}
-
 /** A slash command's name: what the user types after the `/` */
 const COMMAND_NAME = /^[a-z][a-z0-9-]*$/;
 
@@ -494,23 +478,6 @@ export const ContentFormatSchema = z.object({
     ctx.addIssue({ code: 'custom', path: ['entity'], message: 'Format "markdown-tree" writes one entity type: set "entity" to a string, and "tree.branchEntity" for directories' });
   }
 });
-
-/**
- * What an apply does about an item of this entry that the user has edited, and the line is whether editing
- * it meant adoption or customisation.
- *
- * **`theirs` is the default, because it is the quiet one.** Where the pack ships a starting point for the
- * user's own writing, their first edit makes the item theirs: never updated again, and never the subject of
- * a badge about their own prose. Where it ships something of the pack's that the user has customised — a
- * flow, an action, a prompt — they still want its bug fixes, so `offer` records what changed and lets them
- * decide. The dangerous option is the one someone has to type.
- *
- * **Neither value ever overwrites the user**, which is why the pair is named for whose the item is rather
- * than for what happens to their edit: under both, what they wrote stays. What differs is whether the pack
- * goes on offering its own version, and nothing here makes a second copy of anything.
- */
-export const CONTENT_EDIT_POLICIES = ['theirs', 'offer'] as const;
-export type ContentEditPolicy = (typeof CONTENT_EDIT_POLICIES)[number];
 
 const ON_USER_EDIT = z.enum(CONTENT_EDIT_POLICIES)
   .describe('What an apply does about an item the user has edited: "theirs" leaves it theirs for good (the default), "offer" records the newer version so they can take it. Neither overwrites their edit.');
@@ -632,16 +599,16 @@ const StepFrontendShape = {
   layout: z.object(StepLayoutShape).strict().describe('Static layout flags and executable calculation targets.').optional(),
   handlePrefix: z.string().min(1).describe('Prefix for indexed output handles, such as branch-0.').optional(),
 } satisfies Record<keyof StepFrontendDeclaration, z.ZodTypeAny>;
-const StepFrontendSchema: z.ZodType<StepFrontendDeclaration> = z.object(StepFrontendShape).strict();
-const ReferencesSchema: z.ZodType<ReferenceDeclarations> = z.object({
+const StepFrontendSchema = z.object(StepFrontendShape).strict();
+const ReferencesSchema = z.object({
   types: declarationRecord(ReferenceNameSchema, z.object({
     category: ReferenceNameSchema.describe('Category ID grouping this reference type in the picker.'),
     icon: IconSchema.describe('Lucide icon export name or a declared component module for this reference type.'),
     svgElements: z.array(z.union([
-      z.tuple([z.literal('path'), z.object({ d: z.string().describe('SVG path geometry.') }).strict()]),
-      z.tuple([z.literal('rect'), declarationRecord(z.string())]),
-      z.tuple([z.literal('circle'), declarationRecord(z.string())]),
-    ])).describe('Static SVG geometry for rendering this reference in serialized editor content.'),
+      z.tuple([z.literal('path'), z.object({ d: z.string().describe('SVG path geometry.') }).strict().readonly()]).readonly(),
+      z.tuple([z.literal('rect'), declarationRecord(z.string()).readonly()]).readonly(),
+      z.tuple([z.literal('circle'), declarationRecord(z.string()).readonly()]).readonly(),
+    ])).describe('Static SVG geometry for rendering this reference in serialized editor content.').readonly(),
   }).strict()).describe('Reference type IDs with static presentation and declared navigation bindings.'),
   categories: declarationRecord(ReferenceNameSchema, z.object({
     label: z.string().min(1).refine(value => value.trim().length > 0, 'Must have a visible label')
@@ -651,7 +618,7 @@ const ReferencesSchema: z.ZodType<ReferenceDeclarations> = z.object({
   }).strict()).describe('Reference picker category IDs and their declared item providers.'),
 }).strict();
 
-const SurfaceSchema: z.ZodType<SurfaceDeclaration> = z.object({
+const SurfaceSchema = z.object({
   label: z.string().min(1).refine(value => value.trim().length > 0, 'Must have a visible label')
     .describe('Surface display name used by shell navigation and menus.'),
   state: ModuleTargetSchema.describe('Machine module, by default export or path#exportName.'),
@@ -668,7 +635,7 @@ const SurfaceSchema: z.ZodType<SurfaceDeclaration> = z.object({
   hotkeys: z.array(z.object({
     action: z.string().min(1).describe('Action name matched against the configured keyboard shortcut.'),
     global: z.boolean().describe('Allow this action while another surface is active; omission limits it to the active surface.').optional(),
-  }).strict()).describe('Keyboard actions exposed by this surface; actual shortcuts are configured in settings.').optional(),
+  }).strict()).describe('Keyboard actions exposed by this surface; actual shortcuts are configured in settings.').readonly().optional(),
   options: z.object({ headerClass: z.string().describe('CSS classes applied to the canvas and popout header.').optional() }).strict()
     .describe('Shell presentation options for this surface.').optional(),
   fallbackPanel: z.object({
@@ -790,7 +757,7 @@ export const FeatureEntrySchema = z.object({
   references: ReferencesSchema.describe('Reference identities and presentation, with reactive item-provider exports. Entity opening is declared separately by the destination surface contract.').optional(),
 }).strict();
 
-export const PackPermissionSchema = z.enum(['ears', 'llm', 'filesystem', 'network', 'terminal']);
+export const PackPermissionSchema = z.enum(PACK_PERMISSIONS);
 
 /**
  * How the pack is built. These are settings no part of the app reads — unlike `entities` or `features`,
@@ -882,13 +849,6 @@ const ExtensionsSchema = z.object({
 
 // ── Main manifest schema ────────────────────────────────────────────
 
-/**
- * A migration's key: the version it targets, which is the only place that version is written. Exported
- * because `apack pack add migration` checks a version against it before writing one — the schema is what
- * refuses a bad key, and it cannot do so until the manifest has already been written.
- */
-export const MIGRATION_TARGET_PATTERN = /^\d+\.\d+\.\d+$/;
-
 const MIGRATION_TARGET_SCHEMA = z.string()
   .regex(MIGRATION_TARGET_PATTERN, 'Must be the version the migration targets, as "major.minor.patch"');
 
@@ -923,26 +883,21 @@ export const MigrationsSchema = z.object({
 }).strict().describe('Migrations this pack runs, under the version line each targets. The key is the version; the declaration owns its description and names the executable up function.');
 
 /**
- * The version lines, derived from the schema so the list and the keys cannot disagree. Codegen emits a map
- * per line and the runners read one each.
- */
-export const MIGRATION_LINES = Object.keys(MigrationsSchema.shape) as MigrationLine[];
-
-/** Which version line a migration's target is a version of */
-export type MigrationLine = keyof typeof MigrationsSchema.shape;
-
-/**
- * The lines are one vocabulary written twice — here with the schema's descriptions, and in
- * `PackMigrations` with the doc comments a pack author hovers — because a Zod shape cannot carry the second
- * and a type cannot be built at runtime. This fails the typecheck the moment they part, which is the thing
- * writing it twice costs.
+ * The lines are one vocabulary written in `declaration-types.ts`, `MigrationsSchema`, and
+ * `PackMigrations` (where pack authors hover doc comments). These assertions fail typecheck the moment
+ * any pair drifts apart.
  *
  * @internal
  */
 type _Asserted<T extends true> = T;
+type _SchemaLines = keyof typeof MigrationsSchema.shape;
 export type _MigrationLinesMatchRegistration = _Asserted<
   MigrationLine extends keyof PackMigrations
-    ? keyof PackMigrations extends MigrationLine ? true : ['the registration declares a line the manifest does not', Exclude<keyof PackMigrations, MigrationLine>]
+    ? keyof PackMigrations extends MigrationLine
+      ? MigrationLine extends _SchemaLines
+        ? _SchemaLines extends MigrationLine ? true : ['MigrationsSchema declares a line declaration-types does not', Exclude<_SchemaLines, MigrationLine>]
+        : ['declaration-types declares a line MigrationsSchema does not', Exclude<MigrationLine, _SchemaLines>]
+      : ['the registration declares a line the manifest does not', Exclude<keyof PackMigrations, MigrationLine>]
     : ['the manifest declares a line the registration does not', Exclude<MigrationLine, keyof PackMigrations>]
 >;
 
@@ -999,3 +954,108 @@ export const ManifestSchema = z.object({
   }
   checkContentWriterClaims(manifest, ctx);
 }).superRefine(checkDeclaredNames, ALONGSIDE_OTHER_ISSUES);
+
+// Bidirectional exactness locks: keep every Zod schema locked to its plain TypeScript interface in
+// declaration-types.ts so consumers never need `z.infer` (or Zod types), while any drift — including
+// extra optional properties (top-level or nested), missing fields, widened types, or readonly/optionality
+// mismatches — fails typecheck immediately.
+type _IsAny<T> = 0 extends (1 & T) ? true : false;
+type _StrictEquals<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+type _DeepNormalize<T> =
+  _IsAny<T> extends true ? any
+  : T extends (...args: never[]) => unknown ? T
+  : T extends object ? { [K in keyof T]: _DeepNormalize<T[K]> }
+  : T;
+type _DeepRequired<T> =
+  _IsAny<T> extends true ? any
+  : T extends (...args: never[]) => unknown ? T
+  : T extends object ? { [K in keyof T]-?: _DeepRequired<T[K]> }
+  : T;
+type _DeepReadonly<T> =
+  _IsAny<T> extends true ? any
+  : T extends (...args: never[]) => unknown ? T
+  : T extends object ? { readonly [K in keyof T]: _DeepReadonly<T[K]> }
+  : T;
+type _IsReadonlyKey<T, K extends keyof T> =
+  _StrictEquals<{ [P in K]: T[P] }, { readonly [P in K]: T[P] }>;
+type _PreservesReadonlyBranch<A, B> =
+  A extends (...args: never[]) => unknown ? true
+  : A extends readonly unknown[]
+    ? B extends readonly unknown[]
+      ? [A] extends [B]
+        ? (number extends A['length']
+            ? _PreservesReadonly<A[number], B[number]>
+            : { [K in keyof A]: K extends keyof B ? _PreservesReadonly<A[K], B[K]> : false }[number] extends true ? true : false)
+        : false
+      : false
+    : A extends object
+      ? B extends object
+        ? ({
+            [K in keyof A]-?: K extends keyof B
+              ? (_IsReadonlyKey<A, K> extends true
+                  ? (_IsReadonlyKey<B, K> extends true ? _PreservesReadonly<A[K], B[K]> : false)
+                  : _PreservesReadonly<A[K], B[K]>)
+              : false;
+          }[keyof A] extends true ? true : false)
+        : false
+      : true;
+type _PreservesReadonly<A, B> =
+  _IsAny<A> extends true ? false
+  : _IsAny<B> extends true ? false
+  : A extends unknown
+    ? (B extends unknown
+        ? (_StrictEquals<_DeepReadonly<A>, _DeepReadonly<B>> extends true
+            ? _PreservesReadonlyBranch<A, B>
+            : never)
+        : never) extends true
+      ? true
+      : false
+    : never;
+type _MutualAssignable<A, B> =
+  [A] extends [B]
+    ? ([B] extends [A] ? true : ['plain type is wider than schema', B, A])
+    : ['schema is wider than plain type', A, B];
+/** Checks mutual assignability, recursive DeepRequired exactness, and structural readonly/optionality equality. */
+export type _Exact<A, B> =
+  _IsAny<A> extends true ? ['schema inferred any']
+  : _IsAny<B> extends true ? ['plain type is any']
+  : _MutualAssignable<A, B> extends true
+    ? _MutualAssignable<_DeepRequired<A>, _DeepRequired<B>> extends true
+      ? _StrictEquals<_DeepNormalize<A>, _DeepNormalize<B>> extends true
+        ? true
+        : ['types differ in readonly, optionality, or exact structure', _DeepNormalize<A>, _DeepNormalize<B>]
+      : ['types differ in nested optional keys', _DeepRequired<A>, _DeepRequired<B>]
+    : _MutualAssignable<A, B>;
+/** For plain interfaces that intentionally add `readonly` over mutable Zod output (`NativePackDeclaration`). */
+export type _ExactReadonly<A, B> =
+  _IsAny<A> extends true ? ['schema inferred any']
+  : _IsAny<B> extends true ? ['plain type is any']
+  : [A] extends [B]
+    ? _Exact<_DeepReadonly<A>, _DeepReadonly<B>> extends true
+      ? [_PreservesReadonly<A, B>] extends [true]
+        ? true
+        : ['plain type drops readonly modifier declared by schema', A, B]
+      : _Exact<_DeepReadonly<A>, _DeepReadonly<B>>
+    : ['schema is not assignable to readonly plain type', A, B];
+
+export type _DeclarationSchemasMatchPlainTypes = [
+  _Asserted<_Exact<z.infer<typeof ManifestSchema>, PackManifest>>,
+  _Asserted<_Exact<z.infer<typeof PackConsumptionSchema>, PackConsumption>>,
+  _Asserted<_Exact<z.infer<typeof StepFrontendSchema>, StepFrontendDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof ReferencesSchema>, ReferenceDeclarations>>,
+  _Asserted<_Exact<z.infer<typeof SurfaceSchema>, SurfaceDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof FeatureEntrySchema>, PackFeatureEntry>>,
+  _Asserted<_Exact<z.infer<typeof LifecycleConfigSchema>, PackLifecycleConfig>>,
+  _Asserted<_Exact<z.infer<typeof MigrationDeclarationSchema>, PackMigrationDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof MigrationsSchema>, PackMigrationsDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof ContentSourceSchema>, ContentSourceConfig>>,
+  _Asserted<_Exact<z.infer<typeof ContentFormatSchema>, ContentFormatConfig>>,
+  _Asserted<_Exact<z.infer<typeof StepEntrySchema>, StepEntry>>,
+  _Asserted<_Exact<z.infer<typeof StepDSLMetaSchema>, StepDSLMeta>>,
+  _Asserted<_Exact<z.infer<typeof DslEntrySchema>, DslDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof ArtifactEntrySchema>, ArtifactDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof BlockEntrySchema>, BlockDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof PackPermissionSchema>, PackPermission>>,
+  _Asserted<_ExactReadonly<z.infer<typeof _NativePackDeclarationSchema>, NativePackDeclaration>>,
+];

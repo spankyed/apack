@@ -3,7 +3,7 @@ import type { NativePackDeclaration } from '../framework/pack-catalog.ts';
 import type { SurfaceDeclaration } from '../framework/surface-declaration.ts';
 import type { StepFrontendDeclaration } from '../framework/step-frontend-declaration.ts';
 import type { StepFEFacet } from '../steps/types.ts';
-import type { StepEntry } from '../build/manifest.ts';
+import type { StepEntry } from '../framework/declaration-types.ts';
 
 /** Declare an authored frontend fixture before admitting its runtime stand-ins; never calls its code. */
 export function nativeFrontendDeclarationFixture(fixture: PackFERegistration): NativePackDeclaration {

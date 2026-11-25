@@ -13,11 +13,6 @@ test('reviews original native image PDF and notebook results', async ({ app, app
   test.setTimeout(process.env.CLAUDE_RESEARCH_PDF_SUCCESS==='1'?150000:90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
-  const _clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
-  const _lifetime = async (): Promise<any> => {
-    try { return JSON.parse(await readFile(join(workspace!, 'native-client-lifetime.json'), 'utf8')) }
-    catch (error: any) { if (error instanceof SyntaxError || error.code === 'ENOENT') return {}; throw error }
-  }
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')

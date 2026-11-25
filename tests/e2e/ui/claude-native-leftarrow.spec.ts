@@ -17,8 +17,6 @@ test.afterEach(async ({ appPage }, info) => { if (info.status !== info.expectedS
 test('left-arrow entry and handoff: hands an original native conversation to a separate background session from the everyday composer', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(120000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
-  const _restriction = planScenario === 'managed-clear'
   const parentOwnerLoss = process.env.CLAUDE_RESEARCH_BACKGROUND_OWNER_LOSS_APP === '1'
   let transferredForAppRestart = false
   const childAppRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_APP_RESTART === '1'

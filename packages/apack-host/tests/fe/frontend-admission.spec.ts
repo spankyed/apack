@@ -1,8 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { createMachine } from 'xstate';
+import { _nativePackDeclarationProblem } from '@apackdev/sdk/build';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import type { PackFERegistration, SettingsPort } from '@apackdev/sdk/fe';
+import { hostDeclaration } from '../../src/features/declaration.ts';
 import { createFePackRegistry } from '../../src/fe/pack-store.ts';
+import { nativeFrontendDeclarationProblem } from '../../src/fe/frontend-admission.ts';
 
 const settings = () => ({ port: {} as SettingsPort, dispose: vi.fn() });
 
@@ -184,4 +187,32 @@ it('blocks registry reentry from binding getters and retires both provisional re
   expect(registry.hasPackFE('outer')).toBe(false);
   expect(outer.dispose).toHaveBeenCalledOnce();
   expect(inner.dispose).toHaveBeenCalledOnce();
+});
+
+it('refuses impure or unidentifiable native declarations on the frontend admission path', () => {
+  const getter = vi.fn(() => 'native');
+  expect(nativeFrontendDeclarationProblem(Object.defineProperty({}, 'id', { get: getter, enumerable: true })))
+    .toContain('JSON data properties');
+  expect(getter).not.toHaveBeenCalled();
+  class Custom { id = 'native'; }
+  expect(nativeFrontendDeclarationProblem(new Custom())).toMatch(/^root: .*JSON data properties/);
+  expect(nativeFrontendDeclarationProblem(null)).toContain('Expected a plain object');
+  expect(nativeFrontendDeclarationProblem([])).toContain('Expected a plain object');
+  expect(nativeFrontendDeclarationProblem({})).toContain('pack id');
+  expect(nativeFrontendDeclarationProblem({ id: 'Bad-Id' })).toContain('pack id');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: [] })).toContain('features: Expected a plain object');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: { view: null } })).toContain('features.view: Expected a plain object');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', entityDestinations: { Action: 'missing' } }))
+    .toContain('Entity destination "Action" names feature "missing"');
+  expect(nativeFrontendDeclarationProblem({
+    id: 'native',
+    features: { shell: { description: 'Shell.' } },
+    eventContracts: { shell: { system: { incoming: ['A', 'A'], outgoing: [] } } },
+  })).toContain('unique');
+  expect(nativeFrontendDeclarationProblem({ id: 'native' })).toBeUndefined();
+});
+
+it('validates static hostDeclaration against the authoritative backend declaration schema', () => {
+  expect(nativeFrontendDeclarationProblem(hostDeclaration)).toBeUndefined();
+  expect(_nativePackDeclarationProblem(hostDeclaration)).toBeUndefined();
 });

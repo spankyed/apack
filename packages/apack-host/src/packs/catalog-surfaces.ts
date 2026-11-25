@@ -1,7 +1,7 @@
 import { SDK_ENTITIES } from '@apackdev/sdk/types';
 import { _entityDestinationsProblem, _packEntityTypes } from '@apackdev/sdk/framework';
 import { resolveName } from '@apackdev/sdk/ids';
-import type { PackCatalogSnapshot, SurfaceCatalogEntry } from './catalog.ts';
+import type { PackCatalogSnapshot, SurfaceCatalogEntry } from './catalog-types.ts';
 import { referenceNameConflicts } from './catalog-references.ts';
 import type { DeclarationData, SurfaceDeclaration, NativePackDeclaration } from '@apackdev/sdk/framework';
 

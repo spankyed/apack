@@ -3,7 +3,7 @@
 // that aren't a feature's, because a port belongs to neither side — either feature owning it would make the
 // other reach into it, which is the one thing a feature's frontend may not do.
 import type { Surface } from '@apackdev/sdk/fe';
-import type { LoadedPackEntry } from '../packs/layout.ts';
+import type { LoadedPackEntry } from '../packs/layout-types.ts';
 
 /** Loads and unloads external packs' frontends (the renderer imports them from `pack://`) */
 export interface ShellPackFrontends {

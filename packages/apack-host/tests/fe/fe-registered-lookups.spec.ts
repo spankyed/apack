@@ -147,7 +147,7 @@ describe("a pack's frontend", () => {
     add('owner', { features: { main: { surface: surface('Accepted'), default: true } } });
     expect(() => registry.replaceFixture({ id: 'owner', features: {
       first: { surface: surface('First'), default: true }, second: { surface: surface('Second'), default: true },
-    } })).toThrow('Two features claim the default surface');
+    } })).toThrow('only one may be claimed');
     expect(defaultSurface()?.id).toBe('owner/main');
     expect(surfaces().map(surface => surface.id)).toEqual(['owner/main']);
     expect(() => register('invalid', { features: { absent: { default: true } } })).toThrow('without a surface');

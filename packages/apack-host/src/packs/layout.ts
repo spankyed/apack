@@ -24,9 +24,11 @@ import { replaceDir } from '../replace-dir.ts';
 import { parseSnapshot, parseContentIndex, contentFile, CONTENT_INDEX_FILE, _snapshotFormatMismatch, PACK_SNAPSHOT_FORMAT, type ContentIndex, type PackManifest, type PackSnapshot, type SnapshotFormatMismatch } from '@apackdev/sdk/build';
 import type { PackRegistry } from './registry.ts';
 import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
+import type { LoadedPackEntry } from './layout-types.ts';
 import { readPackIntegrity, packBuildRevision, verifyPack, readVerifiedPackFiles, sha256File, packFileHashes, listPackFiles } from './assets.ts';
 
 export { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
+export type { LoadedPackEntry } from './layout-types.ts';
 export { readPackIntegrity, packBuildRevision, readPackAsset, verifyPack, sha256File, packFileHashes } from './assets.ts';
 
 /** Sections `apack pack build` writes into dist/ and staging copies into the staged pack. */
@@ -54,27 +56,6 @@ export function isPackLayout(dir: string): boolean {
 export function hasBuiltPackSections(packRoot: string): boolean {
   const dist = path.join(packRoot, 'dist');
   return fs.existsSync(path.join(dist, PACK_LAYOUT.runtimeEntry)) && fs.existsSync(path.join(dist, PACK_LAYOUT.snapshot));
-}
-
-/** A pack whose frontend the renderer loads (the API's `packs.loaded`) */
-export interface LoadedPackEntry {
-  id: string;
-  /** Host-issued accepted runtime identity, independent of build content identity. */
-  registrationId: string;
-  /** Declaration identity of the active backend; frontend bindings must match it. */
-  declarationRevision: string;
-  /** Accepted declarations of the active backend, used to validate frontend binding membership. */
-  manifest?: PackManifest;
-  /** Verified accepted build identity; native host registrations have no installed build. */
-  buildRevision?: string;
-  name: string;
-  version: string;
-  /** The pack's runtime/fe.js, when it has one */
-  feEntry?: string;
-  /** The pack's runtime/fe.css, when it has one */
-  feStyles?: string;
-  /** Explicit source delivery for apack pack dev; never used by an installed build request. */
-  developmentBaseUrl?: string;
 }
 
 /** A pack's frontend files, pack-relative: its FE entry and stylesheet when `apack pack build` wrote them */

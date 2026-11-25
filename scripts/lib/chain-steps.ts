@@ -348,6 +348,7 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  * each workspace's own manifest is already an input through `WORKSPACE_PARTS`.
  */
 const ROOT = ['package-lock.json'];
+const TSCONFIG_PRESETS = ['tsconfig.base.json', 'tsconfig.node.json', 'tsconfig.dom.json'];
 
 /**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.
@@ -427,7 +428,7 @@ const EVERY_WORKSPACE = PACKAGES.flatMap(workspace);
  *
  * Build output is not in here, because a guard's subject is source. `typecheck` adds its own.
  */
-const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/performance', 'tests/packs', 'tests/acceptance', 'tests/_support',
+const EVERY_SOURCE = [...ROOT, ...TSCONFIG_PRESETS, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/performance', 'tests/packs', 'tests/acceptance', 'tests/_support',
   'tests/fixtures/claude-research/linux-electron-launch.mjs',
   'tests/fixtures/claude-research/agent-billing-journey.ts',
   'tests/fixtures/claude-research/selection-limit-journey.ts',
@@ -721,6 +722,7 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
   const reads = SUITE_READS[suite.dir] ?? {};
   return [
     ...ROOT,
+    ...(suite.kind === 'pack' ? [] : TSCONFIG_PRESETS),
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
     // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
@@ -809,7 +811,7 @@ function inputsForSuites(suites: readonly UnitSuite[], half: Half): Pick<ChainSt
  */
 const legInputs = (leg: Leg): string[] => [...new Set(scopeOf(leg) === 'repo'
   ? [...EVERY_SOURCE, ...PACKAGE_BUILD_READS]
-  : [...ROOT,
+  : [...ROOT, ...TSCONFIG_PRESETS,
     ...(leg.alsoReads ?? []),
     ...(scopeOf(leg) as readonly string[]).flatMap(suiteWorkspace),
     ...(scopeOf(leg) as readonly string[]).flatMap((dir) => workspaceDeps(dir)).flatMap(dependencySource),
@@ -916,7 +918,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // `component-contracts.ts` writes every `.component.md` and `api-entries.ts` decides which entries get a
     // report at all, so each is a module whose edit moves a report while the script that imports it does not.
     // The closure check in `chain-inputs.spec.ts` is what found them and what keeps the next one from hiding
-    inputs: [...ROOT,
+    inputs: [...ROOT, ...TSCONFIG_PRESETS,
       'packages/apack-sdk/dist', 'packages/apack-ui/dist',
       'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
       'scripts/api-check.ts', 'scripts/lib/api-report-packages.ts', 'scripts/lib/exit-on-epipe.ts',
@@ -1006,7 +1008,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // both bundles. A pack source edit reaches this step through `build:default-setup`. `check:tiers` and the
   // app build's own header keep an app bundle from tracing into a pack's `src`
   { name: 'build:runtime', budget: 'suite', outputs: APP_OUTPUTS,
-    inputs: [...ROOT, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host'].flatMap(workspace),
+    inputs: [...ROOT, ...TSCONFIG_PRESETS, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host'].flatMap(workspace),
       'packages/server/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   // App checks load the shipped pack separately at runtime. Its bytes can change while every

@@ -1,6 +1,4 @@
-import type { DeclarationData } from '@apackdev/sdk/framework';
-import type { PackManifest } from '@apackdev/sdk/build';
-import type { SurfaceDeclaration, SettingsDefinition, ReferenceDeclarations, StepFrontendDeclaration } from '@apackdev/sdk/framework';
+import type { DeclarationData, PackManifest, SurfaceDeclaration, SettingsDefinition, ReferenceDeclarations, StepFrontendDeclaration } from '@apackdev/sdk/framework';
 import type { PackFERegistration, PackFEFeature, SurfaceDefinition, TextEditorExtensions } from '@apackdev/sdk/fe';
 import { isPlainObject, hasOwn } from '@apackdev/sdk/utils/pure';
 import { namedBindings, sameKeys } from '../packs/binding-shape.ts';

@@ -1,19 +1,17 @@
-import { spawn } from 'child_process';
 import { execFile } from 'child_process';
-import { ipcMain, shell } from 'electron';
+import { ipcMain, shell, utilityProcess } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { randomBytes, randomUUID } from 'crypto';
 import getPort, { clearLockedPorts } from 'get-port';
 import { AppModule } from '../../AppModule.ts';
 import { MainModuleScope } from '../../MainModuleScope.ts';
-import { 
-  API_CONFIG, 
-  API_EVENTS, 
-  getApiPaths, 
-  getEnvironment, 
-  getNodeExecutable, 
-  getExecutionArgs 
+import {
+  API_CONFIG,
+  API_EVENTS,
+  getApiPaths,
+  getEnvironment,
+  getUtilityExecArgv,
 } from './config.ts';
 import { ProcessManager, broadcastEvent } from './process-manager.ts';
 import { logInfo, logError, logWarn, getLogger, logStartupBanner } from './logger.ts';
@@ -127,7 +125,7 @@ export class ApiServer implements AppModule {
       if (this.shutdownComplete) return;
       event.preventDefault();
       this.isShuttingDown = true;
-      this.shutdown ??= this.processManager.stop('SIGTERM', API_CONFIG.SHUTDOWN_TIMEOUT)
+      this.shutdown ??= this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT)
         .catch(error => { logError('[MAIN] API shutdown failed; quitting without it:', error); })
         .then(() => {
           this.shutdownComplete = true;
@@ -226,27 +224,25 @@ export class ApiServer implements AppModule {
     if (this.isShuttingDown) return;
     logInfo(`[MAIN] Selected port ${port} for API server`);
 
-    // Spawn process
-    const nodeExecutable = getNodeExecutable();
-    const execArgs = getExecutionArgs(apiPath, 'dist/server.js');
-    
-    logInfo(`[MAIN] Spawning API server:`);
-    logInfo(`[MAIN]   Executable: ${nodeExecutable}`);
-    logInfo(`[MAIN]   Args: ${JSON.stringify(execArgs)}`);
+    // Fork as an Electron UtilityProcess so the API runs on Electron's built-in Node 24 in both dev and production
+    // and can receive brokered MessagePortMain channels directly from main.
+    const execArgv = getUtilityExecArgv();
+
+    logInfo('[MAIN] Forking API server utilityProcess:');
+    logInfo(`[MAIN]   Module: ${serverPath}`);
+    logInfo(`[MAIN]   ExecArgv: ${JSON.stringify(execArgv)}`);
     logInfo(`[MAIN]   CWD: ${apiPath}`);
-    
-    const apiProcess = spawn(nodeExecutable, execArgs, {
+
+    const apiProcess = utilityProcess.fork(serverPath, [], {
       cwd: apiPath,
       env: getEnvironment(port, {
         apiToken: this.apiToken,
         startupId: this.startupId,
         logDir: getAppEnvironment().logsDir,
       }),
-      // The fourth entry is an IPC channel the app never sends on: it closes when this process dies, which is how
-      // the API hears that its parent is gone (`process.on('disconnect')`) instead of polling for it
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      detached: false,
-      // windowsHide: false
+      execArgv,
+      stdio: 'pipe',
+      serviceName: 'apack API Server',
     });
 
     this.processManager.setProcess(apiProcess);
@@ -357,7 +353,7 @@ export class ApiServer implements AppModule {
         // Read by `handleServerReady`, which happens after this resolves — so it is a flag and not this
         // promise, however much one field would be tidier than two
         this.announceReload = true;
-        await this.processManager.stop('SIGTERM', API_CONFIG.SHUTDOWN_TIMEOUT);
+        await this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT);
         await this.startApiServer();
       } finally {
         this.reloading = undefined;

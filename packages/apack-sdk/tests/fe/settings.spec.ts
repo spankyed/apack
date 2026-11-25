@@ -8,7 +8,7 @@ import { fakeSettings, type FakeSettings } from '../../src/testing/fake-settings
 import { startFeTestRuntime } from '../../src/testing/fe-runtime.ts'
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts'
 import type { FeatureRef } from '../../src/ids/index.ts'
-import { _settingsJsonProblems } from '../../src/framework/settings-validation.ts'
+import { _settingsJsonProblems } from '../../src/framework/settings-json.ts'
 
 const CODE = 'default-setup/code' as FeatureRef
 

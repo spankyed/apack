@@ -1,7 +1,19 @@
-import { ChildProcess } from 'child_process';
+import type { EventEmitter } from 'node:events';
 import { BrowserWindow, app } from 'electron';
 import { API_EVENTS } from './config.ts';
 import { logInfo, logError, logWarn } from './logger.ts';
+
+/**
+ * The slice of Electron's `UtilityProcess` that `ProcessManager` operates on. Structural so unit tests can drive
+ * shutdown escalation and exit timing without launching Electron.
+ */
+export interface ManagedProcess extends EventEmitter {
+  readonly pid?: number;
+  readonly stdout: NodeJS.ReadableStream | null;
+  readonly stderr: NodeJS.ReadableStream | null;
+  postMessage(message: unknown): void;
+  kill(): boolean;
+}
 
 export interface ProcessHandlers {
   onReady?: (port: number) => void;
@@ -9,32 +21,71 @@ export interface ProcessHandlers {
   onError?: (error: Error) => void;
   onStdout?: (data: string) => void;
   onStderr?: (data: string) => void;
+  /** Override for hard-killing a process by PID on POSIX; defaults to `process.kill(pid, 'SIGKILL')`. */
+  forceKillPid?: (pid: number) => void;
 }
 
 export class ProcessManager {
-  private process?: ChildProcess;
+  private process?: ManagedProcess;
   private handlers: ProcessHandlers;
   private serverReady = false;
   private exited = false;
   private stopping?: Promise<void>;
   private lastStderr = '';
+  private stderrBuffer = '';
   private fatalErrors: { message: string; stack?: string; source?: string }[] = [];
 
   constructor(handlers: ProcessHandlers = {}) {
     this.handlers = handlers;
   }
 
-  setProcess(process: ChildProcess): void {
+  setProcess(process: ManagedProcess): void {
     this.process = process;
     this.serverReady = false;
     this.exited = false;
     this.lastStderr = '';
+    this.stderrBuffer = '';
     this.fatalErrors = [];
     this.attachHandlers();
   }
 
+  private markReady(port: number): void {
+    if (this.serverReady) return;
+    this.serverReady = true;
+    this.handlers.onReady?.(port);
+  }
+
+  private parseFatalLine(line: string): void {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{"__fatal":')) return;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.__fatal) {
+        const entry = { message: parsed.message, stack: parsed.stack, source: parsed.source };
+        this.fatalErrors.push(entry);
+        broadcastEvent('api:fatal', entry);
+      }
+    } catch { /* not valid JSON, ignore */ }
+  }
+
+  private flushStderrBuffer(): void {
+    if (!this.stderrBuffer) return;
+    const trailing = this.stderrBuffer;
+    this.stderrBuffer = '';
+    this.parseFatalLine(trailing);
+  }
+
   private attachHandlers(): void {
     if (!this.process) return;
+
+    // Structured control messages from the utility process's `parentPort`
+    this.process.on('message', (message: unknown) => {
+      if (!message || typeof message !== 'object') return;
+      const payload = message as { type?: unknown; port?: unknown };
+      if (payload.type === 'ready' && typeof payload.port === 'number' && Number.isInteger(payload.port) && payload.port > 0) {
+        this.markReady(payload.port);
+      }
+    });
 
     // Stdout handling
     if (this.process.stdout) {
@@ -59,13 +110,11 @@ export class ProcessManager {
           });
         }
         
-        // Check for server ready message (only trigger once)
+        // Fallback readiness detection if the child did not send `{ type: 'ready', port }` over `parentPort`
         if (!this.serverReady && message.includes('WebSocket Server listening')) {
           const portMatch = message.match(/ws:\/\/localhost:(\d+)/);
-          if (portMatch && this.handlers.onReady) {
-            const port = parseInt(portMatch[1], 10);
-            this.serverReady = true;
-            this.handlers.onReady(port);
+          if (portMatch) {
+            this.markReady(parseInt(portMatch[1], 10));
           }
         }
 
@@ -84,18 +133,12 @@ export class ProcessManager {
         const isDev = !app.isPackaged;
         this.lastStderr = message.trim();
 
-        // Check for structured fatal error JSON line from backend
-        for (const line of message.split('\n')) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('{"__fatal":')) {
-            try {
-              const parsed = JSON.parse(trimmed);
-              if (parsed.__fatal) {
-                this.fatalErrors.push({ message: parsed.message, stack: parsed.stack, source: parsed.source });
-                broadcastEvent('api:fatal', { message: parsed.message, stack: parsed.stack, source: parsed.source });
-              }
-            } catch { /* not valid JSON, ignore */ }
-          }
+        // Line-buffered parse for structured fatal error JSON lines so long stacks split across pipe chunks are kept intact
+        this.stderrBuffer += message;
+        const lines = this.stderrBuffer.split('\n');
+        this.stderrBuffer = lines.pop() ?? '';
+        for (const line of lines) {
+          this.parseFatalLine(line);
         }
 
         // Always log errors in production for debugging
@@ -113,26 +156,35 @@ export class ProcessManager {
         this.handlers.onStderr?.(message);
       });
 
+      this.process.stderr.on('end', () => {
+        this.flushStderrBuffer();
+      });
+
       this.process.stderr.on('error', (error) => {
         console.error('Process stderr error:', error);
       });
     }
 
-    // Process exit handling
-    this.process.on('exit', (code, signal) => {
+    // Process exit handling (`UtilityProcess` emits `(code: number)` with no separate signal parameter)
+    this.process.on('exit', (code: number) => {
+      this.flushStderrBuffer();
       this.exited = true;
-      console.log(`Process exited with code ${code} and signal ${signal}`);
-      this.handlers.onExit?.(code, signal);
+      console.log(`Process exited with code ${code}`);
+      this.handlers.onExit?.(code, null);
     });
 
-    // Process error handling
-    this.process.on('error', (error) => {
+    // Process error handling (`UtilityProcess` emits `(type, location, report)` on non-continuable V8 fatal errors)
+    this.process.on('error', (typeOrError: unknown, location?: string, report?: string) => {
+      const error = typeOrError instanceof Error
+        ? typeOrError
+        : new Error([String(typeOrError), location, report].filter(Boolean).join(': '));
       console.error('Process error:', error);
       this.handlers.onError?.(error);
     });
   }
 
   cleanup(): void {
+    this.stderrBuffer = '';
     if (!this.process) return;
 
     // Remove all listeners
@@ -140,18 +192,28 @@ export class ProcessManager {
     this.process.stderr?.removeAllListeners();
     this.process.removeAllListeners();
 
-    // Destroy streams
-    this.process.stdout?.destroy();
-    this.process.stderr?.destroy();
+    // Destroy streams when supported
+    if (this.process.stdout && 'destroy' in this.process.stdout && typeof this.process.stdout.destroy === 'function') {
+      this.process.stdout.destroy();
+    }
+    if (this.process.stderr && 'destroy' in this.process.stderr && typeof this.process.stderr.destroy === 'function') {
+      this.process.stderr.destroy();
+    }
   }
 
   /**
-   * Ends the process and resolves once it is **gone**, not once the signal was sent.
+   * Ends the process and resolves once it is **gone**, not once the shutdown request was sent.
    *
    * Reload and quit both wait for the API to release its port, database and log files.
    *
+   * **Graceful first, then hard kill.** Sends `{ type: 'shutdown' }` over `UtilityProcess`'s parent port so the API
+   * runs pack `onShutdown` hooks, closes LMDB cleanly, and exits `0` identically across macOS, Linux, and Windows
+   * (unlike `SIGTERM`, which hard-terminates on Windows). If the process has not exited within `forceKillDelay`,
+   * escalates to an unignorable kill (`SIGKILL` on POSIX when `pid` is known, `child.kill()` on Windows or before
+   * spawn).
+   *
    * **The order is the method.** `cleanup()` removes *every* listener, so the waiter goes on after it and
-   * the signal after that: before, and it is stripped with the handlers it replaces. Stripping them first
+   * the shutdown request after that: before, and it is stripped with the handlers it replaces. Stripping them first
    * is also what keeps this off `onExit`, so a reload is never counted as a crash.
    *
    * **A force-kill is waited out, never timed out.** SIGKILL cannot be refused: what is left after it is the
@@ -160,7 +222,7 @@ export class ProcessManager {
    * that has nothing left to do. A kill still pending a second after it was sent is logged, so a slow one is
    * seen.
    */
-  stop(signal: NodeJS.Signals = 'SIGTERM', forceKillDelay = 5000): Promise<void> {
+  stop(forceKillDelay = 5000): Promise<void> {
     if (this.stopping) return this.stopping;
     const child = this.process;
     if (!child || !this.isRunning()) return Promise.resolve();
@@ -173,7 +235,7 @@ export class ProcessManager {
         slowKill = setTimeout(() => {
           logWarn(`[MAIN] The API process ${child.pid} has not exited 1s after SIGKILL; waiting for it to go`);
         }, 1000);
-        this.signal(child, 'SIGKILL');
+        this.forceKill(child);
       }, forceKillDelay);
       child.once('exit', () => {
         // `cleanup()` took the handler that normally sets this, and `isRunning()` reads it
@@ -182,22 +244,41 @@ export class ProcessManager {
         clearTimeout(slowKill);
         resolve();
       });
-      this.signal(child, signal);
+      this.requestShutdown(child);
     });
     this.stopping = signalling.finally(() => { this.stopping = undefined; });
     return this.stopping;
   }
 
-  private signal(child: ChildProcess, signal: NodeJS.Signals): void {
+  private requestShutdown(child: ManagedProcess): void {
     try {
-      child.kill(signal);
+      child.postMessage({ type: 'shutdown' });
     } catch (error) {
-      logError(`[MAIN] Error sending ${signal} to the API:`, error);
+      logError('[MAIN] Error posting shutdown to the API; falling back to kill:', error);
+      this.forceKill(child);
+    }
+  }
+
+  private forceKill(child: ManagedProcess): void {
+    if (process.platform !== 'win32' && child.pid !== undefined) {
+      const killPid = this.handlers.forceKillPid ?? ((pid: number) => process.kill(pid, 'SIGKILL'));
+      try {
+        killPid(child.pid);
+        return;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') return;
+        logError(`[MAIN] Error sending SIGKILL to the API (${child.pid}); falling back to child.kill():`, error);
+      }
+    }
+    try {
+      child.kill();
+    } catch (error) {
+      logError('[MAIN] Error killing the API:', error);
     }
   }
 
   isRunning(): boolean {
-    return !!this.process && !this.exited && this.process.exitCode == null && this.process.signalCode == null;
+    return !!this.process && !this.exited;
   }
 
   getPid(): number | undefined {

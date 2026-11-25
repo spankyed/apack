@@ -7,7 +7,7 @@
 // content existed, and the corner none of them covered — *which part* of an item the user changed — is why
 // editing one field of a flow froze all thirty of its entities against every later version.
 import type { AppliedItem, ImportMode } from '../utils/apply.ts';
-import type { ContentEditPolicy } from '../framework/declaration-schema.ts';
+import type { ContentEditPolicy } from '../framework/declaration-types.ts';
 
 /**
  * What an apply decided about one item. Three of them write (`create`, `fast-forward`, `remove`), five

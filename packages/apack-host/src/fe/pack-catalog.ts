@@ -3,16 +3,16 @@ import { assertEventContracts, eventCatalogEntries } from '../packs/catalog-even
 import { captureData } from '../packs/captured-data.ts';
 import { assertCatalogClaims, surfaceCatalogEntries, nativeSurfaceCatalogEntries } from '../packs/catalog-surfaces.ts';
 import { stepCatalogEntries } from '../packs/catalog-steps.ts';
-import type { PackCatalogFrame, PackCatalogSnapshot } from '../packs/catalog.ts';
-import type { NativePackDeclaration, PackCatalogView } from '@apackdev/sdk/framework';
+import type { PackCatalogFrame, PackCatalogSnapshot } from '../packs/catalog-types.ts';
+import { _settingsJsonProblems, type NativePackDeclaration, type PackCatalogView } from '@apackdev/sdk/framework';
 import { referenceCatalogEntries } from '../packs/catalog-references.ts';
 import { frontendCatalogEntries } from '../packs/catalog-frontend.ts';
 import { artifactCatalogEntries } from '../packs/catalog-artifacts.ts';
 import { blockCatalogEntries } from '../packs/catalog-blocks.ts';
-import { _nativePackDeclarationProblem, _settingsJsonProblems } from '@apackdev/sdk/framework';
 import { errorMessage, isPlainObject } from '@apackdev/sdk/utils/pure';
 import { createLogger } from '@apackdev/sdk/logger';
 import { isEqual } from '../features/settings/document.ts';
+import { nativeFrontendDeclarationProblem } from './frontend-admission.ts';
 
 export interface WindowPackCatalogIO {
   timeoutMs?: number;
@@ -25,11 +25,13 @@ const SNAPSHOT_FIELDS = { revision: true, appSettings: true, packs: true, proble
 /** Immutable declaration data; the active frontend registry has a separate lifetime. */
 export function createWindowPackCatalog(io: WindowPackCatalogIO, native: readonly NativePackDeclaration[] = []) {
   for (const declaration of native) {
-    const problem = _nativePackDeclarationProblem(declaration);
+    const problem = nativeFrontendDeclarationProblem(declaration);
     if (problem) throw new Error(`Invalid native declarations: ${problem}`);
   }
-  const localSurfaces = nativeSurfaceCatalogEntries(captureData(native));
-  const localEvents = eventCatalogEntries({ native: captureData(native), packs: [], sourcePacks: [] });
+  const capturedNative = captureData(native);
+  assertEventContracts({ native: capturedNative, packs: [], sourcePacks: [] });
+  const localSurfaces = nativeSurfaceCatalogEntries(capturedNative);
+  const localEvents = eventCatalogEntries({ native: capturedNative, packs: [], sourcePacks: [] });
   let generation = 0;
   let stop: (() => void) | undefined;
   let frame: PackCatalogFrame | undefined;

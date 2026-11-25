@@ -1,7 +1,5 @@
 import { captureData } from './captured-data.ts';
-import { _settingsJsonProblems } from '@apackdev/sdk/framework';
-import type { DeclarationData } from '@apackdev/sdk/framework';
-import type { StepEntry } from '@apackdev/sdk/build';
+import { _settingsJsonProblems, type DeclarationData, type StepEntry } from '@apackdev/sdk/framework';
 import type { StepDefinition } from '@apackdev/sdk/steps';
 import { isPlainObject } from '@apackdev/sdk/utils/pure';
 

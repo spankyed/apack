@@ -14,10 +14,13 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
  await expect.poll(bus).toBe(true);
  const before=await context(),workerBefore=await childProcessState(),infoBefore=await readInfo();
  const mainPid=electronApp.process().pid,apiBefore=await endpoint();
+ const apiUtilityPid=()=>electronApp.evaluate(({app})=>app.getAppMetrics().find(
+  metric=>metric.type==='Utility'&&(metric.name==='apack API Server'||metric.serviceName==='apack API Server'),
+ )?.pid);
  expect(Number.isSafeInteger(apiBefore.pid)&&apiBefore.pid>1).toBe(true);expect(apiBefore.pid).not.toBe(mainPid);expect(apiBefore.pid).not.toBe(process.pid);
+ // Electron launches the API as a utility process; the server module is passed over IPC.
+ await expect.poll(apiUtilityPid).toBe(apiBefore.pid);
  const raw=await readFile('/proc/'+apiBefore.pid+'/stat','utf8'),fields=raw.slice(raw.lastIndexOf(')')+2).split(' ');
- expect(Number(fields[1])).toBe(mainPid);
- expect((await readFile('/proc/'+apiBefore.pid+'/cmdline','utf8')).includes('server.js')).toBe(true);
  const audit=async()=>(await readFile(join(workspace,'background-broker-audit.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
  const oldPost=(await audit()).filter(row=>row.path==='/background-formatter'&&row.status===200&&row.input?.sessionId===job.sessionId).at(-1);
  expect(oldPost?.input.stdout).toBeTruthy();
@@ -38,6 +41,7 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   await expect.poll(bus,{timeout:10000}).toBe(false);observation.disconnectedAt=Date.now();await save();
   await expect.poll(async()=>endpoint().then(v=>v.pid).catch(error=>error.code==='ENOENT'?apiBefore.pid:Promise.reject(error)),{timeout:15000}).not.toBe(apiBefore.pid);
   observation.apiAfter=await endpoint();expect(observation.apiAfter.pid).not.toBe(apiBefore.pid);await save();
+  await expect.poll(apiUtilityPid).toBe(observation.apiAfter.pid);
   await expect.poll(bus,{timeout:15000}).toBe(true);observation.busResubscribedAt=Date.now();await save();
   await waitForAppReady(appPage,{timeout:15000});await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads');
   await appPage.evaluate(id=>window.applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId:id,restore:true}),before.threadId);

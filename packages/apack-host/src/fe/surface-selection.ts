@@ -1,5 +1,5 @@
 import { isEqual } from '../features/settings/document.ts';
-import type { SurfaceCatalogEntry } from '../packs/catalog.ts';
+import type { SurfaceCatalogEntry } from '../packs/catalog-types.ts';
 import type { SurfaceFrontendBinding } from './pack-store.ts';
 
 export interface ShellSurfaceCatalog {

@@ -32,15 +32,27 @@ import { population } from '@apackdev/sdk/testing';
  * not — and commenting a project out dropped five specs from the chain while all 46 cases here passed. A
  * config is a module that exports an object, so the object is what to ask.
  */
+type ProjectEntry = string | { root?: string; test?: { name?: string; isolate?: boolean; include?: string[]; exclude?: string[] } };
+
 const resolvedConfig = async (rel: string): Promise<{ test?: {
-  projects?: string[];
+  projects?: ProjectEntry[];
   maxWorkers?: unknown;
 } }> => (await import(path.join(REPO_ROOT, rel))).default;
 
-const projectsOf = async (rel: string): Promise<string[]> => {
+const projectEntriesOf = async (rel: string): Promise<ProjectEntry[]> => {
   const projects = (await resolvedConfig(rel)).test?.projects ?? [];
   expect(projects.length, `${rel} resolved to no projects, so any comparison against it is vacuous`).toBeGreaterThan(0);
   return projects;
+};
+
+const projectsOf = async (rel: string): Promise<string[]> => {
+  const entries = await projectEntriesOf(rel);
+  const dirs: string[] = [];
+  for (const entry of entries) {
+    const dir = typeof entry === 'string' ? entry : entry.root === undefined ? '' : repoRelative(entry.root);
+    if (!dirs.includes(dir)) dirs.push(dir);
+  }
+  return dirs;
 };
 
 const ROOT_SCRIPTS = (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf-8')) as { scripts: Record<string, string> }).scripts;
@@ -239,6 +251,24 @@ describe('the root pool lists exactly the host suites', () => {
   it('matches UNIT_SUITES', async () => {
     const host = UNIT_SUITES.filter((suite) => suite.kind === 'host').map((suite) => `packages/${suite.dir}`);
     expect(await projectsOf('vitest.config.ts')).toEqual(host);
+  });
+
+  it('names every inline subproject with its owning workspace prefix and lists only existing files', async () => {
+    const entries = await projectEntriesOf('vitest.config.ts');
+    const inline = entries.filter((entry): entry is Exclude<ProjectEntry, string> => typeof entry !== 'string');
+    expect(inline.length, 'split pure/isolated suites should be represented as inline subprojects').toBeGreaterThan(0);
+    for (const entry of inline) {
+      expect(entry.root, 'every inline project must declare an explicit root').toBeDefined();
+      const dir = repoRelative(entry.root!).replace(/^packages\//, '');
+      const suite = UNIT_SUITES.find((candidate) => candidate.dir === dir);
+      expect(suite, `inline project root ${entry.root} maps to no host suite`).toBeDefined();
+      expect(entry.test?.name, `inline project under ${dir} must declare a workspace-prefixed name`)
+        .toMatch(new RegExp(`^${suite!.workspace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`));
+      const literalFiles = [...(entry.test?.include ?? []), ...(entry.test?.exclude ?? [])]
+        .filter((pattern) => !/[*?{}()[\]!]/.test(pattern));
+      const missing = literalFiles.filter((file) => !fs.existsSync(path.join(entry.root!, file)));
+      expect(missing, `${entry.test?.name} names spec files that no longer exist on disk`).toEqual([]);
+    }
   });
 });
 

@@ -9,7 +9,7 @@ import { untypedQuery as query } from '../ears/index.ts';
 import { collectionRepository, documentRepository } from '../repositories/document-repository.ts';
 import { EARS } from '../types/entities.ts';
 import type { ContentSection } from '../types/sdk-entities.ts';
-import type { ContentItem } from '../build/content/items.ts';
+import type { ContentItem } from './item-types.ts';
 import type { ContentWriter } from './writers.ts';
 
 export interface DocumentItem extends ContentItem {

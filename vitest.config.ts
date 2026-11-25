@@ -1,5 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { defaultServerConditions } from 'vite';
+import { projects as sdkProjects } from './packages/apack-sdk/vitest.config.ts';
+import { projects as cliProjects } from './packages/apack-cli/vitest.config.ts';
+import { projects as hostProjects } from './packages/apack-host/vitest.config.ts';
+import { projects as repoChecksProjects } from './packages/internal-repo-checks/vitest.config.ts';
+import { projects as testingProjects } from './packages/apack-testing/vitest.config.ts';
 
 // Vitest's own defaults: Vite's server conditions without 'module'
 const conditions = ['@apackdev/source', ...defaultServerConditions.filter((c) => c !== 'module')];
@@ -20,7 +25,10 @@ export default defineConfig({
      * longest-first, which is the greedy makespan approximation across package boundaries.
      *
      * Each project loads its own config, which is where its environment, setup files and per-project
-     * settings live — nothing is flattened here.
+     * settings live — nothing is flattened here. Suites split into `:pure` (`isolate: false`) and
+     * `:isolated` (`isolate: true`) subprojects export their `projects` array so both the root pool and
+     * `npm test -w <workspace>` run the identical split (Vitest 4 does not recursively expand nested
+     * `test.projects` referenced by directory path).
      *
      * **The pack suite is not here, and cannot be.** `@app/default-setup` must resolve the published
      * `dist` while these resolve source, and Node conditions are per process: vitest shares its worker pool
@@ -30,19 +38,19 @@ export default defineConfig({
      * two pools, split on the boundary `check:specifiers` already enforces.
      *
      * Written out rather than derived from `UNIT_SUITES`, because `check:specifiers` reads this file as
-     * text and cannot read a computed list. `chain-inputs.spec.ts` asserts it is exactly the host suites,
+     * text and cannot read a computed list. `chain-table.spec.ts` asserts it is exactly the host suites,
      * so it cannot drift.
      */
     projects: [
-      'packages/apack-sdk',
-      'packages/apack-cli',
-      'packages/apack-host',
+      ...sdkProjects,
+      ...cliProjects,
+      ...hostProjects,
       'packages/server',
-      'packages/internal-repo-checks',
+      ...repoChecksProjects,
       'packages/renderer',
       'packages/main',
       'packages/preload',
-      'packages/apack-testing',
+      ...testingProjects,
       'packages/apack-ui',
       'packages/internal-publish-checks',
     ],

@@ -1,21 +1,10 @@
 {
+  "extends": "../../tsconfig.node.json",
   "compilerOptions": {
-    "noUnusedLocals": true,
-    "incremental": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/internal-publish-checks.tsbuildinfo",
-    "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    // Workspace @apackdev/* packages resolve to source (see their package.json exports)
-    "customConditions": ["@apackdev/source"],
-    "target": "ES2024",
-    "lib": ["ES2024", "ESNext.Collection", "ESNext.Iterator", "ESNext.Promise", "ESNext.Error", "ESNext.Disposable"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "types": ["node"]
+    "noEmit": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

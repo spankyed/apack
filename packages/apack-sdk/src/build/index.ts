@@ -36,7 +36,7 @@ export type {
 } from './compilers/index.ts';
 
 // Pack preview types
-export type { PackContentPreview, PackContentPreviewItem } from './preview.ts';
+export type { PackContentPreview, PackContentPreviewItem } from '../framework/preview-types.ts';
 
 // Manifest bridge
 export { buildPackConfigFromManifest } from './manifest-bridge.ts';
@@ -72,17 +72,18 @@ export { packValidation } from './diagnostics.ts';
 export type { PackDiagnostic, SkippedPackCheck, PackValidation } from './diagnostics.ts';
 export { generateSettingsTypes } from './settings-types.ts';
 export { parseSnapshot, parseDependencySnapshot } from './snapshot.ts';
+export { _nativePackDeclarationProblem } from './native-declarations.ts';
 export { _helpDataProblem } from './help-data.ts';
 export { _declarationRevision } from './declaration-revision.ts';
 export type { PackSnapshotValidation, PackDependencySnapshotValidation } from './snapshot.ts';
 
-// Manifest schema (Zod — single source of truth for types, validation, and JSON schema generation)
+// Manifest schema (Zod — runtime validation and JSON schema source; plain types live in framework/declaration-types.ts)
 export {
   ManifestSchema, FeatureEntrySchema, FEATURE_ID_PATTERN, _NativePackDeclarationSchema,
   LifecycleConfigSchema, ContentSourceSchema, ContentFormatSchema, StepEntrySchema, StepDSLMetaSchema,
-  DslEntrySchema, PackPermissionSchema, MigrationDeclarationSchema, MigrationsSchema, MIGRATION_LINES, LIFECYCLE_HOOK_NAMES, MIGRATION_TARGET_PATTERN,
+  DslEntrySchema, PackPermissionSchema, MigrationDeclarationSchema, MigrationsSchema, LIFECYCLE_HOOK_NAMES,
 } from '../framework/declaration-schema.ts';
-export type { MigrationLine } from '../framework/declaration-schema.ts';
+export { MIGRATION_LINES, MIGRATION_TARGET_PATTERN, type MigrationLine } from '../framework/declaration-types.ts';
 
 // FE bundler — not re-exported here (uses import.meta which some
 // consumer tsconfigs reject). Import directly from './fe-bundler'.

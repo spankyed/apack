@@ -1,7 +1,7 @@
 import type { FeatureEventCatalogEntry, PackEventContracts } from '@apackdev/sdk/framework';
 import { _parseEventContracts } from '@apackdev/sdk/framework';
 import { resolveName } from '@apackdev/sdk/ids';
-import type { PackCatalogSnapshot } from './catalog.ts';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
 
 /** Validate a window's incoming frame before replacing its accepted declaration data. */
 export function assertEventContracts(snapshot: Pick<PackCatalogSnapshot, 'native' | 'packs' | 'sourcePacks'>): void {

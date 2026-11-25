@@ -1,4 +1,4 @@
-import type { PackCatalogSnapshot } from './catalog.ts';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
 import type { ArtifactCatalogEntry, ArtifactDeclaration, DeclarationData } from '@apackdev/sdk/framework';
 
 /** Icon and viewer declarations remain readable without activating or importing their owner. */

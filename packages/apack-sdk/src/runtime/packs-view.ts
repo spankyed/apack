@@ -9,7 +9,7 @@ import type { StepCatalogEntry } from '../framework/catalog-view.ts';
 import type { ArtifactDefinition } from '../artifacts/types.ts';
 import type { BlockDefinition } from '../blocks/types.ts';
 import type { ContentWriter } from '../content/writers.ts';
-import type { ContentApplier } from '../utils/apply.ts';
+import type { ContentApplier } from '../utils/apply-types.ts';
 import type { SettingsCatalog } from '../framework/pack-settings.ts';
 import type { HelpCatalog } from '../framework/pack-help.ts';
 

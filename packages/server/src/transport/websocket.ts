@@ -9,6 +9,7 @@ import { createRpcContext } from './context.ts';
 import { jsonSafeEncoder } from './encoder.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { SERVER_CONFIG, apiToken, apiTokenIsOwn, isApiToken } from '../boot/config.ts';
+import { notifyServerReady, registerGracefulShutdown } from '../boot/lifecycle.ts';
 import { appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/index.ts';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
@@ -133,6 +134,7 @@ export function createWebSocketServer() {
     console.log(message);
 
     publishApiFiles(port, token);
+    notifyServerReady(port);
   });
 
   // Apply tRPC handler
@@ -167,8 +169,8 @@ export function createWebSocketServer() {
     }
   });
 
-  // Setup graceful shutdown
-  process.on('SIGTERM', () => {
+  // Setup graceful shutdown (wired to SIGTERM, Electron `parentPort` `{ type: 'shutdown' }`, and Node IPC disconnect)
+  registerGracefulShutdown(() => {
     // **Stopping the systems is all this does.** XState 5 runs no exit action on `actor.stop()` — measured,
     // with a two-state machine — so nothing here is a hook anything can be hung on, and an `exit` added to a
     // system's machine expecting to run at shutdown would be dead on this path. What must happen when this
@@ -183,16 +185,6 @@ export function createWebSocketServer() {
     // Exit explicitly so the 'exit' handler fires before Electron force-kills us
     process.exit(0);
   });
-
-  // The parent died (Electron crashed, or was killed): its end of the IPC channel closed, so this process is
-  // orphaned and shuts down the way a SIGTERM would. An API started without a channel — a manual boot, a test —
-  // has no parent to outlive, so there is nothing to watch.
-  if (process.connected) {
-    process.on('disconnect', () => {
-      console.log('[API] Parent process died, shutting down');
-      process.kill(process.pid, 'SIGTERM');
-    });
-  }
 
   return { wss, handler, port };
 }

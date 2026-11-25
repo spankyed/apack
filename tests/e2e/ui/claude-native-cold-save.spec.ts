@@ -56,15 +56,8 @@ test('saves native launch, history and draft before a complete app shutdown', as
   await section.getByRole('button', {name:'Back to conversation',exact:true}).click()
   await appPage.locator('.cursor-row-resize').click({button:'right'})
   const composer=card.locator('[contenteditable="true"]')
-  const _expected=JSON.parse(await readFile(join(workspace!,'large-document-fixture.json'),'utf8'));
   const draft='Keep the release checklist draft while I inspect the migration registry.';
   const code=appPage.locator('[data-native-code-ansi]'),markdown=appPage.locator('[data-native-markdown-ansi]');
-  async function _document(kind:string){return appPage.evaluate(kind=>{
-    const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
-    const pending=Object.values(state.nativeUiViews).map((view:any)=>view.state);let count=0;
-    while(pending.length&&++count<20000){const value:any=pending.pop();if(!value||typeof value!=='object')continue;if(value.kind===kind)return {kind:value.kind,source:value.source??value.text,nativeAnsi:value.nativeAnsi,formattingFallback:value.formattingFallback};pending.push(...Object.values(value).filter(value=>value&&typeof value==='object'));}return null;
-  },kind)}
-
   async function guideCapability(){return appPage.evaluate(()=>{
     const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     for(const [mountId,view] of Object.entries(c.nativeUiViews) as any){if(view.threadId!==c.currentThread?.id||view.state.status!=='live')continue;const queue=[view.state];let count=0;while(queue.length&&++count<20000){const n:any=queue.pop();if(!n||typeof n!=='object')continue;if(n.kind==='button'&&n.label==='Guide'&&n.actionId)return {threadId:view.threadId,mountId,actionId:n.actionId};queue.push(...Object.values(n).filter(v=>v&&typeof v==='object'));}}

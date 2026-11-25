@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { _nativePackDeclarationProblem, type NativePackDeclaration } from '@apackdev/sdk/framework';
+import { _nativePackDeclarationProblem } from '@apackdev/sdk/build';
+import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import { resetTestData, startTestRuntime } from '@apackdev/sdk/testing';
 import { HOST_ENTITY_TYPES, appState } from '../../src/app-state/index.ts';
 import { createPackRegistry } from '../../src/packs/registry.ts';

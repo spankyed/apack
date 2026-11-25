@@ -119,6 +119,12 @@ export async function recordRun(
 const projectArgs = (suites: readonly UnitSuite[]): string[] =>
   suites.flatMap((suite) => ['--project', suite.workspace]);
 
+// Host suites may split into named subprojects (`<workspace>:pure`, `<workspace>:isolated`) so pure specs
+// run with `isolate: false` while global-mutating specs stay isolated; selecting both the workspace name
+// and `<workspace>:*` covers single-project and split-project suites identically.
+const hostProjectArgs = (suites: readonly UnitSuite[]): string[] =>
+  suites.flatMap((suite) => ['--project', suite.workspace, '--project', `${suite.workspace}:*`]);
+
 /**
  * The durations reporter, on every pool's invocation.
  *
@@ -169,7 +175,7 @@ export const POOLS = {
     half: 'fast' as Half,
     suites: () => UNIT_SUITES.filter((suite) => suite.kind === 'host'),
     // with-source supplies the @apackdev/source condition the host suites resolve under
-    run: (stale: readonly UnitSuite[], workers?: number) => [{ suites: stale, command: 'node', args: ['scripts/with-source.mjs', 'npx', 'vitest', 'run', ...projectArgs(stale), ...workerArgs(workers), ...reporterArgs()] }],
+    run: (stale: readonly UnitSuite[], workers?: number) => [{ suites: stale, command: 'node', args: ['scripts/with-source.mjs', 'npx', 'vitest', 'run', ...hostProjectArgs(stale), ...workerArgs(workers), ...reporterArgs()] }],
   },
   pack: {
     half: 'fast' as Half,

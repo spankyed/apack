@@ -73,7 +73,6 @@ test('reverts native history through the app menu and continues at its prior che
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.modelOverride).toBe('haiku')
   }
-  const _sourceThreadId = (await context()).threadId
   await composer.fill('NativeForkCheckpointAlpha: remember this source-only marker.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.some((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.') }).toBe(true)

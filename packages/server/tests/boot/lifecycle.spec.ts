@@ -1,0 +1,92 @@
+import { EventEmitter } from 'node:events';
+import { describe, expect, it, vi } from 'vitest';
+import { createLifecycleBridge, type LifecycleProcess, type UtilityParentPort } from '../../src/boot/lifecycle.ts';
+
+function fakeEnv(options: { withParentPort?: boolean; connected?: boolean } = {}) {
+  const procEmitter = new EventEmitter();
+  const portEmitter = new EventEmitter();
+  const posted: unknown[] = [];
+
+  const parentPort: UtilityParentPort | undefined = options.withParentPort === false
+    ? undefined
+    : {
+        on(event, listener) {
+          portEmitter.on(event, listener);
+        },
+        postMessage(message) {
+          posted.push(message);
+        },
+      };
+
+  const proc: LifecycleProcess = {
+    on(event, listener) {
+      procEmitter.on(event, listener);
+    },
+    connected: options.connected ?? false,
+    parentPort,
+  };
+
+  return { proc, procEmitter, portEmitter, posted };
+}
+
+describe('boot lifecycle bridge', () => {
+  it('records early parentPort shutdown during boot and invokes handler immediately on registration', () => {
+    const { proc, portEmitter } = fakeEnv();
+    const bridge = createLifecycleBridge(proc);
+    bridge.installShutdownBridge();
+
+    // Non-shutdown messages are ignored
+    portEmitter.emit('message', { data: null });
+    portEmitter.emit('message', { data: { type: 'ping' } });
+    expect(bridge.isShutdownRequested()).toBe(false);
+
+    // Shutdown arrives before WebSocket server is created
+    portEmitter.emit('message', { data: { type: 'shutdown' } });
+    expect(bridge.isShutdownRequested()).toBe(true);
+
+    const handler = vi.fn();
+    bridge.registerGracefulShutdown(handler);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    // Duplicate signals never re-run the shutdown handler
+    portEmitter.emit('message', { data: { type: 'shutdown' } });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('invokes registered shutdown handler once across parentPort, SIGTERM, and Node IPC disconnect', () => {
+    const { proc, procEmitter, portEmitter } = fakeEnv({ connected: true });
+    const bridge = createLifecycleBridge(proc);
+    bridge.installShutdownBridge();
+    bridge.installShutdownBridge(); // idempotent
+
+    const handler = vi.fn();
+    bridge.registerGracefulShutdown(handler);
+    expect(handler).not.toHaveBeenCalled();
+
+    procEmitter.emit('SIGTERM');
+    portEmitter.emit('message', { data: { type: 'shutdown' } });
+    procEmitter.emit('disconnect');
+
+    expect(bridge.isShutdownRequested()).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('triggers shutdown on Node IPC disconnect when running outside utilityProcess', () => {
+    const { proc, procEmitter } = fakeEnv({ withParentPort: false, connected: true });
+    const bridge = createLifecycleBridge(proc);
+    const handler = vi.fn();
+    bridge.registerGracefulShutdown(handler);
+
+    procEmitter.emit('disconnect');
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts structured ready message to parentPort when available and no-ops otherwise', () => {
+    const withPort = fakeEnv({ withParentPort: true });
+    createLifecycleBridge(withPort.proc).notifyServerReady(3042);
+    expect(withPort.posted).toEqual([{ type: 'ready', port: 3042 }]);
+
+    const withoutPort = fakeEnv({ withParentPort: false });
+    expect(() => createLifecycleBridge(withoutPort.proc).notifyServerReady(3042)).not.toThrow();
+  });
+});

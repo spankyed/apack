@@ -1,26 +1,14 @@
 {
+  "extends": "../../tsconfig.node.json",
   "compilerOptions": {
-    "noUnusedLocals": true,
     // Typechecking only, so the .tsbuildinfo is the whole point: a re-run with nothing changed reuses it
     // instead of reparsing, and `dep-files.integration.spec.ts` reads it to hold this leg's declared scope
-    // to what the compiler reported reading. `incremental` works with `noEmit`; `composite` does not.
-    "incremental": true,
+    // to what the compiler reported reading.
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/main.tsbuildinfo",
-    // Workspace @apackdev/* packages resolve to source (see their package.json exports)
-    "customConditions": ["@apackdev/source"],
-    // Their relative imports name .ts sources
-    "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    "allowSyntheticDefaultImports": true,
     "module": "NodeNext",
-    "target": "ESNext",
-    "sourceMap": false,
     "moduleResolution": "NodeNext",
-    "skipLibCheck": true,
-    "strict": true,
+    "sourceMap": false,
     "isolatedModules": true,
-    "types": ["node"],
-    "baseUrl": ".",
     "paths": {
       "@app/preload": ["../preload"],
       "@app/renderer": ["../renderer"]

@@ -1,4 +1,4 @@
-import type { PackCatalogSnapshot } from './catalog.ts';
+import type { PackCatalogSnapshot } from './catalog-types.ts';
 import type { ReferenceCatalogEntry, DeclarationData, ReferenceDeclarations } from '@apackdev/sdk/framework';
 import { resolveName } from '@apackdev/sdk/ids';
 

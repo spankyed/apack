@@ -6,7 +6,6 @@
 
 import type { Component } from 'vue';
 import type { Ref } from 'vue';
-import { z } from 'zod';
 
 // @public
 export function formatReferenceHref(target: ReferenceTarget): string;
