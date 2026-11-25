@@ -33,6 +33,45 @@ async function mount(send: (text: string) => Promise<ClaudeAgentComposerSubmitRe
   app = createApp({ render: () => h(NativeAgentComposer, { audience, statusText: state.statusText, draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, openSettings, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
   return { leave, draft, saved, root, state, edit }
 }
+it.each(['paste', 'drop'] as const)('explains an image %s without altering the selected Agent draft', async type => {
+  const send = vi.fn(async () => {})
+  const f = await mount(send, true)
+  editor.commands.setTextSelection({ from: 2, to: 7 })
+  await nextTick()
+  const before = editor.state.selection.toJSON()
+  const edits = f.edit.mock.calls.length
+  if (type === 'drop') vi.spyOn(editor.view, 'posAtCoords').mockReturnValue(null)
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, type === 'paste' ? 'clipboardData' : 'dataTransfer', { value: {
+    items: [{ kind: 'file', type: 'image/png' }], files: [], getData: () => '',
+  } })
+  editor.view.dom.dispatchEvent(event)
+  await nextTick()
+  expect(event.defaultPrevented).toBe(true)
+  expect(f.root.querySelector('[role="status"]')?.textContent).toBe('Send images from the main conversation.')
+  expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
+  expect(editor.state.selection.toJSON()).toEqual(before)
+  expect(f.edit).toHaveBeenCalledTimes(edits)
+  expect(send).not.toHaveBeenCalled()
+
+  editor.commands.insertContent('New')
+  await nextTick()
+  expect(f.root.textContent).not.toContain('Send images from the main conversation.')
+})
+
+it('keeps ordinary text paste available in the selected Agent', async () => {
+  const f = await mount(undefined, true)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  const paste = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(paste, 'clipboardData', { value: {
+    items: [{ kind: 'string', type: 'text/plain' }], files: [], getData: (type: string) => type === 'text/plain' ? 'Pasted text' : '',
+  } })
+  editor.view.dom.dispatchEvent(paste)
+  await nextTick()
+  expect(editor.state.doc.textContent).toContain('Pasted text')
+  expect(f.root.textContent).not.toContain('Send images from the main conversation.')
+})
+
 it('owns Escape before the generic editor keymap and preserves the unsent draft', async () => {
   const f = await mount(), event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
   editor.view.dom.dispatchEvent(event)

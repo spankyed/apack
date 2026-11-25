@@ -159,15 +159,18 @@ function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: 
 
 
 /** Project normalized source offsets; unchanged spans retain their exact UTF-16 distance. */
-function normalizedClaudePromptOffsets(source: string, canonical: string, offsets: readonly number[]): ReadonlyMap<number, number> | undefined {
+function normalizedClaudePromptOffsets(source: string, canonical: string, offsets: readonly number[], cursor: number) {
   // A pathological normalization must not block the editor indefinitely.
   const changes = diffChars(source, canonical, {timeout: 100})
   if (!changes) return
   const requested = [...new Set(offsets)].sort((a, b) => a - b), mapped = new Map<number, number>()
-  let from = 0, to = 0, index = 0
+  let from = 0, to = 0, index = 0, canonicalCursor: number | undefined
   for (const change of changes) {
     if (change.added) { to += change.value.length; continue }
     const end = from + change.value.length
+    // A fallback caret must have unchanged text on both sides. Paint can still
+    // use the edge of a normalized-away delimiter.
+    if (!change.removed && cursor > from && cursor < end) canonicalCursor = to + cursor - from
     while (index < requested.length && requested[index]! <= end) {
       const offset = requested[index++]!
       mapped.set(offset, to + (change.removed ? 0 : offset - from))
@@ -175,7 +178,7 @@ function normalizedClaudePromptOffsets(source: string, canonical: string, offset
     from = end
     if (!change.removed) to += change.value.length
   }
-  return mapped.size === requested.length ? mapped : undefined
+  return { offsets: mapped.size === requested.length ? mapped : undefined, cursor: canonicalCursor }
 }
 
 /** Expose visible list boundaries while leaving other Markdown offsets for the verified parse. */
@@ -269,13 +272,14 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
       if (!doc.eq(parsed)) return
       return {doc, sourcePositions, markerMarks}
     }
-    let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
-    if (!located && canonicalSource) {
-      // Marking an autolink in the source changes both its visible text and
-      // destination. For canonical text the serializer can prove the caret instead.
-      const position = findClaudePromptPosition(parsed, frame.cursor, serialize)
-      if (position !== undefined) located = { doc: parsed, sourcePositions: new Map([[frame.cursor, position]]), markerMarks: parsed.resolve(position).marks() }
+    const locateSerializedCaret = (cursor: number) => {
+      const position = findClaudePromptPosition(parsed, cursor, serialize)
+      if (position !== undefined) return { doc: parsed, sourcePositions: new Map([[frame.cursor, position]]), markerMarks: parsed.resolve(position).marks() }
     }
+    let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
+    // Marking an autolink changes its visible text and destination. The
+    // serializer can prove a caret without inserting a marker in the source.
+    if (!located && canonicalSource) located = locateSerializedCaret(frame.cursor)
     if (!located && !canonicalSource && offsets.length) {
       // A global diff is quadratic across many normalized list markers. Probe the visible
       // list boundaries directly, then verify the marked parse preserves the entire document.
@@ -291,13 +295,14 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
         }
       }
     }
-    if (!located && !canonicalSource && offsets.length) {
-      // Paint may touch hidden delimiters even when the native caret and document are valid.
-      // Verify the caret separately, then project paint inward through canonical serialization.
-      located = locate([frame.cursor])
-      if (!located) return
-      // A diff timeout leaves only the exact caret position available for paint.
-      sourceOffsets = normalizedClaudePromptOffsets(frame.text, canonicalText, offsets)
+    if (!located && !canonicalSource) {
+      // Paint can touch hidden delimiters even when the caret is representable.
+      // When the marker also disrupts the caret, require an unchanged source run
+      // and an exact serialized position in the unmodified parsed document.
+      if (offsets.length) located = locate([frame.cursor])
+      const normalized = normalizedClaudePromptOffsets(frame.text, canonicalText, offsets, frame.cursor)
+      sourceOffsets = normalized?.offsets
+      if (!located && normalized?.cursor !== undefined) located = locateSerializedCaret(normalized.cursor)
     }
     if (!located) return
     let {doc} = located

@@ -68,6 +68,34 @@ it('keeps the destination, caret and URL decoration through a native structural 
   } finally { bridge.dispose() }
 })
 
+it.each([false, true])('keeps the native caret inside an autolink when a heading normalizes (paint=%s)', paint => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const url = 'https://example.test/docs'
+  const tail = 'Review <' + url + '> today'
+  const text = 'Release notes\n=============\n\n' + tail
+  const canonical = '# Release notes\n\n' + tail
+  const start = text.indexOf(url)
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+    text, cursor: start + 10, ...(paint && { decorations: [
+      { start: start + 8, end: start + 15, color: 'red' },
+      { start: start + 17, end: start + 17, virtualText: 'hint' },
+    ] }),
+  } })
+  try {
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(bridge.readDraft()).toMatchObject({ text: canonical, cursor: canonical.indexOf(url) + 10 })
+    expect(editor.view.dom.querySelector('h1')?.textContent).toBe('Release notes')
+    const link = editor.view.dom.querySelector('a')
+    expect(link?.getAttribute('href')).toBe(url)
+    const decoration = link?.querySelector('.claude-prompt-decoration')
+    const hint = link?.querySelector('.claude-prompt-virtual')
+    expect(decoration?.textContent).toBe(paint ? url.slice(8, 15) : undefined)
+    expect(hint?.textContent).toBe(paint ? 'hint' : undefined)
+    if (paint) expect(hint?.previousSibling?.textContent?.endsWith(url.slice(15, 17))).toBe(true)
+  } finally { bridge.dispose() }
+})
+
 it.each([
   ['bold', 'Review  ', 'release notes', '**Review**  release notes'],
   ['italic', 'Review     ', 'notes', '*Review*     notes'],

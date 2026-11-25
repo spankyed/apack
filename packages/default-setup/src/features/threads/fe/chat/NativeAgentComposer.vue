@@ -1,5 +1,5 @@
 <template>
-  <form ref="composerRef" :style="[promptThemeStyle, { minHeight: minimumHeight + 'px' }]" :class="{ 'native-agent-composer--tools': toolsExpanded, 'native-agent-composer--background': audience === 'background' }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" :aria-label="audience === 'background' ? 'Background session message' : 'Agent message'" @submit.prevent="submit" @keydown.capture="leaveEditor">
+  <form ref="composerRef" :style="[promptThemeStyle, { minHeight: minimumHeight + 'px' }]" :class="{ 'native-agent-composer--tools': toolsExpanded, 'native-agent-composer--background': audience === 'background' }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" :aria-label="audience === 'background' ? 'Background session message' : 'Agent message'" @submit.prevent="submit" @keydown.capture="leaveEditor" @paste.capture="refuseAgentImage" @drop.capture="refuseAgentImage">
     <div class="flex min-h-0 flex-1 flex-col overflow-clip" :class="{ 'native-agent-body--background-tools': audience === 'background' && toolsExpanded }">
     <StatusLine ref="statusLineRef" :class="{ 'shrink-0': audience === 'background' }" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <div class="native-agent-draft-scroll min-h-10 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
@@ -13,6 +13,7 @@
         <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="submissionBlocked" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
         <button v-if="audience === 'background'" type="button" :disabled="submitting" class="rounded py-1 text-xs text-neutral-400 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @click="emit('leave')">Back to parent notes</button>
         <span v-else-if="agentDraftTooLong" role="status" class="min-w-0 text-xs text-amber-200">{{ CLAUDE_UI_TEXT_LIMIT_MESSAGE }}</span>
+        <span v-else-if="imageTransferRefused" role="status" class="min-w-0 text-xs text-amber-200">Send images from the main conversation.</span>
         <span v-else class="truncate text-[11px] text-neutral-500">{{ disabled ? (audience === 'background' ? 'Background input unavailable' : 'Agent input unavailable') : 'Enter to send · Shift+Enter for a new line' }}</span>
       </div>
       <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="submissionBlocked || agentDraftTooLong || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
@@ -61,6 +62,7 @@ watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded, () => props.ui
 }, { flush: 'post' })
 
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
+const imageTransferRefused = ref(false)
 const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submissionBlocked = computed(() => props.disabled || props.operationPending || submitting.value)
@@ -70,6 +72,7 @@ let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true,
 let committedState: Editor['state'] | undefined
 watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmentId], ([editor, mountId], _old, cleanup) => {
   bridge?.dispose(); bridge = undefined; offers.value = []; nativeProblem.value = undefined
+  imageTransferRefused.value = false
   if (!editor) return
   nativePromptEditors.add(editor)
   const releaseCommands = holdEditorCommandSuggestions(editor)
@@ -156,9 +159,22 @@ watch(() => props.hostRequest, request => {
   }
   else emit('host', { requestId: request.requestId, kind: 'suggest', shown: available && (bridge?.showSuggestion(request.text, request.revision) ?? false) })
 })
+function refuseAgentImage(event: ClipboardEvent | DragEvent) {
+  const editor = editorRef.value?.editor
+  if (props.audience || !editor?.view.dom.contains(event.target as Node)) return
+  const clipboard = 'clipboardData' in event
+  const transfer = clipboard ? event.clipboardData : event.dataTransfer
+  if (!transfer || (clipboard && transfer.getData('text/plain'))) return
+  const image = Array.from(transfer.items).some(item => item.kind === 'file' && item.type.startsWith('image/'))
+    || Array.from(transfer.files).some(file => file.type.startsWith('image/'))
+  if (!image) return
+  event.preventDefault()
+  imageTransferRefused.value = true
+}
 function updateDraft(text: string) {
   const editor = editorRef.value?.editor
   if (editor?.view.composing) return
+  imageTransferRefused.value = false
   emit('draft', editor ? normalizeClaudeAgentDraftText(editor.state.doc, text) : text)
 }
 function leaveEditor(event: KeyboardEvent) {
