@@ -69,7 +69,7 @@ it('keeps draft text, selection and attachments with their own conversation', as
   attachments.pendingFiles.value.push(file('second.txt'))
 
   f.state.currentThread = firstThread
-  await vi.waitFor(() => expect(editor.getHTML()).toBe('<p><strong>first</strong></p>'), { timeout: 2000 })
+  await vi.waitFor(() => expect(editor.getHTML()).toBe('<p><strong>first</strong></p>'))
   expect(editor.state.selection.toJSON()).toEqual(originalSelection)
   expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['first.txt'])
   f.submit()
@@ -77,7 +77,7 @@ it('keeps draft text, selection and attachments with their own conversation', as
   expect(attachments.pendingFiles.value).toEqual([])
 
   f.state.currentThread = { id: 'thread-two', messages: [] }
-  await vi.waitFor(() => expect(editor.state.doc.textContent).toBe('second'), { timeout: 2000 })
+  await vi.waitFor(() => expect(editor.state.doc.textContent).toBe('second'))
   expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['second.txt'])
 })
 
