@@ -74,7 +74,8 @@
       <div v-show="!isSystem && (!message.autoHide || !message.asideText || expanded)" class="relative">
       <!-- Floating hover UI -->
       <div
-        class="absolute transition-opacity duration-200 opacity-0 pointer-events-none -bottom-3 -right-4 z-10 group-hover:opacity-100 group-hover:pointer-events-auto"
+        class="absolute z-10 pointer-events-none opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+        :class="isClaudeCodeThread && isUser ? 'bottom-0 right-0' : '-bottom-3 -right-4'"
       >
         <div class="flex items-center overflow-hidden border rounded-lg shadow-lg bg-neutral-800 border-neutral-700">
           <!-- Timestamp -->

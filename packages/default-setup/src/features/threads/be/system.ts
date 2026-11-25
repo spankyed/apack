@@ -23,7 +23,7 @@ import { onConnectionEnded } from '@apackdev/sdk/events';
 import { write, transact, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
-import type { ThreadLinkItem } from './types.ts';
+import type { ThreadLinkItem, ThreadsAsks } from './types.ts';
 import { type ChangeBlock, toMap, toIdentifierSet, mapScalar, mapArray } from '@apackdev/sdk/utils';
 import { exportThreads } from './export-threads.ts';
 import { importThreads } from './import-threads.ts';
@@ -183,6 +183,73 @@ function reported<T>(refused: (error: unknown) => void, write: () => T): T {
     refused(error);
     throw error;
   }
+}
+
+function prepareThreadRevert(
+  { threadId, messageId, restoreFiles, userCliUuid }: ThreadsAsks['APPLY_THREAD_REVERT']['args'],
+  committed: () => void,
+): ThreadHistoryOperationInput {
+  const readSnapshot = () => JSON.stringify({
+    thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+    messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages,
+  });
+  return {
+    request: {kind: 'revert', threadId, messageId, restoreFiles, userMessageId: userCliUuid},
+    snapshot: readSnapshot(), readSnapshot,
+    rejected: error => {
+      logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});
+      if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not revert: ${errorMessage(error)}`, blocks: [], forkable: false});
+    },
+    commit: () => {
+      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+
+      // Stop active processes before soft-deleting so nothing races
+      // against the deletion (e.g. a stream consumer writing to messages).
+      runThreadTeardown(threadId);
+
+      const deletion = repository.chatCommands.softDeleteMessagesAfter({
+        threadId: threadId as EARS.EntityId,
+        messageId: messageId as EARS.EntityId,
+      });
+      const deletedIds = new Set(deletion.deletedIds);
+      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+
+      // Determine which agent flows had messages deleted so each flow can
+      // skip its revert handler when it isn't affected.
+      const agents = {
+        claudeCode: deletedMessages.some((m: any) =>
+          m.context?.cliUuid || m.context?.agent === 'Claude Code'
+        ),
+        codex: deletedMessages.some((m: any) =>
+          m.context?.agent === 'Codex'
+        ),
+      };
+      const codexDeletedUserMessageCount = agents.codex
+        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+        : 0;
+
+      services.chat.visitThread(threadId as EARS.EntityId);
+
+      // Unified `thread.revert` brain event — the `kind` discriminator
+      // tells the claude-code flow which variant to run.
+      tell('brain', {
+        type: 'TRIGGER_BRAIN_EVENT',
+        eventType: 'thread.revert',
+        payload: {
+          threadId,
+          messageId,
+          kind: restoreFiles ? 'rewind' : 'revert',
+          deletedMessageIds: deletion.deletedIds,
+          deletedUserMessageCount,
+          agents,
+          codexDeletedUserMessageCount,
+          ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+        },
+      });
+      committed();
+    },
+  };
 }
 
 export const answers = threadsSpec.answers({
@@ -386,6 +453,12 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
+  APPLY_THREAD_REVERT: async ({ args, signal }) => {
+    let accepted = false;
+    await runThreadHistoryOperation(prepareThreadRevert(args, () => { accepted = true; }), signal);
+    signal.throwIfAborted();
+    return { accepted };
+  },
   FORK_THREAD: async ({ args, client, signal }) => {
       const { messageId, threadId, threadTopic } = args;
       if (!threadId) throw new Error('There is no thread to fork from');
@@ -549,71 +622,10 @@ export const threadsSystem = setup({
     },
     revertThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, client}) => {
       const request = threadsSpec.typeOf('REVERT_THREAD', event);
-      const threadId = request.threadId ?? '';
-      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
-        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
-      return { request: {kind: 'revert' as const, threadId, messageId: request.messageId, restoreFiles: request.restoreFiles, userMessageId: request.userCliUuid},
-        snapshot: readSnapshot(), readSnapshot,
-        rejected: (error: unknown) => {
-          logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});
-          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not revert: ${errorMessage(error)}`, blocks: [], forkable: false});
-        },
-        commit: () => {
-          try {
-          const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
-          const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-
-          // Stop active processes before soft-deleting so nothing races
-          // against the deletion (e.g. a stream consumer writing to messages).
-          runThreadTeardown(threadId);
-
-          const deletion = repository.chatCommands.softDeleteMessagesAfter({
-            threadId: threadId as EARS.EntityId,
-            messageId: messageId as EARS.EntityId,
-          });
-          const deletedIds = new Set(deletion.deletedIds);
-          const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-          const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
-
-          // Determine which agent flows had messages deleted so each flow can
-          // skip its revert handler when it isn't affected.
-          const agents = {
-            claudeCode: deletedMessages.some((m: any) =>
-              m.context?.cliUuid || m.context?.agent === 'Claude Code'
-            ),
-            codex: deletedMessages.some((m: any) =>
-              m.context?.agent === 'Codex'
-            ),
-          };
-          const codexDeletedUserMessageCount = agents.codex
-            ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-            : 0;
-
-          services.chat.visitThread(threadId as EARS.EntityId);
-          const show = { type: 'SHOW_THREAD' as const, threadId: threadId as EARS.EntityId };
-          if (client) sendToWindow(client, 'threads', show); else broadcast('threads', show);
-
-          // Unified `thread.revert` brain event — the `kind` discriminator
-          // tells the claude-code flow which variant to run.
-          tell('brain', {
-            type: 'TRIGGER_BRAIN_EVENT',
-            eventType: 'thread.revert',
-            payload: {
-              threadId,
-              messageId,
-              kind: restoreFiles ? 'rewind' : 'revert',
-              deletedMessageIds: deletion.deletedIds,
-              deletedUserMessageCount,
-              agents,
-              codexDeletedUserMessageCount,
-              ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
-            },
-          });
-          } catch (err) {
-            logger.error('revertThread failed', { error: err });
-          }
-        },
-      };
+      return prepareThreadRevert(request, () => {
+        const show = { type: 'SHOW_THREAD' as const, threadId: request.threadId as EARS.EntityId };
+        if (client) sendToWindow(client, 'threads', show); else broadcast('threads', show);
+      });
     }) }),
     summarizeThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, client}) => {
       const request = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
@@ -823,6 +835,7 @@ export const threadsSystem = setup({
           },
           USER_COMMAND: answers.on.USER_COMMAND,
           FORK_THREAD: answers.on.FORK_THREAD,
+          APPLY_THREAD_REVERT: answers.on.APPLY_THREAD_REVERT,
           REVERT_THREAD: {
             actions: 'revertThread',
           },

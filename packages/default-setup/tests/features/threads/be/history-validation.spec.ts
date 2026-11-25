@@ -78,6 +78,33 @@ for (const type of ['REVERT_THREAD','SUMMARIZE_THREAD'] as const) {
     expect(teardown).toHaveBeenCalledOnce()
   })
 }
+it.each([false, true])('answers the requesting composer after native revert validation (accepted: %s)', async accepted => {
+  const app = await startApp({ systems: ['threads'] })
+  await app.connect()
+  const validation = Promise.withResolvers<void>()
+  const f = fixture(vi.fn(() => validation.promise))
+  const navigation = vi.fn()
+  const off = testRootEvents.onSurfaceSend(message => {
+    if (message.to === 'default-setup/threads' && message.event.type === 'SHOW_THREAD') navigation(message)
+  })
+  try {
+    const answer = app.ask('threads', {
+      type: 'APPLY_THREAD_REVERT', threadId: f.id, messageId: f.pivot.id,
+    }, { client: 'rewind-window' })
+    await vi.waitFor(() => expect(f.validate).toHaveBeenCalled())
+    expect(repository.chatQueries.threadData(f.id)?.messages).toHaveLength(3)
+    if (accepted) validation.resolve()
+    else validation.reject(new Error('Pause the current turn before changing history.'))
+    expect(await answer).toEqual({ ok: true, value: { accepted } })
+    expect(repository.chatQueries.threadData(f.id)?.messages).toHaveLength(accepted ? 1 : 3)
+    expect(f.notify).toHaveBeenCalledTimes(accepted ? 0 : 1)
+    expect(navigation).not.toHaveBeenCalled()
+  } finally {
+    validation.resolve()
+    off()
+  }
+})
+
 it('stopping the parent aborts pending native validation and prevents late mutation',async()=>{
   const app=await startApp({systems:['threads']})
   let release!:()=>void

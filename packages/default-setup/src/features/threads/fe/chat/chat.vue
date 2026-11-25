@@ -1230,7 +1230,7 @@ function handleRevert(messageId: string, restoreFiles = false, skipConfirm = fal
   pendingRestoreFiles = restoreFiles
   pendingIsSummarize.value = false
   if (skipConfirm || threads.value.data.chatSettings?.skipRevertConfirm) {
-    doRevert(messageId)
+    void doRevert(messageId)
   } else {
     pendingRevertMessageId.value = messageId
     showRevertDialog.value = true
@@ -1251,7 +1251,7 @@ function handleSummarize(messageId: string, skipConfirm = false) {
 function confirmRevert() {
   if (pendingRevertMessageId.value) {
     if (pendingIsSummarize.value) doSummarize(pendingRevertMessageId.value)
-    else doRevert(pendingRevertMessageId.value)
+    else void doRevert(pendingRevertMessageId.value)
   }
   if (dontAskAgain.value) {
     void threadsSettings.set({ path: ['chat', 'skipRevertConfirm'], value: true })
@@ -1278,20 +1278,32 @@ function prefillInput(msg: MessageEntity | undefined) {
   })
 }
 
-function doRevert(messageId: string) {
-  if (!currentThread.value?.id) return
+async function doRevert(messageId: string) {
+  const threadId = currentThread.value?.id
+  if (!threadId) return
   const msg = allMessages.value.find(m => m.id === messageId)
-  send({
-    type: 'REVERT_THREAD',
-    messageId,
-    threadId: currentThread.value.id,
-    ...(pendingRestoreFiles && {
-      restoreFiles: true,
-      userCliUuid: (msg as any)?.context?.cliUuid || undefined,
-    }),
-  })
+  const restoreFiles = pendingRestoreFiles
+  const checkpoint = msg?.context?.cliUuid
   pendingRestoreFiles = false
-  prefillInput(msg)
+  const mayPrefill = mainComposer.value?.captureHistoryPrefillTarget()
+  try {
+    const outcome = await ask('threads', {
+      type: 'APPLY_THREAD_REVERT',
+      messageId,
+      threadId,
+      ...(restoreFiles && { restoreFiles: true, userCliUuid: typeof checkpoint === 'string' ? checkpoint : undefined }),
+    })
+    if (currentThread.value?.id !== threadId) return
+    if (!outcome.ok) {
+      toast.value?.error('Could not revert', outcome.failure.message)
+      return
+    }
+    if (outcome.value.accepted && mayPrefill?.() && !agentSelection.value && !nativeTerminalActive.value) prefillInput(msg)
+  } catch (error) {
+    if (currentThread.value?.id === threadId) {
+      toast.value?.error('Could not revert', error instanceof Error ? error.message : String(error))
+    }
+  }
 }
 
 function doSummarize(messageId: string) {

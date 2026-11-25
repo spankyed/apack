@@ -10202,6 +10202,18 @@ type ThreadsAsks = {
             threadId: EARS.EntityId;
         };
     };
+    /** Revert after native history validation and acknowledge the requesting composer. */
+    APPLY_THREAD_REVERT: {
+        args: {
+            messageId: string;
+            threadId: string;
+            restoreFiles?: boolean;
+            userCliUuid?: string;
+        };
+        answer: {
+            accepted: boolean;
+        };
+    };
     /** What a window's chat starts from */
     GET_CHAT_START: {
         answer: ChatStart;

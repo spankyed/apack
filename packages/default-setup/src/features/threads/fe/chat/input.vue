@@ -709,7 +709,14 @@ function canPresentIdleComposerNotice() {
   const editor = tiptapRef.value?.editor
   return !!editor && !hasTextContent.value && editor.isEmpty && !composerComposing.value && !hasAttachments.value && !hostPopupActive.value && !submitting.value
 }
-defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentIdleComposerNotice })
+function captureHistoryPrefillTarget(): () => boolean {
+  const editor = tiptapRef.value?.editor
+  const doc = editor?.state.doc
+  const epoch = composerEpoch.value
+  return () => !!editor && !editor.isDestroyed && tiptapRef.value?.editor === editor
+    && composerEpoch.value === epoch && editor.state.doc === doc && canPresentIdleComposerNotice()
+}
+defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentIdleComposerNotice, captureHistoryPrefillTarget })
 watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {
   if (values.some(Boolean)) paneFocusGrant.value = null
 })
