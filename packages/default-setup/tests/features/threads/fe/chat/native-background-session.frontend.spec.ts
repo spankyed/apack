@@ -17,6 +17,43 @@ it('keeps composing ownership and its bounded layout when active session changes
  }finally{app.unmount();root.remove()}
 })
 
+it('gives a plain reply the composing space and keeps its selection across disclosure', async () => {
+  const continuation = { sessionId: 'parent', continuedInSessionId: 'root', timestamp: '2026-11-05T00:00:00Z' }
+  const state = {
+    ...continuation, revision: 1, operation: 'refresh', status: 'done',
+    session: { id: '11111111', sessionId: 'root', cwd: '/owned', state: 'working', pid: 119 },
+  } satisfies ClaudeBackgroundSessionState
+  const composing = vi.fn()
+  const root = document.createElement('div')
+  document.body.append(root)
+  const app = createApp(NativeBackgroundSession, { continuation, state, canReply: true, onComposing: composing })
+  try {
+    app.mount(root)
+    const toggle = root.querySelector<HTMLButtonElement>('button[aria-label="Reply"]')!
+    toggle.click()
+    await nextTick()
+    const editor = root.querySelector('textarea')!
+    editor.value = 'Keep the child draft.'
+    editor.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+    editor.setSelectionRange(3, 12, 'backward')
+    expect(composing).toHaveBeenLastCalledWith(true)
+    toggle.click()
+    await nextTick()
+    expect(composing).toHaveBeenLastCalledWith(false)
+    expect(editor.closest('form')?.style.display).toBe('none')
+    toggle.click()
+    await nextTick()
+    expect(composing).toHaveBeenLastCalledWith(true)
+    expect(root.querySelector('textarea')).toBe(editor)
+    expect([editor.value, editor.selectionStart, editor.selectionEnd, editor.selectionDirection])
+      .toEqual(['Keep the child draft.', 3, 12, 'backward'])
+  } finally {
+    app.unmount()
+    root.remove()
+  }
+})
+
 it('interrupts the current response while retaining the separate worker Stop control',async()=>{
  const continuation={sessionId:'parent',continuedInSessionId:'root',timestamp:'2026-11-05T00:00:00Z'}
  const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'root',jobSessionId:'root',jobId:'11111111',pid:119,processStart:'start'}

@@ -1,5 +1,5 @@
 <template>
-  <section v-for="panel in panels" :key="panel.key" ref="panelElements" tabindex="-1" aria-label="Background Claude session" :aria-busy="panel.pending" class="background-session" :class="{ 'background-session--composing': richReplyActive }">
+  <section v-for="panel in panels" :key="panel.key" ref="panelElements" tabindex="-1" aria-label="Background Claude session" :aria-busy="panel.pending" class="background-session" :class="{ 'background-session--composing': replyComposing }">
     <header class="background-session__heading">
       <div class="background-session__body">
         <h3 :title="panel.session?.name || 'Background session'">{{ panel.session?.name || 'Background session' }}</h3>
@@ -25,7 +25,7 @@
       :target="state!.desktop!" :draft="draft" :draft-snapshot="draftSnapshot" :update-draft="(text: string) => updateDraft(panel.target, text)" :save-snapshot="(snapshot: ClaudeAgentDraftSnapshot) => saveSnapshot(panel.target, snapshot)" :close="() => replyOpen = false" :pending="panel.pending"
       :send="(text: string) => sendReply(panel.target, panel.session!, text, true)" />
     </div>
-    <form v-else-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" class="background-session__reply" data-native-background-reply @submit.prevent="reply(panel.target, panel.session)">
+    <form v-else-if="plainReplyAvailable && panel.session" v-show="replyOpen" class="background-session__reply" data-native-background-reply @submit.prevent="reply(panel.target, panel.session)">
       <div class="background-session__reply-heading">
         <label :for="replyInputId">Message background session</label>
         <span v-if="!draft && state?.operation === 'reply' && state.status === 'done'" role="status">Message queued</span>
@@ -60,7 +60,14 @@ const richReplyActive = computed(() => !!(props.canReply && replyOpen.value && p
   && props.state.sessionId === props.continuation.sessionId && props.state.continuedInSessionId === props.continuation.continuedInSessionId
   && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.jobSessionId === props.continuation.continuedInSessionId
   && props.state.session?.pid && ['working','blocked'].includes(props.state.session.state)))
-watch(richReplyActive, value => emit('composing', value), {immediate:true,flush:'sync'})
+const plainReplyAvailable = computed(() => {
+  const state = props.state
+  return !!(props.canReply && state?.sessionId === props.continuation.sessionId
+    && state.continuedInSessionId === props.continuation.continuedInSessionId
+    && (!state.desktop || !slots.composer) && state.session?.pid && ['working','blocked'].includes(state.session.state))
+})
+const replyComposing = computed(() => richReplyActive.value || (plainReplyAvailable.value && replyOpen.value))
+watch(replyComposing, value => emit('composing', value), {immediate:true,flush:'sync'})
 let submitted: {
   text: string; revision: number; rich: boolean; jobId: string; jobSessionId: string; pid: number; desktopOwner?: string
   resolve(value: ClaudeAgentComposerSubmitResult): void; reject(error: Error): void
