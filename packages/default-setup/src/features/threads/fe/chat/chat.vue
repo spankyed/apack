@@ -55,7 +55,7 @@
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :approval-pending="!!pendingNativeApproval" :panel-decision-pending="!!pendingNativePlan || !!pendingNativeQuestion" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent">
           <template #decision="{ restoreFocus }">
             <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-              <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
+              <NativePlanPanel :key="nativePlanReviewKey" v-bind="pendingNativePlan" v-model:review="nativePlanReviewDraft"
                 @respond="respondNativePlan"
                 @pause="pauseNativeDecision" />
             </div>
@@ -154,7 +154,7 @@
               @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativePlan && !focusedAgent" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
+            <NativePlanPanel :key="nativePlanReviewKey" v-bind="pendingNativePlan" v-model:review="nativePlanReviewDraft"
               @respond="respondNativePlan"
               @pause="pauseNativeDecision" />
           </div>
@@ -272,7 +272,7 @@ import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
 import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
-import { provide, ref, shallowReactive, computed, watch, watchPostEffect, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { provide, ref, shallowRef, shallowReactive, computed, watch, watchPostEffect, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
 import { claudeMcpTaskStatusLabel } from '#features/code/common/native-mcp-task.ts'
 import { readClaudeDecisionPauseScope, type ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createScrollPositioning } from './scroll-positioning.ts'
@@ -329,7 +329,7 @@ import ChatInput from './input.vue'
 import { ClaudeGenericToolPermissionApprovalSchema, ClaudeToolPermissionApprovalSchema } from '#features/code/common/native-tool-permission.ts'
 import NativeToolApproval from './NativeToolApproval.vue'
 import { ClaudeBashApprovalPresentationSchema } from '#features/code/common/native-bash-approval.ts'
-import NativePlanPanel from './NativePlanPanel.vue'
+import NativePlanPanel, { type ClaudePlanReviewDraft } from './NativePlanPanel.vue'
 import { ClaudePlanPresentationSchema } from '#features/code/common/native-plan.ts'
 import { selectClaudeFocusMessages } from './native-focus-messages.ts'
 import { ClaudeWorkflowApprovalSchema } from '#features/code/common/native-workflow-approval.ts'
@@ -913,6 +913,22 @@ const pendingNativePlan = computed(() => {
   if (!presentation.success || !message) return undefined
   return { messageId: pending.approvalMessageId, pauseScope: readClaudeDecisionPauseScope(pending), entering: pending.toolName === 'EnterPlanMode', presentation: presentation.data, reason: typeof native.reason === 'string' ? native.reason : undefined, disabled: !!message.responseTimestamp }
 })
+
+// A fresh action revision or app message can authorize the same original plan request.
+const nativePlanReviewKey = computed(() => {
+  const plan = pendingNativePlan.value, scope = plan?.pauseScope
+  return scope ? JSON.stringify([scope.ownerId, scope.sessionId, scope.id, scope.requestId, scope.toolName]) : plan?.messageId
+})
+
+const retainedPlanReview = shallowRef<{ key: string; draft: ClaudePlanReviewDraft }>()
+const nativePlanReviewDraft = computed<ClaudePlanReviewDraft | undefined>({
+  get: () => retainedPlanReview.value?.key === nativePlanReviewKey.value ? retainedPlanReview.value?.draft : undefined,
+  set: draft => {
+    const key = nativePlanReviewKey.value
+    if (key && draft) retainedPlanReview.value = { key, draft }
+  },
+})
+watch(() => currentThread.value?.id, () => { retainedPlanReview.value = undefined }, { flush: 'sync' })
 
 const focusedAgentUiMount = computed(() => {
   const target = focusedAgent.value?.target, threadId = currentThread.value?.id

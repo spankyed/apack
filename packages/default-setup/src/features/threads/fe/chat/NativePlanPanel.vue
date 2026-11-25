@@ -12,22 +12,89 @@
       </template>
       <p v-if="presentation.planFilePath" class="path">{{ presentation.planFilePath }}</p>
       <p v-if="reason" class="muted">{{ reason }}</p>
-      <fieldset v-if="presentation.choices.length" class="choices"><legend>{{ entering ? 'Continue with' : 'Context and permissions' }}</legend><label v-for="option in presentation.choices" :key="option.value"><input v-model="selected" type="radio" name="native-plan-choice" :value="option.value" :disabled="disabled" /><span>{{ option.label }}</span></label></fieldset>
+      <fieldset v-if="presentation.choices.length" class="choices">
+        <legend>{{ entering ? 'Continue with' : 'Context and permissions' }}</legend>
+        <p v-if="review.choiceWithdrawn" role="status" class="muted">That option is no longer available. Choose how to continue.</p>
+        <label v-for="option in presentation.choices" :key="option.value">
+          <input v-model="selected" type="radio" name="native-plan-choice" :value="option.value" :disabled="disabled" />
+          <span>{{ option.label }}</span>
+        </label>
+      </fieldset>
       <label v-if="!entering" class="feedback"><span>Feedback for Claude</span><textarea v-model="feedback" aria-label="Plan feedback" maxlength="4000" rows="2" :disabled="disabled" placeholder="Tell Claude what to change, or add a note to your approval" /></label>
     </div>
-    <footer><button type="button" class="quiet" :disabled="disabled" @click="emit('pause', pauseScope)">{{ cancelLabel ?? 'Cancel' }}</button><div class="decisions"><button type="button" class="secondary" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">{{ entering ? 'Decline' : 'Keep planning' }}</button><button v-if="presentation.choices.length" type="button" class="primary" :disabled="disabled || !selected" @click="approve">{{ entering ? 'Enter plan mode' : 'Approve plan' }}</button></div></footer>
+    <footer><button type="button" class="quiet" :disabled="disabled" @click="emit('pause', pauseScope)">{{ cancelLabel ?? 'Cancel' }}</button><div class="decisions"><button type="button" class="secondary" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">{{ entering ? 'Decline' : 'Keep planning' }}</button><button v-if="presentation.choices.length" type="button" class="primary" :disabled="disabled || !selectedChoice" @click="approve">{{ entering ? 'Enter plan mode' : 'Approve plan' }}</button></div></footer>
   </section>
 </template>
+<script lang="ts">
+import type { ClaudePlanPresentation as PlanPresentation } from '#features/code/common/native-plan.ts'
+export interface ClaudePlanReviewDraft {
+  original: { plan: string; path?: string; empty: boolean; withheld: boolean }
+  draft: string
+  feedback: string
+  editing: boolean
+  choice?: PlanPresentation['choices'][number]
+  choiceWithdrawn: boolean
+}
+</script>
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import type { ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import type { ClaudePlanPresentation } from '#features/code/common/native-plan.ts'
 const props = defineProps<{ entering: boolean; pauseScope?: ClaudeDecisionPauseScope; cancelLabel?: string; presentation: ClaudePlanPresentation; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; choice?: string; reason?: string; plan?: string }]; pause: [scope?: ClaudeDecisionPauseScope] }>()
-const draft = ref(props.presentation.plan), feedback = ref(''), editing = ref(false)
-const selected = ref(props.presentation.initialChoice)
-function approve() { emit('respond', { approved: true, choice: selected.value, reason: feedback.value.trim() || undefined, ...(!props.entering && !props.presentation.empty && draft.value !== props.presentation.plan ? { plan: draft.value } : {}) }) }
+const sharedReview = defineModel<ClaudePlanReviewDraft>('review')
+const original = (presentation: ClaudePlanPresentation) => ({
+  plan: presentation.plan, path: presentation.planFilePath, empty: presentation.empty, withheld: presentation.withheld,
+})
+const initial = (presentation: ClaudePlanPresentation): ClaudePlanReviewDraft => ({
+  original: original(presentation),
+  draft: presentation.plan,
+  feedback: '',
+  editing: false,
+  choice: presentation.choices.find(choice => choice.value === presentation.initialChoice),
+  choiceWithdrawn: false,
+})
+const review = ref(sharedReview.value ?? initial(props.presentation))
+function updateReview(changes: Partial<ClaudePlanReviewDraft>) {
+  const next = { ...review.value, ...changes }
+  review.value = next
+  sharedReview.value = next
+}
+
+const draft = computed({ get: () => review.value.draft, set: draft => updateReview({ draft }) })
+const feedback = computed({ get: () => review.value.feedback, set: feedback => updateReview({ feedback }) })
+const editing = computed({ get: () => review.value.editing, set: editing => updateReview({ editing }) })
+const selectedChoice = computed(() => {
+  const selected = review.value.choice
+  return props.presentation.choices.find(choice => selected && choice.value === selected.value
+    && choice.mode === selected.mode && choice.clearContext === selected.clearContext)
+})
+const selected = computed({
+  get: () => selectedChoice.value?.value ?? '',
+  set: value => updateReview({ choice: props.presentation.choices.find(choice => choice.value === value), choiceWithdrawn: false }),
+})
+
+watch(() => props.presentation, current => {
+  const source = original(current), previous = review.value.original
+  if (source.plan !== previous.plan || source.path !== previous.path
+    || source.empty !== previous.empty || source.withheld !== previous.withheld) {
+    updateReview(initial(current))
+  } else if (review.value.choice && !selectedChoice.value) {
+    updateReview({ choice: undefined, choiceWithdrawn: true })
+  }
+}, { immediate: true })
+
+function approve() {
+  const choice = selectedChoice.value
+  if (props.disabled || !choice) return
+  emit('respond', {
+    approved: true,
+    choice: choice.value,
+    reason: feedback.value.trim() || undefined,
+    ...(!props.entering && !props.presentation.empty && draft.value !== props.presentation.plan ? { plan: draft.value } : {}),
+  })
+}
 </script>
 <style scoped>
 .plan-panel { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; border:1px solid rgb(255 255 255 / .1); border-radius:12px; background:#232323; color:#e5e5e5; }
