@@ -643,7 +643,7 @@ function editNativePrompt(edit: import('#generated/types.ts').ClaudePromptEdit) 
 }
 let heartbeat: ReturnType<typeof setInterval> | undefined
 let stopNativeUiWatch: (() => void) | undefined
-function detachNativeUi(nextThreadId = currentThread.value?.id) {
+function detachNativeUi(nextThreadId = currentThread.value?.id, retiredOwnerId?: string) {
   nativeClientSequence=0
   if (heartbeat) clearInterval(heartbeat)
   heartbeat = undefined
@@ -658,7 +658,7 @@ function detachNativeUi(nextThreadId = currentThread.value?.id) {
     unmountView('CLAUDE_UI_UNMOUNT', mount)
     const pending = pendingNativeSends.get(mount.threadId)
     if (pending?.mount.mountId !== mount.mountId) unmountView('CLAUDE_TERMINAL_UNMOUNT', mount)
-    else if (mount.threadId === nextThreadId) {
+    else if (mount.threadId === nextThreadId && pending.ownerId !== retiredOwnerId) {
       finishNativeSend(pending)
       pending.reject(new Error('Claude conversation view changed'))
     } else {
@@ -687,9 +687,9 @@ function pressNativeUi(actionId: string, href?: string) {
   const mount = nativeUiMount.value
   if (mount) send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
-function mountNativeUi() {
+function mountNativeUi(retiredOwnerId?: string) {
   const threadId = currentThread.value?.id, owner = taskView.value?.[1].state
-  detachNativeUi(threadId)
+  detachNativeUi(threadId, retiredOwnerId)
   if (!threadId || !currentThread.value?.context?.claudeCode || nativeTerminalActive.value || agentSelection.value || owner?.ownerId && owner.view?.kind !== 'main') return
   nativeUiMount.value = { threadId, mountId: crypto.randomUUID() }
   renewNativeUi()
@@ -703,7 +703,18 @@ function reconnectNativeUi() {
 onMounted(() => {
   window.addEventListener('focus', renewNativeUi)
   window.addEventListener('blur', renewNativeUi)
-  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0, () => !!agentSelection.value], mountNativeUi, { immediate: true })
+  stopNativeUiWatch = watch([
+    () => currentThread.value?.id,
+    () => !!currentThread.value?.context?.claudeCode,
+    () => nativeTerminalActive.value,
+    () => taskView.value?.[1].state?.ownerId,
+    () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0,
+    () => !!agentSelection.value,
+  ], ([threadId, , , ownerId], [previousThreadId, , , previousOwnerId]) => {
+    // The task view can report broker loss before the composer receives the final receipt.
+    const retiredOwnerId = threadId === previousThreadId && ownerId !== previousOwnerId ? previousOwnerId : undefined
+    mountNativeUi(retiredOwnerId)
+  }, { immediate: true })
 })
 onUnmounted(() => {
   window.removeEventListener('focus', renewNativeUi)
@@ -1018,14 +1029,17 @@ watch(nativeTerminalViews, views => {
   }
 })
 function settleNativeSend(pending: PendingNativeSend, view: typeof nativeComposerView.value) {
-  if (view?.state?.ownerId !== pending.ownerId || ['exited', 'error'].includes(view.state.status)) {
+  const state = view?.state, result = view?.submission
+  const matching = result?.ownerId === pending.ownerId && result.revision === pending.revision
+  // Losing the writer does not invalidate an admitted receipt for this exact session.
+  const admitted = matching && result.status === 'accepted' && result.receipt?.sessionId === pending.sessionId
+  if (state?.ownerId !== pending.ownerId || !admitted && (state.status === 'exited' || state.status === 'error')) {
     finishNativeSend(pending); pending.reject(new Error('Claude conversation owner changed')); return
   }
-  const result = view.submission
-  if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision) {
+  if (!matching) {
     // A request that has not been admitted cannot follow the owner into the next session.
     // A matching pending command can reset its own session and still acknowledge completion.
-    if (view.state.sessionId !== pending.sessionId) {
+    if (state.sessionId !== pending.sessionId) {
       finishNativeSend(pending)
       pending.reject(new Error(CLAUDE_STALE_DRAFT_MESSAGE))
     }
@@ -1034,7 +1048,11 @@ function settleNativeSend(pending: PendingNativeSend, view: typeof nativeCompose
   if (result.status === 'pending') return
   finishNativeSend(pending)
   if (result.status === 'accepted') {
-    if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.mount.threadId, pending.stageRevision)
+    if (result.receipt && !admitted) {
+      pending.reject(new Error(CLAUDE_STALE_DRAFT_MESSAGE))
+      return
+    }
+    if (admitted && pending.stageRevision) commitClaudeComposerPhase(pending.mount.threadId, pending.stageRevision)
     if (result.command?.kind === 'review') pending.resolve({ review: result.command })
     else if (result.command?.kind === 'confirmation') pending.resolve({ commandPending: true, revision: result.revision })
     else if (result.command?.kind === 'ultraplan_settled' && result.command.draft) pending.resolve({ returnedDraft: result.command.draft })
