@@ -225,3 +225,92 @@ describe('stopping the API process', () => {
     expect(exits, 'the supervisor heard nothing to restart').toEqual([]);
   });
 });
+
+function fakeProcess(): {
+  child: ManagedProcess;
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+} {
+  const stdout = new EventEmitter();
+  const stderr = new EventEmitter();
+  const child = Object.assign(new EventEmitter(), {
+    pid: 7777,
+    stdout,
+    stderr,
+    postMessage() {},
+    kill() { return true; },
+  }) as unknown as ManagedProcess;
+  return { child, stdout, stderr };
+}
+
+describe('ProcessManager readiness, fatal stderr, and error handling', () => {
+  it('signals ready once from structured parentPort message and deduplicates stdout fallback', () => {
+    const readyPorts: number[] = [];
+    const { child, stdout } = fakeProcess();
+    const manager = new ProcessManager({ onReady: (port) => readyPorts.push(port) });
+    manager.setProcess(child);
+
+    // Malformed payloads are ignored
+    child.emit('message', null);
+    child.emit('message', { type: 'ready', port: 0 });
+    child.emit('message', { type: 'ready', port: 3001.5 });
+    child.emit('message', { type: 'other', port: 3001 });
+    expect(readyPorts).toEqual([]);
+
+    child.emit('message', { type: 'ready', port: 3456 });
+    stdout.emit('data', Buffer.from('✅ WebSocket Server listening on ws://localhost:3456\n'));
+    child.emit('message', { type: 'ready', port: 3456 });
+
+    expect(readyPorts).toEqual([3456]);
+  });
+
+  it('falls back to stdout readiness line when no structured ready message arrives', () => {
+    const readyPorts: number[] = [];
+    const { child, stdout } = fakeProcess();
+    const manager = new ProcessManager({ onReady: (port) => readyPorts.push(port) });
+    manager.setProcess(child);
+
+    stdout.emit('data', Buffer.from('✅ WebSocket Server listening on ws://localhost:3009\n'));
+    stdout.emit('data', Buffer.from('✅ WebSocket Server listening on ws://localhost:3009\n'));
+
+    expect(readyPorts).toEqual([3009]);
+  });
+
+  it('reassembles __fatal JSON lines split across stderr chunks and flushes trailing buffer on exit', () => {
+    const { child, stderr } = fakeProcess();
+    const manager = new ProcessManager({});
+    manager.setProcess(child);
+
+    const firstFatal = JSON.stringify({ __fatal: true, message: 'boom', stack: 'Error: boom\n  at boot', source: 'setupBackend' });
+    const splitAt = Math.floor(firstFatal.length / 2);
+    stderr.emit('data', Buffer.from(`some warning\n${firstFatal.slice(0, splitAt)}`));
+    expect(manager.getFatalErrors()).toEqual([]);
+
+    stderr.emit('data', Buffer.from(`${firstFatal.slice(splitAt)}\n`));
+    expect(manager.getFatalErrors()).toEqual([
+      { message: 'boom', stack: 'Error: boom\n  at boot', source: 'setupBackend' },
+    ]);
+
+    // Trailing unterminated fatal line flushed on process exit
+    const trailingFatal = JSON.stringify({ __fatal: true, message: 'trailing', source: 'exit' });
+    stderr.emit('data', Buffer.from(trailingFatal));
+    expect(manager.getFatalErrors()).toHaveLength(1);
+
+    child.emit('exit', 1);
+    expect(manager.getFatalErrors()).toEqual([
+      { message: 'boom', stack: 'Error: boom\n  at boot', source: 'setupBackend' },
+      { message: 'trailing', stack: undefined, source: 'exit' },
+    ]);
+  });
+
+  it('formats UtilityProcess FatalError (type, location, report) arguments into an Error', () => {
+    const errors: Error[] = [];
+    const { child } = fakeProcess();
+    const manager = new ProcessManager({ onError: (error) => errors.push(error) });
+    manager.setProcess(child);
+
+    child.emit('error', 'FatalError', 'v8::Heap::CheckMemory', 'OOM');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toBe('FatalError: v8::Heap::CheckMemory: OOM');
+  });
+});

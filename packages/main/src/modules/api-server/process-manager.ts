@@ -32,6 +32,7 @@ export class ProcessManager {
   private exited = false;
   private stopping?: Promise<void>;
   private lastStderr = '';
+  private stderrBuffer = '';
   private fatalErrors: { message: string; stack?: string; source?: string }[] = [];
 
   constructor(handlers: ProcessHandlers = {}) {
@@ -43,12 +44,48 @@ export class ProcessManager {
     this.serverReady = false;
     this.exited = false;
     this.lastStderr = '';
+    this.stderrBuffer = '';
     this.fatalErrors = [];
     this.attachHandlers();
   }
 
+  private markReady(port: number): void {
+    if (this.serverReady) return;
+    this.serverReady = true;
+    this.handlers.onReady?.(port);
+  }
+
+  private parseFatalLine(line: string): void {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{"__fatal":')) return;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.__fatal) {
+        const entry = { message: parsed.message, stack: parsed.stack, source: parsed.source };
+        this.fatalErrors.push(entry);
+        broadcastEvent('api:fatal', entry);
+      }
+    } catch { /* not valid JSON, ignore */ }
+  }
+
+  private flushStderrBuffer(): void {
+    if (!this.stderrBuffer) return;
+    const trailing = this.stderrBuffer;
+    this.stderrBuffer = '';
+    this.parseFatalLine(trailing);
+  }
+
   private attachHandlers(): void {
     if (!this.process) return;
+
+    // Structured control messages from the utility process's `parentPort`
+    this.process.on('message', (message: unknown) => {
+      if (!message || typeof message !== 'object') return;
+      const payload = message as { type?: unknown; port?: unknown };
+      if (payload.type === 'ready' && typeof payload.port === 'number' && Number.isInteger(payload.port) && payload.port > 0) {
+        this.markReady(payload.port);
+      }
+    });
 
     // Stdout handling
     if (this.process.stdout) {
@@ -73,13 +110,11 @@ export class ProcessManager {
           });
         }
         
-        // Check for server ready message (only trigger once)
+        // Fallback readiness detection if the child did not send `{ type: 'ready', port }` over `parentPort`
         if (!this.serverReady && message.includes('WebSocket Server listening')) {
           const portMatch = message.match(/ws:\/\/localhost:(\d+)/);
-          if (portMatch && this.handlers.onReady) {
-            const port = parseInt(portMatch[1], 10);
-            this.serverReady = true;
-            this.handlers.onReady(port);
+          if (portMatch) {
+            this.markReady(parseInt(portMatch[1], 10));
           }
         }
 
@@ -98,18 +133,12 @@ export class ProcessManager {
         const isDev = !app.isPackaged;
         this.lastStderr = message.trim();
 
-        // Check for structured fatal error JSON line from backend
-        for (const line of message.split('\n')) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('{"__fatal":')) {
-            try {
-              const parsed = JSON.parse(trimmed);
-              if (parsed.__fatal) {
-                this.fatalErrors.push({ message: parsed.message, stack: parsed.stack, source: parsed.source });
-                broadcastEvent('api:fatal', { message: parsed.message, stack: parsed.stack, source: parsed.source });
-              }
-            } catch { /* not valid JSON, ignore */ }
-          }
+        // Line-buffered parse for structured fatal error JSON lines so long stacks split across pipe chunks are kept intact
+        this.stderrBuffer += message;
+        const lines = this.stderrBuffer.split('\n');
+        this.stderrBuffer = lines.pop() ?? '';
+        for (const line of lines) {
+          this.parseFatalLine(line);
         }
 
         // Always log errors in production for debugging
@@ -127,6 +156,10 @@ export class ProcessManager {
         this.handlers.onStderr?.(message);
       });
 
+      this.process.stderr.on('end', () => {
+        this.flushStderrBuffer();
+      });
+
       this.process.stderr.on('error', (error) => {
         console.error('Process stderr error:', error);
       });
@@ -134,6 +167,7 @@ export class ProcessManager {
 
     // Process exit handling (`UtilityProcess` emits `(code: number)` with no separate signal parameter)
     this.process.on('exit', (code: number) => {
+      this.flushStderrBuffer();
       this.exited = true;
       console.log(`Process exited with code ${code}`);
       this.handlers.onExit?.(code, null);
@@ -150,6 +184,7 @@ export class ProcessManager {
   }
 
   cleanup(): void {
+    this.stderrBuffer = '';
     if (!this.process) return;
 
     // Remove all listeners
