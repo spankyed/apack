@@ -162,6 +162,23 @@ it('expires plan choices when native eligibility changes and withholds unsafe pl
   await f.reply(withheld, { choice: 'no', feedback: 'Shorter plan please' })
   expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny', feedback: 'Shorter plan please' })
 })
+it('keeps an offered Keep context approval current through native pre-plan bookkeeping changes', async () => {
+  const f = planFixture()
+  const permission = f.context.getAppState().toolPermissionContext
+  permission.isAutoModeAvailable = false
+  const dialog = await f.snapshot()
+  permission.prePlanMode = 'acceptEdits'
+  f.native.planAuto.yp = () => true
+  expect((await f.snapshot()).revision).toBe(dialog.revision)
+
+  await f.reply(dialog, { choice: 'yes-accept-edits-keep-context', plan: '# Reviewed plan' })
+  expect(f.native.planAuto.Fx).toHaveBeenCalledExactlyOnceWith(false)
+  expect(f.answer).toHaveBeenCalledExactlyOnceWith('dialog-1', {
+    behavior: 'allow',
+    updatedInput: { plan: '# Reviewed plan' },
+    permissionUpdates: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }],
+  })
+})
 it('queues native clear-context continuation and resolves with the native denial-shaped result', async () => {
   const f = planFixture(); f.context.getAppState().settings.showClearContextOnPlanAccept = true
   const dialog = await f.snapshot()

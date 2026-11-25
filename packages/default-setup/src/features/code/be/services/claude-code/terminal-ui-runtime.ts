@@ -974,6 +974,8 @@ function nativeDialog(n,kind){
  }
  let revision=dialogRevisions.get(kind);
  const planFacts=['permission_enter_plan_mode','permission_exit_plan_mode_v2'].includes(kind)?planPresentation(n,context,payload):undefined;
+ // Plan consent already binds the original payload, current mode and eligible choices.
+ // Pre-plan bookkeeping is read live when applying the chosen mode.
  const fingerprint=JSON.stringify([payload,planFacts]);
  if(revision?.fingerprint!==fingerprint||revision?.item!==item||revision?.payload!==payload||revision?.sessionId!==sessionId)
   revision={item,payload,sessionId,fingerprint,revision:randomUUID()};
@@ -995,7 +997,7 @@ function planPresentation(n,context,payload){
   add('yes-default-keep-context','Keep context and manually approve edits','default');
  }
  return {plan:withheld?'':raw,...(typeof payload.planFilePath==='string'?{planFilePath:payload.planFilePath}:{}),empty,withheld,choices,initialChoice:state.proactivityLevel==='ask'&&n.planProactivity.BG()&&choices.some(option=>option.value==='yes-default-keep-context')&&!choices.some(option=>option.value==='yes-resume-auto-mode')?'yes-default-keep-context':choices[0]?.value??'',
-  permissionMode:permission.mode,prePlanMode:permission.prePlanMode,autoActive:n.planAuto.yp()};
+  permissionMode:permission.mode};
 }
 async function answerPlan(n,d,request,signal){
  if(request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native plan feedback');
@@ -1366,7 +1368,7 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_plan_dialogs'){
   let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');if(!d.item)return {dialogs:[]};
-  const{permissionMode,prePlanMode,autoActive,...presentation}=d.planFacts;
+  const{permissionMode,...presentation}=d.planFacts;
   return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:d.payload.toolName,input:d.payload.input,presentation,...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{})}]};
  }
  if(request.subtype==='apack_answer_plan_dialog'){
