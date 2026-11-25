@@ -1,0 +1,29 @@
+{
+  "name": "@apackdev/pack-format",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Workers-safe pack manifest, snapshot, content index, layout and host compatibility contracts",
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "schema:check": "node --conditions=@apackdev/source scripts/generate-schema.ts --check",
+    "schema:update": "node --conditions=@apackdev/source scripts/generate-schema.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./apack.schema.json": "./apack.schema.json"
+  },
+  "dependencies": {
+    "@apackdev/sdk": "*",
+    "@elmdb/ears": "0.1.0",
+    "semver": "^7.8.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/semver": "^7.8.0",
+    "esbuild": "^0.25.0",
+    "vscode-json-languageservice": "^5.7.2"
+  }
+}

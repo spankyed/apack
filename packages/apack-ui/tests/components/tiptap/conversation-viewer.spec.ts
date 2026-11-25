@@ -2,7 +2,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { Extension, type Editor } from '@tiptap/core'
 import { createApp, h, nextTick, ref, type App } from 'vue'
-import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
+import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing/fe'
 import type MarkdownIt from 'markdown-it'
 import type { TextEditorExtensionsBinding } from '@apackdev/sdk/fe'
 import ConversationViewer from '../../../src/components/tiptap/ConversationViewer.vue'

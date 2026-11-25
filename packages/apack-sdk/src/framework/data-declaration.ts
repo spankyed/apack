@@ -27,7 +27,7 @@ export interface PackEmbedDeclaration extends EmbedDeclaration {
 }
 
 /** A language a text index stems in (ISO 639-1): Snowball's, as elmdb names them */
-export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
+export type SearchStemLanguage = (typeof SEARCH_STEM_LANGUAGES)[number];
 
 /** A text index as a manifest declares it: the engine's `SearchDeclaration`, its language one elmdb stems in */
 export interface PackSearchDeclaration extends SearchDeclaration {
@@ -148,16 +148,16 @@ export function _shortCodeTypes(rules: ReadonlyArray<readonly [string, Partial<R
   };
 }
 
-/** @internal The languages a text index stems in: Snowball's, as elmdb names them (ISO 639-1) */
-export const _SEARCH_STEM_LANGUAGES = ['ar', 'da', 'de', 'el', 'en', 'es', 'fi', 'fr', 'hu', 'it', 'nl', 'no', 'pt', 'ro', 'ru', 'sv', 'ta', 'tr'] as const;
+/** The languages a text index stems in: Snowball's, as elmdb names them (ISO 639-1) */
+export const SEARCH_STEM_LANGUAGES = ['ar', 'da', 'de', 'el', 'en', 'es', 'fi', 'fr', 'hu', 'it', 'nl', 'no', 'pt', 'ro', 'ru', 'sv', 'ta', 'tr'] as const;
 
-/** An entity type's name: PascalCase, as the database holds a type's */
+/** @internal An entity type's name: PascalCase, as the database holds a type's */
 export const _ENTITY_NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
 
-/** A field the database is told of, one a shape requires or an entry indexes: lowerCamelCase, as it holds a field's */
+/** @internal A field the database is told of, one a shape requires or an entry indexes: lowerCamelCase, as it holds a field's */
 export const _FIELD_NAME_PATTERN = /^[a-z][A-Za-z0-9]*$/;
 
-/** A relation kind's or a role's stored name: snake_case, its generated EARS constant the same in uppercase */
+/** @internal A relation kind's or a role's stored name: snake_case, its generated EARS constant the same in uppercase */
 export const _WIRE_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 /** The flat EARS constants of a list of wire names, refusing an invalid or repeated one */

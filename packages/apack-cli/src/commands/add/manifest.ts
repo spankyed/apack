@@ -1,5 +1,5 @@
 import { hasOwn } from '@apackdev/sdk/utils/pure';
-import type { PackManifest, PackFeatureEntry, StepEntry, MigrationLine, PackMigrationDeclaration } from '@apackdev/sdk/build';
+import type { PackManifest, PackFeatureEntry, StepEntry, MigrationLine, PackMigrationDeclaration } from '@apackdev/pack-format';
 
 export { readManifest } from '../../utils';
 

@@ -107,7 +107,7 @@ export interface PackRegistration {
   features?: Record<string, PackFeature>;
   services?: Record<string, unknown>;
   /** Generated runtime service binding; the host supplies accepted caller authority and records its revocation. */
-  bindServices?: (access: import('../services/index.ts').PackServiceAccess) => () => void;
+  bindServices?: (access: import('../services/pack-service-access.ts').PackServiceAccess) => () => void;
   ears?: PackEARS;
   /** The pack's repositories by name (apack.json `features[].repositories`), registered with the app's engine */
   repositories?: Record<string, unknown>;

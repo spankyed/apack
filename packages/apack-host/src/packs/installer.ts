@@ -7,15 +7,17 @@ import * as path from 'path';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
 import { isDeepStrictEqual } from 'node:util';
-import { parse, satisfies } from 'semver';
 import { replaceDir } from '../replace-dir.ts';
 import { DOWNLOAD_TIMEOUT_MS, fetchReleaseAsset, githubFetch, type GitHubReleaseAsset } from './github.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
-import { parseManifest } from '@apackdev/sdk/build';
+import { isHostCompatible, parseManifest } from '@apackdev/pack-format';
+import { settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
+
+export { isHostCompatible } from '@apackdev/pack-format';
 import {
   PACK_LAYOUT,
   assertChecksum,
@@ -104,32 +106,14 @@ function readValidManifest(dir: string): PackManifest {
     throw new Error('apack.json is not valid JSON');
   }
 
-  const { diagnostics } = parseManifest(raw);
+  const parsed = parseManifest(raw);
+  const diagnostics = parsed.diagnostics.length > 0
+    ? parsed.diagnostics
+    : settingsDeclarationDiagnostics(raw as PackManifest);
   if (diagnostics.length > 0) {
     throw new Error(`Invalid apack.json:\n${diagnostics.map(({ message }) => `  - ${message}`).join('\n')}`);
   }
   return raw as PackManifest;
-}
-
-/**
- * Whether an app at `appVersion` satisfies a pack's `hostVersion` range.
- *
- * A prerelease counts as its release, the same rule the migrations runner states: `0.4.0-beta.2` runs
- * the `0.4.0` migrations, and here it installs the packs that ask for `>=0.4.0`. Semver orders a
- * prerelease *before* its release, so without this a beta refuses every pack that requires the release
- * it is a beta of — which is the release those packs are being tested against. The trade is the same
- * one migrations already take: a pack asking for `>=0.4.0` installs on an early beta that may not have
- * everything it needs yet.
- */
-export function isHostCompatible(hostRange: string | undefined, appVersion: string): boolean {
-  if (!hostRange) return true;
-  try {
-    const parsed = parse(appVersion);
-    const asRelease = parsed && parsed.prerelease.length > 0 ? `${parsed.major}.${parsed.minor}.${parsed.patch}` : appVersion;
-    return satisfies(asRelease, hostRange, { includePrerelease: true });
-  } catch {
-    return false;
-  }
 }
 
 function assertHostCompatible(manifest: PackManifest, hostVersion?: string): void {

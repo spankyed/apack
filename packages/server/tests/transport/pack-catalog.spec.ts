@@ -30,7 +30,7 @@ it('includes disabled installed declarations while no runtime is registered', as
   const manifest = { id: 'disabled-pack', name: 'Disabled', version: '1.0.0', features: {
     view: { description: 'Feature declaration fixture.', surface: { label: 'Disabled view', state: 'do-not-load.ts' } },
   } };
-  const { _declarationRevision, PACK_SNAPSHOT_FORMAT } = await import('@apackdev/sdk/build');
+  const { _declarationRevision, PACK_SNAPSHOT_FORMAT } = await import('@apackdev/pack-format');
   catalog.replace([{ dir: '/isolated/disabled-pack', enabled: false, snapshot: {
     format: PACK_SNAPSHOT_FORMAT, declarationRevision: _declarationRevision(manifest), manifest, types: { entities: {}, relKinds: {}, roles: {} }, entityDestinations: {}, eventContracts: { view: { surface: { receives: [] } } }, facades: {},
   } }]);

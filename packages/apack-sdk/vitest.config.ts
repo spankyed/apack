@@ -15,12 +15,9 @@ const setupFiles = [
 const PURE_DIRS = ['build', 'utils', 'ids', 'events', 'framework', 'steps', 'services'] as const;
 // Specs inside PURE_DIRS that use bindHost, XState, process.env writes, or global spies stay isolated.
 const PURE_DIR_ISOLATED = [
-  'tests/build/content-compiler.spec.ts',
   'tests/build/flow-compiler.spec.ts',
   'tests/build/flow-dsl-validator.spec.ts',
   'tests/build/flow-round-trip.spec.ts',
-  'tests/build/generate-entries/entries.spec.ts',
-  'tests/build/manifest-editor.spec.ts',
   'tests/events/calls.spec.ts',
   'tests/events/define-events.spec.ts',
   'tests/framework/define-system-actions.spec.ts',

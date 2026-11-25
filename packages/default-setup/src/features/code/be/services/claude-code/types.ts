@@ -3,7 +3,8 @@
  *
  * The CLI is fast-moving and routinely adds fields; every object schema uses
  * `.passthrough()` so unknown fields survive round-trips and we only validate
- * the bits we actually read. Inferred TS types are exported next to each schema.
+ * the bits we actually read. Explicit TS types are exported next to each schema
+ * so pack-types.d.ts stays free of Zod types.
  *
  * Source of truth for field shapes: the stream-json writer at
  * `src/cli/structuredIO.ts` and the SDK Zod schemas at
@@ -26,7 +27,15 @@ import { z } from 'zod'
  * permission resolver entirely; `auto` is feature-gated and uses an ML
  * classifier instead of prompting.
  */
-export const PermissionModeSchema = z.enum([
+export type PermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'plan'
+  | 'bypassPermissions'
+  | 'dontAsk'
+  | 'auto'
+
+export const PermissionModeSchema: z.ZodType<PermissionMode> = z.enum([
   'default',
   'acceptEdits',
   'plan',
@@ -34,18 +43,26 @@ export const PermissionModeSchema = z.enum([
   'dontAsk',
   'auto',
 ])
-export type PermissionMode = z.infer<typeof PermissionModeSchema>
 
-export const ThinkingSchema = z.enum(['enabled', 'adaptive', 'disabled'])
-export type Thinking = z.infer<typeof ThinkingSchema>
+export type Thinking = 'enabled' | 'adaptive' | 'disabled'
+export const ThinkingSchema: z.ZodType<Thinking> = z.enum(['enabled', 'adaptive', 'disabled'])
 
-export const EffortSchema = z.enum(['low', 'medium', 'high', 'max'])
-export type Effort = z.infer<typeof EffortSchema>
+export type Effort = 'low' | 'medium' | 'high' | 'max'
+export const EffortSchema: z.ZodType<Effort> = z.enum(['low', 'medium', 'high', 'max'])
 
-export const SettingScopeSchema = z.enum(['user', 'project', 'local'])
-export type SettingScope = z.infer<typeof SettingScopeSchema>
+export type SettingScope = 'user' | 'project' | 'local'
+export const SettingScopeSchema: z.ZodType<SettingScope> = z.enum(['user', 'project', 'local'])
 
 // ─── Stream-json stdout lines (discriminated union on `type`) ────────────────
+
+interface PassthroughFields {
+  [key: string]: unknown
+}
+
+interface UuidLine extends PassthroughFields {
+  uuid?: string
+  session_id?: string
+}
 
 const withUuid = z.object({
   uuid: z.string().optional(),
@@ -53,7 +70,18 @@ const withUuid = z.object({
 })
 
 /** `{type:'user', message:{role:'user', content:...}}` — replayed user turn. */
-export const UserStreamLineSchema = withUuid.extend({
+export interface UserStreamLine extends UuidLine {
+  type: 'user'
+  message: {
+    role: 'user'
+    content: string | any[]
+    [key: string]: unknown
+  }
+  parent_tool_use_id?: string | null
+  isReplay?: boolean
+  isSynthetic?: boolean
+}
+export const UserStreamLineSchema: z.ZodType<UserStreamLine> = withUuid.extend({
   type: z.literal('user'),
   message: z.object({
     role: z.literal('user'),
@@ -63,10 +91,23 @@ export const UserStreamLineSchema = withUuid.extend({
   isReplay: z.boolean().optional(),
   isSynthetic: z.boolean().optional(),
 }).passthrough()
-export type UserStreamLine = z.infer<typeof UserStreamLineSchema>
 
 /** `{type:'assistant', message:{role:'assistant', content:[...blocks]}}` */
-export const AssistantStreamLineSchema = withUuid.extend({
+export interface AssistantStreamLine extends UuidLine {
+  type: 'assistant'
+  message: {
+    role: 'assistant'
+    content: any[]
+    [key: string]: unknown
+  }
+  parent_tool_use_id?: string | null
+  error?: {
+    type: string
+    message: string
+    [key: string]: unknown
+  }
+}
+export const AssistantStreamLineSchema: z.ZodType<AssistantStreamLine> = withUuid.extend({
   type: z.literal('assistant'),
   message: z.object({
     role: z.literal('assistant'),
@@ -78,32 +119,47 @@ export const AssistantStreamLineSchema = withUuid.extend({
     message: z.string(),
   }).passthrough().optional(),
 }).passthrough()
-export type AssistantStreamLine = z.infer<typeof AssistantStreamLineSchema>
 
 /** `{type:'stream_event', event:{...}}` — partial message chunks. */
-export const StreamEventLineSchema = withUuid.extend({
+export interface StreamEventLine extends UuidLine {
+  type: 'stream_event'
+  event: {
+    type: string
+    [key: string]: unknown
+  }
+  parent_tool_use_id?: string | null
+}
+export const StreamEventLineSchema: z.ZodType<StreamEventLine> = withUuid.extend({
   type: z.literal('stream_event'),
   event: z.object({ type: z.string() }).passthrough(),
   parent_tool_use_id: z.string().nullable().optional(),
 }).passthrough()
-export type StreamEventLine = z.infer<typeof StreamEventLineSchema>
 
 /** Tool-use progress heartbeat. */
-export const ToolProgressLineSchema = withUuid.extend({
+export interface ToolProgressLine extends UuidLine {
+  type: 'tool_progress'
+  tool_use_id: string
+  tool_name: string
+  elapsed_time_seconds?: number
+  parent_tool_use_id?: string | null
+}
+export const ToolProgressLineSchema: z.ZodType<ToolProgressLine> = withUuid.extend({
   type: z.literal('tool_progress'),
   tool_use_id: z.string(),
   tool_name: z.string(),
   elapsed_time_seconds: z.number().optional(),
   parent_tool_use_id: z.string().nullable().optional(),
 }).passthrough()
-export type ToolProgressLine = z.infer<typeof ToolProgressLineSchema>
 
 /** System lines — many subtypes, all passthrough. */
-export const SystemLineSchema = withUuid.extend({
+export interface SystemLine extends UuidLine {
+  type: 'system'
+  subtype: string
+}
+export const SystemLineSchema: z.ZodType<SystemLine> = withUuid.extend({
   type: z.literal('system'),
   subtype: z.string(),
 }).passthrough()
-export type SystemLine = z.infer<typeof SystemLineSchema>
 
 /** `system/init` — the well-typed subset callers usually want. */
 export interface SystemInitLine extends SystemLine {
@@ -120,22 +176,45 @@ export interface SystemInitLine extends SystemLine {
 }
 
 /** Rate limit warnings. */
-export const RateLimitLineSchema = withUuid.extend({
+export interface RateLimitLine extends UuidLine {
+  type: 'rate_limit_event'
+  rate_limit_info: Record<string, unknown>
+}
+export const RateLimitLineSchema: z.ZodType<RateLimitLine> = withUuid.extend({
   type: z.literal('rate_limit_event'),
   rate_limit_info: z.object({}).passthrough(),
 }).passthrough()
-export type RateLimitLine = z.infer<typeof RateLimitLineSchema>
 
 /** Tool-use summary ("Read 2 files, wrote 1 file"). */
-export const ToolUseSummaryLineSchema = withUuid.extend({
+export interface ToolUseSummaryLine extends UuidLine {
+  type: 'tool_use_summary'
+  summary: string
+  preceding_tool_use_ids?: string[]
+}
+export const ToolUseSummaryLineSchema: z.ZodType<ToolUseSummaryLine> = withUuid.extend({
   type: z.literal('tool_use_summary'),
   summary: z.string(),
   preceding_tool_use_ids: z.array(z.string()).optional(),
 }).passthrough()
-export type ToolUseSummaryLine = z.infer<typeof ToolUseSummaryLineSchema>
 
 /** Final result line — marks turn completion. */
-export const ResultLineSchema = withUuid.extend({
+export interface ResultLine extends UuidLine {
+  type: 'result'
+  subtype: string
+  is_error?: boolean
+  duration_ms?: number
+  duration_api_ms?: number
+  num_turns?: number
+  result?: string
+  stop_reason?: string | null
+  total_cost_usd?: number
+  usage?: Record<string, unknown>
+  modelUsage?: Record<string, any>
+  permission_denials?: Array<Record<string, unknown>>
+  structured_output?: unknown
+  errors?: string[]
+}
+export const ResultLineSchema: z.ZodType<ResultLine> = withUuid.extend({
   type: z.literal('result'),
   subtype: z.string(),
   is_error: z.boolean().optional(),
@@ -151,40 +230,60 @@ export const ResultLineSchema = withUuid.extend({
   structured_output: z.unknown().optional(),
   errors: z.array(z.string()).optional(),
 }).passthrough()
-export type ResultLine = z.infer<typeof ResultLineSchema>
 
 /** Control request from CLI → wrapper. Dispatched to the control router. */
-export const ControlRequestLineSchema = z.object({
+export interface ControlRequestLine extends PassthroughFields {
+  type: 'control_request'
+  request_id: string
+  request: {
+    subtype: string
+    [key: string]: unknown
+  }
+}
+export const ControlRequestLineSchema: z.ZodType<ControlRequestLine> = z.object({
   type: z.literal('control_request'),
   request_id: z.string(),
   request: z.object({ subtype: z.string() }).passthrough(),
 }).passthrough()
-export type ControlRequestLine = z.infer<typeof ControlRequestLineSchema>
 
 /** Control response — normally wrapper → CLI, but can echo on stdout too. */
-export const ControlResponseLineSchema = z.object({
+export interface ControlResponseLine extends PassthroughFields {
+  type: 'control_response'
+  response: {
+    subtype: 'success' | 'error'
+    request_id: string
+    [key: string]: unknown
+  }
+}
+export const ControlResponseLineSchema: z.ZodType<ControlResponseLine> = z.object({
   type: z.literal('control_response'),
   response: z.object({
     subtype: z.enum(['success', 'error']),
     request_id: z.string(),
   }).passthrough(),
 }).passthrough()
-export type ControlResponseLine = z.infer<typeof ControlResponseLineSchema>
 
 /** `control_cancel_request` — CLI withdraws a pending control request. */
-export const ControlCancelLineSchema = z.object({
+export interface ControlCancelLine extends PassthroughFields {
+  type: 'control_cancel_request'
+  request_id: string
+}
+export const ControlCancelLineSchema: z.ZodType<ControlCancelLine> = z.object({
   type: z.literal('control_cancel_request'),
   request_id: z.string(),
 }).passthrough()
-export type ControlCancelLine = z.infer<typeof ControlCancelLineSchema>
 
 /** `keep_alive` — NDJSON heartbeat, silently ignored by readers. */
-export const KeepAliveLineSchema = z.object({ type: z.literal('keep_alive') })
-export type KeepAliveLine = z.infer<typeof KeepAliveLineSchema>
+export interface KeepAliveLine {
+  type: 'keep_alive'
+}
+export const KeepAliveLineSchema: z.ZodType<KeepAliveLine> = z.object({ type: z.literal('keep_alive') })
 
 /** Fallthrough catch-all: the CLI adds new top-level types regularly. */
-export const UnknownLineSchema = z.object({ type: z.string() }).passthrough()
-export type UnknownLine = z.infer<typeof UnknownLineSchema>
+export interface UnknownLine extends PassthroughFields {
+  type: string
+}
+export const UnknownLineSchema: z.ZodType<UnknownLine> = z.object({ type: z.string() }).passthrough()
 
 /**
  * Every line type we explicitly recognise. Each variant has a literal

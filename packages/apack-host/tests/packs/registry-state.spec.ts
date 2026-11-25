@@ -15,11 +15,11 @@ const SDK_SRC = path.resolve(import.meta.dirname, '../../../apack-sdk/src');
  * both clean, which is luck rather than evidence, since nothing was asking them.
  *
  * Two halves, because the two sides relate to the registry differently. A **lookup** reads the bound one,
- * which its source says by naming `boundHost().packs`, `boundFeHost().packs` or `_boundPackExtensions()`.
- * A **store** is what the registry is built from, which is the two factories and whatever they import from
- * their own folder.
+ * which its source says by naming `boundHost().packs`, `_boundBackendHost().packs`, `boundFeHost().packs`
+ * or `_boundPackExtensions()`. A **store** is what the registry is built from, which is the two factories
+ * and whatever they import from their own folder.
  */
-const READS_THE_REGISTRY = /boundHost\(\)\.packs|boundFeHost\(\)\.packs|_boundPackExtensions\(/;
+const READS_THE_REGISTRY = /boundHost\(\)\.packs|_boundBackendHost\(\)\.packs|boundFeHost\(\)\.packs|_boundPackExtensions\(/;
 
 function tsFilesUnder(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

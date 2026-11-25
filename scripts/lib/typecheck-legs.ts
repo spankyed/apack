@@ -80,6 +80,8 @@ export const TYPECHECK_LEGS: readonly Leg[] = [
   { name: 'typecheck:renderer', command: 'npm run typecheck:renderer', alsoReads: ['build/build-metadata.ts', 'package.json'] },
   { name: 'typecheck:server', command: 'npm run typecheck:server', alsoReads: ['package.json'] },
   { name: 'typecheck:sdk', command: 'npm run typecheck:sdk' },
+  { name: 'typecheck:pack-format', command: 'npm run typecheck:pack-format' },
+  { name: 'typecheck:pack-build', command: 'npm run typecheck:pack-build' },
   { name: 'typecheck:host', command: 'npm run typecheck:host' },
   { name: 'typecheck:ui', command: 'npm run typecheck:ui' },
   { name: 'check:specifiers', command: 'npm run check:specifiers', scope: 'repo' },

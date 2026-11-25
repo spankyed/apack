@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { Component } from 'vue';
 import type { Editor } from '@tiptap/core';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 import { test as base, expect } from '@apackdev/testing';
 

@@ -1,7 +1,7 @@
 import { _packEntityTypes } from '@apackdev/sdk/framework';
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { ManifestSchema, _declarationRevision } from '@apackdev/sdk/build';
+import { ManifestSchema, _declarationRevision } from '@apackdev/pack-format';
 import type { ContentRuntime } from '@apackdev/sdk/framework';
 import { startTestRuntime, resetTestData } from '@apackdev/sdk/testing';
 import { contentBindingProblem } from '../../src/packs/declaration-binding.ts';

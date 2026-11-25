@@ -41,6 +41,8 @@
     "vue-arrange": "^1.5.0"
   },
   "devDependencies": {
+    "@apackdev/pack-build": "*",
+    "@apackdev/pack-format": "*",
     "@apackdev/testing": "*",
     "@tiptap/core": "3.32.0",
     "@tiptap/starter-kit": "3.32.0",

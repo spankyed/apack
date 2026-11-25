@@ -1,5 +1,5 @@
 // @slow: real `apack pack build`s, most cases one or two, a refused build each retaining the one before it
-import * as content from '@apackdev/sdk/build';
+import * as content from '@apackdev/pack-build';
 import * as frontend from '../../src/build/fe-bundler.ts';
 import { buildStagingDir } from '../../src/build/build-publication.ts';
 import * as fs from 'node:fs';
@@ -11,7 +11,7 @@ import { build } from '../../src/commands/build';
 import { PACK_LAYOUT, readPackBuild, stagePack, verifyPack } from '@apackdev/host/packs';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { generateEntries } from '../../src/commands/generate-entries';
-import { PACK_TYPES_FACADE } from '@apackdev/sdk/build';
+import { PACK_TYPES_FACADE } from '@apackdev/pack-build';
 import * as replacement from '@apackdev/host/replace-dir';
 import { cpuBudget } from '@apackdev/testing/vitest';
 

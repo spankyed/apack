@@ -4,7 +4,7 @@ import { startTestRuntime, fakeInference, testRootEvents, nativePackDeclarationF
 import { bindHost } from '@apackdev/sdk/runtime';
 import { boundHost, unbindHost } from '@apackdev/sdk/runtime/internals';
 import type { NativePackDeclaration, PackRegistration } from '@apackdev/sdk/framework';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import type { PackCatalogEntry } from '../../src/packs/catalog.ts';
 import { createPackRegistry } from '../../src/packs/registry.ts';
 

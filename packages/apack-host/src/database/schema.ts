@@ -4,13 +4,14 @@ import { _packEntityTypes, _packRanks, _packRelationRules, _packRelationTypes, _
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AppEnvironment } from '@apackdev/sdk/env';
-import { parseManifest, parseSnapshot, type PackManifest } from '@apackdev/sdk/build';
+import { parseManifest, parseSnapshot, type PackManifest } from '@apackdev/pack-format';
 import { readInstalledPacks } from '../packs/installed.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, SDK_SHORT_CODES, _withSdkIndexes } from '@apackdev/sdk/types';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';
 import type { EngineSchema, RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 import { PACK_LAYOUT } from '../packs/layout.ts';
 import { readInstalledPackBuilds } from '../packs/discovery.ts';
+import { settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 
 /** What opening a database needs from the packs: which names are entity types, and where each type is stored */
 export interface DatabaseSchema {
@@ -135,6 +136,10 @@ const PACK_CANDIDATES = [
 function readSnapshotManifest(file: string): PackManifest {
   const parsed = parseSnapshot(readJSON(file, "a pack's snapshot"));
   if (!parsed.snapshot) throw new Error(`${file}: ${parsed.diagnostics.map(issue => issue.message).join('; ')}`);
+  const settingsDiagnostics = settingsDeclarationDiagnostics(parsed.snapshot.manifest, {
+    codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+  });
+  if (settingsDiagnostics.length) throw new Error(`${file}: ${settingsDiagnostics.map(issue => issue.message).join('; ')}`);
   return parsed.snapshot.manifest;
 }
 
@@ -142,6 +147,8 @@ function readManifestFile(file: string): PackManifest {
   const raw = readJSON(file, "a pack's manifest");
   const { diagnostics } = parseManifest(raw);
   if (diagnostics.length > 0) throw new Error(`${file}: ${diagnostics.map(issue => issue.message).join('; ')}`);
+  const settingsDiagnostics = settingsDeclarationDiagnostics(raw as PackManifest, { source: file });
+  if (settingsDiagnostics.length > 0) throw new Error(`${file}: ${settingsDiagnostics.map(issue => issue.message).join('; ')}`);
   // The schema it just passed is what `PackManifest` is inferred from, which is why the installer reads one
   // the same way (`packs/installer.ts`)
   return raw as PackManifest;

@@ -9,7 +9,7 @@ import { loadExternalPacks, loadSingleExternalPack } from '../../src/packs/runti
 import { PACK_LAYOUT } from '../../src/packs/layout.ts';
 import { sealPack, writeInstalledPackFixture } from './runtime/build-fixture.ts';
 import { expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { createContributionCatalog } from '../../src/packs/catalog.ts';
 import { appSettingsDefinition } from '../../src/features/settings/be/app-definition.ts';
 

@@ -14,6 +14,7 @@ import type { FilesystemService } from '../services/filesystem.ts';
 import type { TerminalService } from '../services/terminal.ts';
 import type { SettingsAdmin } from '../services/settings.ts';
 import type { PackRegistryView } from './packs-view.ts';
+import { _setBackendHostPort } from './backend-port.ts';
 
 /** The app's EARS engine as a program is handed it: its operations, without `admin` (`createEarsEngine` from `@elmdb/ears`) */
 export type { Ears } from '@elmdb/ears';
@@ -99,6 +100,12 @@ export function bindHost(runtime: HostRuntime): void {
   if (bound) throw new Error('A host is already bound in this process: bindHost runs once, at boot');
   bound = runtime;
   generation++;
+  _setBackendHostPort({
+    get transport() { return runtime.transport; },
+    get packs() { return runtime.packs; },
+    get diagnostics() { return runtime.diagnostics; },
+    get runHistory() { return runtime.services?.runHistory; },
+  });
   _bindEars(runtime.ears);
   setSecretValueMatcher(runtime.redaction && ((text, from, to) => runtime.redaction!.matchesSecret(text, from, to)));
 }
@@ -107,6 +114,7 @@ export function bindHost(runtime: HostRuntime): void {
 export function unbindHost(): void {
   bound = undefined;
   generation++;
+  _setBackendHostPort(undefined);
   _bindEars(undefined);
   setSecretValueMatcher(undefined);
 }

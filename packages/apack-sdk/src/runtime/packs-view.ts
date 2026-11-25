@@ -19,7 +19,7 @@ export interface EarsNames {
   relKinds: Record<string, string>;
   roles: Record<string, string>;
 }
-import { _isHostBound, boundHost } from './host-runtime.ts';
+import { _isBackendHostBound, _boundBackendHost } from './backend-port.ts';
 import { _isFeHostBound, boundFeHost } from './fe-host.ts';
 
 /** What backend and frontend code both look up in the registered packs */
@@ -77,7 +77,7 @@ export interface PackRegistryView extends PackExtensionsView {
  */
 export function _boundPackExtensions(): PackExtensionsView {
   if (_isFeHostBound()) return boundFeHost().packs;
-  if (_isHostBound()) return boundHost().packs;
+  if (_isBackendHostBound()) return _boundBackendHost().packs;
   throw new Error(
     'No host is bound, so no registered packs to look up: the app binds one at boot with bindHost(runtime) from '
     + '@apackdev/sdk/runtime (the renderer with bindFeHost(runtime)), and unit tests with startTestRuntime() from @apackdev/sdk/testing',

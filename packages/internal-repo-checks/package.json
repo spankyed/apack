@@ -13,6 +13,8 @@
   },
   "devDependencies": {
     "@apackdev/host": "*",
+    "@apackdev/pack-build": "*",
+    "@apackdev/pack-format": "*",
     "@apackdev/sdk": "*",
     "app-builder-lib": "26.18.1",
     "tsx": "^4.23.15",

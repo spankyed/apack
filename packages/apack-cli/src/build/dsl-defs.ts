@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import { builtinModules } from 'node:module';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import type { RecordReads } from './build-reads';
 import type { RecordBuildOutput } from './build-outputs.ts';
 import { bundleDeclarations, isPackageSpecifier } from './types-bundler';

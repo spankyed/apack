@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
+import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from '@apackdev/pack-format';
 
 function sha256(content: string | Buffer): string {
   return crypto.hash('sha256', content, 'hex');

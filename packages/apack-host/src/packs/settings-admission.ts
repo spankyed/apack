@@ -1,4 +1,4 @@
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { appSettingsDefinition } from '../features/settings/be/app-definition.ts';
 import { compileSettingsCatalog } from '../features/settings/validation.ts';

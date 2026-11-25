@@ -1,4 +1,4 @@
-import type { ValidationError, ValidationResult } from '../content-compiler.ts';
+import type { ValidationError, ValidationResult } from '../content-types.ts';
 import { isFlowConfig, resolveTracks, type FlowConfig, type Track } from './flow-types.ts';
 import { stepLookup } from './step-lookup.ts';
 import type { StepDefinition, StepBuildFacet, StepValidationContext } from '../../steps/types.ts';

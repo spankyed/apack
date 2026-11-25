@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../../apack-sdk/apack.schema.json",
+  "$schema": "../../../../apack-pack-format/apack.schema.json",
   "id": "team-notes",
   "name": "Team Notes",
   "version": "0.1.0",

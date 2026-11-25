@@ -1,5 +1,5 @@
 import { writeInstalledPackFixture } from './runtime/build-fixture.ts';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -38,6 +38,28 @@ describe('installed build admission', () => {
     expect(entries).toEqual([{ id: 'local-pack', dir: path.join(packagesDir, 'local-pack'),
       problem: 'Installed directory "local-pack" contains pack "other-pack"' }]);
     expect(discoverPacks(packagesDir)).toEqual([]);
+  });
+
+  it('isolates an installed pack with invalid settings defaults as a per-pack problem while admitting healthy packs', () => {
+    writeManifest('healthy-pack', { id: 'healthy-pack', name: 'Healthy', version: '1.0.0' });
+    writeManifest('broken-settings', {
+      id: 'broken-settings',
+      name: 'Broken Settings',
+      version: '1.0.0',
+      extensions: {
+        settings: {
+          prefs: {
+            schema: { type: 'object', properties: { limit: { type: 'integer' } }, required: ['limit'] },
+            defaults: { limit: 'not-an-integer' },
+          },
+        },
+      },
+    });
+    const entries = readInstalledPackBuilds(packagesDir);
+    expect(entries.find(e => e.id === 'healthy-pack')?.build).toBeDefined();
+    const broken = entries.find(e => e.id === 'broken-settings');
+    expect(broken?.build).toBeUndefined();
+    expect(broken?.problem).toContain('manifest.extensions.settings.prefs.defaults.limit');
   });
 });
 

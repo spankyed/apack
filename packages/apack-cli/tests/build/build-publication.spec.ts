@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { buildStagingDir, publishPackBuild } from '../../src/build/build-publication.ts';

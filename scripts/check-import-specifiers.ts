@@ -292,21 +292,23 @@ export const LAYERS: {
   forbidden?: RegExp;
 }[] = [
   { name: '@apackdev/sdk', dir: 'packages/apack-sdk', allowed: [] },
+  { name: '@apackdev/pack-format', dir: 'packages/apack-pack-format', allowed: ['@apackdev/sdk'] },
+  { name: '@apackdev/pack-build', dir: 'packages/apack-pack-build', allowed: ['@apackdev/sdk', '@apackdev/pack-format'] },
   {
     name: '@apackdev/host',
     dir: 'packages/apack-host',
-    allowed: ['@apackdev/sdk'],
+    allowed: ['@apackdev/sdk', '@apackdev/pack-format', '@apackdev/pack-build'],
     // The API: its package, its `@/` alias, or its sources by relative path
     forbidden: /^(?:@app\/server(?:\/|$)|@\/|(?:\.\.?\/)+(?:[\w.-]+\/)*server\/(?:src|scripts)(?:\/|$))/,
   },
-  { name: '@app/server', dir: 'packages/server', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/server', dir: 'packages/server', allowed: ['@apackdev/sdk', '@apackdev/pack-format', '@apackdev/host'] },
   { name: '@app/renderer', dir: 'packages/renderer', allowed: ['@apackdev/sdk', '@apackdev/host', '@apackdev/ui'] },
   // Published alongside the SDK rather than above it: a component takes its contracts and host-shared state
   // from `@apackdev/sdk/fe`, and the other direction is already refused by the SDK's own row
   { name: '@apackdev/ui', dir: 'packages/apack-ui', allowed: ['@apackdev/sdk'] },
   // The harness binds a test runtime, so it reaches the host; it may not reach the component library or the
   // CLI, which are above it
-  { name: '@apackdev/testing', dir: 'packages/apack-testing', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@apackdev/testing', dir: 'packages/apack-testing', allowed: ['@apackdev/sdk', '@apackdev/pack-format', '@apackdev/pack-build', '@apackdev/host'] },
   // Tooling at the top, so `allowed` forbids nothing — what this row is for is the other half, the manifest:
   // it imported `@apackdev/testing` and didn't declare it until this row existed.
   //
@@ -314,7 +316,7 @@ export const LAYERS: {
   // only ever resolves it by name — the Tailwind content globs, the host-proxy decision (`build.bundleUi`),
   // `CHECKOUT_PACKAGES` — and the one real import is a test checking that proxying against the real module.
   { name: '@apackdev/cli', dir: 'packages/apack-cli',
-    allowed: ['@apackdev/sdk', '@apackdev/host', '@apackdev/ui', '@apackdev/testing'] },
+    allowed: ['@apackdev/sdk', '@apackdev/pack-format', '@apackdev/pack-build', '@apackdev/host', '@apackdev/ui', '@apackdev/testing'] },
   // `@apackdev/cli` is allowed because the manifest declares it, and unused because that declaration is a
   // process dependency — `RUNTIME_ONLY_DEPS` is where it says so, and this row reads that rather than
   // keeping a second copy of the reason
@@ -323,7 +325,7 @@ export const LAYERS: {
   // so `@apackdev/host` here would be a finding
   { name: '@app/preload', dir: 'packages/preload', allowed: ['@apackdev/sdk'] },
   // Both check the repo rather than run in it, and reach the host for the build and freshness primitives
-  { name: '@app/internal-repo-checks', dir: 'packages/internal-repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/internal-repo-checks', dir: 'packages/internal-repo-checks', allowed: ['@apackdev/sdk', '@apackdev/pack-format', '@apackdev/pack-build', '@apackdev/host'] },
   { name: '@app/internal-publish-checks', dir: 'packages/internal-publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
 ];
 

@@ -1351,12 +1351,12 @@ describe('ensurePackagesBuilt, where the caller says the packages are already bu
 });
 
 
-it.each(['bin/compiler-windows.ps1', 'templates/pack.json', 'LICENSE'])('refuses deleted or changed copied CLI output: %s', target => {
+it.each(['bin/compiler-windows.ps1', 'templates/pack.json', 'LICENSE', 'apack.schema.json'])('refuses deleted or changed copied CLI output: %s', target => {
   const f = fixture();
   const cliRoot = path.join(REPO_ROOT, 'packages/apack-cli');
   const output = path.join(f.root, 'dist/package');
   const unit: BuildUnit = { inputs: [f.src], outputs: BUILD_UNITS['@apackdev/cli'].outputs.map(file => path.join(f.root, path.relative(cliRoot, file))) };
-  for (const [file, bytes] of [['package.json', '{}'], ['dist/cli.js', 'export {};'], ['bin/compiler-windows.ps1', 'launcher'], ['templates/pack.json', '{}'], ['LICENSE', 'MIT License']]) {
+  for (const [file, bytes] of [['package.json', '{}'], ['dist/cli.js', 'export {};'], ['bin/compiler-windows.ps1', 'launcher'], ['templates/pack.json', '{}'], ['LICENSE', 'MIT License'], ['apack.schema.json', '{}']]) {
     const destination = path.join(output, file);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, bytes);

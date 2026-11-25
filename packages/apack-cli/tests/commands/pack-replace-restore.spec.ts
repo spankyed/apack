@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { publishRunningApp, findDatabaseWriter, openAppDatabase, openDatabaseStore, readInstalledSchema } from '@apackdev/host/database';
 import { installShippedPacks, readInstalledPacks, recordHostCompatibility, readPackBuild,

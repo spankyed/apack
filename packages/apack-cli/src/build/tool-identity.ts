@@ -36,11 +36,14 @@ export function buildToolHash(moduleUrl = defaultModuleUrl()): string {
   if (source) {
     for (const [name, specifier] of [
       ['@apackdev/host', '@apackdev/host/build/shared-deps'],
+      ['@apackdev/pack-format', '@apackdev/pack-format'],
+      ['@apackdev/pack-build', '@apackdev/pack-build'],
       ['@apackdev/sdk', '@apackdev/sdk/build'],
     ] as const) {
       // Exported metadata identifies the workspace owner, rather than its nested published dist.
-      const owner = name === '@apackdev/host' ? packageRoot(require.resolve(specifier))
-        : path.dirname(require.resolve(`${name}/package.json`));
+      const owner = name === '@apackdev/sdk'
+        ? path.dirname(require.resolve(`${name}/package.json`))
+        : packageRoot(require.resolve(specifier));
       scopes.push({ name, root: owner, directory: 'src' });
     }
     // What the SDK has linked from a checkout (`npm run deps:local`: EARS from elmdb's) changes without its version or

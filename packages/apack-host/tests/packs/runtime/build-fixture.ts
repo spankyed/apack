@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import { sealPackBuild, PACK_LAYOUT, PACK_LAYOUT_VERSION, packFileHashes } from '../../../src/packs/layout.ts';
 import type { PackEventContracts } from '@apackdev/sdk/framework';
 

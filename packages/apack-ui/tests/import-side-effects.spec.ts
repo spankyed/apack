@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import ts from 'typescript';
 import { parse } from '@vue/compiler-sfc';
 import { describe, expect, it } from 'vitest';
-import { population } from '@apackdev/sdk/testing';
+import { population } from '@apackdev/sdk/testing/fe';
 
 
 /**

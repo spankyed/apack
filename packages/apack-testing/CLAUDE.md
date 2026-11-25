@@ -293,13 +293,11 @@ number in the repo and buys nothing: `npm run chain -- --dry --all` prints the p
 on it, and halving this saves zero chain wall and about a second of `npm run spec`. Revisit when the step
 appears on that path — not when the ratio worsens, which it will as default-setup grows.
 
-The one thing left to measure, if that loop ever matters more: this file imports `@apackdev/sdk/build`
-statically for content compilation most spec files never reach (`compilePack`, `resolveContentSources`, `compileFlowDSL`,
-at the content helpers), but `readDependencies` reaches the same module on *every* setup through
-`_snapshotFormatMismatch` and `_cliFormatMismatchMessage` — two format checks, not compilers. Moving those
-two to a leaf module would let the rest load only where a test compiles content. `@apackdev/sdk/build` is 238ms
-as a standalone import in a fresh process; what it costs *marginally* inside a worker that has already loaded
-the SDK was not measured, and is probably well under that. Measure before moving anything.
+The one thing left to measure, if that loop ever matters more: this file imports `@apackdev/pack-build`
+statically for content compilation most spec files never reach (`compilePack`, `resolveContentSources`,
+at the content helpers), while `readDependencies` uses `@apackdev/pack-format` for snapshot format checks
+(`_snapshotFormatMismatch`, `_cliFormatMismatchMessage`). Deferring `@apackdev/pack-build` until a test
+compiles content would keep compiler dependencies unloaded for pure runtime specs. Measure before moving anything.
 
 ## A session over the app something else is holding (`src/engine/`)
 

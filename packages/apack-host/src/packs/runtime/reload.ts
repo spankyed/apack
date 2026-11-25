@@ -5,7 +5,7 @@ import { resolveAppEnvironment, getAppVersion } from '@apackdev/sdk/env';
 import { packSystemIds, type PackRegistry } from '../registry.ts';
 import { installShippedPacks } from '../installer.ts';
 import { disabledPackIds } from '../installed.ts';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { loadSingleExternalPack, clearPackRequireCache, registerExternalPacks } from './loader.ts';
 import { runPackMigrations } from '../../migrations/index.ts';
 import { applyPacks } from './apply.ts';

@@ -18,7 +18,6 @@ import { FlowEdge } from '@apackdev/sdk/repositories';
 import { HostServices, ProgramStatusRecord } from '@apackdev/sdk/services';
 import { ExecutionContext, FieldMapping, RunNode, RunNodeId, RunStatus, RunTree, StepInput, StepRuntimeError } from '@apackdev/sdk/steps';
 import { BinaryOperator } from '@apackdev/sdk/utils';
-import { z } from 'zod';
 
 /**
  * A window's writes to its actions, each answered once: that it landed, or why it was refused. What a write changed
@@ -227,23 +226,21 @@ interface ArtifactEntity extends BaseEntity {
 
 type ArtifactType = string;
 
-type AssistantStreamLine = z.infer<typeof AssistantStreamLineSchema>;
-
 /** `{type:'assistant', message:{role:'assistant', content:[...blocks]}}` */
-declare const AssistantStreamLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"assistant">;
-    message: z.ZodObject<{
-        role: z.ZodLiteral<"assistant">;
-        content: z.ZodArray<z.ZodAny>;
-    }, z.core.$loose>;
-    parent_tool_use_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    error: z.ZodOptional<z.ZodObject<{
-        type: z.ZodString;
-        message: z.ZodString;
-    }, z.core.$loose>>;
-}, z.core.$loose>;
+interface AssistantStreamLine extends UuidLine {
+    type: 'assistant';
+    message: {
+        role: 'assistant';
+        content: any[];
+        [key: string]: unknown;
+    };
+    parent_tool_use_id?: string | null;
+    error?: {
+        type: string;
+        message: string;
+        [key: string]: unknown;
+    };
+}
 
 /**
  * `claude auth` — login, logout, status.
@@ -1818,43 +1815,36 @@ type Contract$l = {
     asks: ThreadsAsks;
 };
 
-type ControlCancelLine = z.infer<typeof ControlCancelLineSchema>;
-
 /** `control_cancel_request` — CLI withdraws a pending control request. */
-declare const ControlCancelLineSchema: z.ZodObject<{
-    type: z.ZodLiteral<"control_cancel_request">;
-    request_id: z.ZodString;
-}, z.core.$loose>;
+interface ControlCancelLine extends PassthroughFields {
+    type: 'control_cancel_request';
+    request_id: string;
+}
 
 /** Caller hook: handle arbitrary control request subtypes we don't special-case. */
 type ControlRequestHandler = (request: {
     subtype: string;
 } & Record<string, unknown>) => unknown | Promise<unknown>;
 
-type ControlRequestLine = z.infer<typeof ControlRequestLineSchema>;
-
 /** Control request from CLI → wrapper. Dispatched to the control router. */
-declare const ControlRequestLineSchema: z.ZodObject<{
-    type: z.ZodLiteral<"control_request">;
-    request_id: z.ZodString;
-    request: z.ZodObject<{
-        subtype: z.ZodString;
-    }, z.core.$loose>;
-}, z.core.$loose>;
-
-type ControlResponseLine = z.infer<typeof ControlResponseLineSchema>;
+interface ControlRequestLine extends PassthroughFields {
+    type: 'control_request';
+    request_id: string;
+    request: {
+        subtype: string;
+        [key: string]: unknown;
+    };
+}
 
 /** Control response — normally wrapper → CLI, but can echo on stdout too. */
-declare const ControlResponseLineSchema: z.ZodObject<{
-    type: z.ZodLiteral<"control_response">;
-    response: z.ZodObject<{
-        subtype: z.ZodEnum<{
-            error: "error";
-            success: "success";
-        }>;
-        request_id: z.ZodString;
-    }, z.core.$loose>;
-}, z.core.$loose>;
+interface ControlResponseLine extends PassthroughFields {
+    type: 'control_response';
+    response: {
+        subtype: 'error' | 'success';
+        request_id: string;
+        [key: string]: unknown;
+    };
+}
 
 /**
  * Artifact Service
@@ -2266,14 +2256,7 @@ declare namespace EARS {
 /** A transition between two nodes, as the SDK's flow repository returns it */
 type EdgeEntity = FlowEdge;
 
-type Effort = z.infer<typeof EffortSchema>;
-
-declare const EffortSchema: z.ZodEnum<{
-    low: "low";
-    medium: "medium";
-    high: "high";
-    max: "max";
-}>;
+type Effort = 'high' | 'low' | 'max' | 'medium';
 
 /** ── Brain-local types ──────────────────────────────────────────────────── */
 interface EventListenerEntity {
@@ -3121,12 +3104,10 @@ type IncomingThreadsEvents = {
     threadId: string;
 };
 
-type KeepAliveLine = z.infer<typeof KeepAliveLineSchema>;
-
 /** `keep_alive` — NDJSON heartbeat, silently ignored by readers. */
-declare const KeepAliveLineSchema: z.ZodObject<{
-    type: z.ZodLiteral<"keep_alive">;
-}, z.core.$strip>;
+interface KeepAliveLine {
+    type: 'keep_alive';
+}
 
 interface KeepAliveNode extends NodeBase {
     nodeType: 'keep_alive';
@@ -4418,6 +4399,10 @@ interface ParseErrorLine {
     error: string;
 }
 
+interface PassthroughFields {
+    [key: string]: unknown;
+}
+
 /**
  * The response shape for `can_use_tool`, as required by the Claude Code
  * CLI at:
@@ -4453,14 +4438,13 @@ type PermissionDecision = {
 /** Caller hook: decide a tool permission request. */
 type PermissionHandler = (request: CanUseToolRequest) => PermissionDecision | Promise<PermissionDecision>;
 
-type PermissionMode = z.infer<typeof PermissionModeSchema>;
-
 /**
  * Type definitions + Zod schemas for the Claude Code stream-json wire protocol.
  *
  * The CLI is fast-moving and routinely adds fields; every object schema uses
  * `.passthrough()` so unknown fields survive round-trips and we only validate
- * the bits we actually read. Inferred TS types are exported next to each schema.
+ * the bits we actually read. Explicit TS types are exported next to each schema
+ * so pack-types.d.ts stays free of Zod types.
  *
  * Source of truth for field shapes: the stream-json writer at
  * `src/cli/structuredIO.ts` and the SDK Zod schemas at
@@ -4479,14 +4463,7 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * permission resolver entirely; `auto` is feature-gated and uses an ML
  * classifier instead of prompting.
  */
-declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
-    acceptEdits: "acceptEdits";
-    plan: "plan";
-    bypassPermissions: "bypassPermissions";
-    dontAsk: "dontAsk";
-    auto: "auto";
-}>;
+type PermissionMode = 'acceptEdits' | 'auto' | 'bypassPermissions' | 'default' | 'dontAsk' | 'plan';
 
 type Predicate = {
     key: string;
@@ -5134,15 +5111,11 @@ type Ran = {
     executionTime: number;
 };
 
-type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
-
 /** Rate limit warnings. */
-declare const RateLimitLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"rate_limit_event">;
-    rate_limit_info: z.ZodObject<{}, z.core.$loose>;
-}, z.core.$loose>;
+interface RateLimitLine extends UuidLine {
+    type: 'rate_limit_event';
+    rate_limit_info: Record<string, unknown>;
+}
 
 /** A note as the welcome page shows it, with when it last changed */
 type RecentNote = Pick<NoteDTO, 'icon' | 'id' | 'noteType' | 'title' | 'updatedAt'>;
@@ -5190,27 +5163,23 @@ interface RepositoryUnder {
     kind: 'nested' | 'submodule' | 'top' | 'worktree';
 }
 
-type ResultLine = z.infer<typeof ResultLineSchema>;
-
 /** Final result line — marks turn completion. */
-declare const ResultLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"result">;
-    subtype: z.ZodString;
-    is_error: z.ZodOptional<z.ZodBoolean>;
-    duration_ms: z.ZodOptional<z.ZodNumber>;
-    duration_api_ms: z.ZodOptional<z.ZodNumber>;
-    num_turns: z.ZodOptional<z.ZodNumber>;
-    result: z.ZodOptional<z.ZodString>;
-    stop_reason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    total_cost_usd: z.ZodOptional<z.ZodNumber>;
-    usage: z.ZodOptional<z.ZodObject<{}, z.core.$loose>>;
-    modelUsage: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
-    permission_denials: z.ZodOptional<z.ZodArray<z.ZodObject<{}, z.core.$loose>>>;
-    structured_output: z.ZodOptional<z.ZodUnknown>;
-    errors: z.ZodOptional<z.ZodArray<z.ZodString>>;
-}, z.core.$loose>;
+interface ResultLine extends UuidLine {
+    type: 'result';
+    subtype: string;
+    is_error?: boolean;
+    duration_ms?: number;
+    duration_api_ms?: number;
+    num_turns?: number;
+    result?: string;
+    stop_reason?: string | null;
+    total_cost_usd?: number;
+    usage?: Record<string, unknown>;
+    modelUsage?: Record<string, any>;
+    permission_denials?: Array<Record<string, unknown>>;
+    structured_output?: unknown;
+    errors?: string[];
+}
 
 /** What the panel does to one commit of the history: give it a new message, fold it into the one before it, or drop it */
 type RewriteAction = 'drop' | 'reword' | 'squash';
@@ -5382,13 +5351,7 @@ interface SessionViewOptions {
     offset?: number;
 }
 
-type SettingScope = z.infer<typeof SettingScopeSchema>;
-
-declare const SettingScopeSchema: z.ZodEnum<{
-    user: "user";
-    project: "project";
-    local: "local";
-}>;
+type SettingScope = 'local' | 'project' | 'user';
 
 type SettingsOf<K extends keyof AvailableSettings> = AvailableSettings[K];
 
@@ -5454,18 +5417,15 @@ interface StoredBlock extends BlockConfig {
     id: EARS.EntityId;
 }
 
-type StreamEventLine = z.infer<typeof StreamEventLineSchema>;
-
 /** `{type:'stream_event', event:{...}}` — partial message chunks. */
-declare const StreamEventLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"stream_event">;
-    event: z.ZodObject<{
-        type: z.ZodString;
-    }, z.core.$loose>;
-    parent_tool_use_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-}, z.core.$loose>;
+interface StreamEventLine extends UuidLine {
+    type: 'stream_event';
+    event: {
+        type: string;
+        [key: string]: unknown;
+    };
+    parent_tool_use_id?: string | null;
+}
 
 /**
  * Public stream-line type. Callers iterate these out of `query().events`.
@@ -5494,15 +5454,11 @@ type SystemContracts = {
     'logs': Contract$b;
 };
 
-type SystemLine = z.infer<typeof SystemLineSchema>;
-
 /** System lines — many subtypes, all passthrough. */
-declare const SystemLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"system">;
-    subtype: z.ZodString;
-}, z.core.$loose>;
+interface SystemLine extends UuidLine {
+    type: 'system';
+    subtype: string;
+}
 
 interface Tab {
     id: string;
@@ -5781,13 +5737,7 @@ interface TerminalTab extends OpenFile {
     terminalInfo: TerminalInfo;
 }
 
-type Thinking = z.infer<typeof ThinkingSchema>;
-
-declare const ThinkingSchema: z.ZodEnum<{
-    enabled: "enabled";
-    adaptive: "adaptive";
-    disabled: "disabled";
-}>;
+type Thinking = 'adaptive' | 'disabled' | 'enabled';
 
 /**
  * Free-form per-thread scratchpad for features that need to persist small
@@ -6270,29 +6220,21 @@ interface ToolEntryEntity {
     };
 }
 
-type ToolProgressLine = z.infer<typeof ToolProgressLineSchema>;
-
 /** Tool-use progress heartbeat. */
-declare const ToolProgressLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"tool_progress">;
-    tool_use_id: z.ZodString;
-    tool_name: z.ZodString;
-    elapsed_time_seconds: z.ZodOptional<z.ZodNumber>;
-    parent_tool_use_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-}, z.core.$loose>;
-
-type ToolUseSummaryLine = z.infer<typeof ToolUseSummaryLineSchema>;
+interface ToolProgressLine extends UuidLine {
+    type: 'tool_progress';
+    tool_use_id: string;
+    tool_name: string;
+    elapsed_time_seconds?: number;
+    parent_tool_use_id?: string | null;
+}
 
 /** Tool-use summary ("Read 2 files, wrote 1 file"). */
-declare const ToolUseSummaryLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"tool_use_summary">;
-    summary: z.ZodString;
-    preceding_tool_use_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
-}, z.core.$loose>;
+interface ToolUseSummaryLine extends UuidLine {
+    type: 'tool_use_summary';
+    summary: string;
+    preceding_tool_use_ids?: string[];
+}
 
 interface TransformNode extends NodeBase {
     nodeType: 'transform';
@@ -6352,12 +6294,10 @@ type UndoableAfter = {
     } | null;
 };
 
-type UnknownLine = z.infer<typeof UnknownLineSchema>;
-
 /** Fallthrough catch-all: the CLI adds new top-level types regularly. */
-declare const UnknownLineSchema: z.ZodObject<{
-    type: z.ZodString;
-}, z.core.$loose>;
+interface UnknownLine extends PassthroughFields {
+    type: string;
+}
 
 interface UpdateArtifactOptions {
     title?: string;
@@ -6442,21 +6382,23 @@ type UserMessage = {
     forceDirectoryPicker?: boolean;
 };
 
-type UserStreamLine = z.infer<typeof UserStreamLineSchema>;
-
 /** `{type:'user', message:{role:'user', content:...}}` — replayed user turn. */
-declare const UserStreamLineSchema: z.ZodObject<{
-    uuid: z.ZodOptional<z.ZodString>;
-    session_id: z.ZodOptional<z.ZodString>;
-    type: z.ZodLiteral<"user">;
-    message: z.ZodObject<{
-        role: z.ZodLiteral<"user">;
-        content: z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodAny>]>;
-    }, z.core.$loose>;
-    parent_tool_use_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    isReplay: z.ZodOptional<z.ZodBoolean>;
-    isSynthetic: z.ZodOptional<z.ZodBoolean>;
-}, z.core.$loose>;
+interface UserStreamLine extends UuidLine {
+    type: 'user';
+    message: {
+        role: 'user';
+        content: string | any[];
+        [key: string]: unknown;
+    };
+    parent_tool_use_id?: string | null;
+    isReplay?: boolean;
+    isSynthetic?: boolean;
+}
+
+interface UuidLine extends PassthroughFields {
+    uuid?: string;
+    session_id?: string;
+}
 
 /** The repository's watcher, held the same way (`watcherOf`) */
 interface WatcherHandle {

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { setup } from 'xstate';
-import { PACK_SNAPSHOT_FORMAT, _declarationRevision, type PackManifest } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT, _declarationRevision, type PackManifest } from '@apackdev/pack-format';
 import { createPackRegistry } from '../../src/packs/registry.ts';
 
 const machine = setup({}).createMachine({});
