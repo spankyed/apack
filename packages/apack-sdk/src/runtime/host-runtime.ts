@@ -101,10 +101,10 @@ export function bindHost(runtime: HostRuntime): void {
   bound = runtime;
   generation++;
   _setBackendHostPort({
-    transport: runtime.transport,
-    packs: runtime.packs,
-    diagnostics: runtime.diagnostics,
-    runHistory: runtime.services?.runHistory,
+    get transport() { return runtime.transport; },
+    get packs() { return runtime.packs; },
+    get diagnostics() { return runtime.diagnostics; },
+    get runHistory() { return runtime.services?.runHistory; },
   });
   _bindEars(runtime.ears);
   setSecretValueMatcher(runtime.redaction && ((text, from, to) => runtime.redaction!.matchesSecret(text, from, to)));

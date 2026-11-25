@@ -75,19 +75,20 @@ export interface SettingsDeclarationContainer {
  */
 export function settingsDeclarationDiagnostics(
   declaration: SettingsDeclarationContainer,
-  options?: { readonly packId?: string; readonly source?: string; readonly codePrefix?: string; readonly label?: string },
+  options?: { readonly packId?: string; readonly source?: string; readonly codePrefix?: string; readonly label?: string; readonly pathPrefix?: readonly string[] },
 ): PackDiagnostic[] {
   const diagnostics: PackDiagnostic[] = [];
   const packId = options?.packId ?? declaration.id;
   const codePrefix = options?.codePrefix ?? 'manifest';
   const label = options?.label ?? 'apack.json';
+  const pathPrefix = options?.pathPrefix ?? [];
   const check = (prefix: readonly string[], definition: SettingsDefinition): void => {
     try {
       compileSettingsDefinition(definition);
     } catch (error) {
       if (error instanceof SettingsDefaultsError) {
         for (const problem of error.problems) {
-          const fullPath = [...prefix, 'defaults', ...problem.path.map(String)];
+          const fullPath = [...pathPrefix, ...prefix, 'defaults', ...problem.path.map(String)];
           diagnostics.push({
             code: `${codePrefix}.custom`,
             severity: 'error',
@@ -98,7 +99,7 @@ export function settingsDeclarationDiagnostics(
           });
         }
       } else {
-        const fullPath = [...prefix, 'schema'];
+        const fullPath = [...pathPrefix, ...prefix, 'schema'];
         diagnostics.push({
           code: `${codePrefix}.custom`,
           severity: 'error',

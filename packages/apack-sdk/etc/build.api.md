@@ -753,13 +753,13 @@ export const ManifestSchema: z.ZodObject<{
     consumes: z.ZodOptional<z.ZodReadonly<z.ZodObject<{
         services: z.ZodReadonly<z.ZodArray<z.ZodUnion<readonly [z.ZodEnum<{
             "host/settings": "host/settings";
-            "host/runHistory": "host/runHistory";
-            "host/inference": "host/inference";
-            "host/emitter": "host/emitter";
+            "host/onboarding": "host/onboarding";
             "host/logger": "host/logger";
+            "host/emitter": "host/emitter";
             "host/repository": "host/repository";
             "host/appData": "host/appData";
-            "host/onboarding": "host/onboarding";
+            "host/runHistory": "host/runHistory";
+            "host/inference": "host/inference";
             "host/secrets": "host/secrets";
             "host/filesystem": "host/filesystem";
             "host/terminal": "host/terminal";
@@ -1403,7 +1403,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1478,7 +1478,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1553,7 +1553,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1628,7 +1628,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -2005,13 +2005,13 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     consumes: z.ZodOptional<z.ZodReadonly<z.ZodObject<{
         services: z.ZodReadonly<z.ZodArray<z.ZodUnion<readonly [z.ZodEnum<{
             "host/settings": "host/settings";
-            "host/runHistory": "host/runHistory";
-            "host/inference": "host/inference";
-            "host/emitter": "host/emitter";
+            "host/onboarding": "host/onboarding";
             "host/logger": "host/logger";
+            "host/emitter": "host/emitter";
             "host/repository": "host/repository";
             "host/appData": "host/appData";
-            "host/onboarding": "host/onboarding";
+            "host/runHistory": "host/runHistory";
+            "host/inference": "host/inference";
             "host/secrets": "host/secrets";
             "host/filesystem": "host/filesystem";
             "host/terminal": "host/terminal";
@@ -2216,7 +2216,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2291,7 +2291,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2366,7 +2366,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2441,7 +2441,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -3526,10 +3526,10 @@ export const StepEntrySchema: z.ZodObject<{
             }, z.core.$strict>;
             category: z.ZodEnum<{
                 data: "data";
-                ai: "ai";
-                logic: "logic";
                 trigger: "trigger";
                 action: "action";
+                logic: "logic";
+                ai: "ai";
             }>;
             isImplemented: z.ZodOptional<z.ZodBoolean>;
             isDisabled: z.ZodOptional<z.ZodBoolean>;

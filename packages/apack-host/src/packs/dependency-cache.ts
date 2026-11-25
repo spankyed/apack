@@ -8,6 +8,7 @@ import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { replaceDir } from '../replace-dir.ts';
 import { holdExclusiveLock } from '../exclusive-lock.ts';
 import { PACK_LAYOUT, verifyPack, packBuildRevision, type PackIntegrity } from './layout.ts';
+import { settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 
 const localOrigin = z.object({
   kind: z.enum(['workspace', 'file', 'host', 'installed-app']),
@@ -51,6 +52,10 @@ function readSnapshot(directory: string): { snapshot: PackDependencySnapshot; by
   const bytes = fs.readFileSync(path.join(directory, PACK_LAYOUT.snapshot));
   const result = parseDependencySnapshot(JSON.parse(bytes.toString('utf8')));
   if (!result.snapshot) throw new Error(`${directory}: ${result.diagnostics.map(issue => issue.message).join('; ')}`);
+  const settingsDiagnostics = settingsDeclarationDiagnostics(result.snapshot.manifest, {
+    codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+  });
+  if (settingsDiagnostics.length) throw new Error(`${directory}: ${settingsDiagnostics.map(issue => issue.message).join('; ')}`);
   return { snapshot: result.snapshot, bytes };
 }
 

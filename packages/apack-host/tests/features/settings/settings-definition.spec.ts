@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SettingsDefinition } from '@apackdev/sdk/framework';
+import { _assertSettingsDefinitionStructure, type SettingsDefinition } from '@apackdev/sdk/framework';
 import { generateSettingsTypes } from '@apackdev/sdk/build';
 import { compileSettingsDefinition, settingsDeclarationDiagnostics } from '../../../src/features/settings/compile.ts';
 
@@ -194,6 +194,12 @@ describe('settings data contract', () => {
 
 it.each([{ ...definition, visible: false }, { ...definition, access: 'private' }, { ...definition, title: 3 }])('refuses invalid definition metadata in native registrations too: %j', invalid => {
   expect(() => compileSettingsDefinition(invalid as SettingsDefinition)).toThrow();
+});
+
+it('validates defaults structure and JSON purity in _assertSettingsDefinitionStructure', () => {
+  expect(() => _assertSettingsDefinitionStructure({ schema: { type: 'object' }, defaults: null as never })).toThrow('Settings defaults must be an object');
+  expect(() => _assertSettingsDefinitionStructure({ schema: { type: 'object' }, defaults: [] as never })).toThrow('Settings defaults must be an object');
+  expect(() => _assertSettingsDefinitionStructure({ schema: { type: 'object' }, defaults: { bad: NaN } })).toThrow('Settings defaults must be JSON data');
 });
 
 it('owns the compiled schema even when validation retains a large enum by reference', () => {
