@@ -62,3 +62,4 @@ export { cacheDependency, readCachedDependency, readDependencyBuild } from './de
 export type { DependencyOrigin, DependencyResolution, CachedDependencyBuild } from './dependency-cache.ts';
 
 export { assertPackSettings } from './settings-admission.ts';
+export { compileSettingsDefinition, nativeDeclarationSettingsProblem, settingsDeclarationDiagnostics } from '../features/settings/compile.ts';

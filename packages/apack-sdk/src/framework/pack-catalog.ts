@@ -2,7 +2,7 @@ import type { PackConsumption } from './service-consumption.ts';
 import type { ArtifactDeclaration, BlockDeclaration, DslDeclaration, PackMigrationsDeclaration, StepEntry } from './declaration-types.ts';
 import type { PackLifecycleDeclaration } from './lifecycle-declaration.ts';
 import type { PackDataDeclarations, PackEntityDeclaration } from './data-declaration.ts';
-import { boundHost } from '../runtime/host-runtime.ts';
+import { _boundBackendHost } from '../runtime/backend-port.ts';
 import type { SettingsDefinition } from './settings-definition.ts';
 import type { DeclarationData } from './catalog-view.ts';
 import type { ReferenceDeclarations } from './reference-declaration.ts';
@@ -53,5 +53,5 @@ export interface NativePackDeclaration extends PackDataDeclarations, FrontendDec
 
 /** Observe committed declaration changes, independently of executable pack activation. */
 export function onPackCatalogChanged(listener: () => void): () => void {
-  return boundHost().packs.onCatalogChanged(listener);
+  return _boundBackendHost().packs.onCatalogChanged(listener);
 }

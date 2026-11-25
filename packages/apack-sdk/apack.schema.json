@@ -524,7 +524,6 @@
             "description": "Links the system to an EARS designation."
           },
           "settings": {
-            "description": "Declarative feature preferences: effective-value schema and explicit defaults.",
             "type": "object",
             "properties": {
               "schema": {
@@ -568,7 +567,8 @@
               "schema",
               "defaults"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "Declarative feature preferences: effective-value schema and explicit defaults."
           },
           "types": {
             "type": "string",

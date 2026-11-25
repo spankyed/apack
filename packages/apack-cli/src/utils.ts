@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { parseManifest, type PackManifest } from '@apackdev/sdk/build';
+import { settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { cliDirs } from './app/pack-host';
 import { resolveStoredProfile } from './app/profiles';
 import { APP_ENVS, parseAppEnv, resolveAppEnvironment, type AppEnv, type AppChannel } from '@apackdev/sdk/env';
@@ -81,7 +82,10 @@ export function readManifest(root: string): PackManifest {
 /** The pack's manifest, or an error listing why the installer would reject it */
 export function readValidManifest(root: string): PackManifest {
   const manifest = readManifest(root);
-  const { diagnostics } = parseManifest(manifest);
+  const parsed = parseManifest(manifest);
+  const diagnostics = parsed.diagnostics.length > 0
+    ? parsed.diagnostics
+    : settingsDeclarationDiagnostics(manifest);
   if (diagnostics.length > 0) {
     throw new Error(`apack.json is invalid:\n${diagnostics.map(({ message }) => `  - ${message}`).join('\n')}`);
   }

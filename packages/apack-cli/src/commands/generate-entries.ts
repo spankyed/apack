@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { PackManifest } from '@apackdev/sdk/build';
 import { _depTypesFile, _depTypesVersion, generatePackFiles } from '@apackdev/sdk/build';
 import { holdExclusiveLock } from '@apackdev/host/exclusive-lock';
+import { compileSettingsDefinition } from '@apackdev/host/packs';
 import { findPackRoot, readValidManifest } from '../utils';
 import { resolveDeps, type ResolvedDeps } from './generate';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
@@ -136,7 +137,12 @@ async function writeGenerated(
   dependencies: ResolvedDeps,
   compilation: CompilationInputs,
 ) {
-  const files = await generatePackFiles(manifest, { packRoot: root, depTypes: dependencies.depTypes, depSnapshots: dependencies.depSnapshots });
+  const files = await generatePackFiles(manifest, {
+    packRoot: root,
+    depTypes: dependencies.depTypes,
+    depSnapshots: dependencies.depSnapshots,
+    validateSettings: compileSettingsDefinition,
+  });
   compilation.assertCurrent();
   if (computeInputsHash(root, manifest, dependencies, compilation) !== currentHash) {
     throw new Error('Pack generation inputs changed; retry before publishing generated files');

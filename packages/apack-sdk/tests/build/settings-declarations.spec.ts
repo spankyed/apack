@@ -23,11 +23,11 @@ describe('declarative pack settings', () => {
     { ...definition, defaults: null },
     { ...definition, unexpected: true },
     { ...definition, access: 'private' },
-    { ...definition, defaults: { name: 1 } },
-    { ...definition, schema: { type: 'object', properties: { name: { type: 'string', default: '' } }, required: ['name'] }, defaults: {} },
+    { ...definition, schema: { type: 'string' } },
     { ...definition, schema: { type: 'object', properties: { name: { $ref: 'https://example.test/value.json' } } } },
-    { ...definition, schema: { type: 'object', unknownKeyword: true } },
-  ])('refuses invalid definitions rather than executing or normalizing them: %j', declaration => {
+    { ...definition, schema: { type: 'object', $async: true } },
+    { ...definition, schema: { type: 'object', definitions: { nested: { $id: 'https://example.test/nested' } } } },
+  ])('refuses structurally invalid definitions without executing or normalizing them: %j', declaration => {
     const before = structuredClone(declaration);
     const result = parseManifest(manifest({ assistant: declaration }));
     expect(result.status).toBe('invalid');
@@ -49,10 +49,5 @@ describe('declarative pack settings', () => {
     const result = parseSnapshot(snapshot);
     expect(result.status).toBe('valid');
     expect(Object.keys(result.snapshot!.manifest.extensions!.settings!.assistant.defaults)).toEqual(['__proto__', 'constructor']);
-  });
-
-  it('keeps default errors at the owning declaration', () => {
-    const result = parseManifest(manifest({ assistant: { ...definition, defaults: { name: null } } }));
-    expect(result.diagnostics).toMatchObject([{ path: ['extensions', 'settings', 'assistant', 'defaults', 'name'] }]);
   });
 });

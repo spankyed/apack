@@ -1,9 +1,9 @@
 // Active backend implementations. Declaration reads and frontend bindings have separate APIs.
 import type { StepDefinition, StepBuildFacet, StepRuntimeFacet, StepNodeFacet, TriggerFacet } from './types.ts';
-import { boundHost } from '../runtime/host-runtime.ts';
+import { _boundBackendHost } from '../runtime/backend-port.ts';
 import { getStepDeclaration } from './catalog.ts';
 
-const step = (type: string): StepDefinition | undefined => boundHost().packs.step(type);
+const step = (type: string): StepDefinition | undefined => _boundBackendHost().packs.step(type);
 
 /** The registered step definitions and their facets, by type */
 interface StepRegistry {
@@ -50,15 +50,15 @@ export const stepRegistry: StepRegistry = {
   },
 
   triggers(): StepDefinition[] {
-    return boundHost().packs.steps().filter(s => s.kind === 'trigger');
+    return _boundBackendHost().packs.steps().filter(s => s.kind === 'trigger');
   },
 
   types(): string[] {
-    return boundHost().packs.steps().map(s => s.type);
+    return _boundBackendHost().packs.steps().map(s => s.type);
   },
 
   all(): StepDefinition[] {
-    return boundHost().packs.steps();
+    return _boundBackendHost().packs.steps();
   },
 
   /** Initial JSON fields from declarations, available even without an active provider. */

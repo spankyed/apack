@@ -1,7 +1,7 @@
 import { _performanceEnvelope, type PerformanceCarrier } from '../runtime/performance.ts';
 // Messaging between frontend surfaces and backend systems. Frontend-safe: no Node modules and no
 // `services`, since pack frontends get this module from the host (the `sdkEvents` global).
-import { boundHost, _isHostBound } from '../runtime/host-runtime.ts';
+import { _boundBackendHost, _isBackendHostBound } from '../runtime/backend-port.ts';
 import { _isFeHostBound, boundFeHost } from '../runtime/fe-host.ts';
 import { getDesignated } from '../designations/index.ts';
 import { resolveName, splitRef, type FeatureRef } from '../ids/refs.ts';
@@ -437,7 +437,7 @@ export const HOST_SURFACE_EVENT_TYPES = {
 function sendIncoming(message: Message): void {
   message = _performanceEnvelope(message);
   if (_isFeHostBound()) boundFeHost().client.send(message);
-  else if (_isHostBound()) boundHost().transport.rootEvents.emitIncoming(message);
+  else if (_isBackendHostBound()) _boundBackendHost().transport.rootEvents.emitIncoming(message);
   else throw new Error('No host is bound to send events through: call bindHost(runtime) (backend) or bindFeHost(runtime) (frontend) from @apackdev/sdk/runtime first');
 }
 
@@ -525,15 +525,15 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
     broadcast(name: string, event: { type: string; [key: string]: unknown }): void {
       // The two sends share a signature, so the compiler can't tell a caller it picked the wrong one: say which it
       // is. Reaching for the other from here is the likely mistake, not a missing bindHost.
-      if (!_isHostBound() && _isFeHostBound()) {
+      if (!_isBackendHostBound() && _isFeHostBound()) {
         throw new Error(`broadcast("${name}") is the backend's, over the bus to every window. In the renderer, send to this window's surface with sendToSurface from #generated/events`);
       }
-      boundHost().transport.rootEvents.emitSurfaceSend(_performanceEnvelope({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() }));
+      _boundBackendHost().transport.rootEvents.emitSurfaceSend(_performanceEnvelope({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() }));
     },
 
     sendToSurface(name: string, event: { type: string; [key: string]: unknown }): void {
       // The two sends share a signature, so the compiler can't tell a caller it picked the wrong one: say which it is.
-      if (!_isFeHostBound() && _isHostBound()) {
+      if (!_isFeHostBound() && _isBackendHostBound()) {
         throw new Error(`sendToSurface("${name}") is the renderer's, to this window's surface. On the backend, send over the bus with broadcast from #generated/events`);
       }
       deliverInWindow({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() });
@@ -564,7 +564,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
       if (!client) {
         throw new Error(`sendToWindow("${name}") was given no connection to send to. A handler is handed the one it is serving as \`client\`, which is absent when the message came from another system or from nothing — to reach every window showing that surface, use broadcast.`);
       }
-      boundHost().transport.rootEvents.emitSurfaceSend(_performanceEnvelope({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress(), client }));
+      _boundBackendHost().transport.rootEvents.emitSurfaceSend(_performanceEnvelope({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress(), client }));
     },
 
     /**
@@ -741,8 +741,8 @@ const connectionSignals = new WeakMap<object, Map<string, AbortController>>();
  * backend is bound to hear of one ending.
  */
 export function _connectionSignal(client: string | undefined): AbortSignal {
-  if (client === undefined || !_isHostBound()) return NEVER_ABORTS;
-  const { rootEvents } = boundHost().transport;
+  if (client === undefined || !_isBackendHostBound()) return NEVER_ABORTS;
+  const { rootEvents } = _boundBackendHost().transport;
   let controllers = connectionSignals.get(rootEvents);
   if (controllers === undefined) {
     const made = new Map<string, AbortController>();
@@ -880,7 +880,7 @@ export function _replyTo(delivery: _Delivery | undefined): Reply | undefined {
       if (asker.kind === 'bus') { boundFeHost().client.send(message); return; }
       throw new Error(`Can't answer "${asker.ref}" on connection "${asker.client}" from a window: a window reaches the backend and the surfaces beside it, not another window's connection. Nothing in this window builds a connection asker, so the delivery was constructed wrongly rather than answered wrongly — the handler that called reply is not at fault.`);
     }
-    const { rootEvents } = boundHost().transport;
+    const { rootEvents } = _boundBackendHost().transport;
     if (asker.kind === 'connection') { rootEvents.emitSurfaceSend({ ...message, client: asker.client }); return; }
     if (asker.kind === 'bus') { rootEvents.emitIncoming(message); return; }
     throw new Error(`Can't answer the "${asker.ref}" surface in its own window from the backend: there is no window-local bus here, so a backend send to a surface either reaches every window (broadcast) or one connection (sendToWindow). Nothing on the backend builds a window asker, so the delivery was constructed wrongly rather than answered wrongly — the handler that called reply is not at fault.`);
@@ -922,7 +922,7 @@ export function untypedAsk(to: SystemTarget, event: { type: string; [key: string
 
 /** Calls `callback` each time a client connects; returns the unsubscribe (backend only) */
 export function onConnected(callback: () => void): () => void {
-  return boundHost().transport.rootEvents.onConnected(callback);
+  return _boundBackendHost().transport.rootEvents.onConnected(callback);
 }
 
 /**
@@ -939,12 +939,12 @@ export function onConnected(callback: () => void): () => void {
  * and a unit test importing the module binds none — and dispose in `boot.onShutdown`.
  */
 export function onConnectionEnded(callback: (client: string) => void): () => void {
-  return boundHost().transport.rootEvents.onConnectionEnded(callback);
+  return _boundBackendHost().transport.rootEvents.onConnectionEnded(callback);
 }
 
 /** Calls `callback` with each message sent to a backend system; returns the unsubscribe (backend only) */
 export function onIncoming(callback: (message: Message) => void): () => void {
-  return boundHost().transport.rootEvents.onIncoming(callback);
+  return _boundBackendHost().transport.rootEvents.onIncoming(callback);
 }
 
 /** `sendToSurface` typed against a surface event map; any feature's surface, by its ref, takes what every surface does */

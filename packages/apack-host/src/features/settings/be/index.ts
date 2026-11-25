@@ -8,3 +8,10 @@ export { createSettingsBackupValidator } from './backup.ts';
 export { createSettingsAccess, bindSettingsRequest, settingsRequestAccess, SETTINGS_MUTATIONS, type SettingsAccess } from './access.ts';
 
 export { compileSettingsCatalog } from '../validation.ts';
+export {
+  compileSettingsDefinition,
+  nativeDeclarationSettingsProblem,
+  settingsDeclarationDiagnostics,
+  SettingsDefaultsError,
+  type SettingsDeclarationContainer,
+} from '../compile.ts';

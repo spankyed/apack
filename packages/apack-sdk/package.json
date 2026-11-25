@@ -184,6 +184,11 @@
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
     },
+    "./testing/fe": {
+      "@apackdev/source": "./src/testing/fe.ts",
+      "types": "./dist/testing/fe.d.ts",
+      "default": "./dist/testing/fe.js"
+    },
     "./apack.schema.json": "./apack.schema.json",
     "./runtime/internals": {
       "@apackdev/source": "./src/runtime/internals.ts"
@@ -242,7 +247,6 @@
   },
   "dependencies": {
     "@elmdb/ears": "0.1.0",
-    "ajv": "^8.20.0",
     "json-schema-to-typescript": "^15.0.4",
     "mdast-util-from-markdown": "^2.0.2",
     "mdast-util-to-markdown": "^2.1.2",

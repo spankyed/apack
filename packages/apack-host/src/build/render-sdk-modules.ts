@@ -12,6 +12,7 @@ export const APP_UNBRIDGED: Readonly<Record<string, string>> = {
   '@apackdev/sdk/actions': 'compile-time only, inlined into compiled action bodies',
   // A pack's unit tests (through @apackdev/testing) load it, never a pack's runtime in the app
   '@apackdev/sdk/testing': 'unit-test runtime only',
+  '@apackdev/sdk/testing/fe': 'frontend unit-test runtime only',
   // A pack directory on disk, for the specs whose subject is pack tooling. Source-only: the entry has no
   // published target and a pack's config may not declare the condition, so no pack can resolve it at all
   '@apackdev/sdk/testing/pack-fixture': 'repo test tooling, resolvable only under @apackdev/source',

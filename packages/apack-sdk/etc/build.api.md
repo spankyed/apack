@@ -513,7 +513,7 @@ export const FeatureEntrySchema: z.ZodObject<{
         changeOrder?: boolean | undefined;
     }>>>>;
     designation: z.ZodOptional<z.ZodString>;
-    settings: z.ZodOptional<z.ZodPreprocess<z.ZodObject<{
+    settings: z.ZodOptional<z.ZodObject<{
         schema: z.ZodType<Record<string, unknown>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, unknown>, Record<string, unknown>>>;
         defaults: z.ZodPipe<z.ZodCustom<Record<string, unknown>, Record<string, unknown>>, z.ZodTransform<Record<string, unknown>, Record<string, unknown>>>;
         title: z.ZodOptional<z.ZodString>;
@@ -523,7 +523,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             owner: "owner";
             shared: "shared";
         }>>;
-    }, z.core.$strict>, unknown>>;
+    }, z.core.$strict>>;
     types: z.ZodOptional<z.ZodString>;
     system: z.ZodOptional<z.ZodObject<{
         entry: z.ZodString;
@@ -697,13 +697,17 @@ export interface GenerateEntriesOptions {
     depTypes?: Map<string, PackTypeManifest>;
     // (undocumented)
     packRoot: string;
+    // (undocumented)
+    validateSettings?: (definition: SettingsDefinition) => void;
 }
 
 // @public (undocumented)
 export function generatePackFiles(manifest: PackManifest, opts: GenerateEntriesOptions): Promise<Record<string, string>>;
 
 // @public
-export function generateSettingsTypes(definition: SettingsDefinition, name: string): Promise<string>;
+export function generateSettingsTypes(definition: SettingsDefinition, name: string, options?: {
+    validate?: (definition: SettingsDefinition) => void;
+}): Promise<string>;
 
 // @public (undocumented)
 export function hashFlows(merged: FlowDSL): Record<string, object>;
@@ -1005,7 +1009,14 @@ export const ManifestSchema: z.ZodObject<{
             changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         types?: string | undefined;
         system?: {
             entry: string;
@@ -1204,7 +1215,14 @@ export const ManifestSchema: z.ZodObject<{
             changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         types?: string | undefined;
         system?: {
             entry: string;
@@ -1322,14 +1340,28 @@ export const ManifestSchema: z.ZodObject<{
             description?: string | undefined;
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
-        }>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, {
+        }>, Record<string, {
             schema: Record<string, unknown>;
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
-        }>, Record<string, unknown>>>>;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        }>, Record<string, {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        }>>>>;
         help: z.ZodOptional<z.ZodObject<{
             path: z.ZodString;
         }, z.core.$strict>>;
@@ -1992,14 +2024,28 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         description?: string | undefined;
         form?: string | undefined;
         access?: "owner" | "shared" | undefined;
-    }>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, {
+    }>, Record<string, {
         schema: Record<string, unknown>;
         defaults: Record<string, unknown>;
         title?: string | undefined;
         description?: string | undefined;
         form?: string | undefined;
         access?: "owner" | "shared" | undefined;
-    }>, Record<string, unknown>>>>;
+    }>, z.core.$ZodTypeInternals<Record<string, {
+        schema: Record<string, unknown>;
+        defaults: Record<string, unknown>;
+        title?: string | undefined;
+        description?: string | undefined;
+        form?: string | undefined;
+        access?: "owner" | "shared" | undefined;
+    }>, Record<string, {
+        schema: Record<string, unknown>;
+        defaults: Record<string, unknown>;
+        title?: string | undefined;
+        description?: string | undefined;
+        form?: string | undefined;
+        access?: "owner" | "shared" | undefined;
+    }>>>>;
     services: z.ZodOptional<z.ZodLazy<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
     repositories: z.ZodOptional<z.ZodLazy<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
     data: z.ZodOptional<z.ZodObject<{
@@ -2664,7 +2710,14 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         references?: {
@@ -2843,7 +2896,14 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         references?: {
