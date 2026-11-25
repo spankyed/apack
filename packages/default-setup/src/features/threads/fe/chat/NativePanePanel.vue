@@ -1,6 +1,6 @@
 <template>
   <section ref="panel" data-native-pane-panel @keydown="panelKey" class="min-h-0 shrink-0 border-b border-white/[0.06] bg-[#202022] px-5 py-3" aria-label="Claude panes">
-    <div class="mb-3 flex items-center gap-2 border-b border-white/[0.05] pb-2">
+    <header ref="header" class="native-pane-header mb-3 flex items-center gap-2 border-b border-white/[0.05] pb-2">
       <div v-if="panes.roster.panes.length > 1" class="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist" aria-label="Claude pane tabs">
         <button v-for="pane in panes.roster.panes" :key="pane.id" type="button" role="tab" :aria-selected="pane.id === shown" :tabindex="pane.id === shown ? 0 : -1"
           class="max-w-48 shrink-0 truncate rounded-md border border-transparent px-3 py-1.5 text-xs font-medium text-neutral-400 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" :class="{ '!border-white/[0.08] bg-white/[0.06] !text-neutral-100': pane.id === shown }"
@@ -9,7 +9,7 @@
       <span v-else class="flex-1 truncate text-xs font-medium text-neutral-300">{{ title }}</span>
       <button v-if="preferredRows !== undefined" type="button" class="rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" aria-label="Use requested pane height" title="Use requested pane height" @click="emit('resize', undefined)"><RotateCcw :size="12" /></button>
       <button type="button" class="rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" :aria-label="`Close ${title}`" @click="emit('operate', { kind: 'close', id: shown })"><X :size="14" /></button>
-    </div>
+    </header>
     <div ref="site" class="native-pane-surface min-h-10 min-w-0 overflow-auto text-[13px] leading-5 outline-none" :style="{ height: `${bodyRows * rowPixels}px` }" role="tabpanel" :aria-label="title" tabindex="0"
       @focusin="focusIn" @focusout="focusOut" @compositionstart="composing = true" @compositionend="composing = false"
       @keydown="siteKey" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
@@ -70,15 +70,23 @@ function resizeKey(event: KeyboardEvent) {
 }
 const site = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: site, cellWidth: () => (measure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
-const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
+const panel = ref<HTMLElement | null>(null), header = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
 watch(() => props.panes.body, () => hover.invalidate(), { flush: 'post' })
 let revision = props.initialFocusRevision ?? 0, applying = false, held = false, autoEntering = false
 let consumedGrant: string | null = null
 const composing = ref(false)
 const selectFocus = useNativeSelectFocus(site, releaseFocus, panel)
+function revealBelowHeader(target: EventTarget | null) {
+  const heading = header.value, card = panel.value?.closest<HTMLElement>('[data-onboarding-id="agent-chat-input"]')
+  if (!heading || !card?.scrollTop || !(target instanceof HTMLElement) || target === site.value || getComputedStyle(heading).position !== 'sticky') return
+  const field = target.closest<HTMLElement>('label[data-native-scroll-id]') ?? target
+  const overlap = heading.getBoundingClientRect().bottom + 4 - field.getBoundingClientRect().top
+  if (overlap > 0) card.scrollTop -= overlap
+}
 function focusIn(event: FocusEvent) {
   if (applying || !shown.value || !site.value || event.target !== document.activeElement) return
+  revealBelowHeader(event.target)
   if (selectFocus.returnsToTrigger(event.target) && held) return
   held = true
   const target = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
@@ -153,6 +161,18 @@ watch(() => props.focus, reply => {
     const bounds = element.getBoundingClientRect(), control = target.getBoundingClientRect()
     if (control.top < bounds.top) scroll.reveal(element.scrollTop + control.top - bounds.top)
     else if (control.bottom > bounds.bottom) scroll.reveal(element.scrollTop + control.bottom - bounds.bottom)
+    revealBelowHeader(target)
   } finally { applying = false }
 })
 </script>
+
+<style scoped>
+@media (max-height: 700px) {
+  .native-pane-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #202022;
+  }
+}
+</style>
