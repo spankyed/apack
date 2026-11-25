@@ -6,7 +6,7 @@
     </span>
     <SelectRoot v-if="node.kind === 'select'" :model-value="selectToken" :open="visible && selectOpen" @update:open="selectOpen = visible && $event">
       <SelectTrigger :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :aria-label="node.label || 'Claude selection'"
-        class="flex h-9 min-w-0 max-w-full items-center justify-between gap-3 rounded-lg border border-current bg-transparent px-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @keydown.stop>
+        class="flex h-9 min-w-0 max-w-full items-center justify-between gap-3 rounded-lg border border-current bg-transparent px-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @keydown="selectKeydown">
         <span class="truncate">{{ selectedLabel }}</span><span aria-hidden="true">⌄</span>
       </SelectTrigger>
       <SelectPortal>
@@ -94,6 +94,11 @@ const draft = ref(props.node.value)
 const visible = inject(claudeNativeSiteVisible, computed(() => true))
 const selectOpen = ref(false)
 watch(visible, value => { if (!value) selectOpen.value = false })
+function selectKeydown(event: KeyboardEvent) {
+  // An open picker handles Escape itself. When closed, only a Pane claims that key.
+  if (event.key === 'Escape' && !event.isComposing && !selectOpen.value && field.value?.closest('[data-native-pane-panel]')) return
+  event.stopPropagation()
+}
 function restoreSelectFocus(event: Event) {
   // Reka normally returns focus to the trigger. A retired surface owns that decision.
   if (!visible.value || !field.value?.isConnected) event.preventDefault()

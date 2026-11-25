@@ -23,6 +23,23 @@ it('keeps native titles literal, exposes tabs/close, and preserves denied-close 
   } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
 })
 
+it('lets a closed native Select pass Escape to its owning Pane', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const panes: ClaudeUiPanePresentation = {
+    roster: { panes: [{ id: 'review', title: 'Review', plugin: 'fixture', close_on_escape: true }], shown_id: 'review', focused_id: null, focus_requested_id: null },
+    body: { status: 'live', tree: { kind: 'select', actionId: 'audience', focusId: 'focus-audience', revision: 0, autoFocus: false, options: [{ value: 'a', label: 'Audience' }] } },
+  }
+  const operate = vi.fn(), root = document.createElement('div')
+  document.body.append(root)
+  const app = createApp({ render: () => h(NativePanePanel, { panes, onOperate: operate }) })
+  app.mount(root)
+  try {
+    const select = root.querySelector('[role="combobox"]')!
+    select.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    expect(operate).toHaveBeenCalledExactlyOnceWith({ kind: 'close', id: 'review' })
+  } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
+})
+
 it('resizes with keyboard bounds, keeps the user size across requests and reopen, and can restore the native request', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const state = reactive<ClaudeUiPanePresentation>({ roster: { panes: [{ id: 'a', title: 'Review', plugin: 'fixture', rows: 6 }], shown_id: 'a', focused_id: null, focus_requested_id: null }, body: { status: 'live', tree: { kind: 'text', text: 'Native pane body' } } })
