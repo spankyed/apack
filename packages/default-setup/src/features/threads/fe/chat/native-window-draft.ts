@@ -13,8 +13,8 @@ const scope = globalThis as unknown as Record<symbol, WindowDrafts | undefined>
 const drafts = scope[key] ??= { parent: new Map(), agents: {} }
 export const claudeWindowAgentDrafts = drafts.agents
 
-export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void {
-  const storageKey = claudeWindowStorageKey('parent-draft', owner)
+export function bindClaudeWindowDraft(editor: Editor, owner: string, { persistent = true } = {}): () => void {
+  const storageKey = persistent ? claudeWindowStorageKey('parent-draft', owner) : undefined
   const cached = drafts.parent.get(owner)
   const storage = () => surfaceStorage(featureRef('threads'))
   const durable = !!storageKey && typeof indexedDB !== 'undefined'

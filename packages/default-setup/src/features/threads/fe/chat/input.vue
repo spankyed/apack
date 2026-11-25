@@ -96,6 +96,7 @@
         <!-- Editor container -->
         <div ref="editorAreaRef" class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
+            :key="currentThread?.id"
             ref="tiptapRef"
             mode="input"
             variant="chat"
@@ -546,9 +547,12 @@ const composerEpoch = ref(0)
 watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch.value++; submissionProblem.value = undefined; queuedNotice.value = false }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch.value++ })
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
-// Restore only this native session's parent input before adopting it into a fresh prompt host.
+// The editor is recreated on conversation switch, so undo and composition also
+// belong to the originating conversation. Only committed draft state is restored.
 watch([() => tiptapRef.value?.editor, () => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId], ([editor, threadId, sessionId], _previous, cleanup) => {
-  if (editor && threadId && sessionId) cleanup(bindClaudeWindowDraft(editor, JSON.stringify([threadId, sessionId])))
+  if (editor) {
+    cleanup(bindClaudeWindowDraft(editor, JSON.stringify([threadId ?? null, sessionId ?? null]), { persistent: !!threadId && !!sessionId }))
+  }
 }, { flush: 'post' })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
 watch(() => props.nativeDecisionPending, pending => { if (pending) { promptEditor?.dismissSuggestion(); promptEditor?.dismissCompletions() } })
@@ -582,7 +586,7 @@ watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
     editorDom.removeEventListener('compositionend', endComposition)
     editorDom.removeEventListener('blur', endComposition)
   })
-})
+}, { flush: 'post' })
 const pageSelection = useClaudeUiSelection()
 function promptHostAvailable(expiresAt: number) {
   return Date.now() < expiresAt && !!promptEditor && !props.disabled && !submitting.value && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
@@ -663,7 +667,7 @@ watch(() => props.prefillText, (text) => {
     tiptapRef.value.editor.chain().setMeta('claude-prompt-by', 'app').setContent(text).run()
     tiptapRef.value.editor.commands.focus('end')
   }
-})
+}, { flush: 'post' })
 
 // Prefill attachments when the parent sets prefillReferences (e.g., on revert).
 watch(() => props.prefillReferences, (refs) => {
@@ -935,10 +939,17 @@ const visibleModes = computed(() => props.modes.filter(m => !m.hidden))
 
 // Reset to first visible mode when switching from forced-mode thread, and focus editor
 watch(() => props.currentThread?.id, () => {
+  messageContent.value = ''
+  hasTextContent.value = false
+  historyIndex.value = -1
+  lastClearedContent.value = null
   if (props.currentMode && !props.currentThread?.forcedMode && !visibleModes.value.some(m => m.name === props.currentMode)) {
     emit('mode-change', visibleModes.value[0].name)
   }
-  nextTick(() => tiptapRef.value?.editor?.commands.focus('end'))
+  void nextTick(() => {
+    const editor = tiptapRef.value?.editor
+    if (editor && !editor.isDestroyed) editor.commands.focus()
+  })
 })
 
 const handleButtonClick = (action: string) => {

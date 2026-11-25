@@ -23,8 +23,9 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
   const { default: StarterKit } = await import('@tiptap/starter-kit')
   const { Markdown } = await import('tiptap-markdown')
   return { default: defineComponent({ emits: ['update:modelValue'], setup(_props, { expose, emit }) {
-    editor = new Editor({ extensions: [StarterKit, Markdown, CommandSuggestion], onUpdate: ({ editor }) => emit('update:modelValue', (editor.storage as any).markdown.getMarkdown()) })
-    expose({ editor }); onUnmounted(() => editor.destroy())
+    const mountedEditor = new Editor({ extensions: [StarterKit, Markdown, CommandSuggestion], onUpdate: ({ editor }) => emit('update:modelValue', (editor.storage as any).markdown.getMarkdown()) })
+    editor = mountedEditor
+    expose({ editor: mountedEditor }); onUnmounted(() => mountedEditor.destroy())
     return () => h('div', { 'data-testid': 'editor-fixture' })
   } }) }
 })
@@ -50,25 +51,32 @@ function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
 
-it('keeps attachments on the thread that owns the draft', async () => {
+it('keeps draft text, selection and attachments with their own conversation', async () => {
   const f = mount(async () => 'apack-media://image')
+  await nextTick()
   const firstThread = f.state.currentThread
+  editor.commands.setContent('<p><strong>first</strong></p>')
+  editor.commands.setTextSelection({ from: 2, to: 4 })
+  const originalSelection = editor.state.selection.toJSON()
   attachments.pendingFiles.value.push(file('first.txt'))
 
   f.state.currentThread = { id: 'thread-two', messages: [] }
   await nextTick()
+  expect(editor.isEmpty).toBe(true)
   expect(attachments.pendingFiles.value).toEqual([])
+  editor.commands.setContent('second')
   attachments.pendingFiles.value.push(file('second.txt'))
 
   f.state.currentThread = firstThread
-  await nextTick()
+  await vi.waitFor(() => expect(editor.getHTML()).toBe('<p><strong>first</strong></p>'), { timeout: 2000 })
+  expect(editor.state.selection.toJSON()).toEqual(originalSelection)
   expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['first.txt'])
   f.submit()
-  await vi.waitFor(() => expect(f.send).toHaveBeenCalledExactlyOnceWith('first', { files: [file('first.txt')] }))
+  await vi.waitFor(() => expect(f.send).toHaveBeenCalledExactlyOnceWith('**first**', { files: [file('first.txt')] }))
   expect(attachments.pendingFiles.value).toEqual([])
 
   f.state.currentThread = { id: 'thread-two', messages: [] }
-  await nextTick()
+  await vi.waitFor(() => expect(editor.state.doc.textContent).toBe('second'), { timeout: 2000 })
   expect(attachments.pendingFiles.value.map(item => item.name)).toEqual(['second.txt'])
 })
 
