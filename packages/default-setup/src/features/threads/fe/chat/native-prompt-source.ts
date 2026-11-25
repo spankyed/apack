@@ -103,8 +103,11 @@ function retainedReferences(node: ProseMirrorNode): PositionedSourceReference[] 
   })
 }
 
-export function claudePromptSourceReferences(node: ProseMirrorNode): ContextReference[] {
-  return retainedReferences(node).map(value=>({...value.reference}))
+export function claudePromptSourceReferences(editor: Editor, node: ProseMirrorNode): ContextReference[] {
+  const retained = retainedReferences(node)
+  // A saved draft can arrive with offsets produced before source semantics were checked.
+  const active = retained.length ? activeSourceReferences(node.textContent, retained, text => parseClaudePromptMarkdown(editor, text)) : retained
+  return active.map(({ reference }) => ({ ...reference }))
 }
 
 /** Confirm each occurrence is an active reference, including when identical text appears elsewhere. */

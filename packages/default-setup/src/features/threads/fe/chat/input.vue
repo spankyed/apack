@@ -1028,7 +1028,7 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   if (!editor) return []
   const refs: ContextReference[] = []
   editor.state.doc.descendants((node) => {
-    if (node.type.name === 'claudePromptSource') refs.push(...claudePromptSourceReferences(node))
+    if (node.type.name === 'claudePromptSource') refs.push(...claudePromptSourceReferences(editor, node))
     if (node.type.name === 'reference') {
       refs.push({
         refType: node.attrs.refType,

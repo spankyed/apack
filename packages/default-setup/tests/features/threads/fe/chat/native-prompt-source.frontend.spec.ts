@@ -43,9 +43,9 @@ it('retains a linked target through raw URI caret placement but drops former con
   const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
   bridge.receive({revision:bridge.revision,status:'applied',frame:{text:source,cursor}})
   expect(text()).toBe(source);expect(bridge.readDraft()?.cursor).toBe(cursor)
-  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([{refType:'thread',refId:'thread-id',shortCode:'T-1',label:'Context'}])
+  expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([{refType:'thread',refId:'thread-id',shortCode:'T-1',label:'Context'}])
   editor.view.dom.dispatchEvent(new Event('beforeinput',{bubbles:true}));editor.commands.insertContent('X')
-  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+  expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([])
   bridge.dispose()
 })
 
@@ -62,7 +62,7 @@ it('does not transfer a source reference to an identical copied token after its 
   try {
     bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: source, cursor: sourceStart + 3 } })
     expect(editor.state.doc.firstChild?.type.name).toBe('claudePromptSource')
-    const refs = () => claudePromptSourceReferences(editor.state.doc.firstChild!)
+    const refs = () => claudePromptSourceReferences(editor, editor.state.doc.firstChild!)
     editor.view.dispatch(editor.state.tr.insertText(token, 1))
     expect(refs()).toHaveLength(1)
     const originalUri = 1 + token.length + source.indexOf('thread-id')
@@ -86,7 +86,7 @@ it('keeps a positioned source reference and exact decoration when Claude inserts
   try {
     bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: source, cursor: 1 } })
     expect(editor.state.doc.firstChild?.type.name).toBe('claudePromptSource')
-    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([reference])
+    expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([reference])
     editor.commands.setTextSelection(3)
     const prefix = 'Important: '
     const rewritten = prefix + source
@@ -97,7 +97,7 @@ it('keeps a positioned source reference and exact decoration when Claude inserts
     } })
     expect(bridge.readDraft()).toEqual({ text: rewritten, cursor: prefix.length + 2 })
     expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('[Context]')
-    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([reference])
+    expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([reference])
     expect(editor.state.doc.firstChild!.attrs.references[0].from).toBe(start)
   } finally { bridge.dispose() }
 })
@@ -135,7 +135,7 @@ it.each(['person', 'native'])('withdraws context when a %s edit opens a code fen
   const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
   try {
     bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: source, cursor: 1 } })
-    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toHaveLength(1)
+    expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toHaveLength(1)
     const fence = '~~~md\n'
     if (by === 'native') {
       editor.commands.setTextSelection(3)
@@ -144,8 +144,24 @@ it.each(['person', 'native'])('withdraws context when a %s edit opens a code fen
       editor.view.dispatch(editor.state.tr.insertText(fence, 1))
     }
     expect(text()).toBe(fence + source)
-    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+    expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([])
   } finally { bridge.dispose() }
+})
+
+it('rechecks older saved literal drafts before attaching context, even without a draft edit', () => {
+  const token = '[Context](apack-ref://thread/thread-id)'
+  const reference = { refType: 'thread', refId: 'thread-id', shortCode: 'T-1', label: 'Context' }
+  const contents = ['Review ' + token, '~~~md\nReview ' + token + '\n~~~']
+  for (const [index, content] of contents.entries()) {
+    // Both snapshots carry the original token's exact offset, as older drafts did.
+    editor.commands.setContent({ type: 'doc', content: [{
+      type: 'claudePromptSource', attrs: { references: [{ text: token, from: content.indexOf(token), reference }] },
+      content: [{ type: 'text', text: content }],
+    }] })
+    const stored = editor.state.doc.firstChild!
+    expect(stored.attrs.references).toHaveLength(1)
+    expect(claudePromptSourceReferences(editor, stored)).toEqual(index === 0 ? [reference] : [])
+  }
 })
 
 it('refuses native atom removal rather than silently dropping context metadata',async()=>{
@@ -174,7 +190,7 @@ it('allows an explicit reverse replace to withdraw old reference context in lite
   const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn()),source='~~~ts\nconst fresh = true\n~~~'
   expect(bridge.fillDraft({mode:'replace',text:source},bridge.revision)).toBe(true)
   expect(text()).toBe(source);expect(bridge.readDraft()).toEqual({text:source,cursor:source.length})
-  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([]);bridge.dispose()
+  expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([]);bridge.dispose()
 })
 
 it('keeps an explicit replacement containing a former link inside code free of reference metadata', () => {
@@ -183,11 +199,11 @@ it('keeps an explicit replacement containing a former link inside code free of r
   const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
   try {
     bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: '# Heading\n\n' + token, cursor: 1 } })
-    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toHaveLength(1)
+    expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toHaveLength(1)
     const replacement = '\`\`\`md\n' + token + '\n\`\`\`'
     expect(bridge.fillDraft({ mode: 'replace', text: replacement }, bridge.revision)).toBe(true)
     expect(text()).toBe(replacement)
-    expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+    expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([])
   } finally { bridge.dispose() }
 })
 
@@ -196,7 +212,7 @@ it('carries textual hard breaks and reference identity through literal append an
   const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn()),before=text(),append='\n\n~~~ts\nconst ready = true\n~~~'
   expect(bridge.fillDraft({mode:'append',text:append},bridge.revision)).toBe(true)
   expect(text()).toBe(before+append)
-  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([{refType:'thread',refId:'thread-id',shortCode:'T-1',label:'Context'}])
+  expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([{refType:'thread',refId:'thread-id',shortCode:'T-1',label:'Context'}])
   const old=bridge.revision,content=text()
   bridge.receive({revision:old,status:'applied',frame:bridge.readDraft()!})
   expect(bridge.fillDraft({mode:'insert',text:'\nMore notes'},bridge.revision)).toBe(true)
@@ -208,7 +224,7 @@ it('carries textual hard breaks and reference identity through literal append an
   expect(bridge.fillDraft({mode:'replace',text:replacement},bridge.revision)).toBe(true)
   expect(text()).toBe(replacement)
   expect(editor.state.doc.firstChild!.attrs.references).toEqual([])
-  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+  expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([])
   bridge.dispose()
 })
 
