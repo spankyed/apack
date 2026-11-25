@@ -3,7 +3,7 @@
     <NativeBackgroundApproval v-if="state?.approval" :key="state.approval.id" :frame="state.approval" :disabled="disabled" @answer="answerApproval" @leave="leaveApproval" @open-native="openApproval" />
     <NativeQuestionDrawing v-else-if="state?.question" :key="state.question.messageId" :frame="state.question" :disabled="disabled || !!state.question.pending" :error="state.question.problem" cancel-label="Back to parent notes" can-reject can-clarify @reject="rejectQuestion"
       @press="press" @field="field" @started="started" @respond="answer" @pause="leaveQuestion" />
-    <NativeAgentComposer v-show="!state?.question && !state?.approval" audience="background" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="disabled || !attachment?.attachmentId || !['live', 'rendering'].includes(state?.status ?? '')"
+    <NativeAgentComposer v-show="!state?.question && !state?.approval" audience="background" :draft="draft" :draft-snapshot="draftSnapshot" :operation-pending="disabled" :disabled="!attachment?.attachmentId || !['live', 'rendering'].includes(state?.status ?? '')"
       :mount-id="mountId" :attachment-id="attachment?.attachmentId" :prompt-revision="attachment?.promptRevision" :prompt="attachment?.prompt"
       :host-request="attachment?.promptHostRequest" :completions="attachment?.completions" :completion-revision="attachment?.completionRevision" :focus="attachment?.focus" :ui="state" :send="send"
       @leave="emit('leave')" @draft="emit('draft', $event)" @draft-snapshot="emit('draft-snapshot', $event)" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
@@ -23,11 +23,12 @@ import {provideClaudeHoverGroups} from './native-ui-hover.ts'
 import {claudeTranscriptLayout} from './native-transcript-layout.ts'
 import {queueClaudeUiRetirement, useClaudeViewUnmount} from './native-ui-retirement.ts'
 import {createClaudeActionKeyHandler} from './native-action-keys.ts'
+import type {ClaudeAgentComposerSubmitResult} from './native-submit.ts'
 import type {ClaudeAgentDraftSnapshot} from './native-agent-draft.ts'
 import type {ClaudeBackgroundUiTarget} from '#features/code/common/native-background.ts'
 import type {ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent} from '#generated/types.ts'
 import type {ThreadsState} from '../state.ts'
-const props = defineProps<{threadId: string; target: ClaudeBackgroundUiTarget; active?: boolean; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; send(text: string): Promise<void>}>()
+const props = defineProps<{threadId: string; target: ClaudeBackgroundUiTarget; active?: boolean; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; send(text: string): Promise<ClaudeAgentComposerSubmitResult>}>()
 const emit = defineEmits<{leave: []; 'open-native': []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]}>()
 const actor: ThreadsState = useSurface(), root = ref<HTMLElement>(), mountId = ref<string>()
 const { state: threads, send: sendToThreads } = useState(actor)

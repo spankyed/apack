@@ -66,10 +66,10 @@ it('preserves newer typing when native admission returns a cleaned older draft',
   expect(editor.state.doc.textContent).toContain('newer text'); expect(send).toHaveBeenCalledOnce()
 })
 
-it('keeps only the formatted next draft when the selected Agent acknowledges Send', async () => {
+it.each([undefined, 'background'] as const)('keeps only the formatted next draft after Send acknowledgment (%s)', async audience => {
   const { promise, resolve } = deferred<{ accepted: true }>()
   const send = vi.fn(() => promise)
-  const f = await mount(send, true)
+  const f = await mount(send, true, undefined, undefined, audience)
   f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   await vi.waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith('Unsent Agent draft'))
 

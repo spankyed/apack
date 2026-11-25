@@ -6,16 +6,16 @@
     <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor composer-list-markers min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <p v-if="(problem || nativeProblem) && !agentDraftTooLong" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     </div>
-    <NativePromptCompletions ref="nativeCompletionMenu" :anchor-el="composerRef" :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" :can-focus="id => bridge?.canFocusCompletion(id) ?? false" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
+    <NativePromptCompletions ref="nativeCompletionMenu" :anchor-el="composerRef" :editor="editorRef?.editor" :rows="offers" :disabled="submissionBlocked" :can-focus="id => bridge?.canFocusCompletion(id) ?? false" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
     </div>
     <div ref="actionsRef" class="native-agent-actions flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
       <div class="flex min-w-0 items-center gap-2">
-        <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="disabled || submitting" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
+        <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="submissionBlocked" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
         <button v-if="audience === 'background'" type="button" :disabled="submitting" class="rounded py-1 text-xs text-neutral-400 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @click="emit('leave')">Back to parent notes</button>
         <span v-else-if="agentDraftTooLong" role="status" class="min-w-0 text-xs text-amber-200">{{ CLAUDE_UI_TEXT_LIMIT_MESSAGE }}</span>
         <span v-else class="truncate text-[11px] text-neutral-500">{{ disabled ? (audience === 'background' ? 'Background input unavailable' : 'Agent input unavailable') : 'Enter to send · Shift+Enter for a new line' }}</span>
       </div>
-      <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || agentDraftTooLong || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
+      <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="submissionBlocked || agentDraftTooLong || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
     </div>
   </form>
 </template>
@@ -39,7 +39,7 @@ import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { holdEditorCommandSuggestions } from '@apackdev/sdk/fe'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
-const props = defineProps<{ audience?: 'background'; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeAgentComposerSubmitResult>; openSettings?: () => Promise<void> }>()
+const props = defineProps<{ audience?: 'background'; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; operationPending?: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeAgentComposerSubmitResult>; openSettings?: () => Promise<void> }>()
 const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const toolsExpanded = ref(false)
 const composerRef = ref<HTMLElement | null>(null)
@@ -63,6 +63,7 @@ watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded, () => props.ui
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
 const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
+const submissionBlocked = computed(() => props.disabled || props.operationPending || submitting.value)
 const agentDraftTooLong = computed(() => !props.audience && (props.draft.length > CLAUDE_UI_TEXT_MAX_LENGTH || nativeProblem.value === CLAUDE_UI_TEXT_LIMIT_MESSAGE))
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
 let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true, adoptedEditor: Editor | undefined
@@ -128,7 +129,7 @@ watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmen
       const owner = bridge
       setEditorCompletionOffer(editor, id && rows.length ? { id, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, id) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
     },
-  }, { canSuggest: () => !props.disabled && !submitting.value && document.hasFocus() })
+  }, { canSuggest: () => !submissionBlocked.value && document.hasFocus() })
 }, { flush: 'post' })
 watch(() => props.prompt, value => { if (value) bridge?.receive(value) })
 watch(() => props.completions, value => { if (value) bridge?.receiveCompletions(value) })
@@ -147,7 +148,7 @@ watch(() => props.hostRequest, request => {
       .then(copied => emit('host', { requestId: request.requestId, kind: 'copy', copied }))
     return
   }
-  const available = !props.disabled && !submitting.value && Date.now() < request.expiresAt && document.hasFocus() && !!bridge
+  const available = !submissionBlocked.value && Date.now() < request.expiresAt && document.hasFocus() && !!bridge
   if (request.kind === 'read') { const box = available ? bridge?.readDraft() : undefined; emit('host', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) }) }
   else if (request.kind === 'fill') {
     const result = (available ? bridge?.fillHostDraft(request.input, request.revision) : undefined) ?? { filled: false }
@@ -169,7 +170,7 @@ function leaveEditor(event: KeyboardEvent) {
 }
 async function openNativeSettings() {
   const active = bridge, open = props.openSettings
-  if (props.disabled || submitting.value || !active || !open) return
+  if (submissionBlocked.value || !active || !open) return
   const revision = active.revision
   submitting.value = true; emit('pending', true); problem.value = undefined
   try {
@@ -179,7 +180,7 @@ async function openNativeSettings() {
   finally { submitting.value = false; emit('pending', false) }
 }
 async function submit() {
-  if (props.disabled || submitting.value || agentDraftTooLong.value || !bridge) return
+  if (submissionBlocked.value || agentDraftTooLong.value || !bridge) return
   const editor = editorRef.value?.editor, active = bridge
   if (!editor) return
   const { mountId, attachmentId } = props
@@ -192,7 +193,7 @@ async function submit() {
     const text = active.readDraft()?.text ?? ''
     if (!text.trim()) return
     const doc = editor.state.doc
-    if (!props.audience) submittedDraft = trackNativeSubmittedDraft(editor, doc)
+    submittedDraft = trackNativeSubmittedDraft(editor, doc)
     const result = await props.send(text)
     if (!current() || result && 'commandPending' in result) return
     if (result && 'text' in result) {

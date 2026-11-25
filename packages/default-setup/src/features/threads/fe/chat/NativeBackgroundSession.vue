@@ -45,6 +45,7 @@ import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundStatus, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest, ClaudeBackgroundSession } from '#features/code/common/native-background.ts'
+import type { ClaudeAgentComposerSubmitResult } from './native-submit.ts'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
 const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; info?: ClaudeBackgroundStatus; attached?: boolean; canReply?: boolean }>()
@@ -61,7 +62,7 @@ const richReplyActive = computed(() => !!(props.canReply && replyOpen.value && p
   && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.jobSessionId === props.continuation.continuedInSessionId
   && props.state.session?.pid && ['working','blocked'].includes(props.state.session.state)))
 watch(richReplyActive, value => emit('composing', value), {immediate:true,flush:'sync'})
-let submitted: {text: string; revision: number; rich: boolean; resolve(): void; reject(error: Error): void} | undefined
+let submitted: {text: string; revision: number; rich: boolean; resolve(value: ClaudeAgentComposerSubmitResult): void; reject(error: Error): void} | undefined
 function retireSubmission() { submitted?.reject(Error('Background session changed before acknowledgment')); submitted = undefined }
 function draftCurrent(target: ClaudeNativeContinuation) { return props.continuation.sessionId === target.sessionId && props.continuation.continuedInSessionId === target.continuedInSessionId }
 function updateDraft(target: ClaudeNativeContinuation, text: string) { if (draftCurrent(target)) draft.value = text }
@@ -83,13 +84,13 @@ watch([() => props.state?.revision, () => props.state?.status], () => {
   const request = submitted; submitted = undefined
   if (state.status === 'done') {
     if (!request.rich && draft.value === request.text) { draft.value = ''; draftSnapshot.value = undefined }
-    request.resolve()
+    request.resolve(request.rich ? { accepted: true } : undefined)
   } else request.reject(Error(state.problem || 'Background message was not queued'))
 })
 function reply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSession) {
   void sendReply(target, session, draft.value, false).catch(() => {})
 }
-function sendReply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSession, text: string, rich: boolean): Promise<void> {
+function sendReply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSession, text: string, rich: boolean): Promise<ClaudeAgentComposerSubmitResult> {
   if (!props.canReply || submitted || props.state?.status === 'pending' || !session.pid || !text.trim() || text.length > 32768
     || props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId
     || props.state?.session?.id !== session.id || props.state.session.pid !== session.pid || !['working','blocked'].includes(session.state)) return Promise.reject(Error('Background input changed. Refresh and send again.'))
