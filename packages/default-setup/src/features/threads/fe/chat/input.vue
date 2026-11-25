@@ -20,7 +20,7 @@
         @dragleave="onDragLeave"
         @dragover.prevent
         @drop.prevent="onDrop">
-        <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="focusComposer" />
+        <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" :initial-focus-revision="nativePaneFocusRevision" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="reportNativePaneFocus" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine :reconnect="() => emit('native-ui-reconnect')" ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :native-permission-mode="nativePermissionMode" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @tools-expanded="nativeToolsExpanded = $event; emit('native-tools-expanded', $event)" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
@@ -476,6 +476,12 @@ const hostPopupActive = ref(false)
 // Keep the person's pane size when panes close/reopen or the plugin changes its request.
 const paneRowsPreference = ref<number>()
 const paneFocusGrant = ref<string | null>(null)
+// Closing the final Pane unmounts the panel, but the native composer still owns its focus sequence.
+let nativePaneFocusRevision = 0
+function reportNativePaneFocus(event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent) {
+  nativePaneFocusRevision = event.revision
+  emit('native-ui-focus', event)
+}
 watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
   if (!id || !document.hasFocus()) return
   const editor = tiptapRef.value?.editor

@@ -36,7 +36,7 @@ import { useNativeSelectFocus } from './native-select-focus.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
-const props = defineProps<{ panes: ClaudeUiPanePresentation; focus?: ClaudeUiFocusReply; grantFocus?: string | null; preferredRows?: number }>()
+const props = defineProps<{ panes: ClaudeUiPanePresentation; focus?: ClaudeUiFocusReply; grantFocus?: string | null; preferredRows?: number; initialFocusRevision?: number }>()
 const emit = defineEmits<{ resize: [rows: number | undefined]; operate: [event: ClaudeUiPaneEvent]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; 'return-focus': []; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
 const shown = computed(() => props.panes.roster.shown_id)
 const activePane = computed(() => props.panes.roster.panes.find(pane => pane.id === shown.value))
@@ -73,7 +73,7 @@ const scroll = useClaudeSiteScroll({ element: site, cellWidth: () => (measure.va
 const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
 watch(() => props.panes.body, () => hover.invalidate(), { flush: 'post' })
-let revision = 0, applying = false, held = false, autoEntering = false
+let revision = props.initialFocusRevision ?? 0, applying = false, held = false, autoEntering = false
 let consumedGrant: string | null = null
 const composing = ref(false)
 const selectFocus = useNativeSelectFocus(site, releaseFocus, panel)

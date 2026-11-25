@@ -1,6 +1,6 @@
 import { createApp, h, reactive, nextTick, ref } from 'vue'
 import NativePanePanel from '#features/threads/fe/chat/NativePanePanel.vue'
-import type { ClaudeUiPanePresentation } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import type { ClaudeUiFocusEvent, ClaudeUiPanePresentation } from '#features/code/be/services/claude-code/ui-presentation.ts'
 
 it('keeps native titles literal, exposes tabs/close, and preserves denied-close presentation', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
@@ -42,5 +42,31 @@ it('resizes with keyboard bounds, keeps the user size across requests and reopen
     root.querySelector<HTMLButtonElement>('button[aria-label="Use requested pane height"]')!.click(); await nextTick()
     expect(preferred.value).toBeUndefined(); expect(separator().getAttribute('aria-valuenow')).toBe('3')
     expect(root.querySelector<HTMLElement>('[role="tabpanel"]')!.style.height).toBe('60px')
+  } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
+})
+
+
+it('keeps focus revisions increasing when the same native Pane is reopened', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const panes: ClaudeUiPanePresentation = {
+    roster: { panes: [{ id: 'review', title: 'Review', plugin: 'fixture' }], shown_id: 'review', focused_id: null, focus_requested_id: null },
+    body: { status: 'live', tree: { kind: 'text', text: 'Native pane body' } },
+  }
+  const visible = ref(true), reports: ClaudeUiFocusEvent[] = []
+  let lastRevision = 0
+  const root = document.createElement('div')
+  document.body.append(root)
+  const app = createApp({ render: () => visible.value ? h(NativePanePanel, {
+    panes, initialFocusRevision: lastRevision,
+    onFocusReport(event: ClaudeUiFocusEvent) { lastRevision = event.revision; reports.push(event) },
+  }) : null })
+  app.mount(root)
+  const site = () => root.querySelector<HTMLElement>('[role="tabpanel"]')!
+  try {
+    site().focus()
+    visible.value = false; await nextTick()
+    visible.value = true; await nextTick()
+    site().focus()
+    expect(reports.filter(event => event.isHeld).map(({ paneId, revision }) => [paneId, revision])).toEqual([['review', 1], ['review', 2]])
   } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
 })
