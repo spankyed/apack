@@ -39,11 +39,12 @@ import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 const hover = useClaudeHoverSurface()
 provide(claudeHoverSurface, hover)
 onBeforeUnmount(() => hover.dispose())
-const props = defineProps<{ statusLine?: string; nativeStatus?: string; nativePermissionMode?: PermissionMode; nativeGoalActive?: boolean; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply; reconnect?: () => void }>()
+const props = defineProps<{ statusLine?: string; nativeStatus?: string; nativePermissionMode?: PermissionMode; nativeGoalActive?: boolean; cwd?: string; nativeUi?: ClaudeUiMountState; attachmentScope?: string; nativeFocus?: ClaudeUiFocusReply; reconnect?: () => void }>()
 watch(() => props.nativeUi, () => hover.invalidate(), { flush: 'post' })
 const permissionLabels: Record<PermissionMode, string> = { default: 'Default', acceptEdits: 'Accept edits', plan: 'Plan', bypassPermissions: 'Bypass', dontAsk: "Don’t ask", auto: 'Auto' }
 const ideContext = computed(() => props.nativeUi?.ide ? {...props.nativeUi.ide} : undefined)
 const toolsOpen = ref(false)
+watch(() => props.attachmentScope, () => { toolsOpen.value = false })
 const toolsToggle = ref<HTMLButtonElement | null>(null)
 provide(claudeNativeSiteVisible, computed(() => toolsOpen.value))
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))

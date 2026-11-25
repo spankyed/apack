@@ -19,7 +19,7 @@ beforeEach(() => {
 })
 let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
-async function mount(props: { statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
+async function mount(props: { statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; attachmentScope?: string; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
   const state = reactive(props)
   const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn(), toolsExpanded = vi.fn(), clientInput = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
@@ -879,6 +879,27 @@ it('starts session tools collapsed and expands them without submitting or replac
   expect(toggle.getAttribute('aria-expanded')).toBe('true'); expect(site.style.display).not.toBe('none')
   toggle.click(); await nextTick()
   expect(site.style.display).toBe('none'); expect(editor.value).toBe('Unsent draft'); expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('collapses Session tools on a replacement attachment while keeping same-attachment redraws open', async () => {
+  const f = await mount({ statusLine: '/release', nativeUi: live, attachmentScope: 'view:first' })
+  const toggle = f.root.querySelector<HTMLButtonElement>('[aria-label="Session tools"]')!
+  const control = f.root.querySelector<HTMLButtonElement>('[aria-label="Run fixture"]')!
+  control.focus()
+  expect(document.activeElement).toBe(control)
+
+  f.state.nativeUi = { ...live }
+  await nextTick()
+  expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  expect(document.activeElement).toBe(control)
+
+  f.focusReport.mockClear()
+  f.state.attachmentScope = 'view:replacement'
+  await nextTick()
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(document.activeElement).toBe(toggle)
+  expect(f.focusReport).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ isHeld: false }))
+  expect(f.submit).not.toHaveBeenCalled()
 })
 
 it.each(['native control', 'disclosure'])('returns focus from retired Session tools when the %s had focus', async focused => {
