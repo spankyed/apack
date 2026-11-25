@@ -8,9 +8,9 @@ export function nativeSelectTrigger(site: HTMLElement | null, target: EventTarge
     .find(element => element.getAttribute('aria-controls') === popup.id)
 }
 
-export function useNativeSelectFocus(site: Ref<HTMLElement | null>, release: () => void, boundary = site) {
-  let trigger: HTMLElement | undefined
-  function reset() { trigger = undefined }
+export function useNativeSelectFocus(site: Ref<HTMLElement | null>, release: () => void, acquire: (target: HTMLElement) => void, boundary = site) {
+  let trigger: HTMLElement | undefined, suspended: HTMLElement | undefined
+  function reset() { trigger = undefined; suspended = undefined }
   function entersPopup(target: EventTarget | null): boolean {
     trigger = nativeSelectTrigger(site.value, target)
     return !!trigger
@@ -28,17 +28,27 @@ export function useNativeSelectFocus(site: Ref<HTMLElement | null>, release: () 
     if (!boundary.value?.contains(target)) release()
   }
   function blur() {
-    if (!trigger) return
-    reset()
+    const owner = trigger
+    if (!owner) return
     release()
+    suspended = owner
+  }
+  function restore() {
+    const owner = suspended
+    suspended = undefined
+    if (!owner || !document.hasFocus() || nativeSelectTrigger(site.value, document.activeElement) !== owner) return
+    trigger = owner
+    acquire(owner)
   }
   onMounted(() => {
     document.addEventListener('focusin', focusElsewhere, true)
     window.addEventListener('blur', blur)
+    window.addEventListener('focus', restore)
   })
   onBeforeUnmount(() => {
     document.removeEventListener('focusin', focusElsewhere, true)
     window.removeEventListener('blur', blur)
+    window.removeEventListener('focus', restore)
   })
   return { entersPopup, returnsToTrigger, reset }
 }

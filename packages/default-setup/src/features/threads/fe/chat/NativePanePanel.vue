@@ -76,7 +76,7 @@ watch(() => props.panes.body, () => hover.invalidate(), { flush: 'post' })
 let revision = props.initialFocusRevision ?? 0, applying = false, held = false, autoEntering = false
 let consumedGrant: string | null = null
 const composing = ref(false)
-const selectFocus = useNativeSelectFocus(site, releaseFocus, panel)
+const selectFocus = useNativeSelectFocus(site, releaseFocus, reportFocus, panel)
 function revealBelowHeader(target: EventTarget | null) {
   const heading = header.value, card = panel.value?.closest<HTMLElement>('[data-onboarding-id="agent-chat-input"]')
   if (!heading || !card?.scrollTop || !(target instanceof HTMLElement) || target === site.value || getComputedStyle(heading).position !== 'sticky') return
@@ -88,9 +88,13 @@ function focusIn(event: FocusEvent) {
   if (applying || !shown.value || !site.value || event.target !== document.activeElement) return
   revealBelowHeader(event.target)
   if (selectFocus.returnsToTrigger(event.target) && held) return
+  reportFocus(event.target)
+}
+function reportFocus(element: EventTarget | null) {
+  if (!shown.value) return
   held = true
-  const target = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
-  emit('focus-report', { paneId: shown.value, revision: ++revision, isHeld: true, focusId: target?.dataset.nativeFocusId ?? (event.target === site.value ? null : undefined), by: autoEntering ? 'auto' : 'person' })
+  const target = element instanceof HTMLElement && !element.closest('[data-native-client]') ? element.closest<HTMLElement>('[data-native-focus-id]') : null
+  emit('focus-report', { paneId: shown.value, revision: ++revision, isHeld: true, focusId: target?.dataset.nativeFocusId ?? (element === site.value ? null : undefined), by: autoEntering ? 'auto' : 'person' })
 }
 function focusOut(event: FocusEvent) {
   if (applying || panel.value?.contains(event.relatedTarget as Node | null) || selectFocus.entersPopup(event.relatedTarget)) return

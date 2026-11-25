@@ -109,15 +109,18 @@ let applyingFocus = false
 let autoEntering = false
 let held = false
 const composing = ref(false)
-const selectFocus = useNativeSelectFocus(nativeSite, releaseNativeFocus)
+const selectFocus = useNativeSelectFocus(nativeSite, releaseNativeFocus, reportFocus)
 function reportFocusIn(event: FocusEvent) {
   const site = nativeSite.value
   if (applyingFocus || !site || event.target !== document.activeElement) return
   revealFocusedField()
   if (selectFocus.returnsToTrigger(event.target) && held) return
+  reportFocus(event.target)
+}
+function reportFocus(target: EventTarget | null) {
   held = true
-  const element = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
-  emit('focus-report', { revision: ++focusRevision, isHeld: true, focusId: element?.dataset.nativeFocusId ?? (event.target === site ? null : undefined), by: autoEntering ? 'auto' : 'person' })
+  const element = target instanceof HTMLElement && !target.closest('[data-native-client]') ? target.closest<HTMLElement>('[data-native-focus-id]') : null
+  emit('focus-report', { revision: ++focusRevision, isHeld: true, focusId: element?.dataset.nativeFocusId ?? (target === nativeSite.value ? null : undefined), by: autoEntering ? 'auto' : 'person' })
 }
 function reportFocusOut(event: FocusEvent) {
   if (nativeSite.value?.contains(event.relatedTarget as Node | null) || selectFocus.entersPopup(event.relatedTarget)) return

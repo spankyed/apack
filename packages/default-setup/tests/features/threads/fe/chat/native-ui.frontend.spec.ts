@@ -274,6 +274,41 @@ it('retains native field focus through the owned Select portal and releases it o
   expect(f.focusReport.mock.calls.map(([event]) => event.isHeld)).toEqual([true, false, true, false])
 })
 
+it('restores Select focus on window return only while the same popup still owns it', async () => {
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0,
+    actionId: 'audience', focusId: 'audience-focus', value: 'developers', label: 'Audience', autoFocus: false,
+    options: [{ value: 'developers', label: 'Developers' }] } } })
+  const select = f.root.querySelector<HTMLElement>('[role=combobox]')!
+  const portal = document.createElement('div')
+  portal.id = select.getAttribute('aria-controls')!
+  portal.role = 'listbox'
+  portal.dataset.state = 'open'
+  const option = document.createElement('button')
+  portal.append(option)
+  document.body.append(portal)
+  const hasFocus = vi.spyOn(document, 'hasFocus')
+  const held = () => f.focusReport.mock.calls.map(([event]) => event.isHeld)
+
+  try {
+    select.focus()
+    option.focus()
+    window.dispatchEvent(new FocusEvent('blur'))
+    expect(held()).toEqual([true, false])
+    hasFocus.mockReturnValue(true)
+    window.dispatchEvent(new FocusEvent('focus'))
+    expect(held()).toEqual([true, false, true])
+    expect(f.focusReport.mock.lastCall?.[0].focusId).toBe('audience-focus')
+    select.focus()
+    expect(held()).toEqual([true, false, true])
+
+    option.focus()
+    window.dispatchEvent(new FocusEvent('blur'))
+    portal.dataset.state = 'closed'
+    window.dispatchEvent(new FocusEvent('focus'))
+    expect(held()).toEqual([true, false, true, false])
+  } finally { hasFocus.mockRestore() }
+})
+
 it('retires a portalled native Select popup when session tools collapse', async () => {
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0, actionId: 'choice',
     focusId: 'mode-choice', label: 'Mode', value: 'a', autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })
