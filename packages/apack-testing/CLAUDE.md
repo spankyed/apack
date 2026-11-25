@@ -470,8 +470,12 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   left alone
 - Per-worker: `electronApp.close()` shuts down Electron. The fixture captures the API pid before close and fails if that child is still alive afterwards; Electron quit must finish API shutdown before fixture-owned data can be cleaned up.
   For a data dir the fixture made, it waits for Electron's `will-quit` (emitted once the API server's
-  `before-quit` handler has stopped the API) and then kills Electron rather than waiting for Chromium to write
-  a profile it is about to delete
+  `before-quit` handler has stopped the API, carrying live Chromium helper PIDs from `app.getAppMetrics()`
+  minus the API process) and then `SIGKILL`s Electron main followed by those Chromium helpers rather than
+  waiting for Chromium to write a profile it is about to delete — terminating `main` and its helpers together
+  so a Chromium `NetworkService` helper cannot outlive `SIGKILL` and hold inherited stdout/stderr open under
+  PID 1, while keeping the API child excluded so the post-close API liveness check still fails loudly if the
+  API leaked
   ([the evidence](../../docs/archive/references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
   A dir the caller gave (`E2E_DATA_DIR`) is relaunched on, so its close waits for the profile.
   **The close is waited for while the app works, never on Playwright's clock**: the fixture declares
