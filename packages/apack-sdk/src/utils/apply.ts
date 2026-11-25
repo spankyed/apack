@@ -3,7 +3,8 @@ import * as path from 'path';
 import { boundHost } from '../runtime/host-runtime.ts';
 import { PACK_ID_PATTERN } from '../ids/refs.ts';
 import { isPlainObject } from './shared.ts';
-import type { ContentIndex } from '../content/index-types.ts';
+import type { ContentIndex, ContentIndexEntry } from '../content/index-types.ts';
+import type { PackContentPreviewItem } from '../framework/preview-types.ts';
 import type { ApplyRecord, ContentSelection, ImportMode, ImportResult } from './apply-types.ts';
 
 export { applyRecord } from './apply-types.ts';
@@ -19,19 +20,65 @@ export function registeredContentKeys(packId: string): string[] {
 /** The index compilePack writes next to a pack's compiled content */
 export const CONTENT_INDEX_FILE = 'content.json';
 
-/** @internal Read a compiled `content.json` index at runtime without pulling schema validators into the SDK. */
+/** @internal Read and validate a compiled `content.json` index at runtime without pulling schema validators into the SDK. */
 export function _readContentIndex(compiledDir: string): ContentIndex {
   const indexFile = path.join(compiledDir, CONTENT_INDEX_FILE);
   const raw = JSON.parse(fs.readFileSync(indexFile, 'utf8')) as unknown;
   if (!isPlainObject(raw) || raw.version !== 1 || typeof raw.packId !== 'string' || !PACK_ID_PATTERN.test(raw.packId) || !Array.isArray(raw.entries)) {
     throw new Error(`Invalid ${CONTENT_INDEX_FILE}: expected version 1, valid packId, and entries array`);
   }
+  const seenKeys = new Set<string>();
+  const entries: ContentIndexEntry[] = [];
   for (const entry of raw.entries) {
-    if (!isPlainObject(entry) || typeof entry.key !== 'string' || entry.key.length === 0 || typeof entry.written !== 'boolean' || !Array.isArray(entry.items)) {
+    if (
+      !isPlainObject(entry)
+      || typeof entry.key !== 'string'
+      || entry.key.length === 0
+      || typeof entry.written !== 'boolean'
+      || typeof entry.count !== 'number'
+      || !Number.isSafeInteger(entry.count)
+      || entry.count < 0
+      || !Array.isArray(entry.items)
+    ) {
       throw new Error(`Invalid ${CONTENT_INDEX_FILE}: malformed entry`);
     }
+    if (seenKeys.has(entry.key)) {
+      throw new Error(`Invalid ${CONTENT_INDEX_FILE}: duplicate entry key "${entry.key}"`);
+    }
+    seenKeys.add(entry.key);
+    let identity: string[] | undefined;
+    if (entry.identity !== undefined) {
+      if (!Array.isArray(entry.identity) || entry.identity.some((part) => typeof part !== 'string' || part.length === 0)) {
+        throw new Error(`Invalid ${CONTENT_INDEX_FILE}: entry "${entry.key}" has invalid identity`);
+      }
+      identity = [...entry.identity];
+    }
+    const items: PackContentPreviewItem[] = [];
+    for (const item of entry.items) {
+      if (!isPlainObject(item) || typeof item.key !== 'string') {
+        throw new Error(`Invalid ${CONTENT_INDEX_FILE}: entry "${entry.key}" has malformed item`);
+      }
+      if (item.description !== undefined && typeof item.description !== 'string') {
+        throw new Error(`Invalid ${CONTENT_INDEX_FILE}: entry "${entry.key}" item "${item.key}" has invalid description`);
+      }
+      if (item.childCount !== undefined && (typeof item.childCount !== 'number' || !Number.isSafeInteger(item.childCount) || item.childCount < 0)) {
+        throw new Error(`Invalid ${CONTENT_INDEX_FILE}: entry "${entry.key}" item "${item.key}" has invalid childCount`);
+      }
+      items.push({
+        key: item.key,
+        ...(item.description !== undefined && { description: item.description }),
+        ...(item.childCount !== undefined && { childCount: item.childCount }),
+      });
+    }
+    entries.push({
+      key: entry.key,
+      written: entry.written,
+      count: entry.count,
+      items,
+      ...(identity !== undefined && { identity }),
+    });
   }
-  return raw as unknown as ContentIndex;
+  return { version: 1, packId: raw.packId, entries };
 }
 
 /**

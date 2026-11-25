@@ -136,7 +136,7 @@ export type ComponentTarget = string | {
     load?: 'lazy';
 };
 
-// @public (undocumented)
+// @public
 export const CONTENT_EDIT_POLICIES: readonly ["theirs", "offer"];
 
 // @public (undocumented)
@@ -309,7 +309,7 @@ export function dslDefinitionsProblem(declarations: Readonly<Record<string, {
 // @public (undocumented)
 export type DslEntry = DslDeclaration;
 
-// @public
+// @internal
 export const _ENTITY_NAME_PATTERN: RegExp;
 
 // @internal
@@ -351,7 +351,7 @@ export interface FeatureEventContract {
     };
 }
 
-// @public
+// @internal
 export const _FIELD_NAME_PATTERN: RegExp;
 
 // @public
@@ -473,7 +473,6 @@ export type MachineMatchesContract<Entry, C extends SystemContract> = Entry exte
 } ? [Spec, SystemSpec<C>] extends [SystemSpec<C>, Spec] ? true : 'this system\'s defineSystem<…> declares a contract that is not the one apack.json names for its feature' : 'this system\'s default export has no `spec` from defineSystem<…>';
 
 // @public
-// @public
 export const MIGRATION_LINES: readonly ["app", "pack"];
 
 // @public
@@ -482,10 +481,10 @@ export const MIGRATION_TARGET_PATTERN: RegExp;
 // @public
 export type MigrationLine = (typeof MIGRATION_LINES)[number];
 
-// @public (undocumented)
+// @internal
 export const _MODULE_PATH_PATTERN: RegExp;
 
-// @public (undocumented)
+// @internal
 export const _MODULE_REFERENCE_PATTERN: RegExp;
 
 // @public
@@ -536,6 +535,9 @@ export interface NativePackDeclaration extends PackDataDeclarations, FrontendDec
 
 // @public
 export function onPackCatalogChanged(listener: () => void): () => void;
+
+// @public (undocumented)
+export const PACK_PERMISSIONS: readonly ["ears", "llm", "filesystem", "network", "terminal"];
 
 // @public (undocumented)
 export interface PackBuildConfig {
@@ -1158,13 +1160,11 @@ export interface ReferenceTypeDeclaration {
     svgElements: readonly ReferenceSvgElement[];
 }
 
-// @internal
-export const _SEARCH_STEM_LANGUAGES: readonly ["ar", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pt", "ro", "ru", "sv", "ta", "tr"];
-
-// Warning: (ae-incompatible-release-tags) The symbol "SearchStemLanguage" is marked as @public, but its signature references "_SEARCH_STEM_LANGUAGES" which is marked as @internal
-//
 // @public
-export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
+export const SEARCH_STEM_LANGUAGES: readonly ["ar", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pt", "ro", "ru", "sv", "ta", "tr"];
+
+// @public
+export type SearchStemLanguage = (typeof SEARCH_STEM_LANGUAGES)[number];
 
 // @internal
 export const _SERVICE_NAME_PATTERN: RegExp;
@@ -1631,7 +1631,7 @@ export type ViewUpdate<Result = unknown> = {
     diagnostics?: ViewDiagnostics;
 };
 
-// @public
+// @internal
 export const _WIRE_NAME_PATTERN: RegExp;
 
 // (No @packageDocumentation comment for this package)

@@ -40,7 +40,7 @@ export { formatReferenceHref, parseReferenceHref, type ReferenceTarget } from '.
 
 export {
   _packEntities, _packEntityTypes, _packShortCodes, _shortCodeTypes, _SHORT_CODE_PATTERN,
-  _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, _WIRE_NAME_PATTERN, _SEARCH_STEM_LANGUAGES,
+  _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, _WIRE_NAME_PATTERN, SEARCH_STEM_LANGUAGES,
   _packRelationTypes, _packWeightedKinds, _packRanks, _packRelationRules, _packRoles,
   type PackDataDeclarations, type PackEntityDeclaration, type PackSearchDeclaration, type PackEmbedDeclaration,
   type SearchStemLanguage, type PackRelationDeclaration, type _PackEntityDeclaration,

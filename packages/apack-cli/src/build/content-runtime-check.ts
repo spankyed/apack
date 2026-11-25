@@ -9,12 +9,6 @@ import { describeRefusal, processWork, watchWork } from '@apackdev/sdk/progress'
 
 /** The CPU the load may spend: loading a bundle is short, and only one that spins reaches this */
 const LOAD_CPU_MS = 60_000;
-/**
- * Optional @apackdev/sdk peers every dependent's unit tests have: @apackdev/testing/harness compiles
- * content with @apackdev/sdk/build, which needs them (the scaffold installs typescript; @apackdev/testing's
- * tsx brings esbuild).
- */
-const HARNESS_PEERS = ['typescript', 'esbuild'];
 
 // What a dependent's unit tests do with the bundle (@apackdev/testing/harness setupPackTests).
 // Synchronous registerHooks blocks @apackdev/sdk's optional peers without spawning an async loader thread.
@@ -43,7 +37,7 @@ function missingSdkPeers(packDir: string): string[] {
     peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   };
   return Object.entries(peerDependenciesMeta)
-    .filter(([name, meta]) => meta.optional && !HARNESS_PEERS.includes(name))
+    .filter(([, meta]) => meta.optional)
     .map(([name]) => name);
 }
 

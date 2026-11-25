@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { builtinModules } from 'node:module';
+import * as vm from 'node:vm';
 import * as esbuild from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { _declarationRevision, isHostCompatible, sha256Hex } from '../src/index.ts';
@@ -38,6 +39,47 @@ describe('@apackdev/pack-format Workers safety', () => {
     expect(inputs.some((input) => /(?:^|\/)src\/declaration-schema\.ts$/.test(input))).toBe(true);
     expect(inputs.some((input) => /(?:^|\/)node_modules\/ajv\//.test(input))).toBe(false);
     expect(inputs.some((input) => /(?:^|\/)apack-pack-build\//.test(input))).toBe(false);
+  });
+
+  it('executes parseManifest, parseSnapshot, isHostCompatible, and _declarationRevision in a Node-free VM context', async () => {
+    const built = await esbuild.build({
+      stdin: { contents: "export * from '../src/index.ts';", resolveDir: import.meta.dirname },
+      bundle: true,
+      write: false,
+      format: 'iife',
+      globalName: 'PackFormat',
+      platform: 'neutral',
+      mainFields: ['module', 'main'],
+      conditions: ['@apackdev/source', 'worker', 'browser'],
+    });
+    const code = built.outputFiles![0]!.text;
+    // Web-only globals matching Cloudflare Workers: zero process, Buffer, require, __dirname, __filename, global
+    const context = vm.createContext({ TextEncoder, TextDecoder, structuredClone, URL, AbortController, console });
+    vm.runInContext(code, context);
+    const mod = (context as { PackFormat: typeof import('../src/index.ts') }).PackFormat;
+
+    const manifest = { id: 'worker-pack', name: 'Worker Pack', version: '1.0.0', hostVersion: '>=0.4.0' };
+    const validation = mod.parseManifest(manifest);
+    expect(validation.status).toBe('valid');
+    expect(validation.diagnostics).toEqual([]);
+    const parsedManifest = mod.ManifestSchema.parse(manifest);
+    expect(parsedManifest.id).toBe('worker-pack');
+
+    const revision = mod._declarationRevision(parsedManifest);
+    expect(revision).toMatch(/^[a-f0-9]{64}$/);
+    expect(mod.isHostCompatible(parsedManifest.hostVersion, '0.4.0-beta.1')).toBe(true);
+    expect(mod.isHostCompatible(parsedManifest.hostVersion, '0.3.9')).toBe(false);
+
+    const parsedSnapshot = mod.parseSnapshot({
+      format: mod.PACK_SNAPSHOT_FORMAT,
+      manifest: parsedManifest,
+      declarationRevision: revision,
+      types: { entities: {}, relKinds: {}, roles: {} },
+      entityDestinations: {},
+      facades: {},
+    });
+    expect(parsedSnapshot.diagnostics).toEqual([]);
+    expect(parsedSnapshot.snapshot?.declarationRevision).toBe(revision);
   });
 
   it('computes pure-JS SHA-256 identically to node:crypto across edge cases', () => {

@@ -215,6 +215,21 @@ export const tags = ({ path }) => fs.readFileSync(path, 'utf-8').trim().split('\
     await expect(tags(`[{ entity: 'Tag', name: 'a', children: [] }]`)).resolves.toBeDefined();
   });
 
+  it('passes compileMarkdownTree on ContentCompileContext to custom compiler modules', async () => {
+    write('content/notes/hello.md', '---\ntitle: Hello\n---\nBody text\n');
+    write('compile-notes.mjs', `export default ({ path: sourcePath, compileMarkdownTree }) => compileMarkdownTree(sourcePath).map(({ name, frontmatter, body }) => ({
+      entity: 'Note', title: frontmatter.title ?? name, body: body.trim(),
+    }));`);
+    await compile(
+      { notes: { compiler: 'compile-notes.mjs', entity: 'Note', identity: ['title'] } },
+      { notes: { path: 'content/notes', format: 'notes' } },
+      { importModule: (file: string) => import(`${file}?v=${Math.random()}`) },
+    );
+    expect(read('notes.content.json').records).toEqual([
+      { entity: 'Note', title: 'Hello', body: 'Body text', contentHash: expect.any(String) },
+    ]);
+  });
+
   it("fails when a compiled record's entity isn't one the format declares", async () => {
     write('content/items.json', JSON.stringify([{ entity: 'Other', name: 'x' }]));
     await expect(compile({ items: { format: 'json', entity: 'Item' } }, { items: { path: 'content/items.json', format: 'items' } }))

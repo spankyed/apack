@@ -1,7 +1,7 @@
 import {
-  CONTENT_EDIT_POLICIES, LIFECYCLE_HOOK_NAMES, MIGRATION_TARGET_PATTERN, PACK_PERMISSIONS, SPECIALTY_CONTENT_KEYS,
+  CONTENT_EDIT_POLICIES, LIFECYCLE_HOOK_NAMES, MIGRATION_TARGET_PATTERN, PACK_PERMISSIONS, SEARCH_STEM_LANGUAGES, SPECIALTY_CONTENT_KEYS,
   _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, _HOST_SERVICE_NAMES, _MODULE_PATH_PATTERN, _MODULE_REFERENCE_PATTERN,
-  _SEARCH_STEM_LANGUAGES, _SERVICE_NAME_PATTERN, _SHORT_CODE_PATTERN, _WIRE_NAME_PATTERN,
+  _SERVICE_NAME_PATTERN, _SHORT_CODE_PATTERN, _WIRE_NAME_PATTERN,
   _assertSettingsDefinitionStructure, _entityDestinationsProblem, _eventContractsProblem, _packEntities,
   _packEntityTypes, _packRelationTypes, _packRoles, _parseEventContractsShape, _serviceProviderProblem,
   _settingsJsonProblems, dslDefinitionsProblem,
@@ -117,7 +117,7 @@ const EntityDeclarationSchema = z.object({
     fields: declarationRecord(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name'), z.number().positive().finite())
       .refine((fields) => Object.keys(fields).length > 0, 'Must name a field')
       .describe('Each field the text index reads, with its weight: a field of weight 3 counts each of its words three times.'),
-    stem: z.enum(_SEARCH_STEM_LANGUAGES).describe('The language whose stems match a word\'s other forms (`en`: "running" matches "runs").').optional(),
+    stem: z.enum(SEARCH_STEM_LANGUAGES).describe('The language whose stems match a word\'s other forms (`en`: "running" matches "runs").').optional(),
   }).strict()
     .describe('A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
   embed: z.object({

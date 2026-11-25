@@ -5,7 +5,7 @@ The `apack.json` file at the root of your pack is the single source of truth. It
 ## Editor assistance
 
 Set `"$schema": "https://apack.dev/schemas/apack.json"` in `apack.json`, or use the schema shipped
-at `@apackdev/sdk/apack.schema.json` for offline editing. JSON editors can complete declaration keys
+at `@apackdev/cli/apack.schema.json` for offline editing. JSON editors can complete declaration keys
 and policy/loading values, show field descriptions, and diagnose structural errors at their source
 ranges. Settings value schemas use JSON Schema draft-07.
 
