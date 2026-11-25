@@ -215,3 +215,59 @@ it('admits pane action callbacks only for the current shown pane of an attached 
   api.clients.delete('app')
   expect(api.actionKeys.current({}, first)).toBe(false)
 })
+
+
+it('keeps each window’s drawn Pane field available to the original focus hook', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const sites=new Map();')
+  const end = claudeTerminalUiRuntime.indexOf('function paneRoster(')
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({recordDrawing,remoteFocus,remoteScroll,dropSite,siteMapKey})`, {
+    Map, Set, AbortController, Promise, clients: new Set(['main', 'popout']), clientViewCurrent: () => true, publish() {},
+    actionKeys: { retire() {} }, paneRoster: () => ({ panes: [{ id: 'revision-review', plugin: 'fixture' }], shown_id: 'revision-review' }),
+  })
+  const originalFocus = {}
+  const scrolls = new Map(), focuses = new Map([['Pane:revision-review', originalFocus]])
+  const originalScroll = vi.fn()
+  let hold: Promise<void> | undefined
+  const native = {
+    runtime: {
+      kV: (component: string, id: string) => `${component}:${id}`, xbe: () => scrolls, Eat: () => focuses, k7t: () => ({ emit() {} }),
+      vxt: originalScroll,
+      v7t: async ({ input }: { input: { component: string; requestId: string; plugin: string; element: string } }) => {
+        await hold
+        const entry = focuses.get(`${input.component}:${input.requestId}`)
+        const deny = (entry as { commit(input: unknown): string | undefined }).commit({ plugin: input.plugin, element: input.element, origin: { kind: 'person' } })
+        return deny ? { deny } : {}
+      },
+    },
+    session: { Ket: (tree: unknown) => tree },
+  }
+  const request = { component: 'Pane', instance_id: 'revision-review' }
+  const draw = (client_id: string, element: string) => api.recordDrawing(native, { ...request, client_id, props: { isFocused: false } }, [{ plugin: 'fixture', element }])
+  const focus = (client_id: string, key: string) => api.remoteFocus(native, { ...request, client_id, is_held: true, by: 'person', element: { plugin: 'fixture', key } })
+  draw('main', 'header-main')
+  draw('popout', 'header-popout')
+
+  expect(await focus('main', 'header-main')).toEqual({ moved: true, element: { plugin: 'fixture', key: 'header-main' } })
+  const mainRegistration = focuses.get('Pane:revision-review')
+  await expect(api.remoteScroll(native, { ...request, client_id: 'popout', by: 0, offset: 2, body_rows: 5, content_rows: 15 })).resolves.toEqual({ moved: true, offset: 2 })
+  expect(originalScroll).not.toHaveBeenCalled()
+  expect(focuses.get('Pane:revision-review')).toBe(mainRegistration)
+
+  let resume!: () => void
+  hold = new Promise<void>(resolve => { resume = resolve })
+  const mainFocus = focus('main', 'header-main')
+  const popoutFocus = focus('popout', 'header-popout')
+  await Promise.resolve()
+  const active = focuses.get('Pane:revision-review') as {
+    hasElement(plugin: string, element: string): boolean
+  }
+  expect(active.hasElement('fixture', 'header-main')).toBe(true)
+  expect(active.hasElement('fixture', 'header-popout')).toBe(false)
+  resume()
+  await expect(mainFocus).resolves.toMatchObject({ moved: true, element: { key: 'header-main' } })
+  await expect(popoutFocus).resolves.toMatchObject({ moved: true, element: { key: 'header-popout' } })
+  expect(await focus('main', 'header-popout')).toMatchObject({ moved: false })
+  expect(await focus('main', 'header-main')).toEqual({ moved: true, element: { plugin: 'fixture', key: 'header-main' } })
+  api.dropSite(native, api.siteMapKey(native, 'main', 'Pane', 'revision-review'))
+  expect(focuses.get('Pane:revision-review')).toBe(originalFocus)
+})

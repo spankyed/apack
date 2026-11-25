@@ -155,6 +155,7 @@ function replayNotices(){
 }
 // Native hook dispatch owns admission and rewrites; this adapter supplies the remote layout.
 const sites=new Map();
+const siteRegistrations=new Map(),paneSiteOperations=new Map();
 const commandOutputFrames=new Map();
 function commandOutputFacts(n,id){
  const binding=originalContext??n.runtime.ey();
@@ -190,17 +191,32 @@ function currentToolResultAction(n,request){
 // ui-mount owns a client-specific AbovePrompt instance; the terminal keeps its original singleton.
 function siteExists(n,component,id,clientId){return component==='AbovePrompt'&&(id===n.runtime.f4||typeof clientId==='string'&&id===clientId+':above-prompt')||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
 function siteOffset(site){return site.follow?Math.max(0,site.contentRows-site.bodyRows):site.offset;}
+function siteMapKey(n,clientId,component,id){return component==='Pane'?JSON.stringify([clientId,component,id]):n.runtime.kV(component,id);}
+function unregisterSite(n,site){
+ const key=n.runtime.kV(site.component,site.id),registration=siteRegistrations.get(key);
+ if(registration?.site!==site)return;
+ siteRegistrations.delete(key);
+ for(const [registry,entry,previous] of [[n.runtime.xbe(),site.scrollEntry,registration.previousScroll],[n.runtime.Eat(),site.focusEntry,registration.previousFocus]])if(registry.get(key)===entry){if(previous)registry.set(key,previous);else registry.delete(key);}
+}
 function dropSite(n,key){
  const site=sites.get(key);if(!site)return;sites.delete(key);site.abort.abort();
  actionKeys.retire({client_id:site.clientId,component:site.component,instance_id:site.id});
- for(const [registry,entry,previous] of [[n.runtime.xbe(),site.scrollEntry,site.previousScroll],[n.runtime.Eat(),site.focusEntry,site.previousFocus]])if(registry.get(key)===entry){if(previous)registry.set(key,previous);else registry.delete(key);}
+ unregisterSite(n,site);
 }
-function refreshSite(n,site){
+function refreshSite(n,site,claim=false){
  if(!clientViewCurrent(n,site.clientId))return;
  const key=n.runtime.kV(site.component,site.id),scrolls=n.runtime.xbe(),focuses=n.runtime.Eat();
- if(scrolls.get(key)!==site.scrollEntry)site.previousScroll=scrolls.get(key);
- if(focuses.get(key)!==site.focusEntry)site.previousFocus=focuses.get(key);
- const current=()=>sites.get(key)===site&&clients.has(site.clientId)&&clientViewCurrent(n,site.clientId)&&siteExists(n,site.component,site.id,site.clientId);
+ const previous=siteRegistrations.get(key);
+ if(!claim&&previous?.site!==site)return;
+ const registration={
+  site,
+  previousScroll:previous&&scrolls.get(key)===previous.site.scrollEntry?previous.previousScroll:scrolls.get(key),
+  previousFocus:previous&&focuses.get(key)===previous.site.focusEntry?previous.previousFocus:focuses.get(key),
+ };
+ if(previous&&previous.site!==site){previous.site.held=false;previous.site.holder=undefined;}
+ siteRegistrations.set(key,registration);
+ const current=()=>siteRegistrations.get(key)?.site===site&&sites.get(siteMapKey(n,site.clientId,site.component,site.id))===site
+  &&clients.has(site.clientId)&&clientViewCurrent(n,site.clientId)&&siteExists(n,site.component,site.id,site.clientId);
  const moved=()=>publish({type:'system',subtype:'ui_scroll',client_id:site.clientId,component:site.component,instance_id:site.id,offset:siteOffset(site),...(site.follow?{follow_end:true}:{})});
  site.scrollEntry={component:site.component,requestId:site.id,owner:site.owner,bodyRows:site.bodyRows,contentRows:site.contentRows,maxOffset:Math.max(0,site.contentRows-site.bodyRows),offset:()=>siteOffset(site),keyRows:(plugin,key)=>{const row=site.keyed.find(row=>row.plugin===plugin&&row.key===key);return row&&{top:row.top,bottom:row.bottom};},commit:(offset,origin)=>{
   if(!current()||origin.kind==='person'&&site.superseded)return false;
@@ -219,16 +235,35 @@ function refreshSite(n,site){
 }
 function remoteSite(n,clientId,component,id){
  if(!clients.has(clientId)||!clientViewCurrent(n,clientId)||!siteExists(n,component,id,clientId))return;
- const key=n.runtime.kV(component,id);let site=sites.get(key);
+ const key=siteMapKey(n,clientId,component,id);let site=sites.get(key);
  if(site&&site.clientId!==clientId){dropSite(n,key);site=undefined;}
  if(!site){site={clientId,component,id,owner:component==='Pane'?paneRoster(n).panes.find(pane=>pane.id===id)?.plugin:undefined,offset:0,bodyRows:0,contentRows:0,keyed:[],focusables:[],held:false,follow:false,abort:new AbortController()};sites.set(key,site);}
- refreshSite(n,site);return site;
+ return site;
+}
+// Claude's registry has one entry per Pane. Finish each admitted operation before another
+// window can publish its own drawing to the original hook.
+function runOnSite(n,site,run){
+ if(site.component!=='Pane')return run();
+ const key=n.runtime.kV(site.component,site.id);
+ const prior=paneSiteOperations.get(key)??Promise.resolve();
+ const pending=prior.then(run,run);
+ paneSiteOperations.set(key,pending);
+ return pending.finally(()=>{if(paneSiteOperations.get(key)===pending)paneSiteOperations.delete(key);});
 }
 function synchronizePanes(n){
  const state=n.roster.Ui().getState(),shown=paneRoster(n).shown_id;
  // Hidden panes unmount their original action registrations; showing one needs a fresh drawing.
- for(const site of sites.values())if(site.component==='Pane'&&site.id!==shown)actionKeys.retire({client_id:site.clientId,component:site.component,instance_id:site.id});
- for(const [key,site] of sites){if(!siteExists(n,site.component,site.id,site.clientId)){dropSite(n,key);continue;}if(site.component==='Pane'){site.held=state.focusedId===site.id;if(!site.held)site.holder=undefined;}refreshSite(n,site);}
+ for(const [key,site] of sites){
+  if(!siteExists(n,site.component,site.id,site.clientId)){dropSite(n,key);continue;}
+  if(site.component==='Pane'){
+   if(site.id!==shown){
+    actionKeys.retire({client_id:site.clientId,component:site.component,instance_id:site.id});
+    unregisterSite(n,site);site.focusables=[];site.held=false;site.holder=undefined;continue;
+   }
+   if(state.focusedId!==site.id){site.held=false;site.holder=undefined;}
+  }
+  refreshSite(n,site);
+ }
 }
 function siteTurn(site,kind,report,merge,run){
  const state=site[kind]??(site[kind]={});
@@ -245,39 +280,50 @@ function siteTurn(site,kind,report,merge,run){
 async function remoteFocus(n,value){
  const site=remoteSite(n,value.client_id??'desktop:default',value.component,value.instance_id);
  if(!site)return {moved:false,element:null,deny:'no such site'};
- return siteTurn(site,'focusQueue',value,(before,after)=>after.element===undefined&&after.is_held&&before.element!==undefined?{...after,element:before.element,by:before.by}:after,async value=>{
-  if(site.abort.signal.aborted)return {moved:false,element:null,deny:'no such site'};
-  site.held=value.is_held;if(!site.held)site.holder=undefined;site.reporting=true;refreshSite(n,site);
-  const element=value.element;let result={};
+ return siteTurn(site,'focusQueue',value,(before,after)=>after.element===undefined&&after.is_held&&before.element!==undefined?{...after,element:before.element,by:before.by}:after,value=>runOnSite(n,site,async()=>{
+  if(site.abort.signal.aborted||!clientViewCurrent(n,site.clientId)||site.component==='Pane'&&paneRoster(n).shown_id!==site.id)return {moved:false,element:null,deny:'no such site'};
+  const element=value.element;
+  if(site.component==='Pane'&&value.is_held&&element&&!site.focusables.some(item=>item.plugin===element.plugin&&item.element===element.key))
+   return {moved:false,element:null,deny:'no element of '+element.plugin+' is drawn under that key'};
+  site.held=value.is_held;if(!site.held)site.holder=undefined;
+  if(site.component==='Pane'&&!site.held&&siteRegistrations.get(n.runtime.kV(site.component,site.id))?.site!==site)return {moved:true,element:null};
+  site.reporting=true;refreshSite(n,site,true);
+  let result={};
   try{if(element!==undefined&&site.held)result=await n.runtime.v7t({input:{component:site.component,requestId:site.id,...(element?{plugin:element.plugin,element:element.key}:{}),origin:value.by==='auto'&&element?{kind:'plugin',name:element.plugin}:{kind:'person'}},signal:site.abort.signal});}
   finally{site.reporting=false;}
   const holder=site.holder;return {moved:result.deny===undefined,element:holder?{plugin:holder.plugin,key:holder.element}:null,...(result.deny!==undefined?{deny:result.deny}:{})};
- });
+ }));
 }
 async function remoteScroll(n,value){
  const site=remoteSite(n,value.client_id??'desktop:default',value.component,value.instance_id);
  if(!site)return {moved:false,offset:value.offset,deny:'no such site'};
- return siteTurn(site,'scrollQueue',value,(before,after)=>({...after,by:before.by+after.by}),async value=>{
-  if(site.abort.signal.aborted)return {moved:false,offset:siteOffset(site),deny:'no such site'};
+ return siteTurn(site,'scrollQueue',value,(before,after)=>({...after,by:before.by+after.by}),value=>runOnSite(n,site,async()=>{
+  if(site.abort.signal.aborted||!clientViewCurrent(n,site.clientId)||site.component==='Pane'&&paneRoster(n).shown_id!==site.id)return {moved:false,offset:siteOffset(site),deny:'no such site'};
   const end=Math.max(0,value.content_rows-value.body_rows),before=site.follow?end:Math.min(site.offset,end),wasFollowing=site.follow;
-  site.offset=before;site.bodyRows=value.body_rows;site.contentRows=value.content_rows;if(value.keyed)site.keyed=value.keyed;site.moving=true;site.superseded=false;refreshSite(n,site);
+  site.offset=before;site.bodyRows=value.body_rows;site.contentRows=value.content_rows;if(value.keyed)site.keyed=value.keyed;
+  const offset=Math.min(end,Math.max(0,value.offset)),registered=siteRegistrations.get(n.runtime.kV(site.component,site.id))?.site;
+  // A passive viewport report updates that window's geometry without moving Claude's focus site.
+  if(site.component==='Pane'&&registered&&registered!==site&&value.by===0&&!value.pointer){
+   site.offset=offset;site.follow=site.follow&&offset>=end;return {moved:true,offset:siteOffset(site)};
+  }
+  site.moving=true;site.superseded=false;refreshSite(n,site,true);
   let result;
-  try{result=await n.runtime.vxt({input:{component:site.component,requestId:site.id,offset:Math.min(end,Math.max(0,value.offset)),by:value.by,bodyRows:site.bodyRows,contentRows:site.contentRows,origin:{kind:'person'},...(value.pointer?{pointer:value.pointer}:{})},signal:site.abort.signal});}
+  try{result=await n.runtime.vxt({input:{component:site.component,requestId:site.id,offset,by:value.by,bodyRows:site.bodyRows,contentRows:site.contentRows,origin:{kind:'person'},...(value.pointer?{pointer:value.pointer}:{})},signal:site.abort.signal});}
   finally{site.moving=false;}
   if(site.abort.signal.aborted||site.superseded)return {moved:false,offset:siteOffset(site),deny:'the window moved meanwhile',...(site.follow?{follow_end:true}:{})};
   if(result.deny!==undefined)site.offset=before;
   else site.follow=site.follow||wasFollowing&&value.by>0&&site.offset>=end;
   return {moved:result.deny===undefined,offset:siteOffset(site),...(result.deny!==undefined?{deny:result.deny}:{}),...(site.follow?{follow_end:true}:{})};
- });
+ }));
 }
 function recordDrawing(n,value,tree){
- const site=remoteSite(n,value.client_id,value.component,value.instance_id);if(!site)return;
+ const site=remoteSite(n,value.client_id,value.component,value.instance_id);if(!site||site.component==='Pane'&&paneRoster(n).shown_id!==site.id)return;
  const scroll=value.props?.scroll;
  if(scroll&&Number.isInteger(scroll.bodyRows)&&scroll.bodyRows>=0)site.bodyRows=scroll.bodyRows;
- if(typeof value.props?.isFocused==='boolean')site.held=value.props.isFocused;
+ if(site.component!=='Pane'&&typeof value.props?.isFocused==='boolean')site.held=value.props.isFocused;
  site.focusables=n.session.Ket(tree);
  if(site.holder&&!site.focusables.some(item=>item.plugin===site.holder.plugin&&item.element===site.holder.element))site.holder=undefined;
- refreshSite(n,site);n.runtime.k7t().emit();
+ refreshSite(n,site,!siteRegistrations.has(n.runtime.kV(site.component,site.id)));n.runtime.k7t().emit();
 }
 
 function paneRoster(n){
