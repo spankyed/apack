@@ -168,21 +168,33 @@ export function createClaudePaneHost(options: {
       return { handled: current() && result.handled }
     },
     async focus(event: ClaudeUiFocusEvent): Promise<ClaudeUiFocusReply | undefined> {
-      const id = event.paneId, snapshot = drawing
-      if (!current() || !id || id !== roster?.shown_id || !snapshot || !Number.isSafeInteger(event.revision) || event.revision <= (focusRevisions.get(id) ?? 0)) return
-      const target = typeof event.focusId === 'string' ? snapshot.focusables.get(event.focusId) : event.focusId
+      const id = event.paneId
+      if (!current() || !id || id !== roster?.shown_id || !Number.isSafeInteger(event.revision) || event.revision <= (focusRevisions.get(id) ?? 0)) return
+      const resolveTarget = (focusId = event.focusId) => {
+        if (typeof focusId !== 'string') return focusId
+        const snapshot = drawing ?? fields
+        const target = snapshot?.focusables.get(focusId)
+        if (!target || !snapshot) return
+        // Layout redraws keep fields interactive but retire the old buttons and links.
+        if (drawing || [...snapshot.fields.values()].some(field => field.plugin === target.plugin && field.key === target.key)) return target
+      }
+      const target = resolveTarget()
       if (typeof event.focusId === 'string' && !target) return
+      const stillOwned = () => {
+        if (!current() || roster?.shown_id !== id || focusRevisions.get(id) !== event.revision) return false
+        if (!target) return true
+        const live = resolveTarget()
+        return !!live && live.plugin === target.plugin && live.key === target.key
+      }
       focusRevisions.set(id, event.revision)
-      const generation = epoch
       focusInFlight++
       try {
         await ui.focusPane({ ...client, id: event.isHeld ? id : null })
-        if (!current() || generation !== epoch || drawing !== snapshot || focusRevisions.get(id) !== event.revision) return
+        if (!stillOwned()) return
         const result = await ui.focus({ ...client, component: 'Pane', instance_id: id, is_held: event.isHeld, by: event.by, ...(target !== undefined ? { element: target } : {}) })
-        if (!current() || generation !== epoch || drawing !== snapshot || focusRevisions.get(id) !== event.revision) return
-        if (target === undefined) return
-        const focusId = result.element === null ? null : [...snapshot.focusables].find(([, item]) => item.plugin === result.element?.plugin && item.key === result.element.key)?.[0]
-        if (focusId === undefined) return
+        if (!stillOwned() || target === undefined) return
+        const focusId = result.element === null ? null : [...((drawing ?? fields)?.focusables ?? [])].find(([, item]) => item.plugin === result.element?.plugin && item.key === result.element.key)?.[0]
+        if (focusId === undefined || (typeof focusId === 'string' && !resolveTarget(focusId))) return
         return { paneId: id, revision: event.revision, moved: result.moved, focusId, ...(result.deny ? { deny: result.deny } : {}) }
       } finally {
         focusInFlight--

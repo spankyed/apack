@@ -83,6 +83,42 @@ it('holds and reports focus against the exact Pane site and ignores a foreign fo
 })
 
 
+it('reports focus and release for the same visible Pane field during a layout redraw', async () => {
+  const f = fixture()
+  await f.host.start()
+  await vi.advanceTimersByTimeAsync(50)
+  const [button, field] = f.nodes()
+  if (button.kind !== 'button' || field.kind !== 'input' || !field.focusId) throw Error('expected focusable field')
+  await f.host.operate({ kind: 'layout', id: 'a', columns: 46, rows: 5, offset: 0 })
+  expect(f.host.state?.body.status).toBe('live')
+  await f.host.focus({ paneId: 'a', revision: 1, focusId: button.focusId, isHeld: true, by: 'person' })
+  expect(f.ui.focusPane).not.toHaveBeenCalled()
+  await f.host.focus({ paneId: 'a', revision: 2, focusId: field.focusId, isHeld: true, by: 'person' })
+  expect(f.ui.focus).toHaveBeenLastCalledWith(expect.objectContaining({
+    component: 'Pane', instance_id: 'a', is_held: true, element: { plugin: 'fixture', key: 'draft' },
+  }))
+  await f.host.focus({ paneId: 'a', revision: 3, isHeld: false, by: 'person' })
+  expect(f.ui.focusPane).toHaveBeenLastCalledWith(expect.objectContaining({ id: null }))
+  expect(f.ui.focus).toHaveBeenLastCalledWith(expect.objectContaining({ instance_id: 'a', is_held: false }))
+  f.host.dispose()
+})
+
+it('drops in-flight field focus when a different Pane replaces the visible owner', async () => {
+  const f = fixture()
+  await f.host.start()
+  await vi.advanceTimersByTimeAsync(50)
+  const field = f.nodes()[1]
+  if (field.kind !== 'input' || !field.focusId) throw Error('expected focusable field')
+  let finish!: () => void
+  f.ui.focusPane.mockImplementationOnce(({ id }) => new Promise(resolve => { finish = () => resolve({ focused_id: id }) }))
+  const pending = f.host.focus({ paneId: 'a', revision: 1, focusId: field.focusId, isHeld: true, by: 'person' })
+  await f.host.operate({ kind: 'show', id: 'b' })
+  finish()
+  await expect(pending).resolves.toBeUndefined()
+  expect(f.ui.focus).not.toHaveBeenCalled()
+  f.host.dispose()
+})
+
 it('keeps pane controls live while a native tool group changes',async()=>{
  const f=fixture();await f.host.start();await vi.advanceTimersByTimeAsync(50)
  const before=f.ui.render.mock.calls.length,button=f.nodes()[0];if(button.kind!=='button')throw Error('button')
