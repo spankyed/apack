@@ -188,6 +188,7 @@ function reported<T>(refused: (error: unknown) => void, write: () => T): T {
 function prepareThreadRevert(
   { threadId, messageId, restoreFiles, userCliUuid }: ThreadsAsks['APPLY_THREAD_REVERT']['args'],
   committed: () => void,
+  rejected: (error: unknown) => void,
 ): ThreadHistoryOperationInput {
   const readSnapshot = () => JSON.stringify({
     thread: repository.threadQueries.byId(threadId as EARS.EntityId),
@@ -198,7 +199,7 @@ function prepareThreadRevert(
     snapshot: readSnapshot(), readSnapshot,
     rejected: error => {
       logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});
-      if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not revert: ${errorMessage(error)}`, blocks: [], forkable: false});
+      rejected(error);
     },
     commit: () => {
       const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
@@ -453,11 +454,11 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
-  APPLY_THREAD_REVERT: async ({ args, signal }) => {
-    let accepted = false;
-    await runThreadHistoryOperation(prepareThreadRevert(args, () => { accepted = true; }), signal);
+  APPLY_THREAD_REVERT: async ({ args, refuse, signal }) => {
+    await runThreadHistoryOperation(prepareThreadRevert(args, () => {}, error => {
+      throw refuse('rejected', errorMessage(error), { threadId: args.threadId });
+    }), signal);
     signal.throwIfAborted();
-    return { accepted };
   },
   FORK_THREAD: async ({ args, client, signal }) => {
       const { messageId, threadId, threadTopic } = args;
@@ -625,6 +626,13 @@ export const threadsSystem = setup({
       return prepareThreadRevert(request, () => {
         const show = { type: 'SHOW_THREAD' as const, threadId: request.threadId as EARS.EntityId };
         if (client) sendToWindow(client, 'threads', show); else broadcast('threads', show);
+      }, error => {
+        if (request.threadId) services.chat.sendBlockMessage({
+          threadId: request.threadId as EARS.EntityId,
+          text: `Could not revert: ${errorMessage(error)}`,
+          blocks: [],
+          forkable: false,
+        });
       });
     }) }),
     summarizeThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, client}) => {

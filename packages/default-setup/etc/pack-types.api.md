@@ -10210,8 +10210,10 @@ type ThreadsAsks = {
             restoreFiles?: boolean;
             userCliUuid?: string;
         };
-        answer: {
-            accepted: boolean;
+        refuses: {
+            'rejected': {
+                threadId: string;
+            };
         };
     };
     /** What a window's chat starts from */

@@ -1298,7 +1298,7 @@ async function doRevert(messageId: string) {
       toast.value?.error('Could not revert', outcome.failure.message)
       return
     }
-    if (outcome.value.accepted && mayPrefill?.() && !agentSelection.value && !nativeTerminalActive.value) prefillInput(msg)
+    if (mayPrefill?.() && !agentSelection.value && !nativeTerminalActive.value) prefillInput(msg)
   } catch (error) {
     if (currentThread.value?.id === threadId) {
       toast.value?.error('Could not revert', error instanceof Error ? error.message : String(error))

@@ -738,7 +738,7 @@ export type ThreadsAsks = {
   /** A thread forked from a message, which every window is told to show */
   FORK_THREAD: { args: { messageId: string; threadId?: string; threadTopic?: string }; answer: { threadId: EARS.EntityId } };
   /** Revert after native history validation and acknowledge the requesting composer. */
-  APPLY_THREAD_REVERT: { args: { messageId: string; threadId: string; restoreFiles?: boolean; userCliUuid?: string }; answer: { accepted: boolean } };
+  APPLY_THREAD_REVERT: { args: { messageId: string; threadId: string; restoreFiles?: boolean; userCliUuid?: string }; refuses: { 'rejected': { threadId: string } } };
   /** What a window's chat starts from */
   GET_CHAT_START: { answer: ChatStart };
 };

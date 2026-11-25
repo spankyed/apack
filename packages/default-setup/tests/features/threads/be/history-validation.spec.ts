@@ -95,9 +95,14 @@ it.each([false, true])('answers the requesting composer after native revert vali
     expect(repository.chatQueries.threadData(f.id)?.messages).toHaveLength(3)
     if (accepted) validation.resolve()
     else validation.reject(new Error('Pause the current turn before changing history.'))
-    expect(await answer).toEqual({ ok: true, value: { accepted } })
+    const outcome = await answer
+    if (accepted) expect(outcome).toEqual({ ok: true, value: undefined })
+    else expect(outcome).toMatchObject({
+      ok: false,
+      failure: { message: 'Pause the current turn before changing history.' },
+    })
     expect(repository.chatQueries.threadData(f.id)?.messages).toHaveLength(accepted ? 1 : 3)
-    expect(f.notify).toHaveBeenCalledTimes(accepted ? 0 : 1)
+    expect(f.notify).not.toHaveBeenCalled()
     expect(navigation).not.toHaveBeenCalled()
   } finally {
     validation.resolve()
