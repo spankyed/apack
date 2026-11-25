@@ -9,6 +9,7 @@ import { NATIVE_NOTIFICATION_ROUTES, type NativeNotificationRoute } from './nati
 import { createClaudeBackgroundStatusObserver, type ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
 import { createClaudeBillingState } from '../../../common/native-billing.ts'
 import { readClaudeUiActionKeys } from './ui-controls.ts'
+import { ClaudeQuestionCountdownEventSchema } from '../../../common/native-question.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeTerminalUiTransport } from './terminal-ui.ts'
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
@@ -532,7 +533,8 @@ export async function createClaudeTerminalBridge(options: {
           && (!notification || typeof event.title === 'string' && ['iterm2', 'iterm2_with_bell', 'kitty', 'ghostty', 'terminal_bell'].includes(String(event.channel)) && event.policy_generation === policyGeneration)
         const actionKeys = event.subtype === 'apack_ui_action_keys' && typeof event.client_id === 'string'
           && /^[A-Za-z0-9._-]{1,64}$/.test(event.client_id) && readClaudeUiActionKeys(event.action_keys) !== undefined
-        if (!invalidation && !promptTheme && !panes && !scroll && !focus && !notice && !actionKeys) return reply(409, {})
+        const countdown = event.subtype === 'apack_question_countdown' && event.session_id === projection.sessionId && ClaudeQuestionCountdownEventSchema.safeParse(event).success
+        if (!invalidation && !promptTheme && !panes && !scroll && !focus && !notice && !actionKeys && !countdown) return reply(409, {})
         ui.receive(event); return reply(200, {})
       }
       if (request.url === '/transcript') {

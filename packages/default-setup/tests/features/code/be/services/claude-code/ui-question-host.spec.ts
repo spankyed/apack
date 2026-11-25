@@ -34,6 +34,29 @@ it('isolates view callbacks and retires a drawing while keeping its engine mount
   expect(f.ui.press).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ client_id: 'first', plugin: 'fixture', handle: 1 }))
   first.dispose(); second.dispose()
 })
+it('updates the native countdown without redrawing or accepting retired samples', async () => {
+  const f = fixture(), host = f.create('view')
+  const revision = '5371f829-556a-4d66-9457-e9dd5a4b76e2'
+  f.replace({ ...row, revision })
+  host.start(); await vi.advanceTimersByTimeAsync(50)
+  const event = { type: 'system', subtype: 'apack_question_countdown', session_id: row.sessionId,
+    dialog_id: row.id, request_id: row.requestId, revision, sequence: 2, seconds: 20 }
+  host.receive({ ...event, request_id: 'another-question' })
+  expect(host.state?.countdownSeconds).toBeUndefined()
+  host.receive(event)
+  expect(host.state?.countdownSeconds).toBe(20)
+  const token = host.state?.token
+  host.receive({ ...event, sequence: 3, seconds: null })
+  host.receive({ ...event, seconds: 19 })
+  expect(host.state?.countdownSeconds).toBeUndefined()
+  expect(host.state?.token).toBe(token)
+  expect(f.source.render).toHaveBeenCalledOnce()
+  f.replace({ ...row, revision: '5eb4cf19-7294-43b0-be10-fbddaa8fe4d2' }); host.refresh()
+  host.receive({ ...event, sequence: 4 })
+  expect(host.state?.countdownSeconds).toBeUndefined()
+  host.dispose()
+})
+
 it('holds the token displayed at first input and rejects duplicate or foreign draft fields', async () => {
   const f = fixture(), host = f.create('view'); host.start(); await vi.advanceTimersByTimeAsync(50)
   const event = { actionId: host.state!.draftActionId, revision: 1, kind: 'change' as const, value: 'earlier-displayed-token' }

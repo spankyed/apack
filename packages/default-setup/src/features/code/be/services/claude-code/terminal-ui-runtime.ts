@@ -39,6 +39,7 @@ import { claudeTerminalStreamRuntime } from './terminal-stream-runtime.ts'
 import { claudeNativeToolResultRuntime } from './native-tool-result-runtime.ts'
 import { withClaudeNativePlatformRuntime } from './native-platform-runtime.ts'
 import { claudeTerminalRasterRuntime } from './terminal-raster-runtime.ts'
+import { claudeTerminalQuestionCountdownRuntime } from './terminal-question-countdown-runtime.ts'
 import { claudeTerminalFocusRuntime } from './terminal-focus-runtime.ts'
 import { claudeTerminalWorkflowRuntime } from './terminal-workflow-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
@@ -303,6 +304,7 @@ ${claudeTerminalPowerShellRuntime}
 ${claudeTerminalToolPermissionRuntime}
 ${claudeTerminalWorkflowRuntime}
 ${claudeTerminalFocusRuntime}
+${claudeTerminalQuestionCountdownRuntime}
 ${claudeTerminalStreamRuntime}
 ${claudeTerminalDocumentRuntime}
 ${claudeTerminalRasterRuntime}
@@ -1980,7 +1982,7 @@ const ownerTimer=setInterval(async()=>{
   const transcriptKey=JSON.stringify([gate.sessionId,gate.transcriptPath]);
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
   if(gate.privateHooksSuppressed||gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
-  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshNativeIdeContext(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();actionKeys.poll(native);}
+  if(native){refreshNativeQuestionCountdown(native);refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshNativeIdeContext(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();actionKeys.poll(native);}
   if(!ownerIndependent&&!bootstrapOwner)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true,...(!ownerIndependent?{bootstrapOwner:true,pid:process.pid}:{})};

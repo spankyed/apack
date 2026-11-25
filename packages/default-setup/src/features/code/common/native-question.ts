@@ -35,6 +35,16 @@ export interface ClaudeQuestionAnswer {
   followUp?: boolean
 }
 
+export const ClaudeQuestionCountdownEventSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('apack_question_countdown'),
+  session_id: z.string().min(1).max(256),
+  dialog_id: z.string().min(1).max(256),
+  revision: z.string().uuid(),
+  request_id: z.string().min(1).max(256),
+  sequence: z.number().int().positive().safe(),
+  seconds: z.number().int().min(0).max(600).nullable(),
+})
 export const ClaudeQuestionPresentationSchema = z.object({
   notice: z.string().optional(),
   previewFormat: z.string().nullable(), extendedQuestions: z.boolean(), optionalDescriptions: z.boolean(),

@@ -6,6 +6,7 @@
         <strong>{{ parsed?.title || current?.header || 'Claude Code' }}</strong>
       </div>
       <h2 v-if="current">{{ current.question }}</h2>
+      <p v-if="countdownSeconds !== undefined && !pending" class="muted question-countdown" data-testid="native-question-countdown">Auto-continue in {{ countdownSeconds }}s</p>
     </header>
     <div v-if="!parsed || !current" class="body">This question format needs the native interface. Use “Use native interface” above to continue.</div>
     <div v-else class="body" :key="step" tabindex="0" role="group" aria-label="Question details" :aria-busy="pending || readingImages || undefined" @paste="pasteImages">
@@ -71,7 +72,7 @@ import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem
 import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { CLAUDE_QUESTION_IMAGE_BYTES, CLAUDE_QUESTION_IMAGE_COUNT, CLAUDE_QUESTION_IMAGE_TYPES, ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionImage, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
-const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; canClarify?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
+const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; canClarify?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; countdownSeconds?: number; renderToken?: string }>()
 const imageProblem = ref(''), readingImages = ref(false)
 const disabled = computed(() => props.disabled || props.pending === true || readingImages.value)
 // Keep the last action focused while Claude processes it. Its handler still rejects duplicate input.
@@ -214,6 +215,7 @@ function skip() {
 
 <style scoped>
 .native-question-panel { flex:1; display:flex; flex-direction:column; min-height:0; height:100%; overflow:hidden; border:1px solid rgb(255 255 255 / .1); border-radius:12px; background:#232323; color:#e5e5e5; }
+.question-countdown { margin: 0; }
 .question-context { flex:none; padding:10px 16px 8px; background:#232323; }
 .question-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; }
 header span { color:#b8a887; font-size:10px; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }

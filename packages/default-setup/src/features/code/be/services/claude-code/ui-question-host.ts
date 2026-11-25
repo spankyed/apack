@@ -1,4 +1,4 @@
-import { ClaudeQuestionAnswerSchema, type ClaudeQuestionImage } from '../../../common/native-question.ts'
+import { ClaudeQuestionAnswerSchema, ClaudeQuestionCountdownEventSchema, type ClaudeQuestionImage } from '../../../common/native-question.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
@@ -11,7 +11,7 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-type Entry = { row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
+type Entry = { countdownSequence?: number; row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
 
 /** A question drawing belongs to this view and the still-pending native dialog. */
 export function createClaudeQuestionHost(options: {
@@ -74,6 +74,17 @@ export function createClaudeQuestionHost(options: {
     start() { started = true; sync(); schedule() },
     refresh() { if (current()) { sync(); schedule() } },
     receive(event: Record<string, unknown>) {
+      if (event.subtype === 'apack_question_countdown') {
+        const target = entry, countdown = ClaudeQuestionCountdownEventSchema.safeParse(event)
+        if (!target || !valid(target) || !countdown.success) return
+        const value = countdown.data, row = target.row
+        if (value.session_id !== row.sessionId || value.dialog_id !== row.id || value.revision !== row.revision ||
+            value.request_id !== row.requestId || value.sequence <= (target.countdownSequence ?? 0)) return
+        target.countdownSequence = value.sequence
+        target.frame = { ...target.frame, countdownSeconds: value.seconds ?? undefined }
+        publish()
+        return
+      }
       if (event.type !== 'system' || event.subtype !== 'ui_invalidate' || event.event !== 'ui.render' || !entry) return
       if (Array.isArray(event.instances) && !event.instances.some(value => value && typeof value === 'object' && (value as Record<string, unknown>).component === 'AskUserQuestion' && (value as Record<string, unknown>).instance_id === entry!.row.requestId)) return
       invalidate()
