@@ -25,7 +25,7 @@ import { GENERATED_EVENT_CONTRACTS_FILE } from '@apackdev/sdk/build';
 import { createPackRegistry, readCachedDependency, readPackBuild, assertPackServiceRequirements, type PackOrigin } from '@apackdev/host/packs';
 import { APPLICATION_SYSTEM_EVENTS, createApplicationSystem, createPacksSystem, createSettingsSystem, hostRegistration, hostDeclaration, packsEvents, settingsEvents } from '@apackdev/host/features';
 import { appState, HOST_ENTITY_TYPES } from '@apackdev/host/app-state';
-import { createSettingsService, createSettingsStore } from '@apackdev/host/settings';
+import { createSettingsService, createSettingsStore, settingsDeclarationDiagnostics } from '@apackdev/host/settings';
 import { getSettingsCatalog, onPackCatalogChanged, type ContentRuntime } from '@apackdev/sdk/framework';
 import { loadDependencyRuntime } from './dependency-runtime.ts';
 import { setAppPacks, stopRunningApps } from './app.ts';
@@ -237,6 +237,10 @@ function readDependencies(packDir: string, manifest: PackManifest): Map<string, 
     if (mismatch) throw new Error(`Dependency "${depId}" in ${path.join(DEPS_DIR, depId)}: ${_cliFormatMismatchMessage(mismatch)}. Run \`apack pack build\` to fetch it again.`);
     const result = parseSnapshot(raw);
     if (!result.snapshot) throw new Error(`Dependency "${depId}" in ${snapshotFile}: ${result.diagnostics.map(issue => issue.message).join('; ')}`);
+    const depSettingsDiagnostics = settingsDeclarationDiagnostics(result.snapshot.manifest, {
+      codePrefix: 'snapshot', source: snapshotFile, label: 'snapshot.json', pathPrefix: ['manifest'],
+    });
+    if (depSettingsDiagnostics.length) throw new Error(`Dependency "${depId}" in ${snapshotFile}: ${depSettingsDiagnostics.map(issue => issue.message).join('; ')}`);
     const snapshot = result.snapshot;
     if (snapshot.manifest.id !== depId) {
       throw new Error(`Dependency "${depId}" in ${snapshotFile} declares "${snapshot.manifest.id}". Rebuild its dependency cache.`);
@@ -277,6 +281,8 @@ export async function setupPackTests(options: PackTestOptions): Promise<void> {
   const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(path.join(packDir, 'apack.json'), 'utf-8')));
   if (!parsed.success) throw new Error(`Invalid source pack manifest: ${parsed.error.issues.map(issue => issue.message).join('; ')}`);
   const manifest = parsed.data;
+  const manifestSettingsDiagnostics = settingsDeclarationDiagnostics(manifest, { source: path.join(packDir, 'apack.json') });
+  if (manifestSettingsDiagnostics.length) throw new Error(`Invalid source pack manifest: ${manifestSettingsDiagnostics.map(issue => issue.message).join('; ')}`);
   const revision = _declarationRevision(manifest);
   if (options.contentRuntime.id !== manifest.id || options.contentRuntime.declarationRevision !== revision
     || (options.registration && (options.registration.id !== manifest.id || options.registration.declarationRevision !== revision))) {

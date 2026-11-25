@@ -35,7 +35,7 @@ import { bundlePackTypes } from '../build/types-bundler';
 import { facadeProblems } from '../build/facade-gate';
 import { compareFacadeReport, facadeReportFile, facadeReportText } from '../build/facade-report';
 import { bundlePackFlowHelpers } from '../build/flow-helpers-bundler';
-import { PACK_LAYOUT, sealPackBuild, readPackBuild } from '@apackdev/host/packs';
+import { PACK_LAYOUT, sealPackBuild, readPackBuild, settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { buildStagingDir, publishPackBuild, type PackBuildCandidate } from '../build/build-publication.ts';
 import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
@@ -278,6 +278,11 @@ async function buildIntoStaging(args: string[], root: string) {
     failures.push(...generatedDeclarationProblems(root, snapshot.declarationRevision, !args.includes('--skip-fe')));
     const validation = parseSnapshot(snapshot);
     failures.push(...validation.diagnostics.map(issue => issue.message));
+    if (validation.snapshot) {
+      failures.push(...settingsDeclarationDiagnostics(validation.snapshot.manifest, {
+        codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+      }).map(issue => issue.message));
+    }
     if (failures.length > 0) {
       throw new Error(`Build failed, so no snapshot was written:\n${failures.map((f) => `  - ${f}`).join('\n')}`);
     }

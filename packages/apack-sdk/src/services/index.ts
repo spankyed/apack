@@ -13,6 +13,9 @@ import type { SettingsService } from './settings.ts';
 import type { SettingsAdmin } from './settings.ts';
 import type { SettingsTarget } from '../types/settings.ts';
 import { _settingsHandle } from './settings-handle.ts';
+import type { _HOST_SERVICE_NAMES } from '../framework/service-consumption.ts';
+import type { PackServiceAccess } from './pack-service-access.ts';
+export type { PackServiceAccess } from './pack-service-access.ts';
 
 export type { AppDataService, BackupDatabase, BackupSummary } from './app-data.ts';
 export type { OnboardingService } from './onboarding.ts';
@@ -104,6 +107,12 @@ export interface HostServices {
   settings: SettingsService;
 }
 
+const _hostServiceNamesMatch:
+  Exclude<typeof _HOST_SERVICE_NAMES[number], keyof HostServices> extends never
+    ? (Exclude<keyof HostServices, typeof _HOST_SERVICE_NAMES[number]> extends never ? true : never)
+    : never = true;
+void _hostServiceNamesMatch;
+
 /** An action names every feature by its ref, its own pack's included, and the ref must be a registered one */
 const actionRef = (kind: 'system' | 'surface', name: string, registered: readonly string[]) =>
   resolveRegistered(kind, name, { registered, form: `actions name a ${kind} "<packId>/<featureId>"` });
@@ -146,12 +155,6 @@ export { _settingsHandle } from './settings-handle.ts';
 /** @internal Host administration over the shared SDK instance, including the published test harness. */
 export function _settingsAdmin(): SettingsAdmin {
   return boundHost().services.settings;
-}
-
-/** Host-selected APIs and attributed action views sharing one accepted runtime lifetime. */
-export interface PackServiceAccess {
-  readonly services: Readonly<Record<string, unknown>>;
-  readonly servicesForAction: (label: string) => Readonly<Record<string, unknown>>;
 }
 
 /** @internal Capture the host behind an accepted service binding, without ambient redirection. */

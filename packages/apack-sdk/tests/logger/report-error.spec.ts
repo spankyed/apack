@@ -7,7 +7,8 @@
 import * as os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLogger, reportError, setDebugEnabled, type LogEvent } from '../../src/logger/index.ts';
-import { startTestRuntime, takeSystemErrors, testPacks, testRootEvents, testRunHistory } from '../../src/testing/index.ts';
+import { resetTestData, startTestRuntime, takeSystemErrors, testPacks, testRootEvents, testRunHistory } from '../../src/testing/index.ts';
+import { boundHost } from '../../src/runtime/host-runtime.ts';
 import { RepositoryError, RepositoryErrorCode } from '../../src/repositories/repository-error.ts';
 import type { Message } from '../../src/events/index.ts';
 import type { EARS } from '../../src/types/entities.ts';
@@ -80,6 +81,39 @@ describe('reportError', () => {
       step: { phase: 'llm.execute', nodeId: 'Node-1' as EARS.EntityId, nodeType: 'llm', eventType: 'user.message' },
     }));
     expect(toSurfaces).toEqual([]);
+  });
+
+  it('reads runHistory dynamically across resetTestData() and runtime service replacement', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    resetTestData();
+    const freshHistory = testRunHistory();
+    const runNodeId = freshHistory.start({ kind: 'step', label: 'After reset', stepNodeType: 'llm', input: { prompt: 'hi' } }).id;
+    reportError({
+      error: new Error('post-reset failure'),
+      source: 'brain-llm',
+      step: { phase: 'llm.execute', runNodeId, nodeId: 'Node-2' as EARS.EntityId, nodeType: 'llm', eventType: 'user.message' },
+    });
+    expect(freshHistory.get(runNodeId)).toMatchObject({
+      result: { error: { message: 'post-reset failure', source: 'brain-llm', phase: 'llm.execute' } },
+    });
+
+    const update = vi.fn();
+    const original = Object.getOwnPropertyDescriptor(boundHost().services, 'runHistory')!;
+    Object.defineProperty(boundHost().services, 'runHistory', {
+      configurable: true,
+      enumerable: true,
+      get: () => ({ update }),
+    });
+    try {
+      reportError({
+        error: new Error('mocked failure'),
+        source: 'brain-llm',
+        step: { phase: 'llm.execute', runNodeId, nodeId: 'Node-2' as EARS.EntityId, nodeType: 'llm', eventType: 'user.message' },
+      });
+      expect(update).toHaveBeenCalledOnce();
+    } finally {
+      Object.defineProperty(boundHost().services, 'runHistory', original);
+    }
   });
 
   it('redacts key-shaped strings a provider error quotes', () => {

@@ -513,7 +513,7 @@ export const FeatureEntrySchema: z.ZodObject<{
         changeOrder?: boolean | undefined;
     }>>>>;
     designation: z.ZodOptional<z.ZodString>;
-    settings: z.ZodOptional<z.ZodPreprocess<z.ZodObject<{
+    settings: z.ZodOptional<z.ZodObject<{
         schema: z.ZodType<Record<string, unknown>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, unknown>, Record<string, unknown>>>;
         defaults: z.ZodPipe<z.ZodCustom<Record<string, unknown>, Record<string, unknown>>, z.ZodTransform<Record<string, unknown>, Record<string, unknown>>>;
         title: z.ZodOptional<z.ZodString>;
@@ -523,7 +523,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             owner: "owner";
             shared: "shared";
         }>>;
-    }, z.core.$strict>, unknown>>;
+    }, z.core.$strict>>;
     types: z.ZodOptional<z.ZodString>;
     system: z.ZodOptional<z.ZodObject<{
         entry: z.ZodString;
@@ -697,13 +697,17 @@ export interface GenerateEntriesOptions {
     depTypes?: Map<string, PackTypeManifest>;
     // (undocumented)
     packRoot: string;
+    // (undocumented)
+    validateSettings?: (definition: SettingsDefinition) => void;
 }
 
 // @public (undocumented)
 export function generatePackFiles(manifest: PackManifest, opts: GenerateEntriesOptions): Promise<Record<string, string>>;
 
 // @public
-export function generateSettingsTypes(definition: SettingsDefinition, name: string): Promise<string>;
+export function generateSettingsTypes(definition: SettingsDefinition, name: string, options?: {
+    validate?: (definition: SettingsDefinition) => void;
+}): Promise<string>;
 
 // @public (undocumented)
 export function hashFlows(merged: FlowDSL): Record<string, object>;
@@ -749,13 +753,13 @@ export const ManifestSchema: z.ZodObject<{
     consumes: z.ZodOptional<z.ZodReadonly<z.ZodObject<{
         services: z.ZodReadonly<z.ZodArray<z.ZodUnion<readonly [z.ZodEnum<{
             "host/settings": "host/settings";
-            "host/runHistory": "host/runHistory";
-            "host/inference": "host/inference";
-            "host/emitter": "host/emitter";
+            "host/onboarding": "host/onboarding";
             "host/logger": "host/logger";
+            "host/emitter": "host/emitter";
             "host/repository": "host/repository";
             "host/appData": "host/appData";
-            "host/onboarding": "host/onboarding";
+            "host/runHistory": "host/runHistory";
+            "host/inference": "host/inference";
             "host/secrets": "host/secrets";
             "host/filesystem": "host/filesystem";
             "host/terminal": "host/terminal";
@@ -1005,7 +1009,14 @@ export const ManifestSchema: z.ZodObject<{
             changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         types?: string | undefined;
         system?: {
             entry: string;
@@ -1204,7 +1215,14 @@ export const ManifestSchema: z.ZodObject<{
             changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         types?: string | undefined;
         system?: {
             entry: string;
@@ -1322,14 +1340,28 @@ export const ManifestSchema: z.ZodObject<{
             description?: string | undefined;
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
-        }>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, {
+        }>, Record<string, {
             schema: Record<string, unknown>;
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
-        }>, Record<string, unknown>>>>;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        }>, Record<string, {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        }>>>>;
         help: z.ZodOptional<z.ZodObject<{
             path: z.ZodString;
         }, z.core.$strict>>;
@@ -1371,7 +1403,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1446,7 +1478,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1521,7 +1553,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1596,7 +1628,7 @@ export const ManifestSchema: z.ZodObject<{
                         inputs: number;
                         outputs: number;
                     };
-                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    category: "data" | "trigger" | "action" | "logic" | "ai";
                     isImplemented?: boolean | undefined;
                     isDisabled?: boolean | undefined;
                 };
@@ -1973,13 +2005,13 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     consumes: z.ZodOptional<z.ZodReadonly<z.ZodObject<{
         services: z.ZodReadonly<z.ZodArray<z.ZodUnion<readonly [z.ZodEnum<{
             "host/settings": "host/settings";
-            "host/runHistory": "host/runHistory";
-            "host/inference": "host/inference";
-            "host/emitter": "host/emitter";
+            "host/onboarding": "host/onboarding";
             "host/logger": "host/logger";
+            "host/emitter": "host/emitter";
             "host/repository": "host/repository";
             "host/appData": "host/appData";
-            "host/onboarding": "host/onboarding";
+            "host/runHistory": "host/runHistory";
+            "host/inference": "host/inference";
             "host/secrets": "host/secrets";
             "host/filesystem": "host/filesystem";
             "host/terminal": "host/terminal";
@@ -1992,14 +2024,28 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         description?: string | undefined;
         form?: string | undefined;
         access?: "owner" | "shared" | undefined;
-    }>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, {
+    }>, Record<string, {
         schema: Record<string, unknown>;
         defaults: Record<string, unknown>;
         title?: string | undefined;
         description?: string | undefined;
         form?: string | undefined;
         access?: "owner" | "shared" | undefined;
-    }>, Record<string, unknown>>>>;
+    }>, z.core.$ZodTypeInternals<Record<string, {
+        schema: Record<string, unknown>;
+        defaults: Record<string, unknown>;
+        title?: string | undefined;
+        description?: string | undefined;
+        form?: string | undefined;
+        access?: "owner" | "shared" | undefined;
+    }>, Record<string, {
+        schema: Record<string, unknown>;
+        defaults: Record<string, unknown>;
+        title?: string | undefined;
+        description?: string | undefined;
+        form?: string | undefined;
+        access?: "owner" | "shared" | undefined;
+    }>>>>;
     services: z.ZodOptional<z.ZodLazy<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
     repositories: z.ZodOptional<z.ZodLazy<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
     data: z.ZodOptional<z.ZodObject<{
@@ -2170,7 +2216,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2245,7 +2291,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2320,7 +2366,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2395,7 +2441,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                     inputs: number;
                     outputs: number;
                 };
-                category: "data" | "ai" | "logic" | "trigger" | "action";
+                category: "data" | "trigger" | "action" | "logic" | "ai";
                 isImplemented?: boolean | undefined;
                 isDisabled?: boolean | undefined;
             };
@@ -2664,7 +2710,14 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         references?: {
@@ -2843,7 +2896,14 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             substrings?: readonly string[] | undefined;
             changeOrder?: boolean | undefined;
         }> | undefined;
-        settings?: unknown;
+        settings?: {
+            schema: Record<string, unknown>;
+            defaults: Record<string, unknown>;
+            title?: string | undefined;
+            description?: string | undefined;
+            form?: string | undefined;
+            access?: "owner" | "shared" | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         references?: {
@@ -3466,10 +3526,10 @@ export const StepEntrySchema: z.ZodObject<{
             }, z.core.$strict>;
             category: z.ZodEnum<{
                 data: "data";
-                ai: "ai";
-                logic: "logic";
                 trigger: "trigger";
                 action: "action";
+                logic: "logic";
+                ai: "ai";
             }>;
             isImplemented: z.ZodOptional<z.ZodBoolean>;
             isDisabled: z.ZodOptional<z.ZodBoolean>;

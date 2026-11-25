@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import { ReferenceNode } from '../../../../src/components/tiptap/extensions/reference-node.ts';
 
-import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
+import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing/fe';
 import { resolveName } from '@apackdev/sdk/ids';
 import type { ReferenceCatalogEntry } from '@apackdev/sdk/framework';
 import type { ReferenceBinding, ReferenceTypeConfig } from '@apackdev/sdk/fe/references';

@@ -16,8 +16,8 @@
 // two-project run and the high end in an eleven-project one. Which is why the count is the durable
 // figure here and a per-case millisecond is not.
 import { describe, expect, it } from 'vitest';
-import { entitiesWithoutShapes } from '../../../src/build/generate-entries.ts';
-import { setupPackFixture, dependency, facade, FACADE_DEFAULTS, generate, system, write } from './_support/pack.ts';
+import { entitiesWithoutShapes, generatePackFiles } from '../../../src/build/generate-entries.ts';
+import { setupPackFixture, dependency, facade, FACADE_DEFAULTS, generate, manifest, root, system, write } from './_support/pack.ts';
 
 setupPackFixture();
 
@@ -164,11 +164,14 @@ describe('generated feature settings', () => {
     expect(Object.getPrototypeOf(emitted.defaults)).toBe(Object.prototype);
   });
 
-  it('refuses invalid effective defaults through the common schema compiler', async () => {
-    await expect(generate({ features: [{ ...system('memos'), settings: {
+  it('invokes validateSettings when provided during settings generation', async () => {
+    await expect(generatePackFiles(manifest({ features: [{ ...system('memos'), settings: {
       schema: { type: 'object', properties: { count: { type: 'number' } }, required: ['count'] },
       defaults: { count: 'wrong' },
-    } }] })).rejects.toThrow('Invalid settings defaults');
+    } }] }), {
+      packRoot: root,
+      validateSettings: () => { throw new Error('Invalid settings defaults'); },
+    })).rejects.toThrow('Invalid settings defaults');
   });
 });
 

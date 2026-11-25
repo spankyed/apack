@@ -6,6 +6,7 @@ import { resetTestData } from '@apackdev/sdk/testing';
 import { generateSettingsTypes } from '@apackdev/sdk/build';
 import { registry } from '../../packs/runtime/test-host.ts';
 import { appSettingsDefinition } from '../../../src/features/settings/be/app-definition.ts';
+import { compileSettingsDefinition } from '../../../src/features/settings/compile.ts';
 import { createSettingsStore } from '../../../src/features/settings/be/store.ts';
 
 const id = 'Settings-app' as EARS.EntityId;
@@ -13,7 +14,7 @@ beforeEach(() => resetTestData());
 const store = () => createSettingsStore({ ears: boundEars, catalog: () => registry.settingsCatalog() });
 
 it('derives the public SDK types from the host definition', async () => {
-  const generated = await generateSettingsTypes(appSettingsDefinition, 'AppSettings');
+  const generated = await generateSettingsTypes(appSettingsDefinition, 'AppSettings', { validate: compileSettingsDefinition });
   const recorded = readFileSync(new URL('../../../../apack-sdk/src/types/app-settings.ts', import.meta.url), 'utf8');
   expect(recorded.slice(recorded.indexOf('\n') + 1)).toBe(generated);
 });

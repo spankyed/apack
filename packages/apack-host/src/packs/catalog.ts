@@ -16,7 +16,8 @@ import { appSettingsDefinition } from '../features/settings/be/app-definition.ts
 import { hasOwn } from '@apackdev/sdk/utils/pure';
 import { isDeepStrictEqual } from 'node:util';
 import { parseSnapshot, ManifestSchema, _declarationRevision, _helpDataProblem, _namingRefusedValue, _nativePackDeclarationProblem, type PackManifest } from '@apackdev/sdk/build';
-import { _compileSettingsDefinition, _settingsJsonProblems, type SettingsDefinition, type SettingsCatalog, type HelpDocument, type HelpCatalog, type NativePackDeclaration } from '@apackdev/sdk/framework';
+import { _settingsJsonProblems, type SettingsDefinition, type SettingsCatalog, type HelpDocument, type HelpCatalog, type NativePackDeclaration } from '@apackdev/sdk/framework';
+import { compileSettingsDefinition, nativeDeclarationSettingsProblem, settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 import type { FeatureRef } from '@apackdev/sdk/ids';
 import { createLogger } from '@apackdev/sdk/logger';
 import type { CatalogData, PackCatalogEntry, PackCatalogProblem, PackCatalogSnapshot, PackCatalogSource, SourcePackDeclaration } from './catalog-types.ts';
@@ -33,7 +34,7 @@ function immutable<T>(data: T): CatalogData<T> {
 export function createContributionCatalog(appSettings: SettingsDefinition) {
   const logger = createLogger('pack-catalog');
   const app = immutable(appSettings);
-  _compileSettingsDefinition(app);
+  compileSettingsDefinition(app);
   let current: PackCatalogSnapshot = immutable({ revision: 0, appSettings: app, packs: [], problems: [], native: [], sourcePacks: [], appPackSources: [], appPackSourceProblems: [] });
   let byId = new Map<string, PackCatalogEntry>();
   let refusedDestinations: PackCatalogEntry[] = [];
@@ -119,6 +120,8 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
       const next = sources.map(source => {
         const result = ManifestSchema.safeParse(source.manifest, { error: _namingRefusedValue });
         if (!result.success) throw new Error(`Source pack declarations in ${source.dir}: ${result.error.issues.map(issue => issue.message).join('; ')}`);
+        const settingsIssues = settingsDeclarationDiagnostics(result.data);
+        if (settingsIssues.length) throw new Error(`Source pack declarations in ${source.dir}: ${settingsIssues.map(issue => issue.message).join('; ')}`);
         if (_declarationRevision(result.data) !== source.declarationRevision) throw new Error(`Source pack "${result.data.id}" has a stale declaration identity`);
         if (source.eventContracts !== undefined) _parseEventContracts(source.eventContracts, result.data.features);
         return { ...source, manifest: result.data };
@@ -131,6 +134,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
       const sources = input.sources.map(source => {
         const result = parseSnapshot(source.snapshot);
         if (!result.snapshot || result.snapshot.manifest.id !== source.id || ids.has(source.id)
+          || settingsDeclarationDiagnostics(result.snapshot.manifest).length > 0
           || source.sourceRevision !== shippedPackRevision(source.files)) {
           throw new Error(`Invalid or conflicting app source declarations: ${source.dir}`);
         }
@@ -144,7 +148,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
       if (jsonProblems.length) throw new Error(`Invalid native declarations: ${jsonProblems.map(problem => `${problem.path.join('.')}: declarations must contain finite, acyclic JSON data properties`).join('; ')}`);
       const accepted = immutable(declarations);
       for (const declaration of accepted) {
-        const problem = _nativePackDeclarationProblem(declaration);
+        const problem = _nativePackDeclarationProblem(declaration) ?? nativeDeclarationSettingsProblem(declaration);
         if (problem) throw new Error(`Invalid native declarations: ${problem}`);
       }
       publish({ native: accepted });
@@ -180,6 +184,12 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
         const candidate = immutable(source);
         const result = parseSnapshot(candidate.snapshot);
         if (!result.snapshot) throw new Error(`Pack declarations in ${source.dir}: ${result.diagnostics.map(issue => issue.message).join('; ')}`);
+        const settingsDiagnostics = settingsDeclarationDiagnostics(result.snapshot.manifest, {
+          codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+        });
+        if (settingsDiagnostics.length) {
+          throw new Error(`Pack declarations in ${source.dir}: ${settingsDiagnostics.map(issue => issue.message).join('; ')}`);
+        }
         const id = result.snapshot.manifest.id;
         const other = next.get(id);
         if (other) throw new Error(`Pack "${id}" is declared twice: ${other.dir} and ${source.dir}`);

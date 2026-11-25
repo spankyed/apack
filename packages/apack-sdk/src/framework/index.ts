@@ -21,8 +21,7 @@ export type {
   StepBuildDeclaration, StepDSLMeta, StepEntry, StepRuntimeDeclaration, StepTriggerDeclaration,
 } from './declaration-types.ts';
 export type { PackContentPreview, PackContentPreviewItem } from './preview-types.ts';
-export { _compileSettingsDefinition } from './settings-validation.ts';
-export { _settingsJsonProblems } from './settings-json.ts';
+export { _assertSettingsDefinitionStructure, _settingsJsonProblems } from './settings-json.ts';
 export { onPackCatalogChanged, type NativePackDeclaration } from './pack-catalog.ts';
 export { _eventContractsProblem, _parseEventContracts, type FeatureEventContract, type PackEventContracts } from './event-contracts.ts';
 

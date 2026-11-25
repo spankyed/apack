@@ -1,16 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import type { SettingsDefinition } from '../../src/framework/settings-definition.ts';
-import { _compileSettingsDefinition } from '../../src/framework/settings-validation.ts';
+import type { SettingsDefinition } from '@apackdev/sdk/framework';
+import { compileSettingsDefinition } from '../../../src/features/settings/compile.ts';
 
-const features = JSON.parse(readFileSync(new URL('../../../default-setup/apack.json', import.meta.url), 'utf8')).features as Record<string, { settings: SettingsDefinition }>;
+const features = JSON.parse(readFileSync(new URL('../../../../default-setup/apack.json', import.meta.url), 'utf8')).features as Record<string, { settings: SettingsDefinition }>;
 
 /** Protect the real constraints preserved when the shipped feature schemas moved out of executable modules. */
 describe('shipped feature settings declarations', () => {
   it('validates every explicit baseline as JSON data', () => {
     expect(Object.keys(features)).toHaveLength(11);
     for (const feature of Object.values(features)) {
-      expect(_compileSettingsDefinition(feature.settings).validate(feature.settings.defaults)).toEqual([]);
+      expect(compileSettingsDefinition(feature.settings).validate(feature.settings.defaults)).toEqual([]);
     }
   });
 
@@ -37,14 +37,14 @@ describe('shipped feature settings declarations', () => {
     let parent = defaults;
     for (const key of path.slice(0, -1)) parent = parent[key] as Record<string, unknown>;
     parent[path.at(-1)!] = value;
-    expect(_compileSettingsDefinition(definition).validate(defaults).length).toBeGreaterThan(0);
+    expect(compileSettingsDefinition(definition).validate(defaults).length).toBeGreaterThan(0);
   });
 
   it('preserves nullable directories and optional tag colors', () => {
     const code = features.code.settings;
-    expect(_compileSettingsDefinition(code).validate({ ...code.defaults, baseDirectory: null })).toEqual([]);
-    expect(_compileSettingsDefinition(code).validate({ ...code.defaults, baseDirectory: '/tmp' })).toEqual([]);
+    expect(compileSettingsDefinition(code).validate({ ...code.defaults, baseDirectory: null })).toEqual([]);
+    expect(compileSettingsDefinition(code).validate({ ...code.defaults, baseDirectory: '/tmp' })).toEqual([]);
     const library = features.library.settings;
-    expect(_compileSettingsDefinition(library).validate({ ...library.defaults, tags: [{ name: 'Tag' }] })).toEqual([]);
+    expect(compileSettingsDefinition(library).validate({ ...library.defaults, tags: [{ name: 'Tag' }] })).toEqual([]);
   });
 });

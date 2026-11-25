@@ -1,16 +1,13 @@
 import { HOST_PACK_ID, PACK_ID_PATTERN } from '../ids/refs.ts';
-import type { HostServices } from '../services/index.ts';
 import { satisfies } from 'semver';
 import { parsePackDependency } from './dependency-source.ts';
 
 /** @internal The always-available SDK facilities; target settings policy still applies. */
 export const _BASELINE_HOST_SERVICE_NAMES = ['logger', 'emitter', 'repository', 'settings'] as const;
-/** @internal One inventory for schema assistance, selection and host-name collision checks. */
+/** @internal One inventory for schema assistance, selection and host-name collision checks (verified against `keyof HostServices` in `services/index.ts`). */
 export const _HOST_SERVICE_NAMES = [..._BASELINE_HOST_SERVICE_NAMES,
   'onboarding', 'appData', 'runHistory', 'inference', 'secrets', 'filesystem', 'terminal',
-] as const satisfies readonly (keyof HostServices)[];
-const complete: Exclude<keyof HostServices, typeof _HOST_SERVICE_NAMES[number]> extends never ? true : never = true;
-void complete;
+] as const;
 
 /** @internal Service keys use the existing JavaScript identifier grammar. */
 export const _SERVICE_NAME_PATTERN = /^[A-Za-z_$][\w$]*$/;

@@ -52,10 +52,12 @@ const extra: GeneratedSettings = {...valid, extra:true};
     }
   });
 
-  it('refuses invalid defaults before emitting a usable declaration', async () => {
-    await expect(generateSettingsTypes({ defaults: {}, schema: {
-      type: 'object', required: ['name'], properties: { name: { type: 'string' } },
-    } }, 'Settings')).rejects.toThrow('Invalid settings defaults');
+  it('invokes an optional validator before emitting a declaration', async () => {
+    await expect(generateSettingsTypes(
+      { defaults: {}, schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } } },
+      'Settings',
+      { validate: () => { throw new Error('Invalid settings defaults'); } },
+    )).rejects.toThrow('Invalid settings defaults');
   });
 
   it('refuses local-file and network references without reading or fetching them', async () => {

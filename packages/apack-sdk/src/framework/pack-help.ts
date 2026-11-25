@@ -1,4 +1,4 @@
-import { boundHost } from '../runtime/host-runtime.ts';
+import { _boundBackendHost } from '../runtime/backend-port.ts';
 
 /** A Markdown article contributed by a pack. IDs are unique within that pack. */
 export interface HelpDocument {
@@ -20,5 +20,5 @@ export interface HelpCatalog { articles: HelpArticle[]; problems: HelpProblem[] 
 export interface HelpTarget { packId?: string; articleId?: string; featureId?: string }
 
 export function getPackHelp(): HelpCatalog {
-  return boundHost().packs.help();
+  return _boundBackendHost().packs.help();
 }

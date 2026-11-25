@@ -18,11 +18,9 @@ describe('declarative feature settings', () => {
 
   it.each([
     'src/settings.ts', { visible: false }, { defaults: {} },
-    { ...settings, defaults: { count: 'wrong' } },
-    { ...settings, defaults: { count: 0 } },
-    { ...settings, defaults: { count: 10, extra: true } },
+    { ...settings, schema: { type: 'string' } },
     { ...settings, surfaces: {} },
-  ])('refuses invalid declarations: %j', declaration => {
+  ])('refuses structurally invalid declarations: %j', declaration => {
     const result = parseManifest(manifest(declaration));
     expect(result.status).toBe('invalid');
     expect(result.diagnostics.some(issue => issue.path.slice(0, 3).join('.') === 'features.memos.settings')).toBe(true);

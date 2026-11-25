@@ -1,4 +1,4 @@
-import { boundHost, _isHostBound } from '../runtime/host-runtime.ts';
+import { _boundBackendHost, _isBackendHostBound } from '../runtime/backend-port.ts';
 import { redactSecrets, redactSecretText } from '../utils/redact.ts';
 
 export interface Logger {
@@ -79,7 +79,7 @@ function errorStack(meta: unknown, message: string): string | undefined {
  * without one, to the console. Either way key-shaped strings are redacted first.
  */
 function log(level: LogLevel, source: string | undefined, args: unknown[]): void {
-  if (!_isHostBound()) {
+  if (!_isBackendHostBound()) {
     console[level](...(source === undefined ? [] : [`[${source}]`]), ...args.map((arg) => redactSecrets(arg)));
     return;
   }
@@ -88,7 +88,7 @@ function log(level: LogLevel, source: string | undefined, args: unknown[]): void
   // Errors become plain objects here, keeping their name, message and stack
   const meta = rawMeta === undefined ? undefined : redactSecrets(rawMeta);
   const stack = level === 'error' ? errorStack(meta, message) : undefined;
-  boundHost().transport.rootEvents.emitLog({
+  _boundBackendHost().transport.rootEvents.emitLog({
     level,
     message,
     source,
@@ -110,5 +110,5 @@ export function createLogger(source?: string, options: LoggerOptions = {}): Logg
 
 /** Calls `callback` with every log entry the app records; returns the unsubscribe (backend only) */
 export function onLog(callback: (event: LogEvent) => void): () => void {
-  return boundHost().transport.rootEvents.onLog(callback);
+  return _boundBackendHost().transport.rootEvents.onLog(callback);
 }
