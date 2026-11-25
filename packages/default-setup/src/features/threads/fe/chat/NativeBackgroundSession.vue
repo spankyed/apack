@@ -62,7 +62,10 @@ const richReplyActive = computed(() => !!(props.canReply && replyOpen.value && p
   && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.jobSessionId === props.continuation.continuedInSessionId
   && props.state.session?.pid && ['working','blocked'].includes(props.state.session.state)))
 watch(richReplyActive, value => emit('composing', value), {immediate:true,flush:'sync'})
-let submitted: {text: string; revision: number; rich: boolean; resolve(value: ClaudeAgentComposerSubmitResult): void; reject(error: Error): void} | undefined
+let submitted: {
+  text: string; revision: number; rich: boolean; jobId: string; jobSessionId: string; pid: number; desktopOwner?: string
+  resolve(value: ClaudeAgentComposerSubmitResult): void; reject(error: Error): void
+} | undefined
 function retireSubmission() { submitted?.reject(Error('Background session changed before acknowledgment')); submitted = undefined }
 function draftCurrent(target: ClaudeNativeContinuation) { return props.continuation.sessionId === target.sessionId && props.continuation.continuedInSessionId === target.continuedInSessionId }
 function updateDraft(target: ClaudeNativeContinuation, text: string) { if (draftCurrent(target)) draft.value = text }
@@ -77,11 +80,21 @@ watch([() => props.continuation.sessionId, () => props.continuation.continuedInS
 watch(draft, text => {
   try { const key = draftKey(); if (key) { const storage = surfaceStorage(featureRef('threads')); if (text) storage.set(key,text); else storage.remove(key) } } catch { /* Keep the live draft when storage is unavailable. */ }
 }, {flush:'sync'})
-watch([() => props.state?.revision, () => props.state?.status], () => {
+watch(() => {
   const state = props.state
-  if (state?.sessionId !== props.continuation.sessionId || state.continuedInSessionId !== props.continuation.continuedInSessionId) return
-  if (!submitted || !state || state.operation !== 'reply' || state.revision <= submitted.revision || state.status === 'pending') return
-  const request = submitted; submitted = undefined
+  return [state?.revision, state?.status, state?.session?.id, state?.session?.sessionId, state?.session?.pid, state?.desktop?.ownerId]
+}, () => {
+  const request = submitted, state = props.state
+  if (!request) return
+  if (!state) { retireSubmission(); return }
+  if (state.sessionId !== props.continuation.sessionId || state.continuedInSessionId !== props.continuation.continuedInSessionId) return
+  const worker = state.session, owner = state.desktop?.ownerId
+  // The final receipt may omit the process after exit, but a different reported worker retires this send.
+  if ((worker && (worker.id !== request.jobId || worker.sessionId !== request.jobSessionId || worker.pid !== undefined && worker.pid !== request.pid))
+    || (owner && request.desktopOwner && owner !== request.desktopOwner)
+    || state.revision > request.revision) { retireSubmission(); return }
+  if (state.operation !== 'reply' || state.revision !== request.revision || state.status === 'pending') return
+  submitted = undefined
   if (state.status === 'done') {
     if (!request.rich && draft.value === request.text) { draft.value = ''; draftSnapshot.value = undefined }
     request.resolve(request.rich ? { accepted: true } : undefined)
@@ -91,12 +104,14 @@ function reply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSessio
   void sendReply(target, session, draft.value, false).catch(() => {})
 }
 function sendReply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSession, text: string, rich: boolean): Promise<ClaudeAgentComposerSubmitResult> {
-  if (!props.canReply || submitted || props.state?.status === 'pending' || !session.pid || !text.trim() || text.length > 32768
-    || props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId
-    || props.state?.session?.id !== session.id || props.state.session.pid !== session.pid || !['working','blocked'].includes(session.state)) return Promise.reject(Error('Background input changed. Refresh and send again.'))
+  const current = props.state, pid = session.pid
+  if (!props.canReply || submitted || current?.status === 'pending' || !pid || !text.trim() || text.length > 32768
+    || !draftCurrent(target) || current?.sessionId !== target.sessionId || current.continuedInSessionId !== target.continuedInSessionId
+    || current.session?.id !== session.id || current.session.pid !== pid || !['working','blocked'].includes(session.state)) return Promise.reject(Error('Background input changed. Refresh and send again.'))
   return new Promise((resolve, reject) => {
-    submitted = {text, revision:props.state?.revision ?? 0, rich, resolve, reject}
-    operate(target, {operation:'reply', id:session.id, pid:session.pid!, text})
+    submitted = {text, revision:current.revision + 1, rich, jobId:session.id, jobSessionId:session.sessionId, pid,
+      desktopOwner:rich ? current.desktop?.ownerId : undefined, resolve, reject}
+    operate(target, {operation:'reply', id:session.id, pid, text})
   })
 }
 function openSession(target: ClaudeNativeContinuation, jobId: string) {

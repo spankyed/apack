@@ -33,31 +33,49 @@ it('interrupts the current response while retaining the separate worker Stop con
  }finally{app.unmount();root.remove()}
 })
 
-it('acknowledges a rich reply only when the original background operation completes', async () => {
+it.each([
+  { name:'the original reply', replacement:false, revision:2 },
+  { name:'a replaced worker', replacement:true, revision:2 },
+  { name:'a newer reply', replacement:false, revision:3 },
+])('settles a rich reply against $name', async ({ replacement, revision }) => {
   const continuation = { sessionId: 'parent', continuedInSessionId: 'root', timestamp: '2026-11-05T00:00:00Z' }
   const desktop = { ownerId: 'desktop', parentSessionId: 'parent', sessionId: 'root', jobSessionId: 'root', jobId: '11111111', pid: 119, processStart: 'start' }
   const state = reactive<ClaudeBackgroundSessionState>({
     ...continuation, revision: 1, operation: 'refresh', status: 'done',
     session: { id: '11111111', sessionId: 'root', cwd: '/owned', state: 'working', pid: 119 }, desktop,
   })
-  const operate = vi.fn(), accepted = vi.fn()
+  const operate = vi.fn(), accepted = vi.fn(), rejected = vi.fn()
   const root = document.createElement('div')
   document.body.append(root)
   const app = createApp({
     render: () => h(NativeBackgroundSession, { continuation, state, canReply: true, onOperate: operate }, {
-      composer: ({ send }) => h('button', { onClick: () => void send('First reply').then(accepted) }, 'Child Send'),
+      composer: ({ send }) => h('button', { onClick: () => void send('First reply').then(accepted,rejected) }, 'Child Send'),
     }),
   })
   try {
     app.mount(root)
     root.querySelector<HTMLButtonElement>('button[aria-label="Reply"]')!.click()
     await nextTick()
-    Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Child Send')!.click()
+    const clickSend = () => Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Child Send')!.click()
+    clickSend()
     expect(operate).toHaveBeenCalledExactlyOnceWith(continuation, { operation: 'reply', id: '11111111', pid: 119, text: 'First reply' })
     Object.assign(state, { revision: 2, operation: 'reply', status: 'pending' })
     await nextTick()
     expect(accepted).not.toHaveBeenCalled()
-    state.status = 'done'
+    if(replacement){
+      state.session={...state.session!,pid:120}
+      state.desktop={...desktop,pid:120,processStart:'replacement'}
+      await nextTick()
+      await vi.waitFor(() => expect(rejected).toHaveBeenCalledOnce())
+    }
+    Object.assign(state,{revision,status:'done'})
+    if(replacement || revision!==2){
+      await vi.waitFor(() => expect(rejected).toHaveBeenCalledOnce())
+      expect(accepted).not.toHaveBeenCalled()
+      clickSend()
+      expect(operate).toHaveBeenCalledTimes(2)
+      Object.assign(state,{revision:revision+1,status:'done'})
+    }
     await vi.waitFor(() => expect(accepted).toHaveBeenCalledExactlyOnceWith({ accepted: true }))
   } finally {
     app.unmount()
