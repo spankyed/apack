@@ -501,8 +501,9 @@ export function createClaudeTerminalViews(dependencies: {
   function refreshRegisteredWorker(key: string, view: View) {
     const operation = view.background, session = operation?.session
     const info = dependencies.backgroundInfo?.(view.threadId)
-    if (!operation || operation.status !== 'done' || !session || session.pid || !['working', 'blocked'].includes(session.state)
-      || !info || info.sessionId !== operation.continuedInSessionId || info.jobId !== session.id || !dependencies.background) return
+    if (!operation || operation.status !== 'done' || !session || !info || info.pid === session.pid
+      || info.sessionId !== operation.continuedInSessionId || info.jobId !== session.id || !dependencies.background) return
+    const replacing = session.pid !== undefined || !['working', 'blocked'].includes(session.state)
     const registration = JSON.stringify([operation.sessionId, info.sessionId, info.jobId, info.pid])
     if (view.backgroundRegistration === registration) return
     view.backgroundRegistration = registration
@@ -512,8 +513,12 @@ export function createClaudeTerminalViews(dependencies: {
       && dependencies.continuation?.(view.threadId)?.sessionId === operation.sessionId
       && dependencies.continuation?.(view.threadId)?.continuedInSessionId === operation.continuedInSessionId
     void dependencies.background(continuation, {operation: 'refresh'}, view.threadId).then(fresh => {
-      if (!current() || !fresh || fresh.id !== session.id || fresh.sessionId !== info.sessionId || fresh.pid !== info.pid || fresh.cwd !== session.cwd) return
-      operation.session = fresh
+      if (!current() || !fresh || fresh.id !== session.id || fresh.sessionId !== info.sessionId || fresh.pid !== info.pid
+        || fresh.cwd !== session.cwd || !['working', 'blocked'].includes(fresh.state)) return
+      if (replacing) {
+        // A replacement reports its own worker state, not the former worker's operation receipt.
+        view.background = { ...continuation, revision: operation.revision + 1, operation: 'refresh', status: 'done', session: fresh }
+      } else operation.session = fresh
       publish(key, view); prepareDesktop(key, view)
     }).catch(() => { /* Explicit Refresh remains available; do not retry each status tick. */ })
   }

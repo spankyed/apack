@@ -316,3 +316,20 @@ it('projects notice pending and failure feedback only into the live addressed te
   expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]).toBeUndefined()
   actor.stop()
 })
+
+it('keeps a replacement background process when the same mount receives an older reply receipt', () => {
+  const actor = createActor(nativeState).start()
+  const identity = { mountId: 'background-view', threadId: 'thread' }
+  const base = { type: 'CLAUDE_TERMINAL_STATE' as const, ...identity, opening: false, output: [] }
+  const job = { id: '11111111', sessionId: 'child', cwd: '/owned', state: 'working' as const, pid: 119 }
+  const old = { sessionId: 'parent', continuedInSessionId: 'child', revision: 2, operation: 'reply' as const, status: 'done' as const, session: job }
+  const fresh = { ...old, revision: 3, operation: 'refresh' as const, session: { ...job, pid: 120 } }
+  const view = () => actor.getSnapshot().context.nativeTerminalViews[identity.mountId]
+  try {
+    actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity })
+    actor.send({ ...base, background: fresh, canReplyBackground: true })
+    actor.send({ ...base, background: old, canReplyBackground: false })
+    expect(view()?.background).toEqual(fresh)
+    expect(view()?.canReplyBackground).toBe(true)
+  } finally { actor.stop() }
+})

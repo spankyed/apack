@@ -1843,9 +1843,12 @@ const threadsState = setup({
     CLAUDE_TERMINAL_STATE: { actions: assign(({ context, event }) => {
       const view = context.nativeTerminalViews[event.mountId]; if (view?.threadId !== event.threadId) return {};
       const sameOwner = view.state?.ownerId === event.state?.ownerId;
+      const previous = view.background, incoming = event.background;
+      const oldBackground = previous && incoming && previous.sessionId === incoming.sessionId
+        && previous.continuedInSessionId === incoming.continuedInSessionId && previous.revision > incoming.revision;
       const output = [...(sameOwner ? view.output : []), ...event.output];
       let bytes = 0, from = output.length; while (from > 0 && bytes < 262144) bytes += output[--from].text.length;
-      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, queueComposer: view.queueComposer, backgroundInfo: event.backgroundInfo, canReplyBackground: event.canReplyBackground, state: event.state, attachment: event.attachment, teammateReconnects: event.teammateReconnects, background: event.background, mcpOperation: event.mcpOperation, queueOperation: event.queueOperation, queueDraft: event.queueDraft, policyRecheck: event.policyRecheck, noticeAnswer: event.noticeAnswer, task: event.task, stop: event.stop, submission: event.submission, opening: event.opening, openingId: event.openingId, cancelling: event.cancelling, problem: event.problem, output: output.slice(from) } } };
+      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, queueComposer: view.queueComposer, backgroundInfo: oldBackground ? view.backgroundInfo : event.backgroundInfo, canReplyBackground: oldBackground ? view.canReplyBackground : event.canReplyBackground, state: event.state, attachment: event.attachment, teammateReconnects: event.teammateReconnects, background: oldBackground ? previous : incoming, mcpOperation: event.mcpOperation, queueOperation: event.queueOperation, queueDraft: event.queueDraft, policyRecheck: event.policyRecheck, noticeAnswer: event.noticeAnswer, task: event.task, stop: event.stop, submission: event.submission, opening: event.opening, openingId: event.openingId, cancelling: event.cancelling, problem: event.problem, output: output.slice(from) } } };
     }) },
     CLAUDE_UI_STATE: { actions: [() => {
       // Module refresh can unmount the old view after startup; a native frame also proves readiness.

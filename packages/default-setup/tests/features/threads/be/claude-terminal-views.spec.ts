@@ -1473,3 +1473,34 @@ it('retires a confirmed ended checkpoint in every window but keeps a temporarily
     expect(latest()?.teammateReconnects?.map(offer => offer.taskId)).toEqual(['inactive'])
   } finally { views.clear() }
 })
+
+it('refreshes a registered replacement in a still-mounted background job', async () => {
+  const link = { sessionId: 'parent', continuedInSessionId: 'child', timestamp: 'now' }
+  const job = { id: '11111111', sessionId: 'child', cwd: '/owned', state: 'working' as const, pid: 119 }
+  const replacement = { ...job, pid: 120 }
+  const owner = { ownerId: 'desktop', parentSessionId: 'parent', sessionId: 'child', jobSessionId: 'child', jobId: job.id, pid: job.pid, processStart: 'start' }
+  const nextOwner = { ...owner, ownerId: 'replacement', pid: replacement.pid, processStart: 'new' }
+  let info: ClaudeBackgroundStatus | undefined, notify!: () => void
+  const background = vi.fn().mockResolvedValueOnce(job).mockResolvedValue(replacement)
+  const send = vi.fn()
+  const views = createClaudeTerminalViews({
+    get: () => undefined, open: vi.fn(), continuation: () => link, background,
+    backgroundInfo: () => info, replyBackground: async () => job,
+    desktop: async (_link, _job, pid) => pid === job.pid ? owner : nextOwner,
+    desktopCurrent: (_key, target) => !info || info.pid === target.pid,
+    subscribeBackground: (_key, changed) => { notify = changed; return () => {} },
+  })
+  const state = () => send.mock.calls.at(-1)?.[0].background
+  try {
+    views.handle(mount, 'window', send)
+    const address = { ...mount, type: 'CLAUDE_TERMINAL_BACKGROUND' as const, ...link }
+    views.handle({ ...address, revision: 1, operation: 'refresh' }, 'window', send)
+    await vi.waitFor(() => expect(state()?.desktop).toEqual(owner))
+    views.handle({ ...address, revision: 2, operation: 'reply', id: job.id, pid: job.pid, text: 'Review the release notes.' }, 'window', send)
+    await vi.waitFor(() => expect(state()).toMatchObject({ revision: 2, operation: 'reply', status: 'done' }))
+    info = { jobId: job.id, sessionId: 'child', pid: replacement.pid, observedAt: 2, model: 'sonnet', turns: 1, startedAt: 2 }
+    notify(); notify()
+    await vi.waitFor(() => expect(state()).toMatchObject({ revision: 3, operation: 'refresh', status: 'done', session: replacement, desktop: nextOwner }))
+    expect(background).toHaveBeenCalledTimes(2)
+  } finally { views.clear() }
+})
