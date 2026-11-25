@@ -65,38 +65,46 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
   }else throw Error('Invalid native Client operation');
   return {handled:true};
  }
- async function dispatchAction(client,value){
+ function findAction(client,value,dispatch){
+  let knownHandle=false;
   for(const entry of entries.values()){
-   if(entry.borrowed)continue;
+   if(dispatch&&entry.borrowed)continue;
    const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
-   if(!ref||ref.plugin!==value.plugin||typeof ref.key!=='string'||ref.key!==value.key||ref.type==='Markdown')continue;
-   if(!entry.enabled||!current(entry)||entry.instanceRevision!==undefined&&(value.instance_revision!==entry.instanceRevision||value.component!==entry.component||value.instance_id!==entry.requestId))return {handled:false};
-   const type=value.subtype==='ui_press'?'Button':value.subtype==='ui_input'?'Input':value.subtype==='ui_select'?'Select':undefined;
-   if(type!==ref.type)return {handled:false};
-   const event=type==='Button'?{type:'press'}:type==='Input'?{type:'input',kind:value.kind,value:value.value}:{type:'select',value:value.value};
-   const actionToken=entry.token;
-   const result=await callbacks.dispatch({plugin:ref.plugin,module:entry.module,key:entry.key,component:entry.component,requestId:entry.requestId,element:ref.key,event});
-   if(entries.get(entry.identity)!==entry||entry.token!==actionToken||!entry.enabled||!current(entry)||!result?.reached)return {handled:false};
-   const reached=result.reached,snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return {handled:false};
-   const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===type&&node.press?.plugin===ref.plugin&&node.props?.key===reached.element)matches.push(node);for(const child of node.children??[])find(child);};find(snapshot.tree);
-   if(matches.length!==1)return {handled:false};const target=matches[0];
-   if(type==='Select'&&!target.props.options.some(option=>option.value===reached.value))return {handled:false};
-   const handled=callbacks.run({plugin:ref.plugin,handle:target.press.handle,key:target.props.key,component:entry.component,requestId:entry.callbackId,event:reached});
-   return {handled,...(handled?{element:reached.element,...(type!=='Button'?{value:reached.value}:{})}:{})};
+   if(!ref||ref.plugin!==value.plugin||ref.key!==value.key||dispatch&&(typeof ref.key!=='string'||ref.type==='Markdown'))continue;
+   knownHandle=true;
+   // A native drawing can share a handle across held sites. The request names the site that received it.
+   if(value.instance_revision!==entry.instanceRevision||entry.instanceRevision!==undefined&&(value.component!==entry.component||value.instance_id!==entry.requestId))continue;
+   return entry.enabled&&current(entry)?{entry,ref}:false;
   }
+  return knownHandle?false:undefined;
+ }
+ async function dispatchAction(client,value){
+  const match=findAction(client,value,true);
+  if(!match)return match===false?{handled:false}:undefined;
+  const {entry,ref}=match;
+  const type=value.subtype==='ui_press'?'Button':value.subtype==='ui_input'?'Input':value.subtype==='ui_select'?'Select':undefined;
+  if(type!==ref.type)return {handled:false};
+  const event=type==='Button'?{type:'press'}:type==='Input'?{type:'input',kind:value.kind,value:value.value}:{type:'select',value:value.value};
+  const actionToken=entry.token;
+  const result=await callbacks.dispatch({plugin:ref.plugin,module:entry.module,key:entry.key,component:entry.component,requestId:entry.requestId,element:ref.key,event});
+  if(entries.get(entry.identity)!==entry||entry.token!==actionToken||!entry.enabled||!current(entry)||!result?.reached)return {handled:false};
+  const reached=result.reached,snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return {handled:false};
+  const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===type&&node.press?.plugin===ref.plugin&&node.props?.key===reached.element)matches.push(node);for(const child of node.children??[])find(child);};find(snapshot.tree);
+  if(matches.length!==1)return {handled:false};const target=matches[0];
+  if(type==='Select'&&!target.props.options.some(option=>option.value===reached.value))return {handled:false};
+  const handled=callbacks.run({plugin:ref.plugin,handle:target.press.handle,key:target.props.key,component:entry.component,requestId:entry.callbackId,event:reached});
+  return {handled,...(handled?{element:reached.element,...(type!=='Button'?{value:reached.value}:{})}:{})};
  }
  function action(client,value){
-  for(const entry of entries.values()){
-   const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
-   if(!ref||ref.plugin!==value.plugin||ref.key!==value.key)continue;
-   if(!entry.enabled||!current(entry)||entry.instanceRevision!==undefined&&(value.instance_revision!==entry.instanceRevision||value.component!==entry.component||value.instance_id!==entry.requestId))return false;
-   const type=value.subtype==='ui_press'?['Button','Markdown']:value.subtype==='ui_input'?['Input']:['Select'];
-   if(!type.includes(ref.type))return false;
-   const snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return false;
-   const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===ref.type&&node.press?.plugin===ref.plugin&&(typeof ref.key==='string'?node.props?.key===ref.key:node.press.handle===value.handle))matches.push(node);for(const child of node.children??[])find(child);};
-   find(snapshot.tree);
-   return matches.length===1?{handle:matches[0].press.handle,component:entry.component,requestId:entry.callbackId,surface:entry.surface}:false;
-  }
+  const match=findAction(client,value,false);
+  if(!match)return match;
+  const {entry,ref}=match;
+  const type=value.subtype==='ui_press'?['Button','Markdown']:value.subtype==='ui_input'?['Input']:['Select'];
+  if(!type.includes(ref.type))return false;
+  const snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return false;
+  const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===ref.type&&node.press?.plugin===ref.plugin&&(typeof ref.key==='string'?node.props?.key===ref.key:node.press.handle===value.handle))matches.push(node);for(const child of node.children??[])find(child);};
+  find(snapshot.tree);
+  return matches.length===1?{handle:matches[0].press.handle,component:entry.component,requestId:entry.callbackId,surface:entry.surface}:false;
  }
  return {render,event,action,dispatchAction,surface(client,id){const entry=tokens.get(id);return entry&&entry.client===client&&entry.enabled&&current(entry)?entry.surface:undefined;},settle(client,component,requestId){return settling.get(scopeOf(client,component,requestId))?.promise??Promise.resolve();},release(client,component,requestId){for(const entry of [...entries.values()])if(entry.scope===scopeOf(client,component,requestId))drop(entry);},suspendInstance(client,component,requestId){for(const entry of entries.values())if(entry.client===client&&entry.component===component&&entry.requestId===requestId){if(entry.borrowed&&typeof entry.instance.isCurrent==='function'&&current(entry))continue;entry.enabled=false;}},suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
 }`
