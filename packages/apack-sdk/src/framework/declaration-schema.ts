@@ -2,7 +2,7 @@ import { _HOST_SERVICE_NAMES, _serviceProviderProblem, _SERVICE_NAME_PATTERN, ty
 import { dslDefinitionsProblem } from './dsl-declarations.ts';
 import { declarationRecord } from './declaration-record.ts';
 import { hasOwn } from '../utils/shared.ts';
-import { _eventContractsProblem, type PackEventContracts } from './event-contracts.ts';
+import { _eventContractsProblem, _parseEventContractsShape, type PackEventContracts } from './event-contracts.ts';
 import type { PackLifecycleDeclaration } from './lifecycle-declaration.ts';
 export { LIFECYCLE_HOOK_NAMES } from './lifecycle-declaration.ts';
 import { _packEntities, _packEntityTypes, _packRelationTypes, _packRoles, _SHORT_CODE_PATTERN, _WIRE_NAME_PATTERN, _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, _SEARCH_STEM_LANGUAGES, type PackDataDeclarations } from './data-declaration.ts';
@@ -267,19 +267,14 @@ function checkFrontendClaims(frontend: FrontendDeclaration | undefined, ctx: z.R
 
 /** @internal Host composition admits shared declaration data independently of executable bindings. */
 const PackVersionSchema = z.string().regex(_PACK_VERSION_PATTERN, 'Must be a complete SemVer version').refine(_validPackVersion, 'Must be a complete SemVer version');
-const EventNamesSchema = z.array(z.string().min(1)).refine(names => new Set(names).size === names.length, 'Event names must be unique');
-export const _EventContractsSchema = declarationRecord(z.string().regex(FEATURE_ID_PATTERN), z.object({
-  system: z.object({
-    incoming: EventNamesSchema,
-    outgoing: EventNamesSchema,
-    // Each declared ask, with the failure kinds its contract gives it: an ask is an event the system receives
-    asks: declarationRecord(z.string().min(1), EventNamesSchema).optional(),
-  }).strict().refine(
-    system => Object.keys(system.asks ?? {}).every(ask => system.incoming.includes(ask)),
-    'Every ask must be among the incoming events',
-  ).optional(),
-  surface: z.object({ receives: EventNamesSchema }).strict().optional(),
-}).strict());
+export const _EventContractsSchema: z.ZodType<PackEventContracts, unknown> = z.unknown().transform((raw, ctx): PackEventContracts => {
+  try {
+    return _parseEventContractsShape(raw);
+  } catch (error) {
+    ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : String(error) });
+    return z.NEVER;
+  }
+});
 
 export const _NativePackDeclarationSchema = z.object({
   id: z.string().regex(PACK_ID_PATTERN),
@@ -959,15 +954,54 @@ export const ManifestSchema = z.object({
   checkContentWriterClaims(manifest, ctx);
 }).superRefine(checkDeclaredNames, ALONGSIDE_OTHER_ISSUES);
 
-// Bidirectional type assertions: keep every Zod schema locked to its plain TypeScript interface in declaration-types.ts
-// so consumers never need `z.infer` (or Zod types) while any schema/type drift fails typecheck immediately.
+// Bidirectional exactness locks: keep every Zod schema locked to its plain TypeScript interface in
+// declaration-types.ts so consumers never need `z.infer` (or Zod types), while any drift — including
+// extra optional properties (top-level or nested), missing fields, widened types, or readonly/optionality
+// mismatches — fails typecheck immediately.
 type _IsAny<T> = 0 extends (1 & T) ? true : false;
-type _Exact<A, B> = _IsAny<A> extends true ? ['schema inferred any']
+type _StrictEquals<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+type _DeepNormalize<T> =
+  _IsAny<T> extends true ? any
+  : T extends (...args: never[]) => unknown ? T
+  : T extends readonly unknown[] ? { [K in keyof T]: _DeepNormalize<T[K]> }
+  : T extends object ? { [K in keyof T]: _DeepNormalize<T[K]> }
+  : T;
+type _DeepRequired<T> =
+  _IsAny<T> extends true ? any
+  : T extends (...args: never[]) => unknown ? T
+  : T extends readonly unknown[] ? { [K in keyof T]-?: _DeepRequired<T[K]> }
+  : T extends object ? { [K in keyof T]-?: _DeepRequired<T[K]> }
+  : T;
+type _DeepReadonly<T> =
+  _IsAny<T> extends true ? any
+  : T extends (...args: never[]) => unknown ? T
+  : T extends readonly unknown[] ? { readonly [K in keyof T]: _DeepReadonly<T[K]> }
+  : T extends object ? { readonly [K in keyof T]: _DeepReadonly<T[K]> }
+  : T;
+type _MutualAssignable<A, B> =
+  [A] extends [B]
+    ? ([B] extends [A] ? true : ['plain type is wider than schema', B, A])
+    : ['schema is wider than plain type', A, B];
+/** Checks mutual assignability, recursive DeepRequired exactness, and structural readonly/optionality equality. */
+export type _Exact<A, B> =
+  _IsAny<A> extends true ? ['schema inferred any']
   : _IsAny<B> extends true ? ['plain type is any']
-  : [A] extends [B] ? ([B] extends [A] ? true : ['plain type is wider than schema', B, A]) : ['schema is wider than plain type', A, B];
-type _KeysExact<A, B> = _Exact<keyof A, keyof B>;
-type _EventContractsSchemaType = z.infer<typeof _EventContractsSchema>;
-type _NativeSchemaType = z.infer<typeof _NativePackDeclarationSchema>;
+  : _MutualAssignable<A, B> extends true
+    ? _MutualAssignable<_DeepRequired<A>, _DeepRequired<B>> extends true
+      ? _StrictEquals<_DeepNormalize<A>, _DeepNormalize<B>> extends true
+        ? true
+        : ['types differ in readonly, optionality, or exact structure', _DeepNormalize<A>, _DeepNormalize<B>]
+      : ['types differ in nested optional keys', _DeepRequired<A>, _DeepRequired<B>]
+    : _MutualAssignable<A, B>;
+/** For plain interfaces that intentionally add `readonly` over mutable Zod output (`NativePackDeclaration`). */
+export type _ExactReadonly<A, B> =
+  _IsAny<A> extends true ? ['schema inferred any']
+  : _IsAny<B> extends true ? ['plain type is any']
+  : [A] extends [B]
+    ? _Exact<_DeepReadonly<A>, _DeepReadonly<B>>
+    : ['schema is not assignable to readonly plain type', A, B];
+
 export type _DeclarationSchemasMatchPlainTypes = [
   _Asserted<_Exact<z.infer<typeof ManifestSchema>, PackManifest>>,
   _Asserted<_Exact<z.infer<typeof FeatureEntrySchema>, PackFeatureEntry>>,
@@ -982,14 +1016,6 @@ export type _DeclarationSchemasMatchPlainTypes = [
   _Asserted<_Exact<z.infer<typeof ArtifactEntrySchema>, ArtifactDeclaration>>,
   _Asserted<_Exact<z.infer<typeof BlockEntrySchema>, BlockDeclaration>>,
   _Asserted<_Exact<z.infer<typeof PackPermissionSchema>, PackPermission>>,
-  _Asserted<_Exact<_EventContractsSchemaType[string], {
-    system?: { incoming: string[]; outgoing: string[]; asks?: Record<string, string[]> };
-    surface?: { receives: string[] };
-  }>>,
-  _Asserted<_KeysExact<_EventContractsSchemaType[string], PackEventContracts[string]>>,
-  _Asserted<_KeysExact<NonNullable<_EventContractsSchemaType[string]['system']>, NonNullable<PackEventContracts[string]['system']>>>,
-  _Asserted<_KeysExact<NonNullable<_EventContractsSchemaType[string]['surface']>, NonNullable<PackEventContracts[string]['surface']>>>,
-  _Asserted<_EventContractsSchemaType extends PackEventContracts ? true : false>,
-  _Asserted<_KeysExact<_NativeSchemaType, NativePackDeclaration>>,
-  _Asserted<_NativeSchemaType extends NativePackDeclaration ? true : false>,
+  _Asserted<_Exact<z.infer<typeof _EventContractsSchema>, PackEventContracts>>,
+  _Asserted<_ExactReadonly<z.infer<typeof _NativePackDeclarationSchema>, NativePackDeclaration>>,
 ];

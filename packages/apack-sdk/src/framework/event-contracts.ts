@@ -39,8 +39,8 @@ function parseEventNames(value: unknown, label: string): string[] {
   return names;
 }
 
-/** @internal Read compiled authoring data with the same grammar and ownership checks as snapshots. */
-export function _parseEventContracts(data: unknown, features: Parameters<typeof _eventContractsProblem>[1], native = false): PackEventContracts {
+/** @internal Parse and validate compiled event contract structure without feature-ownership checks. */
+export function _parseEventContractsShape(data: unknown): PackEventContracts {
   const jsonProblems = _settingsJsonProblems(data);
   if (jsonProblems.length) {
     throw new Error(`Invalid event contracts: ${jsonProblems.map(problem => `${problem.path.join('.') || 'root'}: event contracts must contain finite, acyclic JSON data properties`).join('; ')}`);
@@ -85,7 +85,12 @@ export function _parseEventContracts(data: unknown, features: Parameters<typeof 
     }
     contractEntries.push([featureId, parsed]);
   }
-  const contracts: PackEventContracts = Object.fromEntries(contractEntries);
+  return Object.fromEntries(contractEntries);
+}
+
+/** @internal Read compiled authoring data with the same grammar and ownership checks as snapshots. */
+export function _parseEventContracts(data: unknown, features: Parameters<typeof _eventContractsProblem>[1], native = false): PackEventContracts {
+  const contracts = _parseEventContractsShape(data);
   const problem = _eventContractsProblem(contracts, features, native);
   if (problem) throw new Error(problem);
   return contracts;

@@ -1844,43 +1844,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     }>>>>>;
     dslDefinitions: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     entityDestinations: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
-    eventContracts: z.ZodOptional<z.ZodType<Record<string, {
-        system?: {
-            incoming: string[];
-            outgoing: string[];
-            asks?: Record<string, string[]> | undefined;
-        } | undefined;
-        surface?: {
-            receives: string[];
-        } | undefined;
-    }>, Record<string, {
-        system?: {
-            incoming: string[];
-            outgoing: string[];
-            asks?: Record<string, string[]> | undefined;
-        } | undefined;
-        surface?: {
-            receives: string[];
-        } | undefined;
-    }>, z.core.$ZodTypeInternals<Record<string, {
-        system?: {
-            incoming: string[];
-            outgoing: string[];
-            asks?: Record<string, string[]> | undefined;
-        } | undefined;
-        surface?: {
-            receives: string[];
-        } | undefined;
-    }>, Record<string, {
-        system?: {
-            incoming: string[];
-            outgoing: string[];
-            asks?: Record<string, string[]> | undefined;
-        } | undefined;
-        surface?: {
-            receives: string[];
-        } | undefined;
-    }>>>>;
+    eventContracts: z.ZodOptional<z.ZodType<PackEventContracts, unknown, z.core.$ZodTypeInternals<PackEventContracts, unknown>>>;
     textEditor: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, {
         extensions?: Record<string, string> | undefined;
         popups?: Record<string, string> | undefined;
