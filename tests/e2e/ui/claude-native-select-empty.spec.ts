@@ -88,14 +88,39 @@ test('preserves native Select none and valid empty values through original callb
   const before=await context(),states:any[]=[]
   const callbacks=async()=>JSON.parse(await readFile(join(workspace!,'native-select-callbacks.json'),'utf8').catch(()=>'[]'))
   const drawing=async()=>JSON.parse(await readFile(join(workspace!,'native-select-drawing.json'),'utf8').catch(()=>'{}'))
-  const label=()=>select.locator('span').first().textContent()
+  const displayedValue = select.locator('.native-select-value')
+  const chevron = select.locator('.native-select-chevron')
+  const clearAudience = card.getByRole('button', { name: 'Clear audience', exact: true })
+  const label = () => displayedValue.textContent()
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capture(stage:string,expected:string){
     await expect.poll(label).toBe(expected)
     for(const width of [1100,680]){
       await appPage.setViewportSize({width,height:width===680?600:900})
       await expect(select).toBeInViewport({ratio:1})
-      await expect(card.getByRole('button',{name:'Clear audience',exact:true})).toBeInViewport({ratio:1})
+      await expect(clearAudience).toBeInViewport({ratio:1})
+      await expect(chevron).toHaveText('▾')
+      await expect(chevron).toHaveCSS('opacity', '0.5')
+      const selected = stage === 'empty' || stage === 'selected'
+      await expect(displayedValue).toHaveCSS('opacity', selected ? '1' : '0.5')
+      if (selected) {
+        await clearAudience.focus()
+        await appPage.keyboard.press('Shift+Tab')
+        await expect(select).toBeFocused()
+        const paint = await displayedValue.evaluate(element => {
+          const style = getComputedStyle(element)
+          const resolved = document.createElement('span')
+          resolved.style.color = 'var(--native-field-inverse)'
+          resolved.style.backgroundColor = 'var(--native-field-text)'
+          element.append(resolved)
+          const expected = getComputedStyle(resolved)
+          const colors = { color: style.color, background: style.backgroundColor, expectedColor: expected.color, expectedBackground: expected.backgroundColor }
+          resolved.remove()
+          return colors
+        })
+        expect(paint.color).toBe(paint.expectedColor)
+        expect(paint.background).toBe(paint.expectedBackground)
+      }
       await expect(composer).toHaveText(draft)
       const send=card.getByRole('button',{name:'Send',exact:true});await expect(send).toBeEnabled();await expect(send).toBeInViewport({ratio:1})
       await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
@@ -118,7 +143,10 @@ test('preserves native Select none and valid empty values through original callb
     for(const key of ['Enter','ArrowDown','Escape']){
       if(key==='Enter')await select.press(key)
       else await appPage.keyboard.press(key)
-      if(key==='Enter')await expect(appPage.getByRole('listbox')).toBeVisible()
+      if(key==='Enter') {
+        await expect(appPage.getByRole('listbox')).toBeVisible()
+        await expect(chevron).toHaveText('▴')
+      }
       if(key==='ArrowDown'){
         await appPage.keyboard.press('End')
         const option=appPage.getByRole('option',{name:'Developers',exact:true})

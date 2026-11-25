@@ -7,7 +7,8 @@
     <SelectRoot v-if="node.kind === 'select'" :model-value="selectToken" :open="visible && selectOpen" @update:open="selectOpen = visible && $event">
       <SelectTrigger :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :aria-label="node.label || 'Claude selection'"
         class="flex h-9 min-w-0 max-w-full items-center justify-between gap-3 rounded-lg border border-current bg-transparent px-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @keydown="selectKeydown">
-        <span class="truncate">{{ selectedLabel }}</span><span aria-hidden="true">⌄</span>
+        <span class="native-select-value truncate" :data-selected="selectHasValue ? '' : undefined">{{ selectedLabel }}</span>
+        <span class="native-select-chevron shrink-0" aria-hidden="true">{{ selectOpen ? '▴' : '▾' }}</span>
       </SelectTrigger>
       <SelectPortal>
         <SelectContent position="popper" :side-offset="4" @close-auto-focus="restoreSelectFocus" :style="{ ...fieldTheme, color: 'var(--native-field-text)' }" class="native-field z-50 max-h-[min(20rem,var(--reka-select-content-available-height))] min-w-[var(--reka-select-trigger-width)] overflow-hidden rounded-lg border border-current bg-[var(--native-field-inverse)] p-1 shadow-lg">
@@ -177,7 +178,11 @@ function keydown(event: KeyboardEvent) {
 .native-field:focus-within .native-field-label { font-weight: 600; }
 .native-field textarea, .native-field select { color: inherit; }
 .native-field textarea::placeholder { color: currentColor; opacity: 0.5; }
-.native-field-hint { opacity: 0.5; }
+.native-field-hint, .native-select-chevron, .native-select-value:not([data-selected]) { opacity: 0.5; }
+[role="combobox"][data-state="closed"]:focus-visible .native-select-value[data-selected] {
+  color: var(--native-field-inverse);
+  background-color: var(--native-field-text);
+}
 .native-field option { color: var(--native-field-text); background-color: var(--native-field-inverse); }
 .native-field option:checked { color: var(--native-field-inverse); background-color: var(--native-field-text); }
 </style>
