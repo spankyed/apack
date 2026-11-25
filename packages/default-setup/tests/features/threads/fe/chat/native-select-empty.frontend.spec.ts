@@ -13,7 +13,7 @@ async function field(value?: string) {
 }
 it('shows native none until a real option is picked, including an empty-string choice', async () => {
   const {select,picked}=await field()
-  expect(select.textContent?.replace('⌄','').trim()).toBe('none')
+  expect(select.querySelector('.native-select-value')?.textContent?.trim()).toBe('none')
   expect(picked).not.toHaveBeenCalled()
   select.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await nextTick()
   expect(picked).not.toHaveBeenCalled()
@@ -23,13 +23,13 @@ it('shows native none until a real option is picked, including an empty-string c
   option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await nextTick()
   await vi.waitFor(()=>expect(picked).toHaveBeenCalledOnce())
   expect(picked.mock.calls[0][0]).toMatchObject({kind:'select',value:''})
-  expect(select.textContent?.replace('⌄','').trim()).toBe('Empty choice')
+  expect(select.querySelector('.native-select-value')?.textContent?.trim()).toBe('Empty choice')
 })
 it('keeps explicit empty selections distinct and applies a later unset native value', async () => {
   const {node,select,picked}=await field('')
-  expect(select.textContent?.replace('⌄','').trim()).toBe('Empty choice')
-  node.value='a';await nextTick();expect(select.textContent?.replace('⌄','').trim()).toBe('A')
-  node.value=undefined;await nextTick();expect(select.textContent?.replace('⌄','').trim()).toBe('none')
+  expect(select.querySelector('.native-select-value')?.textContent?.trim()).toBe('Empty choice')
+  node.value='a';await nextTick();expect(select.querySelector('.native-select-value')?.textContent?.trim()).toBe('A')
+  node.value=undefined;await nextTick();expect(select.querySelector('.native-select-value')?.textContent?.trim()).toBe('none')
   expect(picked).not.toHaveBeenCalled()
 })
 
