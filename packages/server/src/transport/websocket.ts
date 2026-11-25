@@ -168,7 +168,10 @@ export function createWebSocketServer() {
   });
 
   // Setup graceful shutdown
-  process.on('SIGTERM', () => {
+  let shuttingDown = false;
+  const gracefulShutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     // **Stopping the systems is all this does.** XState 5 runs no exit action on `actor.stop()` — measured,
     // with a two-state machine — so nothing here is a hook anything can be hung on, and an `exit` added to a
     // system's machine expecting to run at shutdown would be dead on this path. What must happen when this
@@ -182,15 +185,35 @@ export function createWebSocketServer() {
     httpServer.close();
     // Exit explicitly so the 'exit' handler fires before Electron force-kills us
     process.exit(0);
-  });
+  };
 
-  // The parent died (Electron crashed, or was killed): its end of the IPC channel closed, so this process is
-  // orphaned and shuts down the way a SIGTERM would. An API started without a channel — a manual boot, a test —
-  // has no parent to outlive, so there is nothing to watch.
+  process.on('SIGTERM', gracefulShutdown);
+
+  // Under Electron `utilityProcess.fork`, `main` requests graceful shutdown by posting `{ type: 'shutdown' }` on
+  // `parentPort` (works identically on macOS, Linux, and Windows), and `parentPort` closes if `main` dies.
+  // Typed structurally so `@app/server` takes no runtime or type dependency on `electron`.
+  interface UtilityParentPort {
+    on(event: 'message', listener: (event: { data: unknown }) => void): void;
+    on(event: 'close', listener: () => void): void;
+  }
+  const parentPort = (process as NodeJS.Process & { parentPort?: UtilityParentPort }).parentPort;
+  if (parentPort) {
+    parentPort.on('message', (event) => {
+      if (event.data && typeof event.data === 'object' && (event.data as { type?: unknown }).type === 'shutdown') {
+        gracefulShutdown();
+      }
+    });
+    parentPort.on('close', () => {
+      console.log('[API] Parent process died, shutting down');
+      gracefulShutdown();
+    });
+  }
+
+  // Fallback for direct Node `child_process` spawns with an IPC channel (`stdio: [..., 'ipc']`).
   if (process.connected) {
     process.on('disconnect', () => {
       console.log('[API] Parent process died, shutting down');
-      process.kill(process.pid, 'SIGTERM');
+      gracefulShutdown();
     });
   }
 

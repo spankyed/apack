@@ -99,4 +99,11 @@ export const BrowserWindow = {
   fromWebContents(_contents: unknown): object | null {
     return BrowserWindow.current;
   },
+  getAllWindows: () => [] as object[],
+};
+/** Electron's `utilityProcess`: stubbed so main-process unit tests can import `ApiServer` without Electron. */
+export const utilityProcess = {
+  fork: (): never => {
+    throw new Error('utilityProcess.fork is not implemented in electron-stub');
+  },
 };
