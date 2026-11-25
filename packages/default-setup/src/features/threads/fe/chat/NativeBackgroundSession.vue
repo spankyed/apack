@@ -1,5 +1,5 @@
 <template>
-  <section v-for="panel in panels" :key="panel.key" aria-label="Background Claude session" :aria-busy="panel.pending" class="background-session" :class="{ 'background-session--composing': richReplyActive }">
+  <section v-for="panel in panels" :key="panel.key" ref="panelElements" tabindex="-1" aria-label="Background Claude session" :aria-busy="panel.pending" class="background-session" :class="{ 'background-session--composing': richReplyActive }">
     <header class="background-session__heading">
       <div class="background-session__body">
         <h3 :title="panel.session?.name || 'Background session'">{{ panel.session?.name || 'Background session' }}</h3>
@@ -15,8 +15,7 @@
       </div>
     </header>
     <p v-if="panel.info && !(replyOpen && hasRequest)" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
-    <div v-if="panel.info?.statusLine" aria-label="Background Claude configured status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="panel.info.statusLine" /></div>
-    <div v-for="agent in panel.info?.agents" :key="agent.id" aria-label="Background Claude configured agent status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText v-if="agent.statusText" :text="agent.statusText" /></div>
+    <div v-for="caption in panel.captions" :key="caption.id" :data-background-caption="caption.id" :aria-label="caption.label" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="caption.text" /></div>
     <p v-if="state?.question && !replyOpen" role="status" class="background-session__detail">Claude has a question. Open Answer question to continue.</p>
     <p v-if="state?.approval && !replyOpen" role="status" class="background-session__detail">Claude needs permission. Open Review request to continue.</p>
     <p v-if="panel.session?.waitingFor && !hasRequest" class="background-session__detail">{{ panel.session.waitingFor }}</p>
@@ -128,6 +127,7 @@ function operate(target: ClaudeNativeContinuation, request: ClaudeBackgroundSess
   if (request.operation === 'interrupt' && (!current?.desktop || JSON.stringify(current.desktop) !== JSON.stringify(request.target) || current.turn?.id !== request.turnId || current.turn.cancelled)) return
   emit('operate', target, request)
 }
+const panelElements = ref<HTMLElement[]>([])
 const panels = computed(() => {
   const target = { ...props.continuation }
   const state = props.state?.sessionId === target.sessionId && props.state.continuedInSessionId === target.continuedInSessionId ? props.state : undefined
@@ -136,7 +136,22 @@ const panels = computed(() => {
     : !session.pid ? 'Last reported: awaiting a background worker' : session.state === 'blocked' || session.status === 'waiting' ? 'Last reported: needs input' : session.status === 'busy' ? 'Last reported: working in background' : 'Last reported: running in background'
     : pending || !state ? 'Checking background session…' : 'Background session is not listed'
   const info = session?.pid && ['working','blocked'].includes(session.state) && props.info?.sessionId === target.continuedInSessionId && props.info.jobId === session.id && props.info.pid === session.pid ? props.info : undefined
-  return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, info, desktop: state?.desktop, turn: state?.turn, pending, operation: state?.operation, problem: state?.problem, label }]
+  const captions = info?.statusLine ? [{ id: 'main', label: 'Background Claude configured status', text: info.statusLine }] : []
+  for (const agent of info?.agents ?? []) {
+    if (agent.statusText) captions.push({ id: `agent:${agent.id}`, label: 'Background Claude configured agent status', text: agent.statusText })
+  }
+  return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, info, captions, desktop: state?.desktop, turn: state?.turn, pending, operation: state?.operation, problem: state?.problem, label }]
+})
+watch(panels, ([next], [previous]) => {
+  const panel = panelElements.value[0], focused = document.activeElement
+  if (!panel || !next || next.key !== previous?.key || !document.hasFocus()
+    || !(focused instanceof HTMLElement) || !panel.contains(focused)) return
+  const id = focused.dataset.backgroundCaption
+  if (!id || next.captions.some(caption => caption.id === id)) return
+  // Before removing a focused caption, move to the current session's available control.
+  const refresh = panel.querySelector<HTMLButtonElement>('button[aria-label="Refresh status"]')
+  if (!next.pending && refresh && !refresh.disabled) refresh.focus()
+  else panel.focus()
 })
 </script>
 <style scoped>

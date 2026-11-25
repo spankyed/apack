@@ -120,3 +120,49 @@ it('reports active rich replying through collapse and worker stop',async()=>{
   state.session!.state='stopped';await nextTick();expect(composing).toHaveBeenLastCalledWith(false)
  }finally{app.unmount();root.remove()}
 })
+
+it('keeps only live background captions in the Tab order and restores focus when a caption clears', async () => {
+  const state = reactive<ClaudeBackgroundSessionState>({ ...link, operation: 'refresh', status: 'done', revision: 1,
+    session: { id: '05ff1d31', sessionId: link.continuedInSessionId, cwd: '/owned', pid: 119, state: 'working' } })
+  const info = reactive({
+    jobId: '05ff1d31', sessionId: link.continuedInSessionId, pid: 119, observedAt: 1, startedAt: 1, model: 'sonnet', turns: 2,
+    statusLine: 'Review running',
+    agents: [
+      { id: 'one', name: 'Reviewer', status: 'running' as const, statusText: 'Reading' as string | undefined },
+      { id: 'two', name: 'Writer', status: 'running' as const, statusText: undefined as string | undefined },
+    ],
+  })
+  const root = document.createElement('div')
+  document.body.append(root)
+  const app = createApp(NativeBackgroundSession, { continuation: link, state, info })
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  app.mount(root)
+  try {
+    const captions = () => Array.from(root.querySelectorAll<HTMLElement>('[aria-label="Background Claude configured agent status"]'))
+    const refresh = root.querySelector<HTMLButtonElement>('[aria-label="Refresh status"]')!
+    expect(captions().map(row => row.textContent)).toEqual(['Reading'])
+    const reading = captions()[0]!
+    reading.focus()
+    info.agents[0]!.statusText = 'Reading changes'
+    await nextTick()
+    expect(captions()).toEqual([reading])
+    expect(document.activeElement).toBe(reading)
+    info.agents[0]!.statusText = ''
+    await nextTick()
+    expect(captions()).toEqual([])
+    expect(document.activeElement).toBe(refresh)
+
+    info.agents[1]!.statusText = 'Drafting'
+    await nextTick()
+    expect(captions().map(row => row.textContent)).toEqual(['Drafting'])
+    expect(document.activeElement).toBe(refresh)
+
+    const main = root.querySelector<HTMLElement>('[aria-label="Background Claude configured status"]')!
+    main.focus()
+    state.status = 'pending'
+    info.statusLine = ''
+    await nextTick()
+    expect(refresh.disabled).toBe(true)
+    expect(document.activeElement).toBe(root.querySelector('section'))
+  } finally { app.unmount(); focus.mockRestore(); root.remove() }
+})
