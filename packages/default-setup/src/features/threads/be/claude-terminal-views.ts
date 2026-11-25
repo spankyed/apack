@@ -24,8 +24,10 @@ export type ClaudeQueuedPromptEdit = {
   viewRevision: number; turnId: string; queueRevision: string; sequence: number; itemId: string
 }
 
+type WindowPresence = { ownerId: string; sessionId: string; focused: boolean; terminal: boolean }
+
 export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & (
-  | { type: 'CLAUDE_TERMINAL_MOUNT'; queueComposer?: boolean }
+  | { type: 'CLAUDE_TERMINAL_MOUNT'; queueComposer?: boolean; presence?: WindowPresence }
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
   | { type: 'CLAUDE_TERMINAL_CANCEL_OPEN'; openingId: string }
@@ -152,6 +154,7 @@ function mcpDialogCurrent(state: ClaudeNativeTerminalState | undefined, address:
 interface View {
   client: string
   queueComposer: boolean
+  presence?: WindowPresence
   threadId: string
   mountId: string
   expires: number
@@ -258,6 +261,54 @@ export function createClaudeTerminalViews(dependencies: {
   const queueDrafts = new WeakMap<ClaudeNativeTerminalOwner, {draft: QueueDraft; view?: View}>()
   const queueEditsInFlight = new WeakSet<ClaudeNativeTerminalOwner>()
   let timer: ReturnType<typeof setInterval> | undefined
+  const presenceUpdates = new WeakMap<ClaudeNativeTerminalOwner, { queued: boolean; sending: boolean; dirty: boolean; sessionId?: string; last?: boolean }>()
+
+  function syncWindowPresence(threadId: string, owner: ClaudeNativeTerminalOwner) {
+    let update = presenceUpdates.get(owner)
+    if (!update) {
+      update = { queued: false, sending: false, dirty: false }
+      presenceUpdates.set(owner, update)
+    }
+    update.dirty = true
+    if (update.queued || update.sending) return
+    const pending = update
+    pending.queued = true
+    queueMicrotask(() => {
+      pending.queued = false
+      pending.dirty = false
+      const state = owner.state
+      if (dependencies.get(threadId) !== owner || state.status !== 'live' || state.continuation) return
+      if (pending.sessionId !== state.sessionId) {
+        pending.sessionId = state.sessionId
+        pending.last = undefined
+      }
+      const now = Date.now()
+      const current = [...views.values()].flatMap(view => {
+        const presence = view.presence
+        return view.owner === owner && view.expires > now &&
+          presence?.ownerId === state.ownerId && presence.sessionId === state.sessionId ? [presence] : []
+      })
+      // A focused raw view already reports its own presence through the PTY.
+      if (current.some(presence => presence.terminal && presence.focused)) {
+        pending.last = undefined
+        return
+      }
+      const desktop = current.filter(presence => !presence.terminal)
+      if (!desktop.length && (current.length || pending.last === undefined)) {
+        pending.last = undefined
+        return
+      }
+      const focused = desktop.some(presence => presence.focused)
+      if (pending.last === focused) return
+      pending.sending = true
+      void owner.uiTransport.request({
+        subtype: 'apack_desktop_presence', session_id: state.sessionId, focused, observed_at: now,
+      }).then(() => { pending.last = focused }, () => { pending.last = undefined }).finally(() => {
+        pending.sending = false
+        if (pending.dirty) syncWindowPresence(threadId, owner)
+      })
+    })
+  }
   function retireAttachment(view: View) {
     view.attachmentAbort?.abort(); view.attachmentAbort = undefined
     view.attachmentUnsubscribe?.(); view.attachmentUnsubscribe = undefined
@@ -357,6 +408,7 @@ export function createClaudeTerminalViews(dependencies: {
     view?.loadingTeammates?.abort()
     views.get(key)?.launch?.abort.abort()
     views.get(key)?.unsubscribe?.(); views.get(key)?.backgroundUnsubscribe?.(); views.delete(key)
+    if (view?.presence && view.owner) syncWindowPresence(view.threadId, view.owner)
     if (transferTeammate && view?.owner) {
       // Move verified crash reconnects together to another mount of the same owner.
       const continued = [...views].find(([, candidate]) => candidate.client !== view.client
@@ -506,7 +558,7 @@ export function createClaudeTerminalViews(dependencies: {
       }
     }
     view.teammateReconnects.clear()
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined; view.policyRecheck = undefined
+    view.unsubscribe?.(); view.owner = owner; view.presence = undefined; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined; view.policyRecheck = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -584,7 +636,16 @@ export function createClaudeTerminalViews(dependencies: {
         }
         view.send = send; view.expires = Date.now() + 30000
         const owner = dependencies.get(event.threadId)
-        if (owner) attach(key, view, owner)
+        if (owner) {
+          attach(key, view, owner)
+          if (!view.queueComposer && Object.hasOwn(event, 'presence')) {
+            const previous = view.presence
+            const presence = event.presence
+            view.presence = presence?.ownerId === owner.state.ownerId && presence.sessionId === owner.state.sessionId &&
+              typeof presence.focused === 'boolean' && typeof presence.terminal === 'boolean' ? { ...presence } : undefined
+            if (previous || view.presence) syncWindowPresence(event.threadId, owner)
+          }
+        }
         restoreParkedTeammates(key, view, owner)
         publish(key, view)
         loadSavedTeammates(key, view)

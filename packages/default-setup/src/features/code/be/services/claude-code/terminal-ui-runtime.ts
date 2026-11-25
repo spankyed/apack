@@ -1195,6 +1195,18 @@ async function control(request,abort){
  if(request.subtype==='apack_background_reply')return replyNativeBackground(request);
  if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
  if(request.subtype==='apack_ui_background_review')return nativeBackgroundReview(n,request);
+ if(request.subtype==='apack_desktop_presence'){
+  const {focused,observed_at:observed,session_id:sessionId}=request;
+  const current=()=>String(n.questionOptions.q())===sessionId&&(originalContext??n.runtime.ey())?.surface==='terminal';
+  if(typeof focused!=='boolean'||!Number.isSafeInteger(observed)||observed>Date.now()||!current())throw Error('Native desktop presence owner changed');
+  const {h3r:setFocus,cQ:readFocus,_Xo:lastGain}=await import('/$bunfs/root/chunk-7pa9mtjb.js');
+  abort.signal.throwIfAborted();
+  if(!current()||Date.now()-observed>5000)return {applied:false};
+  // A newer native gain belongs to the raw terminal, even if a desktop blur was queued first.
+  if(!focused&&lastGain()>observed)return {applied:false};
+  if(readFocus()!==(focused?'focused':'blurred'))setFocus(focused);
+  return {applied:true};
+ }
  if(request.subtype==='apack_ui_settings')return nativeSettings(n,request,abort);
  if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');

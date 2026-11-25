@@ -167,7 +167,7 @@ import { claudeBillingText } from '#features/code/common/native-billing.ts'
 import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem.ts'
 import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
@@ -360,7 +360,20 @@ const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined
 let attachedOwner: string | undefined, attachedSession: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
-function renew() { send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
+function windowPresence() {
+  const state = view.value?.state
+  if (state?.status !== 'live' || props.continuation || view.value?.attachment) return
+  return { ownerId: state.ownerId, sessionId: state.sessionId, focused: document.hasFocus(), terminal: active.value }
+}
+let reportedPresence = false
+function renew() {
+  const presence = windowPresence()
+  reportedPresence = !!presence
+  send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity(), presence })
+}
+function renewPresence() {
+  if (reportedPresence || windowPresence()) renew()
+}
 function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.background?.continuedInSessionId === target.continuedInSessionId && view.value.background.sessionId === target.sessionId && view.value.background.status === 'pending') return
   send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
@@ -424,12 +437,24 @@ watch([view, active], async ([value, showing]) => {
   terminal?.setInputBlocked(value?.state?.inputBlocked===true)
 }, { flush: 'post' })
 defineExpose({ openTeammateTerminal, open })
-renew();
+renew()
+watch([
+  () => view.value?.state?.ownerId,
+  () => view.value?.state?.sessionId,
+  () => view.value?.state?.status,
+  () => view.value?.attachment?.requestId,
+  active,
+  () => props.continuation?.continuedInSessionId,
+], renewPresence, { flush: 'post' })
+onMounted(() => {
+  window.addEventListener('focus', renewPresence)
+  window.addEventListener('blur', renewPresence)
+})
 watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.continuedInSessionId]), () => {
   if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })
 }, { immediate: true, flush: 'post' })
 const heartbeat = setInterval(renew, 10000)
-onBeforeUnmount(() => { clearInterval(heartbeat); detach(); unmountView('CLAUDE_TERMINAL_UNMOUNT', identity()); emit('active', false); emit('background-composing', false) })
+onBeforeUnmount(() => { window.removeEventListener('focus', renewPresence); window.removeEventListener('blur', renewPresence); clearInterval(heartbeat); detach(); unmountView('CLAUDE_TERMINAL_UNMOUNT', identity()); emit('active', false); emit('background-composing', false) })
 </script>
 
 <style scoped>

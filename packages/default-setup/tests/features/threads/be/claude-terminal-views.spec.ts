@@ -37,6 +37,42 @@ it('requires the live window lease, matching thread and current owner for termin
     expect(f.owner.input).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
+it('keeps Claude present for any focused conversation window and leaves the raw terminal in charge when focused', async () => {
+  const f = fixture()
+  const raw = { ...mount, mountId: randomUUID() }
+  const {ownerId, sessionId} = f.owner.state
+  const presence = (focused: boolean, terminal = false) => ({ownerId, sessionId, focused, terminal})
+  const request = vi.mocked(f.owner.uiTransport.request)
+  try {
+    f.views.handle({ ...mount, presence: presence(true) }, 'one', f.send)
+    f.views.handle({ ...mount, presence: presence(false) }, 'two', f.send)
+    await vi.waitFor(() => expect(request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      subtype: 'apack_desktop_presence', session_id: sessionId, focused: true,
+    })))
+
+    f.views.handle({ ...mount, presence: presence(false) }, 'one', f.send)
+    f.views.handle({ ...mount, presence: presence(true) }, 'two', f.send)
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+
+    f.views.handle({ ...raw, presence: presence(true, true) }, 'raw', f.send)
+    f.views.handle({ ...mount, presence: presence(false) }, 'two', f.send)
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+
+    f.views.handle({ ...raw, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'raw', f.send)
+    await vi.waitFor(() => expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ focused: false })))
+    expect(request).toHaveBeenCalledTimes(2)
+  } finally { f.views.clear() }
+})
+it('drops a queued desktop presence change when its native owner is replaced', async () => {
+  const f = fixture()
+  const {ownerId, sessionId} = f.owner.state
+  try {
+    f.views.handle({ ...mount, presence: {ownerId, sessionId, focused: true, terminal: false} }, 'one', f.send)
+    f.setCurrent()
+    await Promise.resolve()
+    expect(f.owner.uiTransport.request).not.toHaveBeenCalled()
+  } finally { f.views.clear() }
+})
 it('publishes incremental bytes, replays to a new view and detaches without stopping the session', async () => {
   const f = fixture()
   try {
