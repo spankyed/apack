@@ -13,7 +13,7 @@
     </div>
     <p v-if="nativeUi?.billing" role="status" aria-label="Claude billing status" data-testid="claude-billing-status" class="mt-1 min-w-0 break-words text-[11px] leading-4" :class="nativeUi.billing?.info.isUsingOverage || nativeUi.billing?.info.status === 'rejected' ? 'text-amber-300' : 'text-neutral-400'" :title="nativeUi.billing ? 'Observed ' + new Date(nativeUi.billing.observedAt).toISOString() : undefined">{{ claudeBillingText(nativeUi.billing) }}</p>
     <div v-if="nativeStatus" ref="statusOutput" role="status" aria-label="Claude session status" tabindex="0" data-testid="composer-native-status" class="mt-1 max-h-12 shrink-0 min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded focus-visible:outline focus-visible:outline-blue-400 text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
-    <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-80 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
+    <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" :style="nativeSitePaint" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-80 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable <button v-if="reconnect" type="button" class="ml-2 rounded px-1 py-0.5 text-neutral-300 underline underline-offset-2 hover:text-white focus-visible:outline focus-visible:outline-blue-400" @click="reconnect()">Reconnect controls</button></p>
@@ -29,6 +29,7 @@ import { FolderOpen, ChevronDown } from 'lucide-vue-next'
 import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
+import { claudeUiColor } from './native-ui-paint.ts'
 import { nativeSelectTrigger, useNativeSelectFocus } from './native-select-focus.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { claudeNativeSiteVisible } from './native-client-input.ts'
@@ -62,7 +63,15 @@ const stripMinimumHeight = computed(() => {
   const natural = toolsExpanded.value && naturalMinimumHeight.value ? `min(${naturalMinimumHeight.value}px, calc(var(--composer-available-height) * 0.5))` : undefined
   return minimumHeight.value === undefined ? natural : natural ? `max(${minimumHeight.value}px, ${natural})` : minimumHeight.value + 'px'
 })
-const nativeSite = ref<HTMLElement | null>(null), cellMeasure = ref<HTMLElement | null>(null)
+const nativeSite = ref<HTMLElement | null>(null)
+const nativeSitePaint = computed(() => {
+  const palette = props.nativeUi?.promptPalette
+  const color = claudeUiColor(palette?.text)
+  const backgroundColor = claudeUiColor(palette?.inverseText)
+  // The drawing already uses the Claude foreground. Supply its matching surface
+  // so an independently themed app shell cannot make native controls unreadable.
+  if (color && backgroundColor) return { color, backgroundColor }
+}), cellMeasure = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: nativeSite, cellWidth: () => (cellMeasure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
 // Resizing must reveal the complete focused field, even when focus itself does not change.
 function revealFocusedField() {
