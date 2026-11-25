@@ -1,4 +1,4 @@
-import { ClaudeQuestionImagesSchema } from '#features/code/common/native-question.ts'
+import { ClaudeQuestionPartialAnswerSchema, ClaudeQuestionImagesSchema } from '#features/code/common/native-question.ts'
 import { parseClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { createClaudeSelectionReply } from '#features/code/be/services/claude-code/ui-selection-reply.ts'
@@ -434,6 +434,16 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if(event.type==='CLAUDE_UI_QUESTION_REJECT') {
     if(!view||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return
     bind(view);void view.mount?.rejectQuestion(event.messageId,event.token);return
+  }
+  if (event.type === 'CLAUDE_UI_QUESTION_PARTIAL') {
+    if (!view?.promptFocused || view.backgroundView || typeof event.messageId !== 'string' ||
+        event.messageId.length > 512 || !validId(event.token) || !event.answer ||
+        JSON.stringify(event.answer).length > 131072) return
+    const answer = ClaudeQuestionPartialAnswerSchema.safeParse(event.answer)
+    if (!answer.success) return
+    bind(view)
+    void view.mount?.stageQuestionPartial(event.messageId, event.token, event.sequence, answer.data)
+    return
   }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {
     if (!view || !view.backgroundView || typeof event.messageId !== 'string' || event.messageId.length > 512 || !validId(event.token) || (event.decision !== undefined && event.decision !== 'clarify') || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 131072) return

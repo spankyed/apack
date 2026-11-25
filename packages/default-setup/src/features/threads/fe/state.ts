@@ -1811,6 +1811,7 @@ const threadsState = setup({
     CLAUDE_UI_QUESTION_REJECT: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
     CLAUDE_UI_QUESTION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
     CLAUDE_UI_DECISION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_PARTIAL: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
     CLAUDE_UI_QUESTION_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)

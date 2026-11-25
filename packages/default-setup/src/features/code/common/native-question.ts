@@ -17,6 +17,8 @@ export const ClaudeQuestionAnswerSchema = z.object({
   annotations: z.record(z.string(), z.object({preview: z.string().optional(), notes: z.string().optional()}).strict()).optional(),
   response: z.string().optional(), followUp: z.boolean().optional(),
 }).strict()
+export const ClaudeQuestionPartialAnswerSchema = ClaudeQuestionAnswerSchema.pick({ answers: true, annotations: true })
+export type ClaudeQuestionPartialAnswer = z.infer<typeof ClaudeQuestionPartialAnswerSchema>
 export const CLAUDE_QUESTION_IMAGE_COUNT = 4
 export const CLAUDE_QUESTION_IMAGE_BYTES = 10 * 1024 * 1024
 export const CLAUDE_QUESTION_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const

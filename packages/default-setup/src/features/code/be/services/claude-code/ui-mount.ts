@@ -444,6 +444,7 @@ export function mountClaudeUi(options: {
         if (current()) { agentInput = { revision, status: 'command_done', command, decision }; publish(lastState); void refreshAgent() }
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Native command decision failed' }; publish(lastState) } }
     },
+    stageQuestionPartial: question.stagePartial,
     answerQuestion: question.answer,
     rejectQuestion: question.reject,
     pauseQuestion: question.pause,

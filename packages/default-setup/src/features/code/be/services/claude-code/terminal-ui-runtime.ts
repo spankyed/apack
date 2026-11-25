@@ -1045,6 +1045,51 @@ function questionCanonicalAnswer(n,dialog,request){
  const answer={...original,answers:remap(admitted.input.answers),...(admitted.input.annotations!==undefined?{annotations:remap(admitted.input.annotations)}:{}),...(admitted.input.response!==undefined?{response:admitted.input.response}:{}),...(admitted.input.followUp!==undefined?{followUp:admitted.input.followUp}:{})};
  return n.questionTool.admitCardAnswer(original,answer);
 }
+const nativeQuestionPartials=new WeakMap();
+function stageNativeQuestionPartial(n,d,frame,partial){
+ if(!partial||!Number.isSafeInteger(partial.sequence)||partial.sequence<1||!partial.answer||
+  Object.keys(partial.answer).some(key=>key!=='answers'&&key!=='annotations')||
+  JSON.stringify(partial.answer).length>131072)throw Error('Invalid native partial question answer');
+ const admitted=questionCanonicalAnswer(n,d,{render_token:frame.token,draft_started:true,answer:{...frame.shownInput,...partial.answer}});
+ if(admitted.kind!=='admitted')throw Error('Native partial answer refused: '+admitted.rule);
+ const store=d.store;
+ let staged=nativeQuestionPartials.get(store);
+ if(staged?.item!==d.item){
+  staged?.restore();
+  const original=store.answer,owners=new Map(),item=d.item;
+  let unsubscribe;
+  const restore=()=>{
+   unsubscribe?.();
+   if(store.answer===answer)store.answer=original;
+   if(nativeQuestionPartials.get(store)?.item===item)nativeQuestionPartials.delete(store);
+  };
+  function answer(id,result,...args){
+   if(id===item.id&&store.getState().open.some(open=>open===item)){
+    try{
+     const originalInput=result?.updatedInput;
+     // Only the original AFK builder supplies the host timeout field. Manual and raw answers keep their own input.
+     if(result?.behavior==='allow'&&Number.isSafeInteger(originalInput?.afkTimeoutMs)&&originalInput.afkTimeoutMs>0&&
+       Object.keys(originalInput.answers??{}).length===0){
+      const view=clientViewKey(n);
+      const draft=view&&[...owners.values()].findLast(value=>clients.has(value.frame.client)&&
+       clientViews.get(value.frame.client)===view&&frozenQuestionFrames.get(value.frame.client)===value.frame);
+      if(draft)result={...result,updatedInput:{...originalInput,answers:draft.answers??{},
+       annotations:{...draft.annotations,...originalInput.annotations}}};
+     }
+    }catch{ /* An unavailable desktop view leaves the original timeout result intact. */ }
+    restore();
+   }
+   return Reflect.apply(original,this,[id,result,...args]);
+  }
+  store.answer=answer;
+  unsubscribe=store.subscribe(()=>{if(!store.getState().open.some(open=>open===item))restore();});
+  staged={item,owners,restore};
+  nativeQuestionPartials.set(store,staged);
+ }
+ if((staged.owners.get(frame.client)?.sequence??0)>=partial.sequence)return;
+ staged.owners.delete(frame.client);
+ staged.owners.set(frame.client,{frame,sequence:partial.sequence,answers:admitted.input.answers,annotations:admitted.input.annotations});
+}
 // Pinned AskUserQuestion clarification builder (Darwin $rt / Linux zrt).
 function questionClarification(n,payload,shown,admitted){
  const summary=shown.questions.map((question,index)=>{
@@ -1415,7 +1460,12 @@ async function control(request,abort){
  if(request.subtype==='apack_hold_question_dialog'){
   abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_ask_user_question');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
-  holdQuestionFrame(d,request.render_token,request.client_id);return {held:true};
+  const frame=holdQuestionFrame(d,request.render_token,request.client_id);
+  if(request.partial!==undefined){
+   if(frame.token!==request.render_token||!clientViewCurrent(n,frame.client))throw Error('Native partial question view changed');
+   stageNativeQuestionPartial(n,d,frame,request.partial);
+  }
+  return {held:true};
  }
  if(request.subtype==='apack_deny_question_dialog'){
   abort.signal.throwIfAborted();

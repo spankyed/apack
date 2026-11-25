@@ -498,7 +498,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async holdQuestionDialog(request) {
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_hold_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, render_token: request.renderToken }) as { held?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_hold_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, render_token: request.renderToken, ...(request.partial ? { partial: request.partial } : {}) }) as { held?: unknown }
         if (result.held !== true) throw new Error('Native question draft was not acknowledged')
       },
       async renderQuestionDialog(request) {

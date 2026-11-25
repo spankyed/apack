@@ -29,3 +29,32 @@ it('retains original card when the original tool schema refuses a rewritten valu
   const refusing = { questionTool: { ...native.questionTool, inputSchema: { safeParse: () => ({ success: false }) } } }
   expect(rewrite(refusing, { input }, [])).toEqual(input)
 })
+
+it('uses the latest staged answers only for the original unanswered timeout and retires the store wrapper', () => {
+  const start = claudeTerminalUiRuntime.indexOf('const nativeQuestionPartials=')
+  const end = claudeTerminalUiRuntime.indexOf('// Pinned AskUserQuestion clarification builder', start)
+  const frame = { token: 'token', shownInput: { questions: [] }, client: 'active' }
+  const stage = vm.runInNewContext(claudeTerminalUiRuntime.slice(start, end) + ';stageNativeQuestionPartial', {
+    questionCanonicalAnswer: (_native: unknown, _dialog: unknown, {answer}: {answer: unknown}) => ({kind: 'admitted', input: answer}),
+    frozenQuestionFrames: new Map([['active', frame]]), clients: new Set(['active']),
+    clientViewKey: () => 'view', clientViews: new Map([['active', 'view']]),
+  })
+  const item = { id: 'question' }, originalAnswer = vi.fn(), unsubscribe = vi.fn()
+  const store = { answer: originalAnswer, subscribe: vi.fn(() => unsubscribe), getState: () => ({ open: [item] }) }
+  const dialog = { item, store }
+  stage({}, dialog, frame, { sequence: 2, answer: { answers: { First: 'Operators' } } })
+  stage({}, dialog, frame, { sequence: 1, answer: { answers: { First: 'Developers' } } })
+  const manual = { behavior: 'allow', updatedInput: { answers: { First: 'Manual' } } }
+  store.answer(item.id, manual)
+  expect(originalAnswer).toHaveBeenLastCalledWith(item.id, manual)
+  expect(store.answer).toBe(originalAnswer)
+  expect(unsubscribe).toHaveBeenCalledOnce()
+
+  stage({}, dialog, frame, { sequence: 3, answer: { answers: { First: 'Operators' } } })
+  const timeout = { behavior: 'allow', updatedInput: { answers: {}, afkTimeoutMs: 60000 } }
+  store.answer(item.id, timeout)
+  expect(originalAnswer).toHaveBeenLastCalledWith(item.id, { behavior: 'allow',
+    updatedInput: { answers: { First: 'Operators' }, annotations: {}, afkTimeoutMs: 60000 } })
+  expect(timeout.updatedInput.answers).toEqual({})
+  expect(store.answer).toBe(originalAnswer)
+})

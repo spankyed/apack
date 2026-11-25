@@ -71,14 +71,14 @@ import { computed, nextTick, reactive, ref, shallowRef, useId, watch } from 'vue
 import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem.ts'
 import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
-import { CLAUDE_QUESTION_IMAGE_BYTES, CLAUDE_QUESTION_IMAGE_COUNT, CLAUDE_QUESTION_IMAGE_TYPES, ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionImage, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
+import { CLAUDE_QUESTION_IMAGE_BYTES, CLAUDE_QUESTION_IMAGE_COUNT, CLAUDE_QUESTION_IMAGE_TYPES, ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionImage, type ClaudeQuestionPresentation, type ClaudeQuestionPartialAnswer } from '#features/code/common/native-question.ts'
 const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; canClarify?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; countdownSeconds?: number; renderToken?: string }>()
 const imageProblem = ref(''), readingImages = ref(false)
 const disabled = computed(() => props.disabled || props.pending === true || readingImages.value)
 // Keep the last action focused while Claude processes it. Its handler still rejects duplicate input.
 const actionDisabled = computed(() => disabled.value && !props.pending)
 const displayError = computed(() => describeClaudeUiProblem(props.error, 'decision'))
-const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer, decision?: 'clarify', images?: ClaudeQuestionImage[]]; started: [token?: string]; pause: []; reject: [] }>()
+const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer, decision?: 'clarify', images?: ClaudeQuestionImage[]]; started: [token?: string]; partial: [answer: ClaudeQuestionPartialAnswer, sequence: number]; pause: []; reject: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
 watch(() => [JSON.stringify(props.card), props.presentation, props.renderToken], () => {
   if (!answering.value) { acceptedCard.value = props.card; acceptedPresentation.value = props.presentation; acceptedToken.value = props.renderToken }
@@ -91,7 +91,10 @@ const step = ref(0), numberInput = ref<HTMLInputElement>(), customInput = ref<HT
 const questionId = useId()
 type DraftImage = ClaudeQuestionImage & { id: string; name: string; size: number }
 const drafts = reactive<{ selected: string[]; custom: string; customOpen: boolean; notes: string; images: DraftImage[]; numberConfirmed: boolean }[]>([])
-watch(() => JSON.stringify(acceptedCard.value), () => { const card = parsed.value; generalResponse.value = ''; step.value = 0; drafts.splice(0, drafts.length, ...(card?.questions.map(question => ({ selected: [], custom: question.kind === 'number' && question.defaultValue !== undefined ? String(question.defaultValue) : '', customOpen: false, notes: '', images: [], numberConfirmed: false })) ?? [])) }, { immediate: true })
+type ParsedQuestion = NonNullable<typeof parsed.value>['questions'][number]
+const partialSteps = new Map<number, ReturnType<typeof readStep>>()
+let partialSequence = 0
+watch(() => JSON.stringify(acceptedCard.value), () => { const card = parsed.value; partialSteps.clear(); generalResponse.value = ''; step.value = 0; drafts.splice(0, drafts.length, ...(card?.questions.map(question => ({ selected: [], custom: question.kind === 'number' && question.defaultValue !== undefined ? String(question.defaultValue) : '', customOpen: false, notes: '', images: [], numberConfirmed: false })) ?? [])) }, { immediate: true })
 const current = computed(() => parsed.value?.questions[step.value])
 const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', customOpen: false, notes: '', images: [], numberConfirmed: false })
 const isChoice = computed(() => !current.value?.kind || current.value.kind === 'choice')
@@ -174,6 +177,27 @@ function setNumber(event: Event) {
   state.value.numberConfirmed = true
   state.value.selected = []
 }
+function readStep(question: ParsedQuestion, draft: (typeof drafts)[number], includeCustom: boolean) {
+  const answer = includeCustom && draft.custom.trim() ? draft.custom.trim()
+    : draft.selected.length ? question.multiSelect ? [...draft.selected] : draft.selected[0] : undefined
+  const selected = question.options.find(option => draft.selected.includes(option.label) && option.preview)
+  const preview = selected && previewFor(question.question, selected.label, selected.preview) ? selected.preview : undefined
+  const notes = draft.notes.trim()
+  return { answer, annotation: preview || notes ? { ...(preview ? { preview } : {}), ...(notes ? { notes } : {}) } : undefined }
+}
+function commitPartialStep(skipped = false) {
+  if (!current.value || !parsed.value) return
+  if (skipped) partialSteps.delete(step.value)
+  else partialSteps.set(step.value, readStep(current.value, state.value, true))
+  const answers: NonNullable<ClaudeQuestionPartialAnswer['answers']> = Object.create(null)
+  const annotations: NonNullable<ClaudeQuestionPartialAnswer['annotations']> = Object.create(null)
+  for (const [index, draft] of partialSteps) {
+    const question = parsed.value.questions[index].question
+    if (draft.answer !== undefined) answers[question] = draft.answer
+    if (draft.annotation) annotations[question] = draft.annotation
+  }
+  emit('partial', { answers, annotations }, ++partialSequence)
+}
 function submit(followUp = false, decision?: 'clarify') {
   if (!parsed.value || disabled.value) return
   if (decision === 'clarify' && (hasUnsupportedClarificationDraft.value || numberInput.value && !numberInput.value.reportValidity())) return
@@ -184,11 +208,9 @@ function submit(followUp = false, decision?: 'clarify') {
     const draft = drafts[index]
     // A displayed number default is still unanswered until the user edits or advances it.
     const includeDraft = decision !== 'clarify' || question.kind !== 'number' || draft.numberConfirmed
-    if (includeDraft && draft.custom.trim()) answers[question.question] = draft.custom.trim()
-    else if (draft.selected.length) answers[question.question] = question.multiSelect ? [...draft.selected] : draft.selected[0]
-    const selected = question.options.find(option => draft.selected.includes(option.label) && option.preview)
-    const preview = selected && previewFor(question.question, selected.label, selected.preview) ? selected.preview : undefined
-    if (preview || draft.notes.trim()) annotations[question.question] = { ...(preview ? { preview } : {}), ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {}) }
+    const stepValues = readStep(question, draft, includeDraft)
+    if (stepValues.answer !== undefined) answers[question.question] = stepValues.answer
+    if (stepValues.annotation) annotations[question.question] = stepValues.annotation
   })
   const answer = { answers, annotations, ...(generalResponse.value.trim() ? { response: generalResponse.value.trim() } : {}), ...(followUp ? { followUp: true } : {}) }
   const images = drafts.flatMap(draft => draft.images.map(({ mediaType, data }) => ({ mediaType, data })))
@@ -201,14 +223,14 @@ function advance() {
   if (disabled.value || !parsed.value || numberInput.value && !numberInput.value.reportValidity()) return
   markStarted()
   if (current.value?.kind === 'number') state.value.numberConfirmed = true
-  if (step.value + 1 < parsed.value.questions.length) step.value++
+  if (step.value + 1 < parsed.value.questions.length) { commitPartialStep(); step.value++ }
   else submit()
 }
 function skip() {
   if (disabled.value || !parsed.value) return
   state.value.selected = []; state.value.custom = ''; state.value.customOpen = false; state.value.notes = ''
   markStarted()
-  if (step.value + 1 < parsed.value.questions.length) step.value++
+  if (step.value + 1 < parsed.value.questions.length) { commitPartialStep(true); step.value++ }
   else submit()
 }
 </script>

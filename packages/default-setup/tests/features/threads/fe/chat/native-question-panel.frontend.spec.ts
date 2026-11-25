@@ -4,11 +4,11 @@ import NativeQuestionPanel from '#features/threads/fe/chat/NativeQuestionPanel.v
 
 function mount(card: Record<string, unknown>, presentation?: ClaudeQuestionPresentation) {
   const root = document.createElement('div'); document.body.append(root)
-  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token',canReject:false,canClarify:false,cancelLabel:undefined as string|undefined }), respond = vi.fn(), pause = vi.fn(), reject = vi.fn(), started = vi.fn()
-  const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onReject: reject, onPause: pause, onStarted: started }) }); app.mount(root)
+  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token',canReject:false,canClarify:false,cancelLabel:undefined as string|undefined }), respond = vi.fn(), pause = vi.fn(), reject = vi.fn(), started = vi.fn(), partial = vi.fn()
+  const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onReject: reject, onPause: pause, onStarted: started, onPartial: partial }) }); app.mount(root)
   const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
   const input = async (selector: string, text: string) => { const element = root.querySelector<HTMLInputElement>(selector)!; element.value = text; element.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
-  return { root, props, respond, pause, reject, started, button, input, close() { app.unmount(); root.remove() } }
+  return { root, props, respond, pause, reject, started, partial, button, input, close() { app.unmount(); root.remove() } }
 }
 const option = (label: string, preview?: string) => ({ label, description: label + ' description', ...(preview ? { preview } : {}) })
 it('retains custom/multi/annotation drafts across navigation and identical owner projections', async () => {
@@ -25,6 +25,20 @@ it('retains custom/multi/annotation drafts across navigation and identical owner
     expect(f.root.querySelector<HTMLTextAreaElement>('.answer textarea')?.value).toBe('Custom Alpha')
     f.button('Next').click(); await nextTick(); f.button('Submit answers').click()
     expect(f.respond).toHaveBeenCalledWith({ answers: { 'First?': 'Custom Alpha', 'Second?': ['Gamma', 'Delta'] }, annotations: { 'Second?': { preview: '<script>literal</script>', notes: 'Native notes' } } })
+  } finally { f.close() }
+})
+it('stages a completed step and removes it when the user explicitly skips it', async () => {
+  const f = mount({ questions: [{ question: 'First?', header: 'First', options: [option('Alpha'), option('Beta')] },
+    { question: 'Second?', header: 'Second', options: [option('Gamma'), option('Delta')] }] })
+  try {
+    f.root.querySelector<HTMLInputElement>('input[type=radio]')?.click()
+    await nextTick()
+    expect(f.partial).not.toHaveBeenCalled()
+    f.button('Next').click(); await nextTick()
+    expect(f.partial).toHaveBeenLastCalledWith({ answers: { 'First?': 'Alpha' }, annotations: {} }, 1)
+    f.button('Back').click(); await nextTick()
+    f.button('Skip').click(); await nextTick()
+    expect(f.partial).toHaveBeenLastCalledWith({ answers: {}, annotations: {} }, 2)
   } finally { f.close() }
 })
 it('renders text/number fields and emits general response/follow-up only for extended forms', async () => {

@@ -1,4 +1,4 @@
-import { ClaudeQuestionAnswerSchema, ClaudeQuestionCountdownEventSchema, type ClaudeQuestionImage } from '../../../common/native-question.ts'
+import { ClaudeQuestionAnswerSchema, ClaudeQuestionCountdownEventSchema, type ClaudeQuestionImage, type ClaudeQuestionPartialAnswer } from '../../../common/native-question.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
@@ -11,7 +11,7 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-type Entry = { countdownSequence?: number; row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
+type Entry = { partialSequence?: number; countdownSequence?: number; row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
 
 /** A question drawing belongs to this view and the still-pending native dialog. */
 export function createClaudeQuestionHost(options: {
@@ -88,6 +88,22 @@ export function createClaudeQuestionHost(options: {
       if (event.type !== 'system' || event.subtype !== 'ui_invalidate' || event.event !== 'ui.render' || !entry) return
       if (Array.isArray(event.instances) && !event.instances.some(value => value && typeof value === 'object' && (value as Record<string, unknown>).component === 'AskUserQuestion' && (value as Record<string, unknown>).instance_id === entry!.row.requestId)) return
       invalidate()
+    },
+    async stagePartial(messageId: string, token: string, sequence: number, answer: ClaudeQuestionPartialAnswer) {
+      const target = entry
+      if (!target || !valid(target) || !options.source || target.row.messageId !== messageId ||
+          !Number.isSafeInteger(sequence) || sequence <= (target.partialSequence ?? 0)) return
+      target.partialSequence = sequence
+      try {
+        await target.holding
+        if (!valid(target) || target.partialSequence !== sequence || token !== (target.heldToken ?? target.frame.token)) return
+        await options.source.hold({ ...target.row, clientId: options.client.client_id, renderToken: token, partial: { sequence, answer } })
+      } catch {
+        if (valid(target) && target.partialSequence === sequence) {
+          target.frame.problem = 'Claude did not save this partial answer for auto-continue.'
+          publish()
+        }
+      }
     },
     async answer(messageId: string, token: string, answer: import('../../../common/native-question.ts').ClaudeQuestionAnswer, decision?: 'clarify', images?: readonly ClaudeQuestionImage[]): Promise<void> {
       const target = entry

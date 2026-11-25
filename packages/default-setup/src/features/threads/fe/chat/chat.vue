@@ -61,7 +61,7 @@
             </div>
             <div v-else-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
               <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeDecisionMount" :can-clarify="!!nativeDecisionMount"
-                @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
+                @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft" @partial="stageNativeQuestionPartial"
                 @respond="answerNativeQuestion"
                 @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" @return-focus="restoreFocus" />
             </div>
@@ -160,7 +160,7 @@
           </div>
           <div v-if="pendingNativeQuestion && !focusedAgent" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :pending="pendingNativeQuestion.pending" :error="pendingNativeQuestion.error" :can-reject="!!nativeDecisionMount" :can-clarify="!!nativeDecisionMount"
-              @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft"
+              @press="pressNativeQuestion" @field="editNativeQuestion" @started="startNativeQuestionDraft" @partial="stageNativeQuestionPartial"
               @respond="answerNativeQuestion"
               @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" @return-focus="restoreNativeComposerFocus" />
           </div>
@@ -917,6 +917,12 @@ function startNativeQuestionDraft(token: string, identity: import('#features/cod
   if (nativeQuestionDraft.value?.actionId === actionId && nativeQuestionDraft.value.token === token) return
   nativeQuestionDraft.value = { actionId, token }
   editNativeQuestion({ actionId, revision: 1, kind: 'change', value: token })
+}
+function stageNativeQuestionPartial(answer: import('#features/code/common/native-question.ts').ClaudeQuestionPartialAnswer, sequence: number, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
+  const mount = nativeDecisionMount.value
+  if (mount && pendingNativeQuestion.value?.frame && pendingNativeQuestion.value.messageId === identity.messageId) {
+    send({ type: 'CLAUDE_UI_QUESTION_PARTIAL', ...mount, ...identity, sequence, answer })
+  }
 }
 function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity, decision?: 'clarify', images?: import('#features/code/common/native-question.ts').ClaudeQuestionImage[]) {
   const question = pendingNativeQuestion.value
