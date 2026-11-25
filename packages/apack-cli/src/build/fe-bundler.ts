@@ -180,7 +180,7 @@ export function packExternalsPlugin(packDir: string): VitePlugin {
     const runtimeIndex = await resolveSdkFile(ctx, '@apackdev/sdk/runtime');
     if (!runtimeIndex) return [];
     // Workspace source, or the published package's compiled modules
-    return ['host-runtime', 'fe-host'].flatMap((name) => {
+    return ['host-runtime', 'backend-port', 'fe-host'].flatMap((name) => {
       const file = ['ts', 'js'].map(ext => path.join(path.dirname(runtimeIndex), `${name}.${ext}`)).find(f => fs.existsSync(f));
       return file ? [fs.realpathSync(file)] : [];
     });
