@@ -2,8 +2,9 @@ import { claudeTerminalBackgroundReplyRuntime } from '#features/code/be/services
 import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services/claude-code/native-platform-runtime.ts'
 const parent = '24be904a-3c35-4981-9793-cbe7a6c19d46', child = '05ff1d31-597d-4537-8737-4407191add6e'
 function fixture() {
-  const state = {sessionId:child,cwd:'/owned',daemonShort:'05ff1d31'}
-  const worker = {pid:100,procStart:'host-start',replPid:119,replProcStart:'owned-start',dispatch:{sessionId:child,cwd:'/owned'}}
+  const state = {sessionId:child,resumeSessionId:undefined as string | undefined,cwd:'/owned',daemonShort:'05ff1d31'}
+  const worker = {pid:100,procStart:'host-start',replPid:119,replProcStart:'owned-start',sessionId:child,
+    dispatch:{sessionId:child,cwd:'/owned',short:'05ff1d31',launch:{mode:'resume',sessionId:child}}}
   const jobs = {io:vi.fn(() => '/original-job'),Kp:vi.fn(),Zr:vi.fn(async () => state),uL:vi.fn(async () => ({workers:{'05ff1d31':worker}})),iZt:vi.fn(async () => true)}
   const processIdentity={jh:vi.fn(async ():Promise<boolean|undefined>=>true)}
   const Ptt = vi.fn(async () => null), load = vi.fn(async (name:string) => name === 'chunk-tj6zgtfh.js' ? jobs : name === 'chunk-0xj14bee.js' ? processIdentity : {Ptt})
@@ -33,6 +34,19 @@ it.each(['parent','child','pid','cwd','missing-start','liveness','fingerprint'])
 it('preserves the original refusal and never retries the adapter call', async () => {
   const f=fixture();f.Ptt.mockResolvedValue({err:'Original native refusal'} as never)
   await expect(f.api(f.request)).rejects.toThrow('Original native refusal');expect(f.Ptt).toHaveBeenCalledOnce()
+})
+it('sends to the verified active transcript after restarting a cleared job', async () => {
+  const f=fixture(),active='72fd7bf0-568f-490d-9917-ded54c2014b0'
+  f.state.resumeSessionId=active
+  f.worker.sessionId=active
+  f.worker.dispatch.sessionId=active
+  f.worker.dispatch.launch.sessionId=active
+  await expect(f.api(f.request)).resolves.toEqual({queued:true})
+  expect(f.Ptt).toHaveBeenCalledExactlyOnceWith('05ff1d31',f.request.text,undefined,f.state,undefined,undefined,{nextTurn:true})
+
+  f.worker.dispatch.launch.sessionId=child
+  await expect(f.api(f.request)).rejects.toThrow('Background session changed')
+  expect(f.Ptt).toHaveBeenCalledTimes(1)
 })
 it('does not accept a second reply while the first original operation is unresolved', async () => {
   const f=fixture();let finish!:(value:null)=>void;f.Ptt.mockImplementation(() => new Promise(resolve=>{finish=resolve}))
