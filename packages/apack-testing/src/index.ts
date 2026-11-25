@@ -306,9 +306,12 @@ async function watchQuitSequence(app: ElectronApplication): Promise<QuitSequence
   await app.evaluate(({ app }, { marker, apiServiceName }) => {
     app.once('will-quit', () => {
       // Exclude the API server utility process so `closeApp`'s post-close API liveness check can never be masked.
-      const pids = app.getAppMetrics()
-        .filter((metric) => !(metric.type === 'Utility' && (metric.name === apiServiceName || metric.serviceName === apiServiceName)))
-        .map((metric) => metric.pid);
+      let pids: number[] = [];
+      try {
+        pids = app.getAppMetrics()
+          .filter((metric) => !(metric.type === 'Utility' && (metric.name === apiServiceName || metric.serviceName === apiServiceName)))
+          .map((metric) => metric.pid);
+      } catch { /* always emit the will-quit marker even if metrics are unavailable */ }
       process.stdout.write(`${marker} ${JSON.stringify(pids)}\n`);
     });
   }, { marker: WILL_QUIT_MARKER, apiServiceName: API_UTILITY_SERVICE_NAME });
@@ -473,7 +476,7 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
     const liveHelperPids = running ? await snapshotLiveHelperPids(app) : [];
     if (running) app.process().kill('SIGKILL');
     terminateHelperPids(chromiumHelperPidsToKill(
-      [...liveHelperPids, ...quitSequence.helperPids()],
+      liveHelperPids.length > 0 ? liveHelperPids : quitSequence.helperPids(),
       { mainPid: pid, apiPid },
     ));
     if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
