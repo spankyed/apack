@@ -27,6 +27,7 @@ export async function action(
     threadId: string;
     response: any;
     pendingDirectorySelect: {
+      jsonSchema?: unknown;
       pickerMessageId: string;
       text: string;
       mode?: string;
@@ -79,6 +80,7 @@ export async function action(
     disallowedTools: pendingDirectorySelect.disallowedTools,
     channels: pendingDirectorySelect.channels,
     systemPrompt: pendingDirectorySelect.systemPrompt,
+    jsonSchema: pendingDirectorySelect.jsonSchema,
     messageId: pendingDirectorySelect.messageId,
     references: pendingDirectorySelect.references,
   });

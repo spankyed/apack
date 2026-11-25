@@ -36,6 +36,7 @@ export default {
                   phase: "$.event.data.payload.phase",
                   messageId: "$.event.data.payload.messageId",
                   references: "$.event.data.payload.references",
+                  jsonSchema: "$.event.data.payload.jsonSchema",
                   cwdOverride: "$.event.data.payload.cwdOverride",
                   forceDirectoryPicker: "$.event.data.payload.forceDirectoryPicker",
                 },

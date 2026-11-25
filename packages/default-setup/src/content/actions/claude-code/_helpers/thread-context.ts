@@ -37,6 +37,7 @@ export type PermissionMode =
 export type ChatState = 'idle' | 'working' | 'paused' | 'error' | 'success';
 
 export interface QueuedMessage {
+  jsonSchema?: unknown;
   channels?: string[];
   text: string;
   mode?: string;
@@ -140,6 +141,7 @@ export interface ClaudeCodeThreadState {
     disallowedTools?: string[];
     channels?: string[];
     systemPrompt?: string;
+    jsonSchema?: unknown;
     messageId?: string;
     references?: any;
   };
