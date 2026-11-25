@@ -2,8 +2,10 @@
   <section :aria-label="attachment.teammate ? 'Claude teammate terminals' : 'Background Claude terminal'" class="child-terminal">
     <header>
       <div><h3>{{ attachment.teammate ? 'Teammate terminals' : 'Background session' }}</h3><p :title="attachment.state?.cwd">{{ attachment.status === 'opening' ? 'Opening connection…' : attachment.state?.status === 'exited' ? 'Connection ended' : attachment.status === 'error' ? 'Connection unavailable' : attachment.teammate?.recoveryId ? 'Teammate from the earlier Claude process' : attachment.teammate && parentDisconnected ? 'Parent disconnected. Teammate still connected.' : 'Connected to Claude' }}</p></div>
-      <button type="button" class="child-terminal__size" :aria-expanded="expanded" @click="emit('toggle-expanded')">{{ expanded ? 'Minimize' : 'Expand' }}</button>
-      <button type="button" @click="emit('close', attachment.requestId)">{{ attachment.status === 'opening' ? 'Cancel' : 'Close connection' }}</button>
+      <div class="child-terminal__controls">
+        <button type="button" :aria-expanded="expanded" @click="emit('toggle-expanded')">{{ expanded ? 'Minimize' : 'Expand' }}</button>
+        <button type="button" @click="emit('close', attachment.requestId)">{{ attachment.status === 'opening' ? 'Cancel' : 'Close connection' }}</button>
+      </div>
     </header>
     <p v-if="attachment.problem" role="alert">{{ attachment.problem }}</p>
     <div v-if="displayedTerminal" ref="viewport" class="child-terminal__viewport" :aria-label="attachment.teammate ? 'Claude teammate terminal output' : 'Background Claude output'" />
@@ -42,7 +44,6 @@ header {display:flex;flex-shrink:0;align-items:center;justify-content:space-betw
 h3 {font-size:13px;font-weight:600;margin:0} p {font-size:11px;color:#aaa59e;line-height:1.5;overflow-wrap:anywhere}
 button {min-height:30px;padding:5px 9px;border:1px solid #ffffff26;border-radius:7px;font-size:11px}button:focus-visible {outline:2px solid #8cabe8;outline-offset:2px}
 .child-terminal__viewport {flex:1;min-height:0;min-width:0;overflow:hidden;padding:10px;background:#191919;border:1px solid #ffffff1a;border-radius:10px}
-.child-terminal__size {display:none}
-@media (max-height:700px), (max-width:720px) {.child-terminal__size {display:inline-flex}}
+.child-terminal__controls {display:flex;flex-wrap:wrap;gap:8px;margin-inline-start:auto}
 .child-terminal__hint {flex-shrink:0;padding:8px 0;margin:0}
 </style>

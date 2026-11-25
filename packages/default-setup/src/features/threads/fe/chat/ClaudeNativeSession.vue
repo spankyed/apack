@@ -508,11 +508,8 @@ onBeforeUnmount(() => { window.removeEventListener('focus', renewPresence); wind
 }
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { container-type: inline-size; container-name: claude-native; --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
-.native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
-/* Native consent and question screens need more rows than the compact split allows. */
-@media (max-height: 700px), (max-width: 720px) {
-  .native-session--child-expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
-}
+.native-session--expanded,
+.native-session--child-expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
 .native-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; padding: 4px 4px 18px; }
 .native-identity { display: flex; align-items: center; min-width: 0; gap: 12px; }
 .native-mark { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border: 1px solid #b68e7333; border-radius: 11px; background: #b68e7310; color: #d3aa8e; font: 600 21px ui-monospace, monospace; }
