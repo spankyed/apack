@@ -1,5 +1,15 @@
 /** Authored ownership bridge around the original native Client sandbox. */
-export const claudeTerminalClientRuntime = String.raw`function createNativeClientHost(createRegistry,invalidate,clientRequestId,callbacks){
+export const claudeTerminalClientRuntime = String.raw`function runNativeClientAction(engine,{plugin,handle,key,requestId,event}){
+ // The current snapshot supplies the handle. Its native drawing keeps the first site's
+ // component even when another live placement of the same Client receives the action.
+ const held=engine.r5.heldPress(plugin,handle,key);
+ if(!held||held.surface!=='desktop'||held.requestId!==requestId)return false;
+ const run=engine.tut.runnerFor(plugin,held.handle);
+ if(!run)return false;
+ run(event);
+ return true;
+}
+function createNativeClientHost(createRegistry,invalidate,clientRequestId,callbacks){
  const entries=new Map(),tokens=new Map(),registries=new Map(),settling=new Map();
  const scopeOf=(client,component,requestId)=>JSON.stringify([client,component,requestId]);
  function settleAfterRelease(scope){let pending=settling.get(scope);if(!pending){let resolve;const promise=new Promise(done=>{resolve=done;});pending={promise,resolve};settling.set(scope,pending);}if(pending.timer)clearTimeout(pending.timer);pending.timer=setTimeout(()=>{settling.delete(scope);pending.resolve();},0);pending.timer.unref();}
@@ -92,7 +102,7 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
   const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===type&&node.press?.plugin===ref.plugin&&node.props?.key===reached.element)matches.push(node);for(const child of node.children??[])find(child);};find(snapshot.tree);
   if(matches.length!==1)return {handled:false};const target=matches[0];
   if(type==='Select'&&!target.props.options.some(option=>option.value===reached.value))return {handled:false};
-  const handled=callbacks.run({plugin:ref.plugin,handle:target.press.handle,key:target.props.key,component:entry.component,requestId:entry.callbackId,event:reached});
+  const handled=callbacks.run({plugin:ref.plugin,handle:target.press.handle,key:target.props.key,requestId:entry.callbackId,event:reached});
   return {handled,...(handled?{element:reached.element,...(type!=='Button'?{value:reached.value}:{})}:{})};
  }
  function action(client,value){

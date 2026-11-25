@@ -51,34 +51,49 @@ it('does not run a sandbox callback if its instance closes during the original a
 })
 
 it('routes the same native Client handle to the addressed placement without falling through stale actions', async () => {
-  const create = vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`, { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval })
-  const dispatch = vi.fn(async () => ({ reached: { element: 'refresh' } })), run = vi.fn(() => true)
+  const { createNativeClientHost: create, runNativeClientAction } = vm.runInNewContext(
+    `${claudeTerminalClientRuntime};({createNativeClientHost,runNativeClientAction})`,
+    { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval },
+  )
+  const dispatch = vi.fn(async () => ({ reached: { element: 'refresh' } })), callback = vi.fn()
+  const held = { component: 'ToolUse', surface: 'desktop', requestId: 'shared-request#review', handle: 94 }
+  const engine = { r5: { heldPress: vi.fn(() => held) }, tut: { runnerFor: vi.fn(() => callback) } }
+  const run = (value: unknown) => runNativeClientAction(engine, value)
   const drawing = { type: 'Button', props: { key: 'refresh' }, press: { plugin: 'fixture', handle: 1 } }
   const instance = { id: 'shared-sandbox', release: vi.fn(), subscribe: () => () => {}, getSnapshot: () => ({ status: 'drawn', tree: drawing }), acceptsPointer: () => false, acceptsKeys: () => false }
-  const host = create(() => ({ acquire: () => instance, dispose() {} }), () => {}, () => 'callback', { dispatch, run })
+  const host = create(() => ({ acquire: () => instance, dispose() {} }), () => {}, (id: string, key: string) => id + '#' + key, { dispatch, run })
   const tree = { type: 'Client', props: { key: 'review', module: './review.ts' }, client: { plugin: 'fixture' } }
   const press = { subtype: 'ui_press', plugin: 'fixture', handle: 1, key: 'refresh', instance_id: 'shared-request' }
-  const above = { ...press, component: 'AbovePrompt', instance_revision: 1 }
-  const below = { ...press, component: 'BelowPrompt', instance_revision: 2 }
+  const use = { ...press, component: 'ToolUse', instance_revision: 1 }
+  const result = { ...press, component: 'ToolResult', instance_revision: 2 }
 
-  host.render('view', above.component, above.instance_id, tree, above.instance_revision)
-  host.render('view', below.component, below.instance_id, tree, below.instance_revision)
-  host.suspendInstance('view', above.component, above.instance_id)
-  expect(await host.dispatchAction('view', above)).toEqual({ handled: false })
-  expect(host.action('view', above)).toBe(false)
-  expect(await host.dispatchAction('view', { ...below, instance_revision: 1 })).toEqual({ handled: false })
-  expect(host.action('view', { ...below, instance_revision: 1 })).toBe(false)
+  host.render('view', use.component, use.instance_id, tree, use.instance_revision)
+  host.render('view', result.component, result.instance_id, tree, result.instance_revision)
+  host.suspendInstance('view', use.component, use.instance_id)
+  expect(await host.dispatchAction('view', use)).toEqual({ handled: false })
+  expect(host.action('view', use)).toBe(false)
+  expect(await host.dispatchAction('view', { ...result, instance_revision: 1 })).toEqual({ handled: false })
+  expect(host.action('view', { ...result, instance_revision: 1 })).toBe(false)
   expect(dispatch).not.toHaveBeenCalled()
 
-  expect(await host.dispatchAction('view', below)).toEqual({ handled: true, element: 'refresh' })
-  expect(dispatch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ component: 'BelowPrompt', requestId: 'shared-request' }))
-  expect(run).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ component: 'BelowPrompt' }))
-  expect(host.action('view', below)).toEqual({ handle: 1, component: 'BelowPrompt', requestId: 'callback', surface: 'desktop' })
+  expect(await host.dispatchAction('view', result)).toEqual({ handled: true, element: 'refresh' })
+  expect(dispatch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ component: 'ToolResult', requestId: 'shared-request' }))
+  expect(engine.r5.heldPress).toHaveBeenCalledExactlyOnceWith('fixture', 1, 'refresh')
+  expect(engine.tut.runnerFor).toHaveBeenCalledExactlyOnceWith('fixture', 94)
+  expect(callback).toHaveBeenCalledExactlyOnceWith({ element: 'refresh' })
+  expect(host.action('view', result)).toEqual({ handle: 1, component: 'ToolResult', requestId: 'shared-request#review', surface: 'desktop' })
 
-  host.release('view', above.component, above.instance_id)
+  held.surface = 'terminal'
+  expect(await host.dispatchAction('view', result)).toEqual({ handled: false })
+  held.surface = 'desktop'
+  held.requestId = 'different-request#review'
+  expect(await host.dispatchAction('view', result)).toEqual({ handled: false })
+  expect(callback).toHaveBeenCalledTimes(1)
+
+  host.release('view', use.component, use.instance_id)
   expect(instance.release).toHaveBeenCalledTimes(1)
-  expect(await host.dispatchAction('view', above)).toEqual({ handled: false })
-  expect(host.action('view', above)).toBe(false)
+  expect(await host.dispatchAction('view', use)).toEqual({ handled: false })
+  expect(host.action('view', use)).toBe(false)
   host.detach()
 })
 
