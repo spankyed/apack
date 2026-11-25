@@ -26,6 +26,12 @@ export const REPOSITORIES = {
       '@elmdb/ears': { file: 'elmdb-ears-0.1.0.tgz', dir: 'packages/ears' },
     },
   },
+  'apack-clock': {
+    tag: 'pkg',
+    packages: {
+      '@apackdev/clock': { file: 'apackdev-clock-0.1.0.tgz', dir: '.' },
+    },
+  },
   'apack-git': {
     tag: 'pkg',
     packages: {

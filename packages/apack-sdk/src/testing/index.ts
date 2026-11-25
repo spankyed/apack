@@ -2,7 +2,7 @@ import type { SettingsAdmin } from '../services/settings.ts';
 // The runtime a pack's unit tests run against: the EARS engine on a database in a temporary directory, without the app.
 // @apackdev/testing's harness drives it; it lives in the SDK so tests share the pack's SDK instance
 // (its query, repository and content-writer registries) instead of a copy.
-import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@elmdb/ears';
+import { createEarsEngine, type CallCounting, type EarsClock, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@elmdb/ears';
 import { createTemporaryDatabases } from '@elmdb/ears/database';
 import { _bindEars, _EARS_CALL_SITES } from '../ears/index.ts';
 import { _installProjections, type ProjectionRunner } from '../runtime/projections.ts';
@@ -60,6 +60,11 @@ export interface TestRuntimeStartOptions {
   settings?: SettingsAdmin;
   /** Per-test replacements for native host ports, read from this runtime's map. First call only. */
   serviceOverrides?: ReadonlyMap<string, unknown>;
+  /**
+   * Clock for entity timestamps, generated id prefixes, call durations, recency queries and watches (structurally
+   * matches `@apackdev/clock`'s `controller.clock` and `@apackdev/orderings`'s `schedule.clock`). First call only.
+   */
+  clock?: EarsClock;
 }
 
 const entityTypes = new Set<string>(Object.values(SDK_ENTITIES));
@@ -68,7 +73,7 @@ const roles = new Set<string>(Object.values(SDK_ROLES));
 const rowRules = new Map<string, RowRules>(Object.entries(SDK_ROW_RULES));
 const relationRules = new Map<string, RelationRules>(Object.entries(SDK_RELATION_RULES));
 const ranks = new Map<string, RankDeclaration>();
-let started: Pick<TestRuntimeStartOptions, 'packs' | 'appVersion' | 'onboarding' | 'settings' | 'serviceOverrides'> | undefined;
+let started: Pick<TestRuntimeStartOptions, 'packs' | 'appVersion' | 'onboarding' | 'settings' | 'serviceOverrides' | 'clock'> | undefined;
 let engine: EarsEngine | undefined;
 let disposeDatabase: (() => void) | undefined;
 let projections: ProjectionRunner | undefined;
@@ -90,7 +95,7 @@ function installFreshEngine(): EarsEngine {
   disposeDatabase = dispose;
   // Every value a read gives back is frozen: code that changes one, expecting the database to change, throws here
   // rather than silently not persisting in the app
-  engine = createEarsEngine({ database, freeze: true, callSites: _EARS_CALL_SITES });
+  engine = createEarsEngine({ database, freeze: true, callSites: _EARS_CALL_SITES, ...(started?.clock && { clock: started.clock }) });
   projections = _installProjections(engine);
   _bindEars(engine);
   return engine;
@@ -101,13 +106,13 @@ function installFreshEngine(): EarsEngine {
  * the SDK's entity types, relation kinds and roles plus those given, a type held only to the rules given. For host
  * specs that build an engine of their own
  */
-export function _openTestDatabase({ entityTypes: types = [], relationKinds: kinds = [], roles: given = [], rowRules: rules = {} }: Pick<TestRuntimeStartOptions, 'entityTypes' | 'relationKinds' | 'roles' | 'rowRules'> = {}): { database: EarsDatabase; engine: EarsEngine } {
+export function _openTestDatabase({ entityTypes: types = [], relationKinds: kinds = [], roles: given = [], rowRules: rules = {}, clock }: Pick<TestRuntimeStartOptions, 'entityTypes' | 'relationKinds' | 'roles' | 'rowRules' | 'clock'> = {}): { database: EarsDatabase; engine: EarsEngine } {
   const { database } = databases.open({
     types: Object.fromEntries([...Object.values(SDK_ENTITIES), ...types].map((type) => [type, _withSdkIndexes(rules[type])])),
     relations: Object.fromEntries([...Object.values(SDK_REL_KINDS), ...kinds].map((kind) => [kind, SDK_RELATION_RULES[kind] ?? {}])),
     roles: [...Object.values(SDK_ROLES), ...given],
   });
-  return { database, engine: createEarsEngine({ database }) };
+  return { database, engine: createEarsEngine({ database, ...(clock && { clock }) }) };
 }
 
 /** Brings the test runtime's projections up to what changed since each last read, as the app does after another process commits */
@@ -144,7 +149,7 @@ export function startTestRuntime(options: TestRuntimeStartOptions = {}): void {
   if (started) {
     // The names added since are held to as the app holds them
     engine?.admin.setSchema(testSchema());
-    for (const key of ['packs', 'appVersion', 'onboarding', 'serviceOverrides'] as const) {
+    for (const key of ['packs', 'appVersion', 'onboarding', 'serviceOverrides', 'clock'] as const) {
       if (options[key] !== undefined && options[key] !== started[key]) {
         throw new Error(`startTestRuntime already bound the test app without this ${key}: pass ${key} on its first call`);
       }
@@ -152,7 +157,7 @@ export function startTestRuntime(options: TestRuntimeStartOptions = {}): void {
     // Still bound: nothing to start. Unbound since (a test unbound the host): bound again, as first started
     if (_isHostBound()) return;
   } else {
-    started = { packs: options.packs, appVersion: options.appVersion, onboarding: options.onboarding, settings: options.settings, serviceOverrides: options.serviceOverrides };
+    started = { packs: options.packs, appVersion: options.appVersion, onboarding: options.onboarding, settings: options.settings, serviceOverrides: options.serviceOverrides, clock: options.clock };
   }
   installFreshEngine();
   bindTestRuntime({ engine: testEngine, resetData: resetTestData, ...started });

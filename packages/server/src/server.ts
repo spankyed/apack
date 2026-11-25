@@ -2,7 +2,7 @@ import './boot/env';
 import { installFatalErrorHandling, writeFatalError } from './boot/errors';
 import { captureApiToken } from './boot/config';
 import { installShutdownBridge, isShutdownRequested } from './boot/lifecycle';
-import { appDatabase, appPacks, appRunHistory, setupBackend } from './runtime';
+import { appClock, appDatabase, appPacks, appRunHistory, setupBackend } from './runtime';
 import { createWebSocketServer } from './transport/websocket';
 
 installFatalErrorHandling();
@@ -24,6 +24,7 @@ captureApiToken();
     appPacks?.runShutdownHooks();
     try { appDatabase?.close(); } catch {}
     try { appRunHistory?.database.close(); } catch {}
+    try { appClock?.close(); } catch {}
     process.exit(0);
   }
 

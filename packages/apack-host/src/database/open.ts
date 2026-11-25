@@ -1,6 +1,6 @@
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
-import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears, type EarsWarning } from '@elmdb/ears';
+import { createEarsEngine, type EarsAdmin, type EarsClock, type EarsDatabase, type EarsEngine, type Ears, type EarsWarning } from '@elmdb/ears';
 import { _bindEars, _EARS_CALL_SITES } from '@apackdev/sdk/ears';
 import { openDatabase as openElmdb, type DatabaseOptions } from '@elmdb/ears/database';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
@@ -50,6 +50,8 @@ export interface DatabaseStoreOptions {
   /** The entity types: the app's registered packs, or the installed packs' manifests */
   schema: DatabaseSchema;
   readOnly?: boolean;
+  /** Clock for timestamps, watch gaps, and call timings (defaults to the engine's system clock) */
+  clock?: EarsClock;
 }
 
 /**
@@ -58,12 +60,13 @@ export interface DatabaseStoreOptions {
  * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
  * while that pack registers. Nothing is installed.
  */
-export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
+export function openDatabaseStore({ path, schema, readOnly, warn, clock }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
   using unwind = new DisposableStack();
   const database = openDatabase({ path, readOnly });
   unwind.defer(() => database.close());
   const engine = createEarsEngine({
     database,
+    ...(clock && { clock }),
     callSites: _EARS_CALL_SITES,
     // A value index the engine names in a type's row rules is the `indexes` of that type's entry in a pack's apack.json
     warn: warn && ((message: string, warning: EarsWarning) => warn(warning.kind === 'unindexedWalk'
@@ -94,12 +97,12 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
  * files and throws, as it does opened read-only.
  */
-export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean } = {}): RunsDatabase {
+export function openRunHistory(dir: string, { readOnly, clock }: { readOnly?: boolean; clock?: EarsClock } = {}): RunsDatabase {
   const open = (): RunsDatabase => {
     using unwind = new DisposableStack();
     const database = openDatabase({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
     unwind.defer(() => database.close());
-    const engine = createEarsEngine({ database, callSites: _EARS_CALL_SITES });
+    const engine = createEarsEngine({ database, ...(clock && { clock }), callSites: _EARS_CALL_SITES });
     unwind.move();
     return { database, engine, [Symbol.dispose]() { database.close(); } };
   };
@@ -148,6 +151,8 @@ export interface OpenAppDatabaseOptions {
    * snapshot file, a pack directory, or a directory of pack directories (`readInstalledSchema`).
    */
   schemaFrom?: string;
+  /** Clock for timestamps, watch gaps, and call timings (defaults to the engine's system clock) */
+  clock?: EarsClock;
 }
 
 /**
@@ -155,7 +160,7 @@ export interface OpenAppDatabaseOptions {
  * packs' names read from their manifests (no pack code runs), which a tool reports. The engine is bound, so `@apackdev/sdk/ears`'s
  * operations act on it until `close()`. The run history is a database of its own (`openRunHistory`).
  */
-export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom }: OpenAppDatabaseOptions): Promise<AppDatabase> {
+export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom, clock }: OpenAppDatabaseOptions): Promise<AppDatabase> {
   const context = resolveAppEnvironment({ env, userDataDir });
   const paths = findAppDataPaths(userDataDir);
   const schema = readInstalledSchema(context, { schemaFrom });
@@ -167,7 +172,7 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, sche
   if (!readOnly && database.schema === null) {
     throw new Error(`The database in ${userDataDir} holds no schema yet: start apack on it once, which declares its packs', then run this again.`);
   }
-  const engine = createEarsEngine({ database, callSites: _EARS_CALL_SITES });
+  const engine = createEarsEngine({ database, ...(clock && { clock }), callSites: _EARS_CALL_SITES });
   if (!readOnly) engine.admin.beforeCommit(refuseInvalidSettings(engine, context));
   // Bound so the SDK's engine operations (`@apackdev/sdk/ears`) read this database until `close()`, which
   // puts back whatever was bound before rather than leaving none. `apack db`, the one caller today, has no

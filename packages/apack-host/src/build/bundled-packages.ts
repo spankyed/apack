@@ -33,10 +33,11 @@ const VIRTUAL_PACKAGES: readonly (readonly [prefix: string, packageName: string]
 ];
 
 /**
- * The `@apackdev` packages published from other repositories (apack-git's, and apack-terminal's two), which the root's
- * `overrides` take from each repository's release. They share the scope and are third-party here, as elmdb's are
+ * The `@apackdev` packages published from other repositories (apack-clock's, apack-git's, and apack-terminal's two),
+ * which the root's `overrides` take from each repository's release. They share the scope and are third-party here, as
+ * elmdb's are
  */
-export const OTHER_REPOSITORY_PACKAGES: ReadonlySet<string> = new Set(['@apackdev/git', '@apackdev/terminal', '@apackdev/terminal-view']);
+export const OTHER_REPOSITORY_PACKAGES: ReadonlySet<string> = new Set(['@apackdev/clock', '@apackdev/git', '@apackdev/terminal', '@apackdev/terminal-view']);
 
 /** The platform packages `@apackdev/terminal` installs its broker from, one per target (`@apackdev/terminal-darwin-arm64`) */
 const BROKER_PLATFORM_PACKAGE = /^@apackdev\/terminal-(darwin|linux|win32)-/;

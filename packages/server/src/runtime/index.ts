@@ -5,6 +5,7 @@ import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
+import { ClockController } from '@apackdev/clock';
 import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
@@ -55,6 +56,8 @@ export interface AppStore {
   runHistory: RunsDatabase;
   engine: EarsEngine;
   packs: PackRegistry;
+  /** The host-owned clock driving both engines; close it only after closing `database` and `runHistory` */
+  clock: ClockController;
   /** Brings the engine's projections up to what changed since each last read */
   catchUpProjections(): Promise<void>;
   /** Leaves the terminal brokers this runtime reached (`createHostRuntime`'s `leaveTerminals`) */
@@ -74,6 +77,9 @@ export let appDatabase: EarsDatabase | undefined;
 
 /** The run history's open database, so shutdown can close it */
 export let appRunHistory: RunsDatabase | undefined;
+
+/** The host-owned clock driving the app's engines, closed on shutdown after both databases close */
+export let appClock: ClockController | undefined;
 
 /**
  * Opens the app's data and binds the app: the registered packs (`createPackRegistry()`, empty until the caller
@@ -107,13 +113,15 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     appPackSourcesDir: () => process.env.SHIPPED_PACKS_DIR,
     settingsForPack: (packId) => runtime.services.settings.forPack(packId),
   });
+  const clock = new ClockController();
   const { database, engine } = openDatabaseStore({
     path: _getLmdbPath(),
     schema: packs,
+    clock: clock.clock,
     // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
-  const runHistory = openRunHistory(_getRunHistoryPath());
+  const runHistory = openRunHistory(_getRunHistoryPath(), { clock: clock.clock });
   const env = resolveAppEnvironment().env;
   appPerformance = performance ?? (env === 'development' || env === 'test' ? createNodePerformanceController() : undefined);
   appPerformance?.attach(engine, 'app');
@@ -131,7 +139,10 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   appViews = createViewHost({ ears: () => engine, packs, observe: recording ? () => createViewObservation(recording) : undefined });
   appDatabase = database;
   appRunHistory = runHistory;
-  return { database, runHistory, engine, packs, catchUpProjections: () => runtime.catchUpProjections(), leaveTerminals: () => runtime.leaveTerminals() };
+  const previousClock = appClock;
+  appClock = clock;
+  previousClock?.close();
+  return { database, runHistory, engine, packs, clock, catchUpProjections: () => runtime.catchUpProjections(), leaveTerminals: () => runtime.leaveTerminals() };
 }
 
 /**

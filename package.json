@@ -156,12 +156,13 @@
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^11.0.1"
     },
-    "elmdb": "https://github.com/spankyed/elmdb/releases/download/pkg-89c77cd299929233b1c9d7deee811065320a20a4/elmdb-0.1.0.tgz",
-    "@elmdb/ears": "https://github.com/spankyed/elmdb/releases/download/pkg-89c77cd299929233b1c9d7deee811065320a20a4/elmdb-ears-0.1.0.tgz",
+    "elmdb": "https://github.com/spankyed/elmdb/releases/download/pkg-9cd3ce335848e480b7360924453c20bbdf3935f2/elmdb-0.1.0.tgz",
+    "@elmdb/ears": "https://github.com/spankyed/elmdb/releases/download/pkg-9cd3ce335848e480b7360924453c20bbdf3935f2/elmdb-ears-0.1.0.tgz",
+    "@apackdev/clock": "https://github.com/spankyed/apack-clock/releases/download/pkg-84a3b2b11d9a045d8bad4c4713e0c4abc6387c9f/apackdev-clock-0.1.0.tgz",
     "@apackdev/git": "https://github.com/spankyed/apack-git/releases/download/pkg-4f2544f4f17c4ae219d1c13b6ba6c05dac57ee0d/apackdev-git-0.1.0.tgz",
     "@apackdev/terminal": "https://github.com/spankyed/apack-terminal/releases/download/bin-8816ce8efd9a2a26d2a4cbff291cd433580f61bd/apackdev-terminal-0.1.0.tgz",
     "@apackdev/terminal-view": "https://github.com/spankyed/apack-terminal/releases/download/bin-8816ce8efd9a2a26d2a4cbff291cd433580f61bd/apackdev-terminal-view-0.1.0.tgz"
   },
-  "//external": "The five packages above with URL overrides are the tarballs the CI of elmdb, apack-git and apack-terminal attaches to the release of a commit, which `npm run deps:pin -- <repo> <commit>` writes (scripts/lib/external-packages.mjs). Every workspace manifest names them by the version they publish, as it would any registry package, and these overrides alone say where they come from; no workspace manifest may hold a file: spec (workspace-manifests.spec.ts). `npm run deps:local` points them at a local checkout for working across repositories, which is never committed.",
+  "//external": "The six packages above with URL overrides are the tarballs the CI of elmdb, apack-clock, apack-git and apack-terminal attaches to the release of a commit, which `npm run deps:pin -- <repo> <commit>` writes (scripts/lib/external-packages.mjs). Every workspace manifest names them by the version they publish, as it would any registry package, and these overrides alone say where they come from; no workspace manifest may hold a file: spec (workspace-manifests.spec.ts). `npm run deps:local` points them at a local checkout for working across repositories, which is never committed.",
   "//minimatch": "GHSA-g3hv-75wg-m249 (a denial of service from a crafted pattern) affects minimatch >=7 <11.0.1, so the range override lifts only those copies to 11; the 3.x and 5.x copies eslint, electron-builder and dir-compare depend on are outside the range and stay. typescript-estree is reached through a peer dependency, which npm carries no override across, so it needs its own nested entry; npm ls still calls that edge invalid, since it does not credit the override there either."
 }

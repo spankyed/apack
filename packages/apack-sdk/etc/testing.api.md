@@ -11,6 +11,7 @@ import { CallCounting } from '@elmdb/ears';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
 import { EARS as EARS_2 } from '@elmdb/ears';
+import { EarsClock } from '@elmdb/ears';
 import { EarsDatabase } from '@elmdb/ears';
 import { EarsEngine } from '@elmdb/ears';
 import type { EditorState } from '@tiptap/pm/state';
@@ -171,13 +172,15 @@ export function nativeFrontendDeclarationFixture(fixture: PackFERegistration): N
 export function nativePackDeclarationFixture(fixture: PackRegistration, metadata?: Pick<NativePackDeclaration, 'version'>): NativePackDeclaration;
 
 // @internal
-export function _openTestDatabase(input?: Pick<TestRuntimeStartOptions, 'entityTypes' | 'relationKinds' | 'roles' | 'rowRules'>): {
+export function _openTestDatabase(input?: Pick<TestRuntimeStartOptions, 'entityTypes' | 'relationKinds' | 'roles' | 'rowRules' | 'clock'>): {
     database: EarsDatabase;
     engine: EarsEngine;
 };
 
 // @internal
-export function _openTestRunHistory(): {
+export function _openTestRunHistory(input?: {
+    clock?: EarsClock;
+}): {
     database: EarsDatabase;
     engine: EarsEngine;
 };
@@ -258,6 +261,7 @@ export const testRunHistory: () => RunHistory;
 // @public
 export interface TestRuntimeStartOptions {
     appVersion?: string;
+    clock?: EarsClock;
     entityTypes?: readonly string[];
     onboarding?: OnboardingService;
     packs?: PackRegistryView;

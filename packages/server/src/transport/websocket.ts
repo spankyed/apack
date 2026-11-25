@@ -10,7 +10,7 @@ import { jsonSafeEncoder } from './encoder.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { SERVER_CONFIG, apiToken, apiTokenIsOwn, isApiToken } from '../boot/config.ts';
 import { notifyServerReady, registerGracefulShutdown } from '../boot/lifecycle.ts';
-import { appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/index.ts';
+import { appClock, appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/index.ts';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -163,6 +163,9 @@ export function createWebSocketServer() {
     } catch (error) {
       console.error('[backend] Closing the run history failed', error);
     }
+    try {
+      appClock?.close();
+    } catch {}
     const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
     for (const file of [apiPortFile, apiTokenFile]) {
       try { fs.unlinkSync(file); } catch {}

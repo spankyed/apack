@@ -1,9 +1,9 @@
 // The flow model's repository: flows, their nodes and the edges between them, and the root flow role.
 // The SDK declares these entities (sdk-entities.ts), so it owns their reads and writes; packs build
 // their views on top (default-setup's flows repository).
-import { getTimestamp, RESERVED_ATTRIBUTES } from '@elmdb/ears';
+import { RESERVED_ATTRIBUTES } from '@elmdb/ears';
 import { RepositoryError, RepositoryErrorCode } from './repository-error.ts';
-import { findRelations, nextLabel, getRow, getRoles, updateRelation, removeRelation, untypedCreate, untypedWrite, untypedQuery as query, transact } from '../ears/index.ts';
+import { findRelations, nextLabel, now, getRow, getRoles, updateRelation, removeRelation, untypedCreate, untypedWrite, untypedQuery as query, transact } from '../ears/index.ts';
 import { EARS } from '../types/entities.ts';
 import type { FlowEntity, NodeBase } from '../types/sdk-entities.ts';
 import type { CompiledRows } from '../build/compilers/flow-compiler.ts';
@@ -202,15 +202,14 @@ export const flowRepository = {
   // ── Flows ────────────────────────────────────────────────────────────
 
   createFlow: (flow?: Partial<FlowEntity>): FlowEntity => {
-    const ts = getTimestamp();
     const fields = {
       // A subflow names its flow by label, so a default one must be unique
       label: flow?.label || nextLabel(EARS.Entity.Flow, 'New Flow'),
       description: flow?.description || FLOW_DEFAULTS.DESCRIPTION,
       flowType: flow?.flowType || FLOW_DEFAULTS.TYPE,
     };
-    // `create` numbers its short code
-    const id = untypedCreate(EARS.Entity.Flow, { ...fields, createdAt: ts }).id();
+    // `create` numbers its short code and stamps `createdAt` from the engine's clock
+    const id = untypedCreate(EARS.Entity.Flow, fields).id();
     return getRow(id) as unknown as FlowEntity;
   },
 
@@ -322,7 +321,7 @@ export const flowRepository = {
 
   /** Adds a node to a flow, with its step's defaults under the given fields */
   createNode: (flowId: EARS.EntityId, input: FlowNodeInput): FlowNode => {
-    const ts = getTimestamp();
+    const ts = now();
     const nodeType = input.nodeType || NODE_DEFAULTS.TYPE;
     const accepted = requireStepBinding(nodeType);
     const defaults = stepRegistry.createNodeDefaults(nodeType) as Partial<NodeBase>;
@@ -350,7 +349,7 @@ export const flowRepository = {
 
   /** Updates a node's fields, and its related entity when the step's relation field is given */
   updateNode: (nodeId: EARS.EntityId, updates: FlowNodeInput): void => {
-    const ts = getTimestamp();
+    const ts = now();
     const [current] = query.ids(nodeId).pickAll() as unknown as FlowNode[];
     if (!current) throw new RepositoryError(`Node ${nodeId} not found`, RepositoryErrorCode.NOT_FOUND);
     if (updates.nodeType !== undefined && updates.nodeType !== current.nodeType) {
