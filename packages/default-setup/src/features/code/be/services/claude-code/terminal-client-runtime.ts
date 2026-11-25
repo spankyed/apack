@@ -9,6 +9,27 @@ export const claudeTerminalClientRuntime = String.raw`function runNativeClientAc
  run(event);
  return true;
 }
+// Claude's native callback table is process-wide. Give each desktop registry its own
+// drawing request IDs, then restore the original ID when its Client posts a message.
+function createDesktopNativeClientRegistry(runtime){
+ const prefix=randomUUID()+':',originalPort=runtime.A3r();
+ const registry=runtime.x3r({port:{
+  ...originalPort,
+  post(id,value,reply){
+   const requestId=value.message.requestId;
+   if(typeof requestId!=='string'||!requestId.startsWith(prefix))return;
+   originalPort.post(id,{...value,message:{...value.message,requestId:requestId.slice(prefix.length)}},reply);
+  },
+ }});
+ return {
+  acquire(options){
+   const requestId=prefix+options.requestId;
+   const instance=registry.acquire({...options,requestId});
+   return {...instance,callbackRequestId:runtime.R3r(requestId,options.key)};
+  },
+  dispose:()=>registry.dispose(),
+ };
+}
 function createNativeClientHost(createRegistry,invalidate,clientRequestId,callbacks){
  const entries=new Map(),tokens=new Map(),registries=new Map(),settling=new Map();
  const scopeOf=(client,component,requestId)=>JSON.stringify([client,component,requestId]);
@@ -36,7 +57,7 @@ function createNativeClientHost(createRegistry,invalidate,clientRequestId,callba
     const alive=()=>[...entries.values()].some(other=>(other===entry||instance?.id!==undefined&&other.client===client&&other.instance.id===instance.id)&&current(other));
     try{instance=borrowed??registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){if(entry&&!alive())return()=>{};const timer=setInterval(()=>{if(entry&&alive())fn();else if(![...entries.values()].some(other=>other.timers===timers)){clearInterval(timer);timers.delete(timer);}},ms);timers.add(timer);timer.unref();return()=>{clearInterval(timer);timers.delete(timer);};}}});}catch(error){for(const timer of timers)clearInterval(timer);if(![...entries.values()].some(other=>other.client===client)){registries.delete(client);const timer=setTimeout(()=>registry?.dispose(),0);timer.unref();}throw error;}
     const peer=instance.id===undefined?undefined:[...entries.values()].find(other=>other.client===client&&other.instance.id===instance.id);if(peer){for(const timer of timers)peer.timers.add(timer);timers=peer.timers;}
-    entry={plugin,borrowed:!!borrowed,surface:borrowed?.surface??'desktop',timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:borrowed?.callbackRequestId??clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
+    entry={plugin,borrowed:!!borrowed,surface:borrowed?.surface??'desktop',timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:instance.callbackRequestId??clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
     entry.stop=instance.subscribe(()=>{if(entries.get(identity)===entry&&current(entry))invalidate(entry);});
     entries.set(identity,entry);tokens.set(entry.token,entry);
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}

@@ -183,3 +183,83 @@ it('keeps input on an unchanged borrowed sandbox through placement redraw but re
  expect(stop).toHaveBeenCalledTimes(1)
  host.detach()
 })
+
+it('keeps native callback drawings independent across two desktop registries without changing plugin message IDs', async () => {
+  const { createNativeClientHost: create, createDesktopNativeClientRegistry: scoped, runNativeClientAction } = vm.runInNewContext(
+    `${claudeTerminalClientRuntime};({createNativeClientHost,createDesktopNativeClientRegistry,runNativeClientAction})`,
+    { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval },
+  )
+  type Site = { component: string; requestId: string; key: string; plugin: string; surface: string }
+  type Message = { plugin: string; message: { component: string; requestId: string; element: string } }
+  type FlowPort = { post(id: string, message: Message, reply: () => void): void; cancel(id: string): void }
+  const next = vi.fn()
+  const ports: FlowPort[] = []
+  const draw = new Map<string, number>()
+  const held = new Map<number, { surface: string; requestId: string; handle: number }>()
+  const run = new Map<number, () => void>()
+  const history: string[] = []
+  let count = 0
+  const originalID = (requestId: string, key: string) => requestId + '#' + key
+  const runtime = {
+    A3r: () => {
+      const port = { post: vi.fn<FlowPort['post']>(), cancel: vi.fn<FlowPort['cancel']>() }
+      ports.push(port)
+      return port
+    },
+    R3r: originalID,
+    x3r: ({ port }: { port: FlowPort }) => ({
+      acquire: (site: Site) => {
+        const handle = ++count, requestId = originalID(site.requestId, site.key)
+        const previous = draw.get(requestId)
+        if (previous !== undefined) {
+          held.delete(previous)
+          run.delete(previous)
+        }
+        draw.set(requestId, handle)
+        held.set(handle, { surface: site.surface, requestId, handle })
+        run.set(handle, () => {
+          history.push(site.component)
+          port.post(site.requestId, { plugin: site.plugin, message: {
+            component: site.component, requestId: site.requestId, element: site.key,
+          } }, next)
+        })
+        return {
+          release() { held.delete(handle); run.delete(handle); port.cancel(site.requestId) },
+          subscribe: () => () => {},
+          acceptsPointer: () => false,
+          acceptsKeys: () => false,
+          getSnapshot: () => ({ status: 'drawn', tree: {
+            type: 'Button', props: { key: 'inspect' }, press: { plugin: site.plugin, handle },
+          } }),
+        }
+      },
+      dispose() {},
+    }),
+  }
+  const engine = { r5: { heldPress: (_plugin: string, handle: number) => held.get(handle) },
+    tut: { runnerFor: (_plugin: string, handle: number) => run.get(handle) } }
+  const dispatch = vi.fn(async (_request: { requestId: string; key: string }) => ({ reached: { element: 'inspect' } }))
+  const host = create(() => scoped(runtime), () => {}, originalID, {
+    dispatch, run: (value: unknown) => runNativeClientAction(engine, value),
+  })
+  const tree = { type: 'Client', props: { key: 'release', module: './review.ts' }, client: { plugin: 'fixture' } }
+  host.render('main', 'ToolUse', 'native-read-request', tree, 1)
+  host.render('popout', 'ToolUse', 'native-read-request', tree, 1)
+  const press = { subtype: 'ui_press', component: 'ToolUse', plugin: 'fixture', key: 'inspect', instance_id: 'native-read-request', instance_revision: 1 }
+  await expect(host.dispatchAction('main', { ...press, handle: 1 })).resolves.toMatchObject({ handled: true })
+  await expect(host.dispatchAction('popout', { ...press, handle: 2 })).resolves.toMatchObject({ handled: true })
+  await expect(host.dispatchAction('main', { ...press, handle: 2 })).resolves.toBeUndefined()
+  expect(history).toEqual(['ToolUse', 'ToolUse'])
+  for (const port of ports) {
+    expect(port.post).toHaveBeenCalledExactlyOnceWith(expect.any(String), {
+      plugin: 'fixture', message: { component: 'ToolUse', requestId: 'native-read-request', element: 'release' },
+    }, next)
+  }
+  expect(dispatch.mock.calls.map(([request]) => request)).toEqual([0, 1].map(() => expect.objectContaining({
+    requestId: 'native-read-request', key: 'release',
+  })))
+  host.detach('popout')
+  expect(ports[1]?.cancel).toHaveBeenCalledOnce()
+  await expect(host.dispatchAction('main', { ...press, handle: 1 })).resolves.toMatchObject({ handled: true })
+  host.detach()
+})
