@@ -96,6 +96,25 @@ it.each([false, true])('keeps the native caret inside an autolink when a heading
   } finally { bridge.dispose() }
 })
 
+it('keeps the native caret at the start of an autolink when a heading normalizes', () => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const url = 'https://example.test/docs'
+  const tail = 'Review <' + url + '> today'
+  const text = 'Release notes\n=============\n\n' + tail
+  const canonical = '# Release notes\n\n' + tail
+  const start = text.indexOf(url)
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor: start, decorations: [{ start, end: start + 5, color: 'red' }],
+    } })
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(bridge.readDraft()).toMatchObject({ text: canonical, cursor: canonical.indexOf(url) })
+    expect(editor.view.dom.querySelector('a')?.getAttribute('href')).toBe(url)
+    expect(editor.view.dom.querySelector('a .claude-prompt-decoration')?.textContent).toBe(url.slice(0, 5))
+  } finally { bridge.dispose() }
+})
+
 it.each([
   ['bold', 'Review  ', 'release notes', '**Review**  release notes'],
   ['italic', 'Review     ', 'notes', '*Review*     notes'],

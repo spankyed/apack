@@ -60,9 +60,12 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
   if (before + after !== text) {
     // Changing the visible URL alone expands an autolink to [text](href). Probe
     // both the URL and its destination so the serializer keeps the angle form.
-    const { node, offset } = resolved.parent.childBefore(resolved.parentOffset)
-    const link = node?.marks.find(mark => mark.type.name === 'link' && mark.attrs.href === node.text)
-    if (node?.isText && link && markerMarks.some(mark => mark.eq(link))) {
+    const linkAt = (node: ProseMirrorNode | null) => node?.marks.find(mark =>
+      mark.type.name === 'link' && mark.attrs.href === node.text && markerMarks.some(active => active.eq(mark)))
+    const beforeChild = resolved.parent.childBefore(resolved.parentOffset)
+    const { node, offset } = linkAt(beforeChild.node) ? beforeChild : resolved.parent.childAfter(resolved.parentOffset)
+    const link = linkAt(node)
+    if (node?.isText && link) {
       const local = resolved.parentOffset - offset
       // An ASCII marker also preserves the serializer's URL scheme detection.
       let urlMarker = 'apackCursorMarker'
@@ -105,9 +108,9 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
 }
 
 /** Match exact serialized boundaries; syntax and atoms are never guessed through. */
-export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, serialize: ClaudePromptSerializer, bias: -1 | 0 | 1 = 0): number | undefined {
+function findSerializedPosition(doc: ProseMirrorNode, offset: number, serialize: ClaudePromptSerializer, bias: -1 | 0 | 1 = 0): { position: number; marks?: readonly Mark[] } | undefined {
   if (!Number.isInteger(offset) || offset < 0) return
-  let found: number | undefined, distance = Infinity
+  let found: { position: number; marks?: readonly Mark[] } | undefined, distance = Infinity
   doc.descendants((node, position) => {
     if (distance === 0) return false
     if (!node.isTextblock) return
@@ -116,15 +119,30 @@ export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, s
       const middle = Math.floor((low + high) / 2)
       const projected = captureClaudePromptDocument(doc, middle, serialize)
       if (!projected) break
-      if (projected.cursor === offset) { found = middle; distance = 0; break }
+      if (projected.cursor === offset) { found = { position: middle }; distance = 0; break }
+      // One editor position at the start of an autolink represents two
+      // Markdown boundaries: before the angle bracket, or inside the link.
+      if (projected.cursor + 1 === offset && projected.text[projected.cursor] === '<') {
+        const resolved = doc.resolve(middle)
+        const child = resolved.parent.childAfter(resolved.parentOffset)
+        const marks = child.node?.marks
+        if (child.offset === resolved.parentOffset && marks?.some(mark => mark.type.name === 'link' && mark.attrs.href === child.node?.text)
+          && captureClaudePromptDocument(doc, middle, serialize, marks)?.cursor === offset) {
+          found = { position: middle, marks }; distance = 0; break
+        }
+      }
       const delta = projected.cursor - offset
-      if (bias && Math.sign(delta) === bias && Math.abs(delta) < distance) { found = middle; distance = Math.abs(delta) }
+      if (bias && Math.sign(delta) === bias && Math.abs(delta) < distance) { found = { position: middle }; distance = Math.abs(delta) }
       if (projected.cursor < offset) low = middle + 1
       else high = middle - 1
     }
     return false
   })
   return found
+}
+
+export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, serialize: ClaudePromptSerializer, bias: -1 | 0 | 1 = 0): number | undefined {
+  return findSerializedPosition(doc, offset, serialize, bias)?.position
 }
 
 /** Keep original nodes/marks and reference attributes when the native rewrite is representable. */
@@ -153,8 +171,9 @@ function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: 
     if (resolvedFrom.parent === resolvedTo.parent && resolvedFrom.parent.type.name === 'claudePromptSource') sourceEdit = { before: doc, step }
     doc = changed
   }
-  const position = frame.cursor === snapshot.cursor && doc === snapshot.doc ? snapshot.position : findClaudePromptPosition(doc, frame.cursor, serialize)
-  return position === undefined ? undefined : { doc, position, sourceEdit }
+  if (frame.cursor === snapshot.cursor && doc === snapshot.doc) return { doc, position: snapshot.position, sourceEdit }
+  const caret = findSerializedPosition(doc, frame.cursor, serialize)
+  return caret && { doc, position: caret.position, storedMarks: caret.marks, sourceEdit }
 }
 
 
@@ -273,8 +292,8 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
       return {doc, sourcePositions, markerMarks}
     }
     const locateSerializedCaret = (cursor: number) => {
-      const position = findClaudePromptPosition(parsed, cursor, serialize)
-      if (position !== undefined) return { doc: parsed, sourcePositions: new Map([[frame.cursor, position]]), markerMarks: parsed.resolve(position).marks() }
+      const caret = findSerializedPosition(parsed, cursor, serialize)
+      if (caret) return { doc: parsed, sourcePositions: new Map([[frame.cursor, caret.position]]), markerMarks: caret.marks ?? parsed.resolve(caret.position).marks() }
     }
     let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
     // Marking an autolink changes its visible text and destination. The
