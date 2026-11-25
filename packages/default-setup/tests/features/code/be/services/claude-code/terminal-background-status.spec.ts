@@ -107,7 +107,8 @@ it('invalidates pending registrations and publications when the independently ow
 
 it('keeps the authenticated daemon job identity separate from its original active resume session',async()=>{
  const active='72fd7bf0-568f-490d-9917-ded54c2014b0'
- const worker={pid:100,procStart:'host-start',replPid:119,replProcStart:'worker-start',dispatch:{sessionId:child,cwd:'/owned'}}
+ const worker={pid:100,procStart:'host-start',replPid:119,replProcStart:'worker-start',sessionId:child,
+  dispatch:{sessionId:child,cwd:'/owned',short:'05ff1d31',launch:{mode:'resume',sessionId:child}}}
  const state={sessionId:child,resumeSessionId:active,cwd:'/owned',daemonShort:'05ff1d31'}
  const jobs={uL:async()=>({workers:{'05ff1d31':worker}}),io:()=>'/job',Kp:()=>{},Zr:async()=>state,iZt:async()=>true}
  const source=rewriteClaudeNativePlatformSelectors(claudeTerminalBackgroundStatusRuntime)
@@ -118,6 +119,13 @@ it('keeps the authenticated daemon job identity separate from its original activ
  state.resumeSessionId='invalid';await expect(api(request)).rejects.toThrow('active session')
  state.resumeSessionId=active;worker.dispatch.sessionId=active
  await expect(api(request)).rejects.toThrow('worker changed')
+ worker.sessionId=active;worker.dispatch.launch.sessionId=active
+ await expect(api(request)).resolves.toEqual({...identity,activeSessionId:active})
+ worker.dispatch.launch.mode='exec';await expect(api(request)).rejects.toThrow('worker changed')
+ worker.dispatch.launch.mode='resume';worker.dispatch.short='87654321'
+ await expect(api(request)).rejects.toThrow('worker changed')
+ worker.dispatch.short='05ff1d31';state.sessionId=active
+ await expect(api(request)).rejects.toThrow('job changed')
 })
 
 it('rotates status lease to the authenticated active session and refuses late old-session writes',async()=>{

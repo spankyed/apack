@@ -4,7 +4,7 @@ async function identifyNativeBackground(request){
  if(request.parent_session_id!==config.sessionId||typeof request.child_session_id!=='string'||!/^[a-f0-9-]{36}$/i.test(request.child_session_id)||request.child_session_id===config.sessionId||!Number.isSafeInteger(request.pid)||request.pid<=1||typeof request.cwd!=='string')throw Error('Invalid background status target');
  const processIdentity=await import('/$bunfs/root/chunk-0xj14bee.js');
  const jobs=await import('/$bunfs/root/chunk-tj6zgtfh.js'),roster=await jobs.uL({silent:true});
- const candidates=Object.entries(roster.workers).filter(([,worker])=>worker.replPid===request.pid&&worker.dispatch?.sessionId===request.child_session_id&&worker.dispatch.cwd===request.cwd);
+ const candidates=Object.entries(roster.workers).filter(([,worker])=>worker.replPid===request.pid&&worker.dispatch?.cwd===request.cwd);
  if(candidates.length!==1)throw Error('Background status worker changed');
  const [id,worker]=candidates[0];
  if(!/^[a-f0-9]{8}$/.test(id)||typeof worker.procStart!=='string'||!worker.procStart||typeof worker.replProcStart!=='string'||!worker.replProcStart||await processIdentity.jh(worker.replPid,worker.replProcStart)!==true||!await jobs.iZt(worker.replPid,worker.replProcStart)||await processIdentity.jh(worker.pid,worker.procStart)!==true||!await jobs.iZt(worker.pid,worker.procStart))throw Error('Background status process retired');
@@ -12,6 +12,11 @@ async function identifyNativeBackground(request){
  if(!state||state.sessionId!==request.child_session_id||state.cwd!==request.cwd||state.daemonShort!==id)throw Error('Background status job changed');
  const activeSessionId=state.resumeSessionId;
  if(typeof activeSessionId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(activeSessionId)||activeSessionId===config.sessionId)throw Error('Background active session is invalid');
+ // A restarted worker's fleet dispatch names the active resume session. The persisted job still names the durable child.
+ const {dispatch}=worker;
+ if(dispatch.sessionId!==request.child_session_id&&
+    (dispatch.short!==id||dispatch.sessionId!==activeSessionId||worker.sessionId!==activeSessionId||
+     dispatch.launch?.mode!=='resume'||dispatch.launch.sessionId!==activeSessionId))throw Error('Background status worker changed');
  return {jobId:id,sessionId:request.child_session_id,activeSessionId,pid:worker.replPid,start:worker.replProcStart,hostPid:worker.pid,hostStart:worker.procStart,cwd:request.cwd};
 }
 `
