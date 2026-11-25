@@ -488,6 +488,8 @@ const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | 
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
+const nativeCopyRequired = 'Choose Use native interface, then return to the conversation and send /copy.'
+const isNativeCopyCommand = (text: string) => /^\/copy(?:[ \t]+[^\r\n]*)?$/.test(text)
 const queuedNotice = ref(false)
 const queueExpanded = ref(false)
 watch(() => props.nativePromptQueue?.count, count => { if (count === undefined || count <= 1) queueExpanded.value = false })
@@ -521,6 +523,7 @@ const composerProblem = computed(() => {
   if (submissionProblem.value === CLAUDE_BUSY_DRAFT_MESSAGE && !props.isBusy && !props.nativeSendWaiting) {
     return hasTextContent.value || hasAttachments.value ? 'Your draft was kept. Send it when you’re ready.' : nativePromptProblem.value
   }
+  if (submissionProblem.value === nativeCopyRequired && props.nativeSubmit) return nativePromptProblem.value
   return submissionProblem.value || nativePromptProblem.value
 })
 watch([() => tiptapRef.value?.editor, () => props.currentThread?.id], () => { rejectedNativeDraft.value = undefined }, { flush: 'sync' })
@@ -727,6 +730,7 @@ watch(tiptapRef, (ref) => {
 const onContentUpdate = (md: string) => {
   if (rejectedNativeDraft.value && !tiptapRef.value?.editor?.state.doc.eq(rejectedNativeDraft.value.doc)) rejectedNativeDraft.value = undefined
   messageContent.value = md
+  if (submissionProblem.value === nativeCopyRequired && !isNativeCopyCommand(md.trim())) submissionProblem.value = undefined
   hasTextContent.value = !!tiptapRef.value?.editor?.state.doc.textContent.trim()
   if (!navigatingHistory.value) {
     historyIndex.value = -1
@@ -1058,7 +1062,15 @@ const handleSubmit = async () => {
     const attachments = captureAttachments()
     const contextRefs = collectContextReferences(editor)
     const cmdState = commandSuggestionKey.getState(editor.state)
-    if (props.nativeSubmit && !(cmdState?.active && cmdState.selectedCommand)) submittedDraft = trackNativeSubmittedDraft(editor, doc)
+    const appCommand = cmdState?.active && cmdState.selectedCommand
+    // Claude's /copy requires its interactive UI, including when the previous reply is plain text.
+    if (!appCommand && !props.nativeSubmit && props.currentMode === 'Claude Code'
+      && props.currentThread?.context?.claudeCode?.sessionId && !hasAttachments.value && contextRefs.length === 0
+      && isNativeCopyCommand(md)) {
+      submissionProblem.value = nativeCopyRequired
+      return
+    }
+    if (props.nativeSubmit && !appCommand) submittedDraft = trackNativeSubmittedDraft(editor, doc)
     const attachmentRefs = await attachments.collect(entityId)
     if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const references: MessageReferences = {
@@ -1067,8 +1079,8 @@ const handleSubmit = async () => {
     }
 
     // Explicitly selected app commands stay on the app command route under either owner.
-    if (cmdState?.active && cmdState.selectedCommand) {
-      const commandName = cmdState.selectedCommand.name
+    if (appCommand) {
+      const commandName = appCommand.name
       const prefix = `/${commandName} `
       const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
       emit('send-command', commandName, bodyText.trim(), references)
