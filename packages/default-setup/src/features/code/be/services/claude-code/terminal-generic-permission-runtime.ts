@@ -80,8 +80,20 @@ async function nativeGenericPermissionPreview(n,d,source){
  }else if(mounted(cache[154])){
   title=cache[151]?.props?.title;
   if(d.payload.isMcp===true){const tool=await nativeGenericPermissionDetail(n,'Tool',cache[123]);if(tool.value)details.push(tool);}
+  const result=d.payload.permissionResult,decision=result?.decisionReason,notice=cache[135];
+  // The verified ordinary renderer puts its original reason element here. The countdown
+  // and fallback disclosures have changing output and need a separate projection.
+  const hasHookOrigin=result?.behavior==='ask'&&decision?.type==='hook'&&
+    typeof decision.hookSource==='string'&&decision.hookSource&&
+    !result.denialLimitFallback&&!result.autoDenyWindow&&notice?.props?.permissionResult===result;
+  if(hasHookOrigin){
+   const detail=await nativeGenericPermissionDetail(n,'Hook',notice);
+   if(detail.value)details.push(detail);
+  }
   const input=await nativeGenericPermissionDetail(n,'Parameters',cache[129]);if(input.value)details.push(input);
   if(typeof cache[65]==='string'&&cache[65])details.push({label:'Description',value:await nativeGenericPermissionText(n,cache[65])});
+  if(hasHookOrigin&&(source.fiber.child!==root||!mounted(cache[154])||cache[135]!==notice||d.payload.permissionResult!==result))
+   throw Error('Native hook permission changed while formatting');
  }else return;
  if(typeof title!=='string'||!title.length||title.length>4000)return;
  return {title,details};

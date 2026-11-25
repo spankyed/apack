@@ -56,6 +56,26 @@ describe('one-shot approval response ownership', () => {
     expect(repository.chatQueries.messageById(message.id)).toEqual(before);
     expect(app.emitted('threads').filter(event => event.type === 'UPDATE_MESSAGE_STATE' && event.messageId === message.id)).toHaveLength(0);
   });
+  it('keeps the same generic approval open after its old presentation is answered', async () => {
+    const { app, owner, message } = await fixture('approval');
+    const freshToken = 'b'.repeat(64);
+    repository.threadCommands.update(owner.id, { context: { claudeCode: { pendingControlRequest: {
+      requestId: 'request', toolName: 'mcp__research__echo', approvalMessageId: message.id,
+      nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog', revision: 'request',
+        genericTool: { token: freshToken, ready: true, choices: [], choiceDescriptions: {}, title: 'Tool use', details: [] } },
+    } } } });
+    const before = repository.chatQueries.messageById(message.id);
+    for (const response of [{ approved: false, choice: 'no', choiceToken: 'a'.repeat(64) }, { approved: true, choice: 'yes' }]) {
+      await app.send('threads', { type: 'INTERACTIVE_MSG_RESPONSE', threadId: owner.id, messageId: message.id, response });
+      await app.settle();
+      expect(repository.chatQueries.messageById(message.id)).toEqual(before);
+    }
+    const currentResponse = { approved: true, choice: 'yes', choiceToken: freshToken };
+    await app.send('threads', { type: 'INTERACTIVE_MSG_RESPONSE', threadId: owner.id, messageId: message.id, response: currentResponse });
+    await app.settle();
+    expect(repository.chatQueries.messageById(message.id)?.blockResponse).toEqual(currentResponse);
+  });
+
   it('accepts the first approval from its owning thread', async () => {
     const { app, owner, message } = await fixture('approval');
     const view = app.watchView<MessageEntity | null>('threads', 'message', { id: message.id });

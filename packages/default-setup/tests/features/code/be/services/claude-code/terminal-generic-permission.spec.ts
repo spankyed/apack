@@ -7,7 +7,11 @@ import { claudeTerminalGenericPermissionRuntime } from '#features/code/be/servic
 /** Mock native contracts prove adapter guards, never original CLI or app acceptance. */
 function fixture(card = false, monitor = false) {
   function ozr() {} function LCe() {} function qJ() {} function Box() {} function Dialog() {}
-  const payload = { toolName: monitor ? 'Monitor' : 'mcp__research__echo', isMcp: !monitor }
+  const payload: {
+    toolName: string
+    isMcp: boolean
+    permissionResult?: { behavior: string; decisionReason: { type: string; hookSource: string } }
+  } = { toolName: monitor ? 'Monitor' : 'mcp__research__echo', isMcp: !monitor }
   const item = { id: 'original', kind: monitor ? 'permission_monitor' : 'permission_prompt', payload }, open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
   let current = dialog, ready = true, refuse = false, syntaxDisabled = false
@@ -75,6 +79,22 @@ it.each(['yes-dont-ask-again', 'yes-enable-auto-mode'])('leaves offered %s effec
   await f.runtime.answer(f.n, f.dialog, response(f, shown.token, choice))
   expect(f.select.mock.calls[0]).toEqual([choice, undefined])
 })
+it('uses the original hook disclosure and refuses a decision after it changes', async () => {
+  const f = fixture()
+  const permissionResult = { behavior: 'ask', decisionReason: { type: 'hook', hookSource: 'plugin:research-release-review' } }
+  f.dialog.payload.permissionResult = permissionResult
+  f.cache[135] = { type: 'OriginalHookDisclosure', props: { permissionResult } }
+  const originalNotice = 'Original review reason [plugin:research-release-review]'
+  f.render.mockResolvedValue(originalNotice)
+  const shown = await f.runtime.choices(f.n, f.dialog)
+  expect(shown.details).toContainEqual({ label: 'Hook', value: originalNotice, ansi: originalNotice })
+  f.render.mockResolvedValue('Updated original hook disclosure')
+  await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token))).rejects.toThrow('changed')
+  expect(f.select).not.toHaveBeenCalled()
+  f.cache[135] = { type: 'OriginalHookDisclosure', props: { permissionResult: { ...permissionResult } } }
+  expect((await f.runtime.choices(f.n, f.dialog)).details).not.toContainEqual(expect.objectContaining({ label: 'Hook' }))
+})
+
 it('preserves the original permission-card branch without substituting raw input', async () => {
   const f = fixture(true), shown = await f.runtime.choices(f.n, f.dialog)
   expect(shown.title).toBe('Original permission card?')

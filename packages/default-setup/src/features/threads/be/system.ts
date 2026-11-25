@@ -720,6 +720,10 @@ export const threadsSystem = setup({
       if (!message || !repository.chatQueries.hasMessageInThread(messageId as EARS.EntityId, threadId as EARS.EntityId)) return;
       // Retired one-shot decisions cannot regain authority through a delayed frontend response.
       if (message.responseTimestamp && (message.context?.claudeNativeQuestion || message.blocks?.some(block => block.type === 'question' || block.type === 'approval'))) return;
+      const approval = repository.threadQueries.byId(threadId as EARS.EntityId)?.context?.claudeCode?.pendingControlRequest as
+        { approvalMessageId?: unknown; nativeTerminal?: { genericTool?: { token?: unknown } } } | undefined;
+      const choiceToken = approval?.nativeTerminal?.genericTool?.token;
+      if (approval?.approvalMessageId === messageId && typeof choiceToken === 'string' && response?.choiceToken !== choiceToken) return;
 
       // Question image bytes are for the live native decision and the native transcript.
       const storedResponse = message.context?.claudeNativeQuestion && response && typeof response === 'object' && 'nativeQuestionImages' in response

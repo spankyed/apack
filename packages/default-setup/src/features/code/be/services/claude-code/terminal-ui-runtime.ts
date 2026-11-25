@@ -1442,7 +1442,8 @@ async function control(request,abort){
   }
   const d=nativeDialog(n,'permission_prompt');if(!d.item)return {dialogs:[]};
   const shown=await nativeGenericPermissionChoices(n,d),{source,...presentation}=shown;
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:d.payload.toolName,presentation,...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
+  const reason=presentation.details.some(detail=>detail.label==='Hook')?undefined:d.payload.permissionResult?.message;
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:d.payload.toolName,presentation,...(typeof reason==='string'?{reason}:{}),input:d.payload.input}]};
  }
  if(request.subtype==='apack_answer_generic_tool_permission_dialog'){
   abort.signal.throwIfAborted();
