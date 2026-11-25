@@ -6,7 +6,7 @@
     <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor composer-list-markers min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <p v-if="(problem || nativeProblem) && !agentDraftTooLong" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     </div>
-    <NativePromptCompletions :anchor-el="composerRef" :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" :can-focus="id => bridge?.canFocusCompletion(id) ?? false" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
+    <NativePromptCompletions ref="nativeCompletionMenu" :anchor-el="composerRef" :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" :can-focus="id => bridge?.canFocusCompletion(id) ?? false" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
     </div>
     <div ref="actionsRef" class="native-agent-actions flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
       <div class="flex min-w-0 items-center gap-2">
@@ -61,6 +61,7 @@ watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded, () => props.ui
 }, { flush: 'post' })
 
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
+const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
 const agentDraftTooLong = computed(() => !props.audience && (props.draft.length > CLAUDE_UI_TEXT_MAX_LENGTH || nativeProblem.value === CLAUDE_UI_TEXT_LIMIT_MESSAGE))
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
@@ -122,7 +123,7 @@ watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmen
 
   if (!mountId) return
   bridge = bindClaudePromptEditor(editor, value => emit('edit', value), value => { nativeProblem.value = value }, props.promptRevision, {
-    initialRevision: props.completionRevision, request: value => emit('complete', value), update: (rows, id) => {
+    initialRevision: props.completionRevision, ownsMenuFocus: element => nativeCompletionMenu.value?.ownsFocus(element) === true, request: value => emit('complete', value), update: (rows, id) => {
       offers.value = id ? rows.map(row => ({ ...row, offerId: id })) : []
       const owner = bridge
       setEditorCompletionOffer(editor, id && rows.length ? { id, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, id) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)

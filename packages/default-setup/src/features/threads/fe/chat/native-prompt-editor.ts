@@ -10,7 +10,7 @@ import type { ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest
 import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument, type ClaudePromptDocument, type ClaudePromptRewrite } from './native-prompt-document.ts'
 
 /** A mounted view owns its revisions and listeners; it never owns the editor's lifetime. */
-export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean; viewport?: HTMLElement | null }) {
+export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; ownsMenuFocus?(element: Element): boolean; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean; viewport?: HTMLElement | null }) {
   const serialize = (doc: import('@tiptap/pm/model').Node): string =>
     (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
   const parse = (text: string) => {
@@ -28,8 +28,14 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   let completionPending: { revision: number; templateOfferId?: string; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection } | undefined
   let completionOffer: NonNullable<typeof completionPending> & { id: string; result: Extract<ClaudePromptCompletionReply, { status: 'ready' }>['result'] } | undefined
   function retireCompletions() { completionPending = undefined; completionOffer = undefined; completion?.update([]) }
+  function ownsCompletionFocus(element: EventTarget | null): boolean {
+    return element instanceof Element && (dom.contains(element) || completion?.ownsMenuFocus?.(element) === true)
+  }
+  function hasCompletionFocus(): boolean {
+    return dom.ownerDocument.hasFocus() && ownsCompletionFocus(dom.ownerDocument.activeElement)
+  }
   function askCompletions(templateOfferId?: string) {
-    if (!completion || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus()) return
+    if (!completion || disposed || editor.isDestroyed || editor.view.composing || !hasCompletionFocus()) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
     if (!snapshot) return
     const revision = ++completionRevision
@@ -105,7 +111,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   }
   function currentCompletion(offerId: string) {
     const offer = completionOffer
-    if (!offer || offer.id !== offerId || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection)) return
+    if (!offer || offer.id !== offerId || disposed || editor.isDestroyed || editor.view.composing || !hasCompletionFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection)) return
     // Accepting the browser's newer caret retires the offer before focus or text can move.
     synchronizeSelection()
     if (completionOffer === offer) return offer
@@ -260,6 +266,10 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   dom.addEventListener('compositionend', compositionEnd)
   dom.addEventListener('compositionstart', compositionStart)
   dom.addEventListener('keydown', acceptSuggestion, true)
+  const onCompletionFocusOut = (event: FocusEvent) => {
+    if ((completionPending || completionOffer) && ownsCompletionFocus(event.target) && !ownsCompletionFocus(event.relatedTarget)) retireCompletions()
+  }
+  if (completion) dom.ownerDocument.addEventListener('focusout', onCompletionFocusOut, true)
   const onWindowBlur = () => { dismissSuggestion(); retireCompletions() }
   const ownerWindow = dom.ownerDocument.defaultView
   ownerWindow?.addEventListener('blur', onWindowBlur)
@@ -341,7 +351,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     receiveCompletions(reply: ClaudePromptCompletionReply) {
       const pending = completionPending
       if (!pending || disposed || editor.isDestroyed || reply.revision !== pending.revision) return
-      if (editor.view.composing || !dom.ownerDocument.hasFocus() || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
+      if (editor.view.composing || !hasCompletionFocus() || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
       synchronizeSelection()
       if (completionPending !== pending) return
       completionPending = undefined
@@ -359,6 +369,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       const offer = currentCompletion(offerId), row = offer?.result.suggestions[index]
       if (!offer || !row || offer.result.start === undefined) return false
       if (row.templateOfferId) {
+        editor.view.focus()
         retireCompletions()
         askCompletions(row.templateOfferId)
         return true
@@ -374,6 +385,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (!editor.isDestroyed) { editor.unregisterPlugin(decorations.key); editor.unregisterPlugin(suggestion.key) }
       for (const event of events) dom.removeEventListener(event, intent, true)
       dom.ownerDocument.removeEventListener('selectionchange', selectionChanged, true)
+      dom.ownerDocument.removeEventListener('focusout', onCompletionFocusOut, true)
       dom.removeEventListener('keydown', formattingKey, true)
       dom.removeEventListener('keyup', navigationFinished, true)
       dom.removeEventListener('compositionend', compositionEnd)

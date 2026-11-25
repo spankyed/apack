@@ -994,6 +994,8 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when c
   const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   editor.commands.setContent('#rel')
   editor.commands.setTextSelection(5)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
   const send = vi.fn(), request = vi.fn(), update = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
   try {
@@ -1019,7 +1021,7 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when c
     expect(freshOffer).toBeTruthy()
     expect(bridge.selectCompletion(0, freshOffer)).toBe(true)
     expect(serialize(editor.state.doc)).toBe('#release')
-  } finally { bridge.dispose(); focused.mockRestore() }
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
 })
 
 
@@ -1071,6 +1073,8 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when t
   const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   editor.commands.setContent('#rel')
   editor.commands.setTextSelection(5)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
   const send = vi.fn(), request = vi.fn(), update = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
   const acknowledge = () => {
@@ -1103,9 +1107,72 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when t
     bridge.receiveCompletions({ ...reply, revision: fresh })
     expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
     expect(serialize(editor.state.doc)).toBe('#release')
-  } finally { bridge.dispose(); focused.mockRestore() }
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
 })
 
+
+it.each(['pending', 'offered'] as const)('retires %s completion after focus moves to another control in the same window', stage => {
+  const outside = document.createElement('button')
+  document.body.append(editor.view.dom, outside)
+  editor.view.dom.focus()
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  const acknowledge = () => {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+  }
+  try {
+    acknowledge()
+    const reply = { revision: request.mock.lastCall![0].revision, status: 'ready' as const, result: { start: 0, suggestions: [{ text: '#release' }] } }
+    if (stage === 'offered') bridge.receiveCompletions(reply)
+    const oldOffer = update.mock.lastCall?.[1]
+    const { doc, selection } = editor.state
+    outside.focus()
+    expect(document.hasFocus()).toBe(true)
+    if (stage === 'pending') bridge.receiveCompletions(reply)
+    expect(update).toHaveBeenLastCalledWith([])
+    editor.view.dom.focus()
+    if (oldOffer) expect(bridge.selectCompletion(0, oldOffer)).toBe(false)
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+
+    editor.commands.insertContent('e')
+    acknowledge()
+    bridge.receiveCompletions({ ...reply, revision: request.mock.lastCall![0].revision })
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); outside.remove(); editor.view.dom.remove() }
+})
+
+it.each([false, true])('keeps completion keyboard ownership in its own portal (template: %s)', template => {
+  const row = document.createElement('button')
+  document.body.append(editor.view.dom, row)
+  editor.view.dom.focus()
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const options = { request, update, ownsMenuFocus: (element: Element) => row.contains(element) }
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, options)
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    const suggestion = { text: '#release', ...(template ? { templateOfferId: crypto.randomUUID() } : {}) }
+    const result = { start: 0, suggestions: [suggestion] }
+    bridge.receiveCompletions({ revision: request.mock.lastCall![0].revision, status: 'ready', result })
+    const offer = update.mock.lastCall![1]
+    row.focus()
+    expect(document.activeElement).toBe(row)
+    expect(bridge.selectCompletion(0, offer)).toBe(true)
+    if (template) {
+      expect(document.activeElement).toBe(editor.view.dom)
+      expect(request.mock.lastCall![0].templateOfferId).toBe(suggestion.templateOfferId)
+      bridge.receiveCompletions({ revision: request.mock.lastCall![0].revision, status: 'ready', result })
+    }
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); row.remove(); editor.view.dom.remove() }
+})
 
 it('applies a native file replacement past the caret and preserves following text', () => {
   const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
@@ -1113,6 +1180,8 @@ it('applies a native file replacement past the caret and preserves following tex
   const cursor = 'Review @docs/old'.length
   editor.commands.setContent(before)
   editor.commands.setTextSelection(cursor + 1)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
   const send = vi.fn(), request = vi.fn(), update = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
   try {
@@ -1126,7 +1195,7 @@ it('applies a native file replacement past the caret and preserves following tex
     expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
     expect(serialize(editor.state.doc)).toBe('Review @"docs/new notes.md" next')
     expect(bridge.readDraft()?.cursor).toBe('Review @"docs/new notes.md"'.length)
-  } finally { bridge.dispose(); focused.mockRestore() }
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
 })
 
 it.each([false, true])('changes the draft only after MCP template selection is confirmed (%s)', confirmed => {
@@ -1134,6 +1203,8 @@ it.each([false, true])('changes the draft only after MCP template selection is c
   const text = 'Review @research:file://template/re'
   editor.commands.setContent(text)
   editor.commands.setTextSelection(text.length + 1)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
   const send = vi.fn(), request = vi.fn(), update = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
   try {
@@ -1154,7 +1225,7 @@ it.each([false, true])('changes the draft only after MCP template selection is c
       expect(editor.state.doc).toBe(initialDoc)
       expect(editor.state.selection.eq(initialSelection)).toBe(true)
     }
-  } finally { bridge.dispose(); focused.mockRestore() }
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
 })
 
 it('reads a whole rich-document selection without losing its text or collapsing the range on acknowledgement', () => {

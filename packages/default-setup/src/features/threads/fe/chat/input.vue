@@ -125,7 +125,7 @@
           />
         </div>
 
-        <NativePromptCompletions :anchor-el="inputCardRef" :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || nativeDecisionPending || submitting" :can-focus="id => promptEditor?.canFocusCompletion(id) ?? false" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
+        <NativePromptCompletions ref="nativeCompletionMenu" :anchor-el="inputCardRef" :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || nativeDecisionPending || submitting" :can-focus="id => promptEditor?.canFocusCompletion(id) ?? false" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
         <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
           <NativeComposerPlacements class="min-w-0 flex-1" :frames="nativeUi.composer" location="hint" @height="nativeHintHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
@@ -484,6 +484,7 @@ watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
   emit('native-ui-pane', { kind: 'focus', id: paneFocusGrant.value })
 })
 
+const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
@@ -543,7 +544,7 @@ let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
 watch(() => props.nativeDecisionPending, pending => { if (pending) { promptEditor?.dismissSuggestion(); promptEditor?.dismissCompletions() } })
 watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => props.nativePrompt?.attachmentId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
-  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
+  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, ownsMenuFocus: element => nativeCompletionMenu.value?.ownsFocus(element) === true, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
     if (props.nativeDecisionPending) { nativeCompletions.value = []; setEditorCompletionOffer(editor, undefined); return }
     nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
     const owner = promptEditor

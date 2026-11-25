@@ -18,6 +18,7 @@ import type { ClaudePromptCompletionRow } from '#generated/types.ts'
 const props = defineProps<{ anchorEl: HTMLElement | null; editor?: Editor; rows: (ClaudePromptCompletionRow & { offerId: string })[]; disabled?: boolean; canFocus: (offerId: string) => boolean }>()
 const emit = defineEmits<{ select: [index: number, offerId: string]; dismiss: [] }>()
 const root = ref<HTMLElement>(), hostPopup = ref(false)
+defineExpose({ ownsFocus: (element: Element) => root.value?.contains(element) === true })
 // Keep the native status, draft and Send outside the portalled popup.
 const anchor = computed(() => props.editor && !props.editor.isDestroyed ? props.anchorEl : null)
 const visible = computed(() => !!anchor.value && !props.disabled && !hostPopup.value && props.rows.length > 0)
