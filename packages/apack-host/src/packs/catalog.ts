@@ -184,6 +184,12 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
         const candidate = immutable(source);
         const result = parseSnapshot(candidate.snapshot);
         if (!result.snapshot) throw new Error(`Pack declarations in ${source.dir}: ${result.diagnostics.map(issue => issue.message).join('; ')}`);
+        const settingsDiagnostics = settingsDeclarationDiagnostics(result.snapshot.manifest, {
+          codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+        });
+        if (settingsDiagnostics.length) {
+          throw new Error(`Pack declarations in ${source.dir}: ${settingsDiagnostics.map(issue => issue.message).join('; ')}`);
+        }
         const id = result.snapshot.manifest.id;
         const other = next.get(id);
         if (other) throw new Error(`Pack "${id}" is declared twice: ${other.dir} and ${source.dir}`);

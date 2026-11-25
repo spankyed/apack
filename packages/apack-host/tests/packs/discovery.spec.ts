@@ -39,6 +39,28 @@ describe('installed build admission', () => {
       problem: 'Installed directory "local-pack" contains pack "other-pack"' }]);
     expect(discoverPacks(packagesDir)).toEqual([]);
   });
+
+  it('isolates an installed pack with invalid settings defaults as a per-pack problem while admitting healthy packs', () => {
+    writeManifest('healthy-pack', { id: 'healthy-pack', name: 'Healthy', version: '1.0.0' });
+    writeManifest('broken-settings', {
+      id: 'broken-settings',
+      name: 'Broken Settings',
+      version: '1.0.0',
+      extensions: {
+        settings: {
+          prefs: {
+            schema: { type: 'object', properties: { limit: { type: 'integer' } }, required: ['limit'] },
+            defaults: { limit: 'not-an-integer' },
+          },
+        },
+      },
+    });
+    const entries = readInstalledPackBuilds(packagesDir);
+    expect(entries.find(e => e.id === 'healthy-pack')?.build).toBeDefined();
+    const broken = entries.find(e => e.id === 'broken-settings');
+    expect(broken?.build).toBeUndefined();
+    expect(broken?.problem).toContain('manifest.extensions.settings.prefs.defaults.limit');
+  });
 });
 
 describe('installedPacks', () => {

@@ -73,4 +73,9 @@ export function _assertSettingsDefinitionStructure(definition: SettingsDefinitio
   if (schemaProblems.length) throw new Error(`Settings schema must be JSON data: ${schemaProblems[0].message}`);
   if (definition.schema?.type !== 'object') throw new Error('Settings schema must declare an object at its root');
   checkSettingsSchemaReferences(definition.schema);
+  if (!definition.defaults || typeof definition.defaults !== 'object' || Array.isArray(definition.defaults)) {
+    throw new Error('Settings defaults must be an object');
+  }
+  const defaultsProblems = _settingsJsonProblems(definition.defaults);
+  if (defaultsProblems.length) throw new Error(`Settings defaults must be JSON data: ${defaultsProblems[0].message}`);
 }

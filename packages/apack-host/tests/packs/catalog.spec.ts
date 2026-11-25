@@ -419,3 +419,14 @@ it('preserves entity names and declaration identity across native, source and in
     declarationRevision: revision, manifest, types: { entities: { Memo: 'Memo' }, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} } }]);
   expect(Object.keys(catalog.get('owned')!.snapshot.manifest.data!.entities!)).toEqual(['Memo']);
 });
+
+it('rejects snapshots with invalid settings defaults in replace() without altering the committed catalog', () => {
+  const catalog = createContributionCatalog(app);
+  catalog.replace([source('first')]);
+  const before = catalog.getSnapshot();
+  const broken = source('broken');
+  broken.snapshot.manifest.extensions!.settings!.assistant.defaults = { name: 42 as unknown as string };
+  broken.snapshot.declarationRevision = _declarationRevision(broken.snapshot.manifest);
+  expect(() => catalog.replace([broken])).toThrow('manifest.extensions.settings.assistant.defaults.name');
+  expect(catalog.getSnapshot()).toBe(before);
+});

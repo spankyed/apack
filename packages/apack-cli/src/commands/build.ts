@@ -279,7 +279,9 @@ async function buildIntoStaging(args: string[], root: string) {
     const validation = parseSnapshot(snapshot);
     failures.push(...validation.diagnostics.map(issue => issue.message));
     if (validation.snapshot) {
-      failures.push(...settingsDeclarationDiagnostics(validation.snapshot.manifest, { codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json' }).map(issue => issue.message));
+      failures.push(...settingsDeclarationDiagnostics(validation.snapshot.manifest, {
+        codePrefix: 'snapshot', source: 'snapshot.json', label: 'snapshot.json', pathPrefix: ['manifest'],
+      }).map(issue => issue.message));
     }
     if (failures.length > 0) {
       throw new Error(`Build failed, so no snapshot was written:\n${failures.map((f) => `  - ${f}`).join('\n')}`);

@@ -27,6 +27,12 @@ export interface FakeSettings extends SettingsPort {
 export function fakeSettings(document?: Record<string, unknown>): FakeSettings;
 
 // @public
+export interface FakeSettingsReset {
+    // (undocumented)
+    target: SettingsTarget;
+}
+
+// @public
 export interface FakeSettingsUpdate {
     // (undocumented)
     path: readonly string[];
