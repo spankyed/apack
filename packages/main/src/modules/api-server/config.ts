@@ -45,8 +45,14 @@ export const getApiPaths = () => {
 };
 
 // Environment Configuration
-export const getEnvironment = (port: number, options: { apiToken: string; startupId?: string; logDir?: string }) => {
-  const env = { ...process.env };
+export const getEnvironment = (
+  port: number,
+  options: { apiToken: string; startupId?: string; logDir?: string },
+): Record<string, string> => {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) env[key] = value;
+  }
 
   // Production Electron inherits a minimal PATH missing common binary locations.
   // Windows uses "Path" not "PATH"; spread produces a case-sensitive object.
@@ -108,23 +114,35 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
     APACK_ENV: getAppEnvironment().env,
     APACK_APP_MANIFEST: app.isPackaged ? path.join(app.getAppPath(), 'build-manifest.json') : undefined,
     APACK_USER_DATA_DIR: getAppEnvironment().userDataDir,
-    ELECTRON_RUN_AS_NODE: '1',
+    // `utilityProcess.fork` runs Electron's built-in Node directly; it does not need `ELECTRON_RUN_AS_NODE=1`.
+    ELECTRON_RUN_AS_NODE: undefined,
   };
 
-  return { ...env, ...appProcessEnv };
+  for (const [key, value] of Object.entries(appProcessEnv)) {
+    if (value === undefined) delete env[key];
+    else env[key] = value;
+  }
+
+  // From source, packs' imports of workspace `@apackdev/*` packages resolve to workspace source and stacks map to
+  // source files. Electron's `utilityProcess.fork` ignores `--conditions` in `execArgv` (verified on Electron 44),
+  // so pass both via `NODE_OPTIONS` (which `withoutAppProcessEnv` strips from user shells and agent children).
+  if (!app.isPackaged) {
+    const tokens = (env.NODE_OPTIONS ?? '').trim().split(/\s+/).filter(Boolean);
+    for (const flag of ['--conditions=@apackdev/source', '--enable-source-maps']) {
+      if (!tokens.includes(flag)) tokens.push(flag);
+    }
+    env.NODE_OPTIONS = tokens.join(' ');
+  }
+
+  return env;
 };
 
-// Node Executable Configuration
-export const getNodeExecutable = () => {
-  // In production, use Electron's built-in Node to ensure native module compatibility
-  return app.isPackaged ? process.execPath : 'node';
-};
-
-// Execution Arguments
-export const getExecutionArgs = (apiPath: string, serverFile: string) => {
-  // When using Electron's executable, we need to pass the full path
-  const fullPath = path.join(apiPath, serverFile);
-  // From source, packs' requires of workspace @apackdev/* packages resolve to their source, and stacks through the
-  // development bundle's source maps name source files
-  return app.isPackaged ? [fullPath] : ['--conditions=@apackdev/source', '--enable-source-maps', serverFile];
+// Exec arguments passed to `utilityProcess.fork`.
+// Note: custom `--conditions` must go through `NODE_OPTIONS` in `getEnvironment()` because Electron's
+// `utilityProcess.fork` does not forward `--conditions` from `execArgv`; `--inspect` is supported here.
+export const getUtilityExecArgv = (): string[] => {
+  if (!app.isPackaged && process.env.ELECTRON_INSPECT === 'true') {
+    return ['--inspect=127.0.0.1:0'];
+  }
+  return [];
 };
