@@ -1,13 +1,13 @@
 import {createApp,h,nextTick,provide,ref,computed,type App} from 'vue'
 import NativeUiClient from '#features/threads/fe/chat/NativeUiClient.vue'
-import {claudeClientInput,claudeClientReturnFocus,claudeClientVisible} from '#features/threads/fe/chat/native-client-input.ts'
+import {claudeClientInput,claudeClientReturnFocus,claudeNativeSiteVisible} from '#features/threads/fe/chat/native-client-input.ts'
 let app:App|undefined
 const pointer=(type:string,init:MouseEventInit&{pointerId:number})=>Object.assign(new MouseEvent(type,init),{pointerId:init.pointerId})
 const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren();vi.restoreAllMocks()})
 async function mount(returnFocus?:()=>void,visibility=ref(true)){
  const send=vi.fn(),root=document.createElement('div'),node=ref({kind:'client' as const,id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]});document.body.append(root)
- app=createApp({setup(){provide(claudeClientInput,send);provide(claudeClientVisible,computed(()=>visibility.value));if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:node.value},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
+ app=createApp({setup(){provide(claudeClientInput,send);provide(claudeNativeSiteVisible,computed(()=>visibility.value));if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:node.value},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
  return {root,send,node,region:root.querySelector<HTMLElement>('[data-native-client]')!}
 }
 it('routes native key names and modifiers while preserving composition, Escape and nested input',async()=>{
