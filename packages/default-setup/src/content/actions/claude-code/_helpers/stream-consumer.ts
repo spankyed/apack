@@ -780,7 +780,14 @@ export async function consumeStream(
         forkCliUuid: ctx.forkCliUuid ?? null,
       });
 
-      finalizeSessionError(services, threadId, writer, errorText, undefined, { isHistoryChange: !!ctx.isFork });
+      if (result.subtype === 'error_max_structured_output_retries' && result.sessionId && !ctx.isFork) {
+        // Native finished this turn with a validation error and kept its session.
+        writer.finalize(`⚠️ ${errorText}`);
+        persistClaudeState(services, threadId, { sessionId: result.sessionId, sessionError: errorText });
+        updateChatState(services, threadId, 'error');
+      } else {
+        finalizeSessionError(services, threadId, writer, errorText, undefined, { isHistoryChange: !!ctx.isFork });
+      }
 
       finaliseThinking();
       toolActivity.finalise('error');

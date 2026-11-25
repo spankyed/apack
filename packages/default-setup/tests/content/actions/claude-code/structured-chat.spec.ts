@@ -62,12 +62,14 @@ function setup(context: Record<string, unknown> = { cwd: '/fixture' }, compiled 
   }
 
   const invoke = (jsonSchema?: unknown) => chat({ threadId: id, text: 'Review the fixture', jsonSchema }, services);
-  const result = () => {
+  const result = (subtype: 'success' | 'error_max_structured_output_retries' = 'success') => {
     const writer = writers.at(-1)!;
     writer.events.write({ type: 'command_lifecycle', state: 'started', command_uuid: writer.input });
     writer.events.write({ type: 'system', subtype: 'init', session_id: 'fixture-session', cwd: '/fixture' });
-    writer.events.write({ type: 'result', subtype: 'success', session_id: 'fixture-session',
-      user_message_uuid: writer.input, result: '{"answer":42}', structured_output: { answer: 42 } });
+    writer.events.write({ type: 'result', subtype, session_id: 'fixture-session',
+      user_message_uuid: writer.input, ...(subtype === 'success'
+        ? { result: '{"answer":42}', structured_output: { answer: 42 } }
+        : { is_error: true, errors: ['Schema validation exhausted the retry limit'] }) });
   };
   const idle = () => vi.waitFor(() => expect(store.isConversationBusy(id)).toBe(false));
   return { id, opened, writers, invoke, result, idle, execute };
@@ -127,6 +129,21 @@ it('drains a changed schema through the Chat action after the original turn reti
   fixture.result();
   await vi.waitFor(() => expect(fixture.opened).toHaveBeenCalledTimes(2));
   expect(fixture.opened.mock.calls[1][2]).toMatchObject({ jsonSchema: changed, resume: 'fixture-session' });
+  fixture.result();
+  await fixture.idle();
+});
+
+it('keeps the native session after schema retry exhaustion', async () => {
+  const fixture = setup();
+  expect(await fixture.invoke(schema)).toMatchObject({ streaming: true });
+  fixture.result('error_max_structured_output_retries');
+  await fixture.idle();
+  expect(getClaudeState(services, fixture.id)).toMatchObject({
+    sessionId: 'fixture-session', sessionError: 'Schema validation exhausted the retry limit',
+  });
+  expect(await fixture.invoke()).toMatchObject({ streaming: true });
+  expect(fixture.opened.mock.calls[1][2]).toMatchObject({ resume: 'fixture-session' });
+  expect(getClaudeState(services, fixture.id)?.sessionError).toBeUndefined();
   fixture.result();
   await fixture.idle();
 });
