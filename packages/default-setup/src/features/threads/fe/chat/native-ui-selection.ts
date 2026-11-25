@@ -6,7 +6,15 @@ const selectionReader: InjectionKey<ClaudeSelectionReader> = Symbol('claude-ui-s
 const rows = '[data-native-agent-message],[data-native-selection-row],[data-native-user],[data-native-assistant],[data-native-summary],[data-native-command-output],[data-native-tool-use],[data-native-tool-result],[data-native-tool-group],[data-native-tool-progress]'
 const element = (node: Node | null) => node instanceof Element ? node : node?.parentElement
 function isSelectable(scope: HTMLElement, node: Node): boolean {
-  return scope.contains(node) && !element(node)?.closest('[inert],[hidden],[aria-hidden="true"]')
+  const target = element(node), view = scope.ownerDocument.defaultView
+  if (!target || !view || !scope.contains(node) || target.closest('[inert],[hidden],[aria-hidden="true"]')) return false
+  const style = view.getComputedStyle(target)
+  if (style.visibility === 'hidden' || style.visibility === 'collapse') return false
+  // Vue can retain transcript rows under display:none. Their text nodes and ranges still exist.
+  for (let current: Element | null = target; current && current !== scope; current = current.parentElement) {
+    if ((current === target ? style : view.getComputedStyle(current)).display === 'none') return false
+  }
+  return true
 }
 function rowId(start: Node | null, end: Node | null): string | undefined {
   const row = element(start)?.closest(rows)
@@ -40,14 +48,14 @@ export function provideClaudeUiSelection(root: () => HTMLElement | null): Claude
       clear(); return undefined
     }
     const { anchorNode, focusNode } = selected
-    if (!isSelectable(scope, anchorNode) || !isSelectable(scope, focusNode)) { clear(); return undefined }
+    if (!isSelectable(scope, anchorNode) || (focusNode !== anchorNode && !isSelectable(scope, focusNode))) { clear(); return undefined }
     const text = selected.toString(), instance_id = rowId(anchorNode, focusNode)
     if (!text || text.length > 1_000_000) { clear(); return undefined }
     const value = { text, ...(instance_id ? { instance_id } : {}) }
     const ranges = Array.from({ length: selected.rangeCount }, (_, index) => selected.getRangeAt(index).cloneRange())
     // Browser focus can collapse the selection while an action reads it. Retain the text
     // only while its original content belongs to this view and still represents that range.
-    saved = { value, current: scope => isSelectable(scope, anchorNode) && isSelectable(scope, focusNode)
+    saved = { value, current: scope => isSelectable(scope, anchorNode) && (focusNode === anchorNode || isSelectable(scope, focusNode))
       && rowId(anchorNode, focusNode) === instance_id && ranges.map(range => range.toString()).join('') === text }
     return value
   }

@@ -51,7 +51,7 @@ it.each(['input', 'textarea'])('retires stale selection for collapsed, oversized
   } finally { app.unmount(); focus.mockRestore(); root.remove(); foreign.remove() }
 })
 
-it.each(['removed', 'hidden', 'reused'] as const)('refuses a cached selection from a %s transcript row', async change => {
+it.each(['removed', 'hidden', 'reused', 'collapsed', 'concealed'] as const)('refuses a cached selection from a %s transcript row', async change => {
   const root = document.createElement('div')
   document.body.append(root)
   let reader!: ReturnType<typeof provideClaudeUiSelection>
@@ -77,7 +77,15 @@ it.each(['removed', 'hidden', 'reused'] as const)('refuses a cached selection fr
     if (change === 'removed') row.remove()
     if (change === 'hidden') row.setAttribute('aria-hidden', 'true')
     if (change === 'reused') row.setAttribute('data-native-assistant', 'new-reply')
+    if (change === 'collapsed') (row as HTMLElement).style.display = 'none'
+    if (change === 'concealed') (row as HTMLElement).style.visibility = 'hidden'
     expect(reader.read()).toBeUndefined()
+    if (change === 'collapsed' || change === 'concealed') {
+      row.removeAttribute('style')
+      expect(reader.read()).toBeUndefined()
+      selection.addRange(range)
+      expect(reader.read()).toEqual({ text: 'Release notes', instance_id: 'first-reply' })
+    }
   } finally { app.unmount(); focus.mockRestore(); root.remove() }
 })
 
