@@ -19,3 +19,25 @@ it('shows the observed permission mode independently of an app phase and removes
     expect(root.querySelector('[data-testid="composer-session-strip"]')).toBeNull()
   } finally { app.unmount(); root.remove() }
 })
+
+it('shows the native active goal even when it is the only composer status', async () => {
+  const state = reactive({ nativeGoalActive: false })
+  const root = document.createElement('div')
+  document.body.append(root)
+  const app = createApp({ render: () => h(StatusLine, state) })
+  app.mount(root)
+  try {
+    const status = () => root.querySelector('[role="status"][aria-label="Claude goal active"]')
+    expect(status()).toBeNull()
+    state.nativeGoalActive = true
+    await nextTick()
+    expect(status()?.textContent).toBe('Goal active')
+    state.nativeGoalActive = false
+    await nextTick()
+    expect(status()).toBeNull()
+    expect(root.querySelector('[data-testid="composer-session-strip"]')).toBeNull()
+  } finally {
+    app.unmount()
+    root.remove()
+  }
+})

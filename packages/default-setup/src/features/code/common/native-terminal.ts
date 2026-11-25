@@ -101,6 +101,8 @@ export interface ClaudeNativeTerminalState {
   endingTurnId?: string
   /** Native pending-work counts, independent of prompt submission readiness. */
   activity?: { pendingAgents: number; pendingWorkflows: number }
+  /** Read-only active goal indicator from the current original Claude session. */
+  goalActive?: boolean
   focus?: ClaudeNativeFocusProjection
   lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }
   session?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeSessionMetadata

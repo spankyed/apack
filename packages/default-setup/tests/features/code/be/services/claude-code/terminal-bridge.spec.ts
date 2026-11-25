@@ -406,6 +406,25 @@ it('fences native pending activity by owner/session/sequence without blocking ba
   expect((await request('/native-activity', { ...body, sequence: 3 })).status).toBe(409)
 })
 
+it('retires the native goal on clear and reset and refuses stale reports', async () => {
+  await create()
+  const body = { sessionId: session, pid: process.pid, activity: { pendingAgents: 0, pendingWorkflows: 0 } }
+  const report = (sequence: number, goalActive: unknown) => request('/native-activity', { ...body, sequence, goalActive })
+  expect((await report(1, true)).status).toBe(200)
+  expect(bridge!.goalActive).toBe(true)
+  expect((await report(2, 'true')).status).toBe(400)
+  expect((await report(2, false)).status).toBe(200)
+  expect((await report(1, true)).status).toBe(409)
+  expect((await report(2, true)).status).toBe(409)
+  expect(bridge!.goalActive).toBe(false)
+  expect((await report(3, true)).status).toBe(200)
+  expect(bridge!.goalActive).toBe(true)
+  const replacement = '22222222-2222-2222-2222-222222222222'
+  expect((await request('/poll', { sessionId: replacement, agents: [], directOwner: true, busy: false, turn: null })).status).toBe(200)
+  expect((await report(4, true)).status).toBe(409)
+  expect(bridge!.goalActive).toBe(false)
+})
+
 it('reports accepted Pause only while the same native turn is settling', async () => {
   await create()
   const body = { sessionId: session, pid: process.pid, activity: { pendingAgents: 0, pendingWorkflows: 0 } }

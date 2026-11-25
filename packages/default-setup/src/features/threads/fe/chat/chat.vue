@@ -192,7 +192,7 @@
               :quick-prompt-cursor="threads.data.quickPromptCursor"
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
-              :native-status="nativeComposerOwner?.mainStatus" :native-permission-mode="nativePermissionMode" :native-background="nativeComposerOwner?.view?.kind === 'main' && !nativeSessionBackgrounded" :native-backgrounded="nativeSessionBackgrounded"
+              :native-status="nativeComposerOwner?.mainStatus" :native-permission-mode="nativePermissionMode" :native-goal-active="nativeGoalActive" :native-background="nativeComposerOwner?.view?.kind === 'main' && !nativeSessionBackgrounded" :native-backgrounded="nativeSessionBackgrounded"
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing" :native-focus="nativeFocus"
               :native-submit="nativeComposerOwner ? submitNativeMessage : undefined"
@@ -479,10 +479,13 @@ const nativePauseScope = computed<ClaudeNativePauseScope | null | undefined>(() 
     ? { ownerId: owner.ownerId, sessionId: owner.sessionId, turnId: owner.activeTurnId, ...(mcp ? { mcp: { id: mcp.id, revision: mcp.revision } } : {}) }
     : null
 })
-const nativePermissionMode = computed(() => {
+const nativeMainComposerOwner = computed(() => {
   const owner = nativeComposerOwner.value
-  return owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === currentThread.value?.id && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId ? owner.session?.permissionMode : undefined
+  if (owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === currentThread.value?.id
+    && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId) return owner
 })
+const nativePermissionMode = computed(() => nativeMainComposerOwner.value?.session?.permissionMode)
+const nativeGoalActive = computed(() => nativeMainComposerOwner.value?.goalActive === true)
 const nativeMcpFormPanel = ref<InstanceType<typeof NativeMcpForm>>()
 const nativeMcpUrlPanel = ref<InstanceType<typeof NativeMcpUrl>>()
 function focusNativeMcpInput() {

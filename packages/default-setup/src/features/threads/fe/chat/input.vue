@@ -22,7 +22,7 @@
         @drop.prevent="onDrop">
         <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" :initial-focus-revision="nativePaneFocusRevision" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="reportNativePaneFocus" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
-        <StatusLine :reconnect="() => emit('native-ui-reconnect')" ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :native-permission-mode="nativePermissionMode" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
+        <StatusLine :reconnect="() => emit('native-ui-reconnect')" ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :native-permission-mode="nativePermissionMode" :native-goal-active="nativeGoalActive" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @tools-expanded="nativeToolsExpanded = $event; emit('native-tools-expanded', $event)" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <NativeComposerPlacements v-if="nativeUi?.composer?.length" :frames="nativeUi.composer" location="status" @height="nativeActivityHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
@@ -349,6 +349,7 @@ const props = defineProps<{
   /** Actual output from the native main-session status helper. */
   nativeStatus?: string
   nativePermissionMode?: import('#features/code/be/services/claude-code/types.ts').PermissionMode
+  nativeGoalActive?: boolean
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
   nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; attachmentId?: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }

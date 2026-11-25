@@ -3153,6 +3153,8 @@ interface ClaudeNativeTerminalState {
         pendingAgents: number;
         pendingWorkflows: number;
     };
+    /** Read-only active goal indicator from the current original Claude session. */
+    goalActive?: boolean;
     focus?: ClaudeNativeFocusProjection;
     lastTurn?: {
         id: string;

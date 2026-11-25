@@ -92,6 +92,7 @@ export async function createClaudeTerminalBridge(options: {
   let lastTurn: ClaudeNativeTerminalState['lastTurn'], activeTurnId: string | undefined, endingTurnId: string | undefined
   let focus: ClaudeNativeTerminalState['focus'], focusSequence = 0, focusRecord: string | undefined
   let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
+  let goalActive = false
   let preview: ClaudeNativeTerminalState['preview'], previewSequence = 0, previewRecord: string | undefined
   const promptQueueSchema = z.object({
     revision: z.string().regex(/^[a-f0-9]{64}$/),
@@ -276,7 +277,7 @@ export async function createClaudeTerminalBridge(options: {
           nativeViewSequence = 0; nativeViewRecord = undefined; nativeView = undefined
           focusSequence = 0; focusRecord = undefined; focus = undefined
           previewSequence = 0; previewRecord = undefined; preview = undefined
-          activitySequence = 0; activityRecord = undefined; activity = undefined
+          activitySequence = 0; activityRecord = undefined; activity = undefined; goalActive = false
           promptQueue = undefined; nativePolling = false
           generations.main = randomUUID(); generations.subagent = randomUUID()
           delete helperHandoffs.main; delete helperHandoffs.subagent
@@ -326,18 +327,19 @@ export async function createClaudeTerminalBridge(options: {
         return reply(200, {})
       }
       if (request.url === '/native-activity') {
-        if (value.sessionId !== projection.sessionId || value.pid !== observerPid) return reply(409, {})
+        if (value.sessionId !== projection.sessionId || observerPid === undefined || value.pid !== observerPid) return reply(409, {})
         const counts = object(value.activity)
         if (!counts || !['pendingAgents', 'pendingWorkflows'].every(key => Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0) || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1) return reply(400, {})
         const next = { pendingAgents: counts.pendingAgents as number, pendingWorkflows: counts.pendingWorkflows as number }
         const active = value.activeTurnId, ending = value.endingTurnId
         if ([active, ending].some(id => id !== undefined && id !== null && (typeof id !== 'string' || !id || id.length > 256))
-          || (active && ending)) return reply(400, {})
-        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? [], value.managedTasks ?? [], value.teammates ?? [], active ?? null, ending ?? null])
+          || (active && ending) || value.goalActive !== undefined && typeof value.goalActive !== 'boolean') return reply(400, {})
+        const nextGoalActive = value.goalActive === true
+        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? [], value.managedTasks ?? [], value.teammates ?? [], active ?? null, ending ?? null, nextGoalActive])
         if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && activityRecord !== encoded) return reply(409, {})
         if (!projection.updateActivityTasks(value.sessionId, value.workflows, value.shells, value.mcpTasks, value.managedTasks, value.teammates)) return reply(400, {})
         const changed = activityRecord !== encoded
-        activitySequence = value.sequence as number; activityRecord = encoded; activity = next
+        activitySequence = value.sequence as number; activityRecord = encoded; activity = next; goalActive = nextGoalActive
         activeTurnId = typeof active === 'string' && active !== lastTurn?.id ? active : undefined
         endingTurnId = typeof ending === 'string' && ending !== lastTurn?.id ? ending : undefined
         if (changed) options.changed()
@@ -413,7 +415,7 @@ export async function createClaudeTerminalBridge(options: {
             && event.generation === previous[kind] && matchesHelperCommand(kind, event.command)) projection.accept(event)
         }
         if (rotated) await saveObserver?.()
-        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; promptQueue = undefined; session.reset(value.sessionId); lastTurn = undefined; activeTurnId = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
+        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; goalActive = false; nativeView = undefined; promptQueue = undefined; session.reset(value.sessionId); lastTurn = undefined; activeTurnId = undefined; endingTurnId = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
@@ -680,6 +682,7 @@ export async function createClaudeTerminalBridge(options: {
       get preview() { return closed ? undefined : preview },
       get promptQueue() { return closed ? undefined : promptQueue },
       get activity() { return activity },
+      get goalActive() { return !closed && goalActive },
       get busy() { return busy || !!pending || !!nativeEditor?.active },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
         if (text.length > CLAUDE_UI_TEXT_MAX_LENGTH) return Promise.reject(new Error(CLAUDE_UI_TEXT_LIMIT_MESSAGE))
