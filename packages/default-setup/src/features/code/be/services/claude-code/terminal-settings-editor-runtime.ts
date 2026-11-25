@@ -102,6 +102,7 @@ async function nativeSettingsEditorOpeners(n,entry){
  const {qh}=await import('/$bunfs/root/chunk-07y7va8x.js');
  const {frame,owner}=nativeSettingsConfig(n,entry);if(frame.panel.hidden)throw Error('Native Config editor is unavailable');
  const owners=[owner];
+ let questionTimeout;
  const nodes=[owners[0]],fibers=new Set(),elements=new Set(),openers=new Map(),notices=new Map();
  while(nodes.length){
   const item=nodes.pop();if(!item||typeof item!=='object')continue;
@@ -113,6 +114,13 @@ async function nativeSettingsEditorOpeners(n,entry){
   if(elements.has(item))continue;elements.add(item);
   if(item.type===qh.Field&&typeof item.key==='string'){
    const control=item.props?.children;
+   if(item.key==='askUserQuestionTimeout'&&control?.type===qh.Select&&!control.props?.disabled){
+    const {onChange,value,options}=control.props;
+    if(typeof onChange!=='function'||typeof value!=='string'||!Array.isArray(options)||options.length>16||!options.every(option=>typeof option?.value==='string'))throw Error('Native question timeout selector changed');
+    const values=options.map(option=>option.value);
+    if(questionTimeout&&questionTimeout.callback!==onChange)throw Error('Native question timeout selector is ambiguous');
+    questionTimeout={callback:onChange,value,options:values};
+   }
    if(item.key==='remoteHomeSettings'&&typeof item.props?.description==='string'){if(item.props.description.length>16384)throw Error('Native cloud settings notice exceeded bound');notices.set(item.key,item.props.description);}
    if(item.key==='remoteHomeSettings'&&control?.type===qh.Toggle&&control.props?.value===false&&!control.props.disabled&&typeof control.props.onChange==='function'){
     if(openers.has(item.key))throw Error('Native Config editor is ambiguous');
@@ -130,7 +138,18 @@ async function nativeSettingsEditorOpeners(n,entry){
  }
  entry.current();const current=nativeSettingsFrame(n,entry);
  if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,frame.owner)||current.panel!==frame.panel)throw Error('Native Config owner changed');
- return {owner:owners[0],openers,notices};
+ return {owner:owners[0],openers,notices,questionTimeout};
+}
+async function changeNativeQuestionTimeout(n,entry,row,value,signal){
+ if(row.isLocked||row.kind!=='choice'||typeof value!=='string'||!row.options?.includes(value))throw Error('Native question timeout choice is unavailable');
+ signal.throwIfAborted();
+ const before=await nativeSettingsEditorOpeners(n,entry),candidate=before.questionTimeout;
+ if(!candidate||candidate.value!==row.value||JSON.stringify(candidate.options)!==JSON.stringify(row.options))throw Error('Native question timeout selector is unavailable');
+ const current=await nativeSettingsEditorOpeners(n,entry);
+ signal.throwIfAborted();entry.current();
+ if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,before.owner)||current.questionTimeout?.callback!==candidate.callback||current.questionTimeout.value!==candidate.value||JSON.stringify(current.questionTimeout.options)!==JSON.stringify(candidate.options))throw Error('Native question timeout selector changed before saving');
+ // Claude restricts this setting to the Config panel. Its mounted Select runs the original callback.
+ await awaitNativeSettingsReading(candidate.callback(value),signal);
 }
 async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
  signal?.throwIfAborted();

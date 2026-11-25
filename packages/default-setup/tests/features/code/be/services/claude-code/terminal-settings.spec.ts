@@ -7,18 +7,23 @@ function fixture() {
   const editorOpening=vi.fn(async()=>{})
   const editorReading=vi.fn(async()=>nativeEditor),editorSaving=vi.fn(async(_signal:AbortSignal)=>({})),editorAction=vi.fn(async(_n:unknown,_entry:unknown,_request:unknown,_signal:AbortSignal)=>({}))
   let value = false
+  let questionValue = 'never', questionLocked = false, hasQuestion = false
+  let selector: unknown
+  const questionOptions = ['never','60s','5m','10m']
+  const chooseTimeout = vi.fn(async (next: string) => { questionValue = next })
+  const owner = {}
   let frame: any = {selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false}
   const writer = vi.fn(async (next: boolean) => { value = next })
   const context = {}, entry = { context, kind: 'panel', commandName: 'config', clientId: 'client', closed: false, answered: false, current: vi.fn(), dialogId: 'dialog', nodeId: 'node', store: { getState: () => ({ open: [{ id: 'dialog', kind: 'local_jsx', payload: { nodeId: 'node' } }] }) }, done: new Promise(() => {}) }
-  const handles = () => [{ row: { key: 'tips', label: 'Show tips', kind: 'boolean', value, isLocked: false }, write: writer }, { row: { key: 'hidden', label: 'Hidden', kind: 'boolean', value: false, isLocked: false }, write: vi.fn() }]
+  const handles = () => [{ row: { key: 'tips', label: 'Show tips', kind: 'boolean', value, isLocked: false }, write: writer }, { row: { key: 'hidden', label: 'Hidden', kind: 'boolean', value: false, isLocked: false }, write: vi.fn() }, ...(hasQuestion ? [{ row: { key:'askUserQuestionTimeout', label:'Question auto-continue timeout', kind:'choice', value:questionValue, isLocked:questionLocked, options:questionOptions }, write:writer }] : [])]
   const api = { configRowHandles: vi.fn(handles) }
   const commit = vi.fn(async (request: any) => { await request.write(request.value); return { value: request.value } })
   const n = { gate: { _Jo: vi.fn() }, runtime: { p_r: vi.fn(async (row: any) => row.key === 'hidden' ? undefined : row), Ims: commit } }
   const selectTab=vi.fn(async(_n:unknown,_entry:unknown,tab:string)=>{frame={...frame,selectedTab:tab}})
   const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', 'settingsFrame()').replaceAll('await nativeSettingsEditorOpeners(n,entry)','settingsEditors()')
-  const run = vm.runInNewContext(source + ';selectNativeSettingsTab=selectTab;nativeSettingsMountedConsentRows=()=>[];waitForNativeSettingsConfig=async()=>{};readNativeSettingsEditor=editorReading;activateNativeSettingsEditor=editorOpening;saveNativeSettingsEditor=(_n,_entry,_revision,_values,signal)=>editorSaving(signal);actNativeSettingsEditor=editorAction;nativeSettings', { selectTab,editorOpening,editorReading,editorSaving,editorAction,settingsFrame: () => frame, settingsEditors:()=>({openers}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
+  const run = vm.runInNewContext(source + ';selectNativeSettingsTab=selectTab;nativeSettingsMountedConsentRows=()=>[];waitForNativeSettingsConfig=async()=>{};readNativeSettingsEditor=editorReading;activateNativeSettingsEditor=editorOpening;saveNativeSettingsEditor=(_n,_entry,_revision,_values,signal)=>editorSaving(signal);actNativeSettingsEditor=editorAction;nativeSettings', { selectTab,editorOpening,editorReading,editorSaving,editorAction,settingsFrame: () => frame, settingsEditors:()=>({owner,openers,questionTimeout:selector ?? (hasQuestion && !questionLocked ? {callback:chooseTimeout,value:questionValue,options:questionOptions}:undefined)}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout, clearTimeout })
   const request = { client_id: 'client', panel_id: 'panel' }
-  return { selectTab,editorOpening,setOpeners:(next:Map<string,unknown>)=>{openers=next},setNativeEditor:(next:any)=>{nativeEditor=next},editorSaving,editorAction,setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
+  return { selectTab,editorOpening,chooseTimeout,setQuestion:(locked=false)=>{hasQuestion=true;questionLocked=locked},setQuestionSelector:(next:unknown)=>{selector=next},setOpeners:(next:Map<string,unknown>)=>{openers=next},setNativeEditor:(next:any)=>{nativeEditor=next},editorSaving,editorAction,setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
 }
 it('uses original description visibility and config.set coordinator instead of writing directly', async () => {
   const f = fixture(), before = await f.read()
@@ -29,6 +34,31 @@ it('uses original description visibility and config.set coordinator instead of w
   expect(f.writer).toHaveBeenCalledExactlyOnceWith(true)
   expect(result.savedKey).toBe('tips'); expect(result.snapshot.rows[0].value).toBe(true)
 })
+it('uses the mounted Config selection once for the Config-only question timeout', async () => {
+  const f = fixture()
+  f.setQuestion()
+  const key = 'askUserQuestionTimeout'
+  const before = await f.read()
+  const request = { ...f.request, operation:'write', key, revision:before.snapshot.revision }
+  await expect(f.run(f.n, { ...request, value:'30s' }, new AbortController())).rejects.toThrow('choice is unavailable')
+  f.setQuestionSelector({callback:f.chooseTimeout,value:'5m',options:['never','60s','5m','10m']})
+  await expect(f.run(f.n, { ...request, value:'60s' }, new AbortController())).rejects.toThrow('selector is unavailable')
+  f.setQuestionSelector(undefined)
+  await f.run(f.n, { ...request, value:'never' }, new AbortController())
+  expect(f.chooseTimeout).not.toHaveBeenCalled()
+  const result = await f.run(f.n, { ...request, value:'60s' }, new AbortController())
+  expect(result.savedKey).toBe(key)
+  expect(result.snapshot.rows.find((row: {key:string}) => row.key === key).value).toBe('60s')
+  expect(f.chooseTimeout).toHaveBeenCalledExactlyOnceWith('60s')
+  expect(f.commit).not.toHaveBeenCalled()
+  expect(f.writer).not.toHaveBeenCalled()
+
+  f.setQuestion(true)
+  const locked = await f.read()
+  await expect(f.run(f.n, { ...request, revision:locked.snapshot.revision, value:'never' }, new AbortController())).rejects.toThrow('choice is unavailable')
+  expect(f.chooseTimeout).toHaveBeenCalledOnce()
+})
+
 it('preserves native denial and refuses a stale snapshot before invoking the coordinator', async () => {
   const f = fixture(), before = await f.read()
   await expect(f.run(f.n, { ...f.request, operation: 'write', revision: 'old', key: 'tips', value: true }, new AbortController())).rejects.toThrow('changed')

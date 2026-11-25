@@ -164,6 +164,14 @@ async function nativeSettings(n,request,abort){
  const controller=new AbortController(),cancel=()=>controller.abort();abort.signal.addEventListener('abort',cancel,{once:true});
  if(abort.signal.aborted)cancel();void entry.done.then(cancel,cancel);
  try{
+  if(request.key==='askUserQuestionTimeout'){
+   if(Object.is(request.value,visible.value))return {snapshot:read.snapshot};
+   await changeNativeQuestionTimeout(n,entry,visible,request.value,controller.signal);
+   controller.signal.throwIfAborted();nativeSettingsPanel(request);
+   entry.settingsCommit={key:request.key,before:visible.value,until:Date.now()+5000,scalar:true};
+   const after=await readNativeSettings(n,entry,controller.signal);nativeSettingsPanel(request);
+   return {snapshot:after.snapshot,...after.problem?{problem:after.problem}:after.savedKey?{savedKey:after.savedKey}:{}};
+  }
   const result=await n.runtime.Ims({...handle,value:request.value,origin:{kind:'composer'},signal:controller.signal,write:async value=>{
    controller.signal.throwIfAborted();nativeSettingsPanel(request);
    // Hooks may hold or rewrite the value. Recheck original ownership immediately before its writer.
