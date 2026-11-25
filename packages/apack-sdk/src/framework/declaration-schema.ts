@@ -25,7 +25,7 @@ import { _entityDestinationsProblem, type SurfaceDeclaration } from './surface-d
 import type { FrontendDeclaration, TextEditorExtensionsDeclaration } from './frontend-declaration.ts';
 import type { StepFrontendDeclaration, StepLayoutDeclaration } from './step-frontend-declaration.ts';
 import {
-  CONTENT_EDIT_POLICIES, MIGRATION_TARGET_PATTERN, SPECIALTY_CONTENT_KEYS,
+  CONTENT_EDIT_POLICIES, MIGRATION_TARGET_PATTERN, PACK_PERMISSIONS, SPECIALTY_CONTENT_KEYS,
   type ArtifactDeclaration, type BlockDeclaration, type ContentFormatConfig, type ContentSourceConfig,
   type DslDeclaration, type MigrationLine, type PackFeatureEntry, type PackLifecycleConfig, type PackManifest,
   type PackMigrationDeclaration, type PackMigrationsDeclaration, type PackPermission, type StepDSLMeta, type StepEntry,
@@ -39,13 +39,14 @@ const servicePattern = _SERVICE_NAME_PATTERN.source.slice(1, -1);
 const dependencyServiceRefPattern = new RegExp(`^(?!${HOST_PACK_ID}/)${packPattern}/${servicePattern}$`);
 const hostRefs = _HOST_SERVICE_NAMES.map(name => `${HOST_PACK_ID}/${name}` as const);
 
-const PackConsumptionSchema: z.ZodType<PackConsumption> = z.object({
+const PackConsumptionSchema = z.object({
   services: z.array(z.union([
     z.enum(hostRefs as [typeof hostRefs[number], ...typeof hostRefs[number][]]),
     z.string().regex(dependencyServiceRefPattern, 'Must name a service as "<provider-pack>/<service>"'),
   ])).refine(refs => new Set(refs).size === refs.length, 'Consumed service references must be unique')
-    .describe('Required service refs (provider-pack/service). Use the listed host refs for host APIs. Other providers must be this pack or direct dependencies, and must directly declare the service.'),
-}).strict().describe('Supported API dependencies. Logger, emitter, repository, caller-bound settings and this pack\'s own services are implicit. This is not a resource permission or security sandbox.');
+    .describe('Required service refs (provider-pack/service). Use the listed host refs for host APIs. Other providers must be this pack or direct dependencies, and must directly declare the service.')
+    .readonly(),
+}).strict().describe('Supported API dependencies. Logger, emitter, repository, caller-bound settings and this pack\'s own services are implicit. This is not a resource permission or security sandbox.').readonly();
 
 /** Rejects a pack's entries that use a name or value the SDK owns, naming each */
 const notSdkOwned = (owned: Record<string, string>) => (declared: Record<string, string>, ctx: z.RefinementCtx, path: PropertyKey[] = []) => {
@@ -598,16 +599,16 @@ const StepFrontendShape = {
   layout: z.object(StepLayoutShape).strict().describe('Static layout flags and executable calculation targets.').optional(),
   handlePrefix: z.string().min(1).describe('Prefix for indexed output handles, such as branch-0.').optional(),
 } satisfies Record<keyof StepFrontendDeclaration, z.ZodTypeAny>;
-const StepFrontendSchema: z.ZodType<StepFrontendDeclaration> = z.object(StepFrontendShape).strict();
-const ReferencesSchema: z.ZodType<ReferenceDeclarations> = z.object({
+const StepFrontendSchema = z.object(StepFrontendShape).strict();
+const ReferencesSchema = z.object({
   types: declarationRecord(ReferenceNameSchema, z.object({
     category: ReferenceNameSchema.describe('Category ID grouping this reference type in the picker.'),
     icon: IconSchema.describe('Lucide icon export name or a declared component module for this reference type.'),
     svgElements: z.array(z.union([
-      z.tuple([z.literal('path'), z.object({ d: z.string().describe('SVG path geometry.') }).strict()]),
-      z.tuple([z.literal('rect'), declarationRecord(z.string())]),
-      z.tuple([z.literal('circle'), declarationRecord(z.string())]),
-    ])).describe('Static SVG geometry for rendering this reference in serialized editor content.'),
+      z.tuple([z.literal('path'), z.object({ d: z.string().describe('SVG path geometry.') }).strict().readonly()]).readonly(),
+      z.tuple([z.literal('rect'), declarationRecord(z.string()).readonly()]).readonly(),
+      z.tuple([z.literal('circle'), declarationRecord(z.string()).readonly()]).readonly(),
+    ])).describe('Static SVG geometry for rendering this reference in serialized editor content.').readonly(),
   }).strict()).describe('Reference type IDs with static presentation and declared navigation bindings.'),
   categories: declarationRecord(ReferenceNameSchema, z.object({
     label: z.string().min(1).refine(value => value.trim().length > 0, 'Must have a visible label')
@@ -617,7 +618,7 @@ const ReferencesSchema: z.ZodType<ReferenceDeclarations> = z.object({
   }).strict()).describe('Reference picker category IDs and their declared item providers.'),
 }).strict();
 
-const SurfaceSchema: z.ZodType<SurfaceDeclaration> = z.object({
+const SurfaceSchema = z.object({
   label: z.string().min(1).refine(value => value.trim().length > 0, 'Must have a visible label')
     .describe('Surface display name used by shell navigation and menus.'),
   state: ModuleTargetSchema.describe('Machine module, by default export or path#exportName.'),
@@ -634,7 +635,7 @@ const SurfaceSchema: z.ZodType<SurfaceDeclaration> = z.object({
   hotkeys: z.array(z.object({
     action: z.string().min(1).describe('Action name matched against the configured keyboard shortcut.'),
     global: z.boolean().describe('Allow this action while another surface is active; omission limits it to the active surface.').optional(),
-  }).strict()).describe('Keyboard actions exposed by this surface; actual shortcuts are configured in settings.').optional(),
+  }).strict()).describe('Keyboard actions exposed by this surface; actual shortcuts are configured in settings.').readonly().optional(),
   options: z.object({ headerClass: z.string().describe('CSS classes applied to the canvas and popout header.').optional() }).strict()
     .describe('Shell presentation options for this surface.').optional(),
   fallbackPanel: z.object({
@@ -756,7 +757,7 @@ export const FeatureEntrySchema = z.object({
   references: ReferencesSchema.describe('Reference identities and presentation, with reactive item-provider exports. Entity opening is declared separately by the destination surface contract.').optional(),
 }).strict();
 
-export const PackPermissionSchema = z.enum(['ears', 'llm', 'filesystem', 'network', 'terminal']);
+export const PackPermissionSchema = z.enum(PACK_PERMISSIONS);
 
 /**
  * How the pack is built. These are settings no part of the app reads — unlike `entities` or `features`,
@@ -964,21 +965,53 @@ type _StrictEquals<A, B> =
 type _DeepNormalize<T> =
   _IsAny<T> extends true ? any
   : T extends (...args: never[]) => unknown ? T
-  : T extends readonly unknown[] ? { [K in keyof T]: _DeepNormalize<T[K]> }
   : T extends object ? { [K in keyof T]: _DeepNormalize<T[K]> }
   : T;
 type _DeepRequired<T> =
   _IsAny<T> extends true ? any
   : T extends (...args: never[]) => unknown ? T
-  : T extends readonly unknown[] ? { [K in keyof T]-?: _DeepRequired<T[K]> }
   : T extends object ? { [K in keyof T]-?: _DeepRequired<T[K]> }
   : T;
 type _DeepReadonly<T> =
   _IsAny<T> extends true ? any
   : T extends (...args: never[]) => unknown ? T
-  : T extends readonly unknown[] ? { readonly [K in keyof T]: _DeepReadonly<T[K]> }
   : T extends object ? { readonly [K in keyof T]: _DeepReadonly<T[K]> }
   : T;
+type _IsReadonlyKey<T, K extends keyof T> =
+  _StrictEquals<{ [P in K]: T[P] }, { readonly [P in K]: T[P] }>;
+type _PreservesReadonlyBranch<A, B> =
+  A extends (...args: never[]) => unknown ? true
+  : A extends readonly unknown[]
+    ? B extends readonly unknown[]
+      ? [A] extends [B]
+        ? (number extends A['length']
+            ? _PreservesReadonly<A[number], B[number]>
+            : { [K in keyof A]: K extends keyof B ? _PreservesReadonly<A[K], B[K]> : false }[number] extends true ? true : false)
+        : false
+      : false
+    : A extends object
+      ? B extends object
+        ? ({
+            [K in keyof A]-?: K extends keyof B
+              ? (_IsReadonlyKey<A, K> extends true
+                  ? (_IsReadonlyKey<B, K> extends true ? _PreservesReadonly<A[K], B[K]> : false)
+                  : _PreservesReadonly<A[K], B[K]>)
+              : false;
+          }[keyof A] extends true ? true : false)
+        : false
+      : true;
+type _PreservesReadonly<A, B> =
+  _IsAny<A> extends true ? false
+  : _IsAny<B> extends true ? false
+  : A extends unknown
+    ? (B extends unknown
+        ? (_StrictEquals<_DeepReadonly<A>, _DeepReadonly<B>> extends true
+            ? _PreservesReadonlyBranch<A, B>
+            : never)
+        : never) extends true
+      ? true
+      : false
+    : never;
 type _MutualAssignable<A, B> =
   [A] extends [B]
     ? ([B] extends [A] ? true : ['plain type is wider than schema', B, A])
@@ -999,11 +1032,19 @@ export type _ExactReadonly<A, B> =
   _IsAny<A> extends true ? ['schema inferred any']
   : _IsAny<B> extends true ? ['plain type is any']
   : [A] extends [B]
-    ? _Exact<_DeepReadonly<A>, _DeepReadonly<B>>
+    ? _Exact<_DeepReadonly<A>, _DeepReadonly<B>> extends true
+      ? [_PreservesReadonly<A, B>] extends [true]
+        ? true
+        : ['plain type drops readonly modifier declared by schema', A, B]
+      : _Exact<_DeepReadonly<A>, _DeepReadonly<B>>
     : ['schema is not assignable to readonly plain type', A, B];
 
 export type _DeclarationSchemasMatchPlainTypes = [
   _Asserted<_Exact<z.infer<typeof ManifestSchema>, PackManifest>>,
+  _Asserted<_Exact<z.infer<typeof PackConsumptionSchema>, PackConsumption>>,
+  _Asserted<_Exact<z.infer<typeof StepFrontendSchema>, StepFrontendDeclaration>>,
+  _Asserted<_Exact<z.infer<typeof ReferencesSchema>, ReferenceDeclarations>>,
+  _Asserted<_Exact<z.infer<typeof SurfaceSchema>, SurfaceDeclaration>>,
   _Asserted<_Exact<z.infer<typeof FeatureEntrySchema>, PackFeatureEntry>>,
   _Asserted<_Exact<z.infer<typeof LifecycleConfigSchema>, PackLifecycleConfig>>,
   _Asserted<_Exact<z.infer<typeof MigrationDeclarationSchema>, PackMigrationDeclaration>>,
@@ -1016,6 +1057,5 @@ export type _DeclarationSchemasMatchPlainTypes = [
   _Asserted<_Exact<z.infer<typeof ArtifactEntrySchema>, ArtifactDeclaration>>,
   _Asserted<_Exact<z.infer<typeof BlockEntrySchema>, BlockDeclaration>>,
   _Asserted<_Exact<z.infer<typeof PackPermissionSchema>, PackPermission>>,
-  _Asserted<_Exact<z.infer<typeof _EventContractsSchema>, PackEventContracts>>,
   _Asserted<_ExactReadonly<z.infer<typeof _NativePackDeclarationSchema>, NativePackDeclaration>>,
 ];

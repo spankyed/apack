@@ -28,8 +28,10 @@ export function createWindowPackCatalog(io: WindowPackCatalogIO, native: readonl
     const problem = nativeFrontendDeclarationProblem(declaration);
     if (problem) throw new Error(`Invalid native declarations: ${problem}`);
   }
-  const localSurfaces = nativeSurfaceCatalogEntries(captureData(native));
-  const localEvents = eventCatalogEntries({ native: captureData(native), packs: [], sourcePacks: [] });
+  const capturedNative = captureData(native);
+  assertEventContracts({ native: capturedNative, packs: [], sourcePacks: [] });
+  const localSurfaces = nativeSurfaceCatalogEntries(capturedNative);
+  const localEvents = eventCatalogEntries({ native: capturedNative, packs: [], sourcePacks: [] });
   let generation = 0;
   let stop: (() => void) | undefined;
   let frame: PackCatalogFrame | undefined;

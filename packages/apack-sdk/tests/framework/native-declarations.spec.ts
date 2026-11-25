@@ -35,13 +35,21 @@ type _FailReadonlyMismatch = AssertTrue<_Exact<{ a: string }, { readonly a: stri
 // Extra optional field nested inside _ExactReadonly still fails
 // @ts-expect-error nested extra optional field must fail _ExactReadonly
 type _FailReadonlyNestedExtraOptional = AssertTrue<_ExactReadonly<{ nested?: { a: string } }, { readonly nested?: { readonly a: string; readonly extra?: number } }>>;
+// Dropping readonly declared by schema on object property, record index signature, or nested object must fail _ExactReadonly
+// @ts-expect-error dropping readonly on object property must fail _ExactReadonly
+type _FailReadonlyDroppedProp = AssertTrue<_ExactReadonly<{ readonly a: string }, { a: string }>>;
+// @ts-expect-error dropping readonly on record index signature must fail _ExactReadonly
+type _FailReadonlyDroppedRecord = AssertTrue<_ExactReadonly<{ readonly [k: string]: string }, { [k: string]: string }>>;
+// @ts-expect-error dropping readonly on nested optional object property must fail _ExactReadonly
+type _FailReadonlyDroppedNested = AssertTrue<_ExactReadonly<{ nested?: { readonly a: string } }, { readonly nested?: { a: string } }>>;
 // `any` on either side fails
 // @ts-expect-error any must fail _Exact
 type _FailAny = AssertTrue<_Exact<any, { a: string }>>;
 void (0 as unknown as [
   _PositiveExact, _FailSchemaExtraOptional, _FailNestedPlainExtraOptional, _FailRecordExtraOptional,
   _FailArrayExtraOptional, _FailUnionExtraOptional, _FailMissingRequired, _FailWidenedProperty,
-  _FailReadonlyMismatch, _FailReadonlyNestedExtraOptional, _FailAny,
+  _FailReadonlyMismatch, _FailReadonlyNestedExtraOptional,
+  _FailReadonlyDroppedProp, _FailReadonlyDroppedRecord, _FailReadonlyDroppedNested, _FailAny,
 ]);
 
 const declaration = {

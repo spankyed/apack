@@ -10,12 +10,11 @@ import type { StepFrontendDeclaration } from './step-frontend-declaration.ts';
 import type { SurfaceDeclaration } from './surface-declaration.ts';
 import type { EmbeddingModelId } from '../services/models.ts';
 
-export type AllowablePackCheck = 'cross-feature-imports' | 'untyped-sends' | 'raw-transport' | 'backend-console' | 'repository-casts';
-
 /** Development conventions a pack may allow; runtime contract checks remain mandatory. */
 export const ALLOWABLE_PACK_CHECKS = [
   'cross-feature-imports', 'untyped-sends', 'raw-transport', 'backend-console', 'repository-casts',
-] as const satisfies readonly AllowablePackCheck[];
+] as const;
+export type AllowablePackCheck = (typeof ALLOWABLE_PACK_CHECKS)[number];
 
 /** Build-time source-check policy; does not change runtime permissions. */
 export interface PackChecksDeclaration {
@@ -69,19 +68,20 @@ export function declaredContentKeys(manifest: { content?: { sources?: Record<str
  * than for what happens to their edit: under both, what they wrote stays. What differs is whether the pack
  * goes on offering its own version, and nothing here makes a second copy of anything.
  */
-export type ContentEditPolicy = 'theirs' | 'offer';
-export const CONTENT_EDIT_POLICIES = ['theirs', 'offer'] as const satisfies readonly ContentEditPolicy[];
+export const CONTENT_EDIT_POLICIES = ['theirs', 'offer'] as const;
+export type ContentEditPolicy = (typeof CONTENT_EDIT_POLICIES)[number];
 
-export type PackPermission = 'ears' | 'llm' | 'filesystem' | 'network' | 'terminal';
+export const PACK_PERMISSIONS = ['ears', 'llm', 'filesystem', 'network', 'terminal'] as const;
+export type PackPermission = (typeof PACK_PERMISSIONS)[number];
 
 /** A migration's key: the version it targets, as "major.minor.patch". */
 export const MIGRATION_TARGET_PATTERN = /^\d+\.\d+\.\d+$/;
 
-/** Which version line a migration's target is a version of. */
-export type MigrationLine = 'app' | 'pack';
-
 /** The version lines, checked against MigrationsSchema and PackMigrations. */
-export const MIGRATION_LINES: MigrationLine[] = ['app', 'pack'];
+export const MIGRATION_LINES = ['app', 'pack'] as const;
+
+/** Which version line a migration's target is a version of. */
+export type MigrationLine = (typeof MIGRATION_LINES)[number];
 
 export interface PackMigrationDeclaration {
   description: string;

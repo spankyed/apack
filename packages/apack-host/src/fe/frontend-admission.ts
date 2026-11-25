@@ -1,19 +1,52 @@
-import { _packDeclarationProblem, _settingsJsonProblems, type NativePackDeclaration, type DeclarationData } from '@apackdev/sdk/framework';
+import { _entityDestinationsProblem, _packDeclarationProblem, _parseEventContracts, _settingsJsonProblems, type NativePackDeclaration, type DeclarationData } from '@apackdev/sdk/framework';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
-import { isPlainObject } from '@apackdev/sdk/utils/pure';
+import { errorMessage, isPlainObject } from '@apackdev/sdk/utils/pure';
 import type { LoadedPackEntry } from '../packs/layout-types.ts';
 import type { frontendBindingProblem } from './declaration-binding.ts';
+
+const NATIVE_RECORD_FIELDS = [
+  'features', 'settings', 'steps', 'artifacts', 'blocks', 'dsl', 'textEditor', 'appExtensions',
+] as const;
 
 /**
  * Lightweight frontend boundary check for static native declarations (authoritative full Zod schema
  * validation runs on the backend via `_nativePackDeclarationProblem`). Keeps Zod out of the renderer
- * bundle while refusing impure objects and bad pack identities before cloning, matching the `loaded` path.
+ * bundle while refusing impure objects, bad pack identities, malformed containers, and invalid
+ * event contracts or entity destinations before cloning.
  */
 export function nativeFrontendDeclarationProblem(declaration: unknown): string | undefined {
   const problems = _settingsJsonProblems(declaration);
-  if (problems.length) return problems.map(problem => `${problem.path.join('.')}: declarations must contain finite, acyclic JSON data properties`).join('; ');
+  if (problems.length) return problems.map(problem => `${problem.path.join('.') || 'root'}: declarations must contain finite, acyclic JSON data properties`).join('; ');
   if (!isPlainObject(declaration)) return 'Expected a plain object';
   if (typeof declaration.id !== 'string' || !PACK_ID_PATTERN.test(declaration.id)) return 'id: Must be a valid pack id';
+  for (const field of NATIVE_RECORD_FIELDS) {
+    const value = declaration[field];
+    if (value !== undefined && !isPlainObject(value)) return `${field}: Expected a plain object`;
+  }
+  const features = declaration.features as Record<string, unknown> | undefined;
+  if (features) {
+    for (const [featureId, feature] of Object.entries(features)) {
+      if (!isPlainObject(feature)) return `features.${featureId}: Expected a plain object`;
+    }
+  }
+  if (declaration.entityDestinations !== undefined) {
+    if (!isPlainObject(declaration.entityDestinations)) return 'entityDestinations: Expected a plain object';
+    for (const [entity, feature] of Object.entries(declaration.entityDestinations)) {
+      if (!entity || typeof feature !== 'string' || !feature) return `entityDestinations.${entity || 'root'}: Expected a nonempty string`;
+    }
+    const destinationProblem = _entityDestinationsProblem(
+      declaration.entityDestinations as Record<string, string>,
+      features as Record<string, { surface?: unknown }> | undefined,
+    );
+    if (destinationProblem) return `entityDestinations: ${destinationProblem}`;
+  }
+  if (declaration.eventContracts !== undefined) {
+    try {
+      _parseEventContracts(declaration.eventContracts, features as Record<string, { system?: unknown; surface?: unknown }> | undefined, true);
+    } catch (error) {
+      return `eventContracts: ${errorMessage(error)}`;
+    }
+  }
 }
 
 /** Supplied by host composition or the accepted backend entry, never inferred from frontend delivery. */

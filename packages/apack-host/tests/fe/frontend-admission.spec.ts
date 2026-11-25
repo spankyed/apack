@@ -195,11 +195,20 @@ it('refuses impure or unidentifiable native declarations on the frontend admissi
     .toContain('JSON data properties');
   expect(getter).not.toHaveBeenCalled();
   class Custom { id = 'native'; }
-  expect(nativeFrontendDeclarationProblem(new Custom())).toContain('JSON data properties');
+  expect(nativeFrontendDeclarationProblem(new Custom())).toMatch(/^root: .*JSON data properties/);
   expect(nativeFrontendDeclarationProblem(null)).toContain('Expected a plain object');
   expect(nativeFrontendDeclarationProblem([])).toContain('Expected a plain object');
   expect(nativeFrontendDeclarationProblem({})).toContain('pack id');
   expect(nativeFrontendDeclarationProblem({ id: 'Bad-Id' })).toContain('pack id');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: [] })).toContain('features: Expected a plain object');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', features: { view: null } })).toContain('features.view: Expected a plain object');
+  expect(nativeFrontendDeclarationProblem({ id: 'native', entityDestinations: { Action: 'missing' } }))
+    .toContain('Entity destination "Action" names feature "missing"');
+  expect(nativeFrontendDeclarationProblem({
+    id: 'native',
+    features: { shell: { description: 'Shell.' } },
+    eventContracts: { shell: { system: { incoming: ['A', 'A'], outgoing: [] } } },
+  })).toContain('unique');
   expect(nativeFrontendDeclarationProblem({ id: 'native' })).toBeUndefined();
 });
 

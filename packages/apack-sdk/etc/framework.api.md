@@ -19,7 +19,7 @@ import type { RowRules } from '@elmdb/ears';
 import type { SearchDeclaration } from '@elmdb/ears';
 
 // @public (undocumented)
-export type AllowablePackCheck = 'cross-feature-imports' | 'untyped-sends' | 'raw-transport' | 'backend-console' | 'repository-casts';
+export type AllowablePackCheck = (typeof ALLOWABLE_PACK_CHECKS)[number];
 
 // @public
 export type AnswerArgs<C extends SystemContract, K extends AskName<C>> = ChildAnswerArgs<ContractContext<C>, MachineEvents<C>, ContractAsks<C>, K>;
@@ -145,8 +145,8 @@ export interface ContentConfig {
     writers?: Record<string, string>;
 }
 
-// @public
-export type ContentEditPolicy = 'theirs' | 'offer';
+// @public (undocumented)
+export type ContentEditPolicy = (typeof CONTENT_EDIT_POLICIES)[number];
 
 // @public (undocumented)
 export interface ContentFieldDeclaration {
@@ -450,7 +450,7 @@ export type MachineMatchesContract<Entry, C extends SystemContract> = Entry exte
 } ? [Spec, SystemSpec<C>] extends [SystemSpec<C>, Spec] ? true : 'this system\'s defineSystem<…> declares a contract that is not the one apack.json names for its feature' : 'this system\'s default export has no `spec` from defineSystem<…>';
 
 // @public
-export type MigrationLine = 'app' | 'pack';
+export type MigrationLine = (typeof MIGRATION_LINES)[number];
 
 // @public
 export interface NativePackDeclaration extends PackDataDeclarations, FrontendDeclaration {
@@ -840,7 +840,7 @@ export interface PackMigrationsDeclaration {
 }
 
 // @public (undocumented)
-export type PackPermission = 'ears' | 'llm' | 'filesystem' | 'network' | 'terminal';
+export type PackPermission = (typeof PACK_PERMISSIONS)[number];
 
 // @public
 export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, string>>>;

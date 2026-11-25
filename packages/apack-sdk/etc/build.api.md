@@ -532,12 +532,130 @@ export const FeatureEntrySchema: z.ZodObject<{
             incoming: z.ZodOptional<z.ZodArray<z.ZodString>>;
         }, z.core.$strict>>;
     }, z.core.$strict>>;
-    surface: z.ZodOptional<z.ZodType<SurfaceDeclaration, unknown, z.core.$ZodTypeInternals<SurfaceDeclaration, unknown>>>;
+    surface: z.ZodOptional<z.ZodObject<{
+        label: z.ZodString;
+        state: z.ZodString;
+        icon: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+            entry: z.ZodString;
+            load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+        }, z.core.$strict>]>>;
+        canvas: z.ZodOptional<z.ZodUnion<readonly [z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+            entry: z.ZodString;
+            load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+        }, z.core.$strict>]>, z.ZodObject<{
+            routes: z.ZodType<Record<string, string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            }>, Record<string, string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            }>, z.core.$ZodTypeInternals<Record<string, string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            }>, Record<string, string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            }>>>;
+        }, z.core.$strict>]>>;
+        panel: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+            entry: z.ZodString;
+            load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+        }, z.core.$strict>]>>;
+        chat: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+            entry: z.ZodString;
+            load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+        }, z.core.$strict>]>>;
+        isPinned: z.ZodOptional<z.ZodBoolean>;
+        hotkeys: z.ZodOptional<z.ZodReadonly<z.ZodArray<z.ZodObject<{
+            action: z.ZodString;
+            global: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>>>>;
+        options: z.ZodOptional<z.ZodObject<{
+            headerClass: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>>;
+        fallbackPanel: z.ZodOptional<z.ZodObject<{
+            label: z.ZodString;
+            toggle: z.ZodObject<{
+                type: z.ZodString;
+            }, z.core.$strict>;
+            isShown: z.ZodString;
+        }, z.core.$strict>>;
+        defaultVisible: z.ZodOptional<z.ZodBoolean>;
+        contract: z.ZodOptional<z.ZodString>;
+        default: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strict>>;
     services: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     repositories: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     views: z.ZodOptional<z.ZodString>;
     projections: z.ZodOptional<z.ZodString>;
-    references: z.ZodOptional<z.ZodType<ReferenceDeclarations, unknown, z.core.$ZodTypeInternals<ReferenceDeclarations, unknown>>>;
+    references: z.ZodOptional<z.ZodObject<{
+        types: z.ZodType<Record<string, {
+            category: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            svgElements: readonly (readonly ["path", Readonly<{
+                d: string;
+            }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+        }>, Record<string, {
+            category: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            svgElements: readonly (readonly ["path", Readonly<{
+                d: string;
+            }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            category: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            svgElements: readonly (readonly ["path", Readonly<{
+                d: string;
+            }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+        }>, Record<string, {
+            category: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            svgElements: readonly (readonly ["path", Readonly<{
+                d: string;
+            }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+        }>>>;
+        categories: z.ZodType<Record<string, {
+            label: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            useItems: string;
+        }>, Record<string, {
+            label: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            useItems: string;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            label: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            useItems: string;
+        }>, Record<string, {
+            label: string;
+            icon: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            };
+            useItems: string;
+        }>>>;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public
@@ -628,7 +746,21 @@ export const ManifestSchema: z.ZodObject<{
     hostVersion: z.ZodOptional<z.ZodString>;
     license: z.ZodOptional<z.ZodString>;
     dependencies: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
-    consumes: z.ZodOptional<z.ZodType<PackConsumption, unknown, z.core.$ZodTypeInternals<PackConsumption, unknown>>>;
+    consumes: z.ZodOptional<z.ZodReadonly<z.ZodObject<{
+        services: z.ZodReadonly<z.ZodArray<z.ZodUnion<readonly [z.ZodEnum<{
+            "host/settings": "host/settings";
+            "host/runHistory": "host/runHistory";
+            "host/inference": "host/inference";
+            "host/emitter": "host/emitter";
+            "host/logger": "host/logger";
+            "host/repository": "host/repository";
+            "host/appData": "host/appData";
+            "host/onboarding": "host/onboarding";
+            "host/secrets": "host/secrets";
+            "host/filesystem": "host/filesystem";
+            "host/terminal": "host/terminal";
+        }>, z.ZodString]>>>;
+    }, z.core.$strict>>>;
     permissions: z.ZodOptional<z.ZodArray<z.ZodEnum<{
         filesystem: "filesystem";
         terminal: "terminal";
@@ -786,12 +918,73 @@ export const ManifestSchema: z.ZodObject<{
                 incoming?: string[] | undefined;
             } | undefined;
         } | undefined;
-        surface?: SurfaceDeclaration | undefined;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
         projections?: string | undefined;
-        references?: ReferenceDeclarations | undefined;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
     }>, Record<string, {
         description: string;
         entities?: Record<string, {
@@ -821,12 +1014,73 @@ export const ManifestSchema: z.ZodObject<{
                 incoming?: string[] | undefined;
             } | undefined;
         } | undefined;
-        surface?: unknown;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
         projections?: string | undefined;
-        references?: unknown;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
         entities?: Record<string, {
@@ -863,12 +1117,73 @@ export const ManifestSchema: z.ZodObject<{
                 incoming?: string[] | undefined;
             } | undefined;
         } | undefined;
-        surface?: SurfaceDeclaration | undefined;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
         projections?: string | undefined;
-        references?: ReferenceDeclarations | undefined;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
     }>, Record<string, {
         description: string;
         entities?: Record<string, {
@@ -898,12 +1213,73 @@ export const ManifestSchema: z.ZodObject<{
                 incoming?: string[] | undefined;
             } | undefined;
         } | undefined;
-        surface?: unknown;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
         projections?: string | undefined;
-        references?: unknown;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
     }>>>>;
     extensions: z.ZodOptional<z.ZodObject<{
         textEditor: z.ZodOptional<z.ZodType<Record<string, {
@@ -985,7 +1361,39 @@ export const ManifestSchema: z.ZodObject<{
                 validate?: string | undefined;
                 register?: string | undefined;
             } | undefined;
-            fe?: StepFrontendDeclaration | undefined;
+            fe?: {
+                nodeConfig: {
+                    icon: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    };
+                    connectionRules: {
+                        inputs: number;
+                        outputs: number;
+                    };
+                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    isImplemented?: boolean | undefined;
+                    isDisabled?: boolean | undefined;
+                };
+                colorKey?: string | undefined;
+                components?: {
+                    node?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                    form?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                } | undefined;
+                layout?: {
+                    getHeight?: string | undefined;
+                    getPorts?: string | undefined;
+                    hasInput?: boolean | undefined;
+                    usesExitCount?: boolean | undefined;
+                } | undefined;
+                handlePrefix?: string | undefined;
+            } | undefined;
             types?: string | undefined;
             runtime?: {
                 handler?: string | undefined;
@@ -1028,7 +1436,39 @@ export const ManifestSchema: z.ZodObject<{
                 validate?: string | undefined;
                 register?: string | undefined;
             } | undefined;
-            fe?: unknown;
+            fe?: {
+                nodeConfig: {
+                    icon: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    };
+                    connectionRules: {
+                        inputs: number;
+                        outputs: number;
+                    };
+                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    isImplemented?: boolean | undefined;
+                    isDisabled?: boolean | undefined;
+                };
+                colorKey?: string | undefined;
+                components?: {
+                    node?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                    form?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                } | undefined;
+                layout?: {
+                    getHeight?: string | undefined;
+                    getPorts?: string | undefined;
+                    hasInput?: boolean | undefined;
+                    usesExitCount?: boolean | undefined;
+                } | undefined;
+                handlePrefix?: string | undefined;
+            } | undefined;
             types?: string | undefined;
             runtime?: {
                 handler?: string | undefined;
@@ -1071,7 +1511,39 @@ export const ManifestSchema: z.ZodObject<{
                 validate?: string | undefined;
                 register?: string | undefined;
             } | undefined;
-            fe?: StepFrontendDeclaration | undefined;
+            fe?: {
+                nodeConfig: {
+                    icon: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    };
+                    connectionRules: {
+                        inputs: number;
+                        outputs: number;
+                    };
+                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    isImplemented?: boolean | undefined;
+                    isDisabled?: boolean | undefined;
+                };
+                colorKey?: string | undefined;
+                components?: {
+                    node?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                    form?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                } | undefined;
+                layout?: {
+                    getHeight?: string | undefined;
+                    getPorts?: string | undefined;
+                    hasInput?: boolean | undefined;
+                    usesExitCount?: boolean | undefined;
+                } | undefined;
+                handlePrefix?: string | undefined;
+            } | undefined;
             types?: string | undefined;
             runtime?: {
                 handler?: string | undefined;
@@ -1114,7 +1586,39 @@ export const ManifestSchema: z.ZodObject<{
                 validate?: string | undefined;
                 register?: string | undefined;
             } | undefined;
-            fe?: unknown;
+            fe?: {
+                nodeConfig: {
+                    icon: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    };
+                    connectionRules: {
+                        inputs: number;
+                        outputs: number;
+                    };
+                    category: "data" | "ai" | "logic" | "trigger" | "action";
+                    isImplemented?: boolean | undefined;
+                    isDisabled?: boolean | undefined;
+                };
+                colorKey?: string | undefined;
+                components?: {
+                    node?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                    form?: string | {
+                        entry: string;
+                        load?: "lazy" | undefined;
+                    } | undefined;
+                } | undefined;
+                layout?: {
+                    getHeight?: string | undefined;
+                    getPorts?: string | undefined;
+                    hasInput?: boolean | undefined;
+                    usesExitCount?: boolean | undefined;
+                } | undefined;
+                handlePrefix?: string | undefined;
+            } | undefined;
             types?: string | undefined;
             runtime?: {
                 handler?: string | undefined;
@@ -1383,7 +1887,7 @@ depProvenance?: Map<string, PackProvenance>): {
 };
 
 // @public
-export const MIGRATION_LINES: MigrationLine[];
+export const MIGRATION_LINES: readonly ["app", "pack"];
 
 // @public
 export const MIGRATION_TARGET_PATTERN: RegExp;
@@ -1395,7 +1899,7 @@ export const MigrationDeclarationSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
-export type MigrationLine = 'app' | 'pack';
+export type MigrationLine = (typeof MIGRATION_LINES)[number];
 
 // @public (undocumented)
 export const MigrationsSchema: z.ZodObject<{
@@ -1466,7 +1970,21 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }>>>>;
     }, z.core.$strict>>>;
     dependencies: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
-    consumes: z.ZodOptional<z.ZodType<PackConsumption, unknown, z.core.$ZodTypeInternals<PackConsumption, unknown>>>;
+    consumes: z.ZodOptional<z.ZodReadonly<z.ZodObject<{
+        services: z.ZodReadonly<z.ZodArray<z.ZodUnion<readonly [z.ZodEnum<{
+            "host/settings": "host/settings";
+            "host/runHistory": "host/runHistory";
+            "host/inference": "host/inference";
+            "host/emitter": "host/emitter";
+            "host/logger": "host/logger";
+            "host/repository": "host/repository";
+            "host/appData": "host/appData";
+            "host/onboarding": "host/onboarding";
+            "host/secrets": "host/secrets";
+            "host/filesystem": "host/filesystem";
+            "host/terminal": "host/terminal";
+        }>, z.ZodString]>>>;
+    }, z.core.$strict>>>;
     settings: z.ZodOptional<z.ZodType<Record<string, {
         schema: Record<string, unknown>;
         defaults: Record<string, unknown>;
@@ -1642,7 +2160,39 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             validate?: string | undefined;
             register?: string | undefined;
         } | undefined;
-        fe?: StepFrontendDeclaration | undefined;
+        fe?: {
+            nodeConfig: {
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                connectionRules: {
+                    inputs: number;
+                    outputs: number;
+                };
+                category: "data" | "ai" | "logic" | "trigger" | "action";
+                isImplemented?: boolean | undefined;
+                isDisabled?: boolean | undefined;
+            };
+            colorKey?: string | undefined;
+            components?: {
+                node?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+                form?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+            } | undefined;
+            layout?: {
+                getHeight?: string | undefined;
+                getPorts?: string | undefined;
+                hasInput?: boolean | undefined;
+                usesExitCount?: boolean | undefined;
+            } | undefined;
+            handlePrefix?: string | undefined;
+        } | undefined;
         types?: string | undefined;
         runtime?: {
             handler?: string | undefined;
@@ -1685,7 +2235,39 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             validate?: string | undefined;
             register?: string | undefined;
         } | undefined;
-        fe?: unknown;
+        fe?: {
+            nodeConfig: {
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                connectionRules: {
+                    inputs: number;
+                    outputs: number;
+                };
+                category: "data" | "ai" | "logic" | "trigger" | "action";
+                isImplemented?: boolean | undefined;
+                isDisabled?: boolean | undefined;
+            };
+            colorKey?: string | undefined;
+            components?: {
+                node?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+                form?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+            } | undefined;
+            layout?: {
+                getHeight?: string | undefined;
+                getPorts?: string | undefined;
+                hasInput?: boolean | undefined;
+                usesExitCount?: boolean | undefined;
+            } | undefined;
+            handlePrefix?: string | undefined;
+        } | undefined;
         types?: string | undefined;
         runtime?: {
             handler?: string | undefined;
@@ -1728,7 +2310,39 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             validate?: string | undefined;
             register?: string | undefined;
         } | undefined;
-        fe?: StepFrontendDeclaration | undefined;
+        fe?: {
+            nodeConfig: {
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                connectionRules: {
+                    inputs: number;
+                    outputs: number;
+                };
+                category: "data" | "ai" | "logic" | "trigger" | "action";
+                isImplemented?: boolean | undefined;
+                isDisabled?: boolean | undefined;
+            };
+            colorKey?: string | undefined;
+            components?: {
+                node?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+                form?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+            } | undefined;
+            layout?: {
+                getHeight?: string | undefined;
+                getPorts?: string | undefined;
+                hasInput?: boolean | undefined;
+                usesExitCount?: boolean | undefined;
+            } | undefined;
+            handlePrefix?: string | undefined;
+        } | undefined;
         types?: string | undefined;
         runtime?: {
             handler?: string | undefined;
@@ -1771,7 +2385,39 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             validate?: string | undefined;
             register?: string | undefined;
         } | undefined;
-        fe?: unknown;
+        fe?: {
+            nodeConfig: {
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                connectionRules: {
+                    inputs: number;
+                    outputs: number;
+                };
+                category: "data" | "ai" | "logic" | "trigger" | "action";
+                isImplemented?: boolean | undefined;
+                isDisabled?: boolean | undefined;
+            };
+            colorKey?: string | undefined;
+            components?: {
+                node?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+                form?: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                } | undefined;
+            } | undefined;
+            layout?: {
+                getHeight?: string | undefined;
+                getPorts?: string | undefined;
+                hasInput?: boolean | undefined;
+                usesExitCount?: boolean | undefined;
+            } | undefined;
+            handlePrefix?: string | undefined;
+        } | undefined;
         types?: string | undefined;
         runtime?: {
             handler?: string | undefined;
@@ -1865,7 +2511,49 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     appExtensions: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
-        surface?: SurfaceDeclaration | undefined;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1893,11 +2581,72 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
-        references?: ReferenceDeclarations | undefined;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
         designation?: string | undefined;
     }>, Record<string, {
         description: string;
-        surface?: unknown;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1918,11 +2667,72 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         settings?: unknown;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
-        references?: unknown;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
         designation?: string | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
-        surface?: SurfaceDeclaration | undefined;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1950,11 +2760,72 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         } | undefined;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
-        references?: ReferenceDeclarations | undefined;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
         designation?: string | undefined;
     }>, Record<string, {
         description: string;
-        surface?: unknown;
+        surface?: {
+            label: string;
+            state: string;
+            icon?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            canvas?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | {
+                routes: Record<string, string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                }>;
+            } | undefined;
+            panel?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            chat?: string | {
+                entry: string;
+                load?: "lazy" | undefined;
+            } | undefined;
+            isPinned?: boolean | undefined;
+            hotkeys?: readonly {
+                action: string;
+                global?: boolean | undefined;
+            }[] | undefined;
+            options?: {
+                headerClass?: string | undefined;
+            } | undefined;
+            fallbackPanel?: {
+                label: string;
+                toggle: {
+                    type: string;
+                };
+                isShown: string;
+            } | undefined;
+            defaultVisible?: boolean | undefined;
+            contract?: string | undefined;
+            default?: boolean | undefined;
+        } | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1975,7 +2846,26 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         settings?: unknown;
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
-        references?: unknown;
+        references?: {
+            types: Record<string, {
+                category: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                svgElements: readonly (readonly ["path", Readonly<{
+                    d: string;
+                }>] | readonly ["rect", Readonly<Record<string, string>>] | readonly ["circle", Readonly<Record<string, string>>])[];
+            }>;
+            categories: Record<string, {
+                label: string;
+                icon: string | {
+                    entry: string;
+                    load?: "lazy" | undefined;
+                };
+                useItems: string;
+            }>;
+        } | undefined;
         designation?: string | undefined;
     }>>>>;
 }, z.core.$strict>;
@@ -2215,7 +3105,7 @@ export interface PackMigrationDeclaration {
 export type PackModuleLoader = (file: string) => Promise<Record<string, unknown>>;
 
 // @public (undocumented)
-export type PackPermission = 'ears' | 'llm' | 'filesystem' | 'network' | 'terminal';
+export type PackPermission = (typeof PACK_PERMISSIONS)[number];
 
 // @public (undocumented)
 export const PackPermissionSchema: z.ZodEnum<{
@@ -2564,7 +3454,45 @@ export const StepEntrySchema: z.ZodObject<{
         validate: z.ZodOptional<z.ZodString>;
         register: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>>;
-    fe: z.ZodOptional<z.ZodLazy<z.ZodType<StepFrontendDeclaration, unknown, z.core.$ZodTypeInternals<StepFrontendDeclaration, unknown>>>>;
+    fe: z.ZodOptional<z.ZodLazy<z.ZodObject<{
+        nodeConfig: z.ZodObject<{
+            icon: z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+                entry: z.ZodString;
+                load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+            }, z.core.$strict>]>;
+            connectionRules: z.ZodObject<{
+                inputs: z.ZodNumber;
+                outputs: z.ZodNumber;
+            }, z.core.$strict>;
+            category: z.ZodEnum<{
+                data: "data";
+                ai: "ai";
+                logic: "logic";
+                trigger: "trigger";
+                action: "action";
+            }>;
+            isImplemented: z.ZodOptional<z.ZodBoolean>;
+            isDisabled: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>;
+        colorKey: z.ZodOptional<z.ZodString>;
+        components: z.ZodOptional<z.ZodObject<{
+            node: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+                entry: z.ZodString;
+                load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+            }, z.core.$strict>]>>;
+            form: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+                entry: z.ZodString;
+                load: z.ZodOptional<z.ZodLiteral<"lazy">>;
+            }, z.core.$strict>]>>;
+        }, z.core.$strict>>;
+        layout: z.ZodOptional<z.ZodObject<{
+            getHeight: z.ZodOptional<z.ZodString>;
+            getPorts: z.ZodOptional<z.ZodString>;
+            hasInput: z.ZodOptional<z.ZodBoolean>;
+            usesExitCount: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>>;
+        handlePrefix: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>>>;
     types: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodObject<{
         handler: z.ZodOptional<z.ZodString>;
