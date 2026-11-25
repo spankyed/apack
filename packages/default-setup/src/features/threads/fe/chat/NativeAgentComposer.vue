@@ -262,7 +262,8 @@ onBeforeUnmount(() => {
 .native-agent-composer :deep(.native-agent-editor .ProseMirror) { min-height: 24px; max-height: none; overflow: visible; padding: 0; }
 .native-agent-composer :deep(.native-strip--open) { min-height: 0; }
 @container claude-agent-pane (max-height: 24rem) {
-  .native-agent-composer { margin-bottom: .25rem; }
+  .native-agent-composer { margin-bottom: 0; }
+  .native-agent-composer--tools { margin-bottom: .25rem; }
   .native-agent-actions { padding-block: .25rem; }
   /* The draft already has top padding beneath the collapsed status strip. */
   .native-agent-composer:not(.native-agent-composer--tools) :deep([data-testid="composer-session-strip"]) { padding-block: .25rem 0; }

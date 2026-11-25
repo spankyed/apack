@@ -233,7 +233,7 @@ watch([hasContent, toolsExpanded], ([available, expanded]) => {
   .native-strip--tools-and-billing .native-strip-header { display: contents; }
   .native-strip--tools-and-billing .native-strip-toggle { grid-area: 1 / 2; }
   .native-strip--tools-and-billing .native-strip-billing { grid-area: 1 / 1; margin-top: 0; }
-  .native-strip--tools-and-billing .native-strip-output { grid-column: 1 / -1; }
+  .native-strip--tools-and-billing .native-strip-output { grid-column: 1 / -1; margin-top: .125rem; }
 }
 @media (prefers-reduced-motion: reduce) { .transition-transform { transition: none; } }
 </style>
