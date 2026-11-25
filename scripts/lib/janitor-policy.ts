@@ -1,8 +1,9 @@
 // What `scripts/janitor.ts` removes, decided over what it found, so the decisions can be checked without a disk.
 //
-// Everything it may remove is a build cache that a build makes again: a Rust checkout's incremental compilation
-// sessions, its stale artifacts and — when the disk is low — the whole build output of a checkout nothing has
-// compiled in for a while, and the temporary directories an elmdb checkout's tests leave in its `tmp/`.
+// Everything it may remove is a build cache or temporary work directory that a build or test makes again: a Rust
+// checkout's incremental compilation sessions, its stale artifacts and — when the disk is low — the whole build output
+// of a checkout nothing has compiled in for a while, the temporary directories an elmdb checkout's tests leave in its
+// `tmp/`, and orphaned `cargo-mutants-*`, `apack-published-*` and `apack-authoring-*` directories in the system temp dir.
 // Nothing else is in reach — not Docker volumes, whose data may be another session's evidence
 // (docs/references/guides/docker-storage.md), and not logs.
 
@@ -107,3 +108,50 @@ export interface TmpEntry { name: string; mtimeMs: number }
 /** The entries of an elmdb `tmp/` old enough to be leftovers; its committed `.gitignore` stays */
 export const planTmpRemoval = (entries: readonly TmpEntry[], now: number): TmpEntry[] =>
   entries.filter((entry) => entry.name !== '.gitignore' && now - entry.mtimeMs > TEST_TMP_AGE_MS);
+
+export type SystemTmpKind = 'cargo-mutants' | 'apack-published' | 'apack-authoring';
+
+/** Classifies a directory name in `os.tmpdir()` that the janitor owns, or `undefined` for everything else */
+export function classifySystemTmpName(name: string): SystemTmpKind | undefined {
+  if (name.startsWith('cargo-mutants-')) return 'cargo-mutants';
+  if (name.startsWith('apack-published-')) return 'apack-published';
+  if (/^apack-authoring-[0-9a-f]{64}$/.test(name)) return 'apack-authoring';
+  return undefined;
+}
+
+export interface SystemTmpEntry {
+  name: string;
+  path: string;
+  kind: SystemTmpKind;
+  /** Most recent activity in the directory (for `cargo-mutants`, the newest profile compile or directory mtime) */
+  activityMs: number;
+  /** For `apack-authoring`: whether the recorded owner PID is still running */
+  ownerLive?: boolean;
+  /** For `apack-authoring`: whether the recorded checkout path still exists (`undefined` if unreadable) */
+  checkoutExists?: boolean;
+}
+
+/**
+ * Orphaned temporary directories in `os.tmpdir()` that are safe to reclaim:
+ * - `cargo-mutants-*`: a clean run removes its own temp copy, so any copy with no build activity past
+ *   `IN_USE_WINDOW_MS` (and whose `.cargo-lock` files are unheld) was stranded by a killed run.
+ * - `apack-published-*`: integration suites remove their own copy in `afterAll`; leftovers past `TEST_TMP_AGE_MS`
+ *   (tightened to `idleProfileMs` when the disk is low, never below `IN_USE_WINDOW_MS`) are removed.
+ * - `apack-authoring-<sha256>`: never removed while its recorded owner PID is live; removed when its checkout is
+ *   gone, or — when the disk is low — once idle past `idleProfileMs` (at least `IN_USE_WINDOW_MS`).
+ */
+export function planSystemTmpRemoval(
+  entries: readonly SystemTmpEntry[],
+  idleProfileMs: number | undefined,
+  now: number,
+): SystemTmpEntry[] {
+  const lowDiskWindow = idleProfileMs === undefined ? undefined : Math.max(idleProfileMs, IN_USE_WINDOW_MS);
+  return entries.filter((entry) => {
+    if (entry.ownerLive) return false;
+    const age = now - entry.activityMs;
+    if (entry.kind === 'cargo-mutants') return age > IN_USE_WINDOW_MS;
+    if (entry.kind === 'apack-published') return age > (lowDiskWindow ?? TEST_TMP_AGE_MS);
+    if (entry.checkoutExists === false) return true;
+    return lowDiskWindow !== undefined && age > lowDiskWindow;
+  });
+}
