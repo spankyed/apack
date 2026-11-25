@@ -244,6 +244,36 @@ it('uses native select values and leaves the message composer untouched', async 
 })
 
 
+it('retains native field focus through the owned Select portal and releases it outside', async () => {
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0,
+    actionId: 'audience', focusId: 'audience-focus', value: 'developers', label: 'Audience', autoFocus: false,
+    options: [{ value: 'developers', label: 'Developers' }] } } })
+  const select = f.root.querySelector<HTMLElement>('[role=combobox]')!
+  const composer = f.root.querySelector<HTMLElement>('textarea[aria-label="Message"]')!
+  const portal = document.createElement('div')
+  portal.id = select.getAttribute('aria-controls')!
+  portal.role = 'listbox'
+  portal.dataset.state = 'open'
+  const option = document.createElement('button')
+  option.role = 'option'
+  portal.append(option)
+  document.body.append(portal)
+
+  select.focus()
+  option.focus()
+  expect(f.focusReport.mock.calls.map(([event]) => event.isHeld)).toEqual([true])
+  select.focus()
+  expect(f.focusReport.mock.calls.map(([event]) => event.isHeld)).toEqual([true])
+  option.focus()
+  composer.focus()
+  expect(f.focusReport.mock.calls.map(([event]) => event.isHeld)).toEqual([true, false])
+
+  select.focus()
+  portal.id += '-foreign'
+  option.focus()
+  expect(f.focusReport.mock.calls.map(([event]) => event.isHeld)).toEqual([true, false, true, false])
+})
+
 it('retires a portalled native Select popup when session tools collapse', async () => {
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0, actionId: 'choice',
     focusId: 'mode-choice', label: 'Mode', value: 'a', autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })

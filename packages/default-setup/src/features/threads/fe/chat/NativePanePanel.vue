@@ -32,6 +32,7 @@ import { computed, ref, watch, provide, onBeforeUnmount, onMounted, nextTick } f
 import { X, RotateCcw } from 'lucide-vue-next'
 import type { ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiFieldEvent } from '#generated/types.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
+import { useNativeSelectFocus } from './native-select-focus.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
@@ -75,14 +76,21 @@ watch(() => props.panes.body, () => hover.invalidate(), { flush: 'post' })
 let revision = 0, applying = false, held = false, autoEntering = false
 let consumedGrant: string | null = null
 const composing = ref(false)
+const selectFocus = useNativeSelectFocus(site, releaseFocus, panel)
 function focusIn(event: FocusEvent) {
   if (applying || !shown.value || !site.value || event.target !== document.activeElement) return
+  if (selectFocus.returnsToTrigger(event.target) && held) return
   held = true
   const target = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
   emit('focus-report', { paneId: shown.value, revision: ++revision, isHeld: true, focusId: target?.dataset.nativeFocusId ?? (event.target === site.value ? null : undefined), by: autoEntering ? 'auto' : 'person' })
 }
 function focusOut(event: FocusEvent) {
-  if (!held || applying || panel.value?.contains(event.relatedTarget as Node | null) || !shown.value) return
+  if (applying || panel.value?.contains(event.relatedTarget as Node | null) || selectFocus.entersPopup(event.relatedTarget)) return
+  releaseFocus()
+}
+function releaseFocus() {
+  selectFocus.reset()
+  if (!held || !shown.value) return
   held = false; emit('focus-report', { paneId: shown.value, revision: ++revision, isHeld: false, by: 'person' })
 }
 function panelKey(event: KeyboardEvent) { if (!site.value?.contains(event.target as Node)) siteKey(event) }
@@ -122,7 +130,7 @@ onMounted(() => {
   update()
 })
 onBeforeUnmount(() => { endResize(); observer?.disconnect() })
-watch(shown, () => { held = false; void nextTick(reportLayout) })
+watch(shown, () => { selectFocus.reset(); held = false; void nextTick(reportLayout) })
 watch([() => props.panes.roster.focused_id, () => props.grantFocus, () => props.panes.body.status], async ([id, grant, status]) => {
   if (!grant) consumedGrant = null
   if (!id || id !== grant || consumedGrant === grant || id !== shown.value || status !== 'live' || !document.hasFocus()) return

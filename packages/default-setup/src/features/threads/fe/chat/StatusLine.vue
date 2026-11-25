@@ -28,6 +28,7 @@ import { FolderOpen, ChevronDown } from 'lucide-vue-next'
 import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
+import { nativeSelectTrigger, useNativeSelectFocus } from './native-select-focus.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { claudeNativeSiteVisible } from './native-client-input.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
@@ -108,19 +109,22 @@ let applyingFocus = false
 let autoEntering = false
 let held = false
 const composing = ref(false)
+const selectFocus = useNativeSelectFocus(nativeSite, releaseNativeFocus)
 function reportFocusIn(event: FocusEvent) {
   const site = nativeSite.value
   if (applyingFocus || !site || event.target !== document.activeElement) return
   revealFocusedField()
+  if (selectFocus.returnsToTrigger(event.target) && held) return
   held = true
   const element = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
   emit('focus-report', { revision: ++focusRevision, isHeld: true, focusId: element?.dataset.nativeFocusId ?? (event.target === site ? null : undefined), by: autoEntering ? 'auto' : 'person' })
 }
 function reportFocusOut(event: FocusEvent) {
-  if (nativeSite.value?.contains(event.relatedTarget as Node | null)) return
+  if (nativeSite.value?.contains(event.relatedTarget as Node | null) || selectFocus.entersPopup(event.relatedTarget)) return
   releaseNativeFocus()
 }
 function releaseNativeFocus() {
+  selectFocus.reset()
   minimumHeight.value = undefined
   if (!held) return
   held = false
@@ -190,9 +194,7 @@ watch([hasContent, toolsExpanded], ([available, expanded]) => {
   if (expanded) return
   // Read the old DOM before Vue removes the active control or hides the site.
   const active = document.activeElement
-  const popupId = active?.closest<HTMLElement>('[role="listbox"][data-state="open"]')?.id
-  const wasInSite = !!nativeSite.value?.contains(active) || !!popupId && !!nativeSite.value
-    && [...nativeSite.value.querySelectorAll<HTMLElement>('[role="combobox"][data-native-focus-id]')].some(element => element.getAttribute('aria-controls') === popupId)
+  const wasInSite = nativeSite.value?.contains(active) || !!nativeSelectTrigger(nativeSite.value, active)
   const toggleIsLeaving = !available && active === toolsToggle.value
   composing.value = false
   releaseNativeFocus()
