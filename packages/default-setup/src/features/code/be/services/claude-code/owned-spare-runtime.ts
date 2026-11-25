@@ -14,7 +14,7 @@ export async function startOwnedWarmSpare(config,spareDirectory){
    const startup=prepareClaudeOwnedWorkerStartup({configDir:config.configDir,pid:process.pid,argv:[process.execPath,...process.argv.slice(2)]});
    if(!startup)return;
    const worker=dirname(startup),configPath=join(worker,'observer.json'),owned=JSON.parse(readFileSync(configPath,'utf8'));
-   writeFileSync(join(dirname(dirname(worker)),'worker-'+process.pid+'.json'),JSON.stringify({pid:process.pid,sessionId:owned.sessionId,start:processStart(process.pid),configPath}),{mode:0o600,flag:'wx'});
+   writeFileSync(join(dirname(dirname(worker)),'worker-'+process.pid+'.json'),JSON.stringify({pid:process.pid,sessionId:owned.jobSessionId,start:processStart(process.pid),configPath}),{mode:0o600,flag:'wx'});
    cleanup();return pathToFileURL(configPath);
   },
   readPolicy:()=>policy.readNativeHelperPolicy(),

@@ -51,3 +51,40 @@ test('observes the first claimed helper once while unclaimed child I/O and calle
  expect((await readFile(executions,'utf8')).trim().split('\n').map(line=>JSON.parse(line))).toEqual([payload,payload])
  expect(await readdir(spareRoot)).toEqual([])
 })
+
+test('uses the original job identity when a background restart names its owned transcript', async () => {
+  vi.stubEnv('CLAUDE_SECURESTORAGE_CONFIG_DIR', undefined)
+  const temporary = process.platform === 'darwin' ? '/private/tmp' : '/tmp'
+  const root = await mkdtemp(join(temporary, 'cc-spare-resume-'))
+  const observer = await mkdtemp(join(temporary, 'cc-child-'))
+  roots.push(root, observer)
+  const profile = await prepareClaudeOwnedProfile({ userDataDir: root })
+  const jobSessionId = '11111111-1111-4111-8111-111111111111'
+  const sessionId = '22222222-2222-4222-8222-222222222222'
+  const job = join(profile.configDir, 'jobs', '11111111')
+  const project = join(profile.configDir, 'projects', 'release-review')
+  const transcript = join(project, sessionId + '.jsonl')
+  const foreign = join(root, sessionId + '.jsonl')
+  const plugin = join(observer, 'plugin')
+  await Promise.all([mkdir(job, { recursive: true }), mkdir(project, { recursive: true }), mkdir(plugin)])
+  await Promise.all([
+    writeFile(join(job, 'state.json'), JSON.stringify({ sessionId: jobSessionId, resumeSessionId: sessionId }), { mode: 0o600 }),
+    writeFile(transcript, '{}\n', { mode: 0o600 }),
+    writeFile(foreign, '{}\n', { mode: 0o600 }),
+    writeFile(join(observer, 'child-ui-launch.json'), JSON.stringify({
+      directory: observer, configDir: profile.configDir, executable: await realpath(process.execPath),
+      socketPath: join(observer, 'status.sock'), token: 'a'.repeat(64),
+    }), { mode: 0o600 }),
+    writeFile(join(observer, 'child-ui-template.mjs'), 'export {}', { mode: 0o600 }),
+    writeFile(join(observer, 'child-helper-template.mjs'), 'export {}', { mode: 0o600 }),
+  ])
+  const launcher = join(profile.configDir, '..', 'bin', 'launch.mjs')
+  const run = (path: string) => execFileWhileWorking(process.execPath, [
+    launcher, profile.configDir, String(process.pid), process.execPath, '--resume', path, '--plugin-dir', plugin,
+  ], { timeout: 10000, env: { ...process.env, CLAUDE_CONFIG_DIR: profile.configDir, CLAUDE_CODE_SESSION_KIND: 'bg', CLAUDE_BG_RENDEZVOUS_SOCK: '/owned/rendezvous', CLAUDE_JOB_DIR: job } })
+  expect((await run(foreign)).stdout).toBe('')
+  const { stdout } = await run(transcript)
+  expect(stdout).toContain('/startup.mjs')
+  const config = JSON.parse(await readFile(join(stdout, '..', 'observer.json'), 'utf8'))
+  expect(config).toMatchObject({ sessionId, jobSessionId })
+})

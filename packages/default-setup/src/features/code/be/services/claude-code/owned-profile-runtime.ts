@@ -1,15 +1,37 @@
 /** Node helper for the original native launcher's argv prefix. The shell exec retains the native PID. */
 export const claudeOwnedLauncherRuntime = String.raw`import {readFileSync,lstatSync,realpathSync,mkdirSync,mkdtempSync,writeFileSync,readdirSync,rmSync} from 'node:fs';
-import {join,dirname} from 'node:path';
+import {basename,join,dirname} from 'node:path';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 export function processStart(pid){if(process.platform==='linux'){const value=readFileSync('/proc/'+pid+'/stat','utf8');return value.slice(value.lastIndexOf(')')+2).split(' ')[19];}return execFileSync('/bin/ps',['-p',String(pid),'-o','lstart='],{encoding:'utf8',timeout:1000}).trim();}
 function privateFile(path,maxBytes){const s=lstatSync(path);if(!s.isFile()||s.uid!==process.getuid()||(s.mode&0o077)!==0||s.size>maxBytes)throw Error('Unowned Claude child startup input');return readFileSync(path,'utf8');}
+const sessionUuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+function workerLaunchIdentity(configDir,argv,env){
+ const values=['--session-id','--resume'].map(flag=>{const index=argv.indexOf(flag);return index<0?undefined:argv[index+1];});
+ const session=values.find(value=>typeof value==='string'&&sessionUuid.test(value));
+ if(session)return {sessionId:session,jobSessionId:session};
+ const resume=values[1],jobDirectory=env.CLAUDE_JOB_DIR;
+ if(typeof resume!=='string'||typeof jobDirectory!=='string'||!resume.startsWith('/')||!jobDirectory.startsWith('/'))return;
+ const active=basename(resume,'.jsonl');
+ if(!resume.endsWith('.jsonl')||!sessionUuid.test(active))return;
+ try{
+  const info=lstatSync(resume),jobInfo=lstatSync(jobDirectory);
+  if(!info.isFile()||info.uid!==process.getuid()||(info.mode&0o077)!==0||!jobInfo.isDirectory()||jobInfo.uid!==process.getuid())return;
+  const profile=realpathSync(configDir),transcript=realpathSync(resume),job=realpathSync(jobDirectory);
+  if(dirname(dirname(transcript))!==join(profile,'projects')||basename(transcript)!==active+'.jsonl'||dirname(job)!==join(profile,'jobs'))return;
+  const state=JSON.parse(privateFile(join(job,'state.json'),65536));
+  if(typeof state?.sessionId!=='string'||!sessionUuid.test(state.sessionId)||state.sessionId.slice(0,8)!==basename(job)||(state.resumeSessionId??state.sessionId)!==active)return;
+  return {sessionId:active,jobSessionId:state.sessionId};
+ }catch{
+  // An unavailable or foreign native job keeps its original terminal route.
+  return;
+ }
+}
 export function prepareClaudeOwnedWorkerStartup({configDir,pid,argv,env=process.env}){
  if(env.CLAUDE_CONFIG_DIR!==configDir||env.CLAUDE_CODE_SESSION_KIND!=='bg'||!env.CLAUDE_BG_RENDEZVOUS_SOCK||argv.includes('--bg-pty-host')||!Number.isSafeInteger(pid)||pid<2)return;
- const sessionId=['--session-id','--resume'].map(flag=>argv.indexOf(flag)).filter(index=>index>=0).map(index=>argv[index+1]).find(value=>typeof value==='string'&&/^[a-f0-9-]{36}$/i.test(value));
- if(!sessionId)return;
+ const identity=workerLaunchIdentity(configDir,argv,env);
+ if(!identity)return;
  let selected;
  for(let index=0;index<argv.length-1;index++){
   if(argv[index]!=='--plugin-dir')continue;
@@ -35,13 +57,13 @@ export function prepareClaudeOwnedWorkerStartup({configDir,pid,argv,env=process.
  }
  const worker=mkdtempSync(join(workers,'w-'+pid+'-'));
  const originalBunOptions=env.BUN_OPTIONS??null;
- const config={socketPath:descriptor.socketPath,token:randomBytes(32).toString('hex'),sessionId,jobSessionId:sessionId,mainObservationClaimed:false,transportEpoch:randomBytes(16).toString('hex'),generations:{main:randomUUID(),subagent:randomUUID()},uiSocketPath:join(worker,'ui.sock'),originalBunOptions};
+ const config={socketPath:descriptor.socketPath,token:randomBytes(32).toString('hex'),...identity,mainObservationClaimed:false,transportEpoch:randomBytes(16).toString('hex'),generations:{main:randomUUID(),subagent:randomUUID()},uiSocketPath:join(worker,'ui.sock'),originalBunOptions};
  writeFileSync(join(worker,'observer.json'),JSON.stringify(config),{mode:0o600,flag:'wx'});
  const runtime=privateFile(join(directory,'child-ui-template.mjs'),4*1024*1024);
  writeFileSync(join(worker,'ui.mjs'),runtime,{mode:0o600,flag:'wx'});
  writeFileSync(join(worker,'status.mjs'),privateFile(join(directory,'child-helper-template.mjs'),4*1024*1024),{mode:0o600,flag:'wx'});
  const marker=join(worker,'startup.mjs');
- writeFileSync(marker,"import {execFileSync} from 'node:child_process';\nimport {readFileSync,writeFileSync} from 'node:fs';\nconst config=JSON.parse(readFileSync(new URL('./observer.json',import.meta.url),'utf8'));\nif(process.pid!=="+pid+"||process.env.CLAUDE_CONFIG_DIR!=="+JSON.stringify(configDir)+")throw Error('Claude child startup identity changed');\nif(config.originalBunOptions===null||config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;\nwriteFileSync("+JSON.stringify(join(directory,'worker-'+pid+'.json'))+",JSON.stringify({pid:process.pid,sessionId:config.sessionId,start:("+processStart.toString()+") (process.pid),configPath:"+JSON.stringify(join(worker,'observer.json'))+"}),{mode:0o600,flag:'wx'});\nawait import('./status.mjs');\n",{mode:0o600,flag:'wx'});
+ writeFileSync(marker,"import {execFileSync} from 'node:child_process';\nimport {readFileSync,writeFileSync} from 'node:fs';\nconst config=JSON.parse(readFileSync(new URL('./observer.json',import.meta.url),'utf8'));\nif(process.pid!=="+pid+"||process.env.CLAUDE_CONFIG_DIR!=="+JSON.stringify(configDir)+")throw Error('Claude child startup identity changed');\nif(config.originalBunOptions===null||config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;\nwriteFileSync("+JSON.stringify(join(directory,'worker-'+pid+'.json'))+",JSON.stringify({pid:process.pid,sessionId:config.jobSessionId,start:("+processStart.toString()+") (process.pid),configPath:"+JSON.stringify(join(worker,'observer.json'))+"}),{mode:0o600,flag:'wx'});\nawait import('./status.mjs');\n",{mode:0o600,flag:'wx'});
  return marker;
 }
 function privateDirectory(path){mkdirSync(path,{mode:0o700,recursive:true});const info=lstatSync(path);if(!info.isDirectory()||info.uid!==process.getuid()||(info.mode&0o077)!==0)throw Error('Unowned Claude spare directory');}
