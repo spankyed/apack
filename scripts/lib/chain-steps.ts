@@ -665,13 +665,14 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // The runtime also imports root package metadata for the app version.
   server: { pack: true, inputs: ['package.json'] },
   // `pretest: ensure-packages-built`; `published-sdk-peers` reads the built `dist` and skips without it.
+  // `packaged-app-files` reads the sealed Default Setup archive's integrity manifest.
   // `repo`: six of its specs ask git what the repo holds — the chain's input coverage, spec placement,
   // the lint's scope, the import rules — so every one of them is about files this package does not own
   // The integration HMR check traverses the fixture packs' generated frontend entries.
   // `inputs: ['docs']`: `doc-links` resolves every relative link between the repo's documents, and a
   // dead link fails nothing on its own — so the tree it reads has to be in this step's key or the check
   // caches over a move. Only here, since a typo in a guide should not re-run `typecheck`.
-  'internal-repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
+  'internal-repo-checks': { packages: true, pack: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
   // `pretest: ensure-packages-built`; it npm-packs the built packages into a consumer and compiles it
   'internal-publish-checks': { packages: true },
 };
