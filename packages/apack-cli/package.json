@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@apackdev/host": "*",
+    "@apackdev/pack-build": "*",
+    "@apackdev/pack-format": "*",
     "@apackdev/sdk": "*",
     "@octokit/rest": "^21.1.1",
     "@vitejs/plugin-vue": "^6.0.1",

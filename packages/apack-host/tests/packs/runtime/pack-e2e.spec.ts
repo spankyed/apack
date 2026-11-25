@@ -1,6 +1,6 @@
 import { eventContractsFixture } from './build-fixture.ts';
 import { sealPack } from './build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 /**
  * E2E test: exercises the real pack loading pipeline against an isolated
  * test data directory (resolved through @apackdev/sdk/env, never the user's
@@ -18,7 +18,7 @@ import * as os from 'os';
 import { loadExternalPacks } from '../../../src/packs/runtime/loader.ts';
 import { getPacksWithClientLoadedFrontends } from '../../../src/packs/layout.ts';
 import type { LoadedPack } from '../../../src/packs/runtime/loader.ts';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_LAYOUT } from '../../../src/packs/layout.ts';
 

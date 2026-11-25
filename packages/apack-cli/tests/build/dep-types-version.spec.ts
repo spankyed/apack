@@ -1,9 +1,10 @@
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { generatePackFiles, PACK_SNAPSHOT_FORMAT, PACK_TYPES_FACADE, type PackManifest, type PackSnapshot } from '@apackdev/sdk/build';
+import { generatePackFiles, PACK_TYPES_FACADE } from '@apackdev/pack-build';
+import { PACK_SNAPSHOT_FORMAT, type PackManifest, type PackSnapshot } from '@apackdev/pack-format';
 import { bundlePackTypes } from '../../src/build/types-bundler';
 import { warnStaleDepTypes } from '../../src/commands/generate-entries';
 

@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import * as installation from '../../src/build/compiler-installation.ts';
 import * as checkout from '../../src/build/checkout-packages.ts';
 import { readPackDevServerInputs } from '../../src/build/fe-bundler.ts';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';

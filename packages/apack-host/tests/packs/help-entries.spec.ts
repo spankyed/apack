@@ -1,7 +1,7 @@
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { describe, expect, it } from 'vitest';
 import type { HelpDocument } from '@apackdev/sdk/framework';
-import { ManifestSchema, _declarationRevision } from '@apackdev/sdk/build';
+import { ManifestSchema, _declarationRevision } from '@apackdev/pack-format';
 
 const article = (id: string): HelpDocument => ({ id, title: id, body: `About ${id}` });
 function declaration(id: string, name: string, help?: HelpDocument[]) {

@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import type { EarsEngine, BeforeCommit } from '@elmdb/ears';
 import { readInstalledContributionCatalog } from '../packs/catalog.ts';
 import { discoverPackDirectories } from '../packs/discovery.ts';
-import { PACK_LAYOUT } from '../packs/layout-paths.ts';
+import { PACK_LAYOUT } from '@apackdev/pack-format';
 import { disabledPackIds } from '../packs/installed.ts';
 import { compileSettingsCatalog } from '../features/settings/validation.ts';
 import { SettingsRefusedError } from '../features/settings/document.ts';

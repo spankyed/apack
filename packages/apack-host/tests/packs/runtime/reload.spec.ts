@@ -1,5 +1,5 @@
 import { sealPack } from './build-fixture.ts';
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 // Reloading a pack loads and registers its rebuilt runtime before the running one shuts down: a rebuild that
 // fails to load, or whose registration is refused, leaves the running pack as it was.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import { registry } from './test-host.ts';
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { _createPackServices, type SettingsService } from '@apackdev/sdk/services';
-import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { PACK_LAYOUT, getLoadedPackEntries } from '../../../src/packs/layout.ts';
 

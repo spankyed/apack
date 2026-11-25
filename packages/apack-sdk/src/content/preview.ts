@@ -1,8 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { parseContentIndex } from '../build/content-index.ts';
 import type { PackContentPreview } from '../framework/preview-types.ts';
-import { registeredContentKeys, CONTENT_INDEX_FILE } from '../utils/apply.ts';
+import { registeredContentKeys, CONTENT_INDEX_FILE, _readContentIndex } from '../utils/apply.ts';
 
 export type { PackContentPreview, PackContentPreviewItem } from '../framework/preview-types.ts';
 
@@ -16,7 +15,7 @@ export function previewPackContent(directory: string): PackContentPreview {
   if (!fs.existsSync(indexFile)) {
     throw new Error(`${directory} has no ${CONTENT_INDEX_FILE}: choose a pack's compiled content directory (built by apack pack build)`);
   }
-  const index = parseContentIndex(JSON.parse(fs.readFileSync(indexFile, 'utf-8')));
+  const index = _readContentIndex(directory);
   const packId = index.packId;
   const registered = new Set(registeredContentKeys(packId));
   if (registered.size === 0) {

@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { packFeatures } from '@apackdev/sdk/build';
+import { packFeatures } from '@apackdev/pack-format';
 import { renderTemplate } from '../templates.ts';
 import { cliVersion, findPackRoot } from '../utils';
 import { npmUpgradeStep, scaffoldUnitTestSetup } from './init';

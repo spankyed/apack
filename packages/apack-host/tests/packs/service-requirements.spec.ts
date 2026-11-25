@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/pack-format';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import { createContributionCatalog, type PackCatalogEntry, type PackCatalogSnapshot } from '../../src/packs/catalog.ts';
 import { assertPackServiceRequirements } from '../../src/packs/service-requirements.ts';

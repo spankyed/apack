@@ -21,14 +21,17 @@ import * as tar from 'tar';
 import { isDeepStrictEqual } from 'node:util';
 import { DECLARED_COMMANDS_KEY } from '@apackdev/sdk/framework';
 import { replaceDir } from '../replace-dir.ts';
-import { parseSnapshot, parseContentIndex, contentFile, CONTENT_INDEX_FILE, _snapshotFormatMismatch, PACK_SNAPSHOT_FORMAT, type ContentIndex, type PackManifest, type PackSnapshot, type SnapshotFormatMismatch } from '@apackdev/sdk/build';
+import {
+  PACK_LAYOUT, PACK_LAYOUT_VERSION, parseSnapshot, parseContentIndex, contentFile, CONTENT_INDEX_FILE,
+  _snapshotFormatMismatch, PACK_SNAPSHOT_FORMAT,
+  type ContentIndex, type PackIntegrity, type PackManifest, type PackSnapshot, type SnapshotFormatMismatch,
+} from '@apackdev/pack-format';
 import type { PackRegistry } from './registry.ts';
-import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
 import type { LoadedPackEntry } from './layout-types.ts';
 import { readPackIntegrity, packBuildRevision, verifyPack, readVerifiedPackFiles, sha256File, packFileHashes, listPackFiles } from './assets.ts';
 import { settingsDeclarationDiagnostics } from '../features/settings/compile.ts';
 
-export { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
+export { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from '@apackdev/pack-format';
 export type { LoadedPackEntry } from './layout-types.ts';
 export { readPackIntegrity, packBuildRevision, readPackAsset, verifyPack, sha256File, packFileHashes } from './assets.ts';
 

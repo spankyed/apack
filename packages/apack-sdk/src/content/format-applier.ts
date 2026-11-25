@@ -6,9 +6,8 @@ import { findRelations, boundEars as ears, untypedCreate, untypedWrite, untypedQ
 import type { QueryBuilder } from '@elmdb/ears';
 import { _getMediaPath, loadJSON, selectsAll, type ContentApplier, type ApplyContext, type ApplyResult, type AppliedItem } from '../utils/index.ts';
 import { resolve, resolveRemoval, type LiveEntity } from './merge.ts';
-import { contentPath } from '../build/manifest.ts';
 import { contentPackId } from '../utils/apply.ts';
-import { RECORD_KEYS, itemLabel, type CompiledContentFile, type ContentItem } from '../build/content/items.ts';
+import { RECORD_KEYS, itemLabel, type CompiledContentFile, type ContentItem } from './item-types.ts';
 import { _contentWriterRegistry, type ContentWriteContext, type ContentMatch, type ContentWriter } from './writers.ts';
 import { errorMessage } from '../utils/shared.ts';
 import type { ContentEditPolicy } from '../framework/declaration-types.ts';
@@ -198,7 +197,7 @@ export function createFormatApplier(options: FormatApplierOptions): ContentAppli
     key,
     apply(ctx: ApplyContext): ApplyResult {
       const counts: ApplyResult = { created: 0, updated: 0, skipped: 0 };
-      const file = loadJSON<CompiledContentFile>(contentPath(ctx.compiledDir, key));
+      const file = loadJSON<CompiledContentFile>(path.join(ctx.compiledDir, `${key}.content.json`));
       if (!file) {
         ctx.log(`  ${key} file not found, skipping`);
         return counts;

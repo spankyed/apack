@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { packFixture } from '../../src/testing/pack-fixture.ts';
 import * as testing from '../../src/testing/index.ts';
 import manifest from '../../package.json' with { type: 'json' };
-import type { PackManifest } from '../../src/build/manifest.ts';
+import type { PackManifest } from '../../src/framework/declaration-types.ts';
 import { _surfaceTargets } from '../../src/framework/surface-declaration.ts';
 import { population } from '../../src/testing/population.ts';
 

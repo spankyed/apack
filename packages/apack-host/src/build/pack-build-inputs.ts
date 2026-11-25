@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { hash as cryptoHash } from 'node:crypto';
 import { verifyPack } from '../packs/assets.ts';
-import type { PackIntegrity } from '../packs/layout-paths.ts';
+import type { PackIntegrity } from '@apackdev/pack-format';
 import { readPackageInputs, type PackageInputOwner } from './package-inputs.ts';
 import { assertNativeCompilerObservations, withoutCompilerFileReads, type CompilerInputObservations } from './compiler-inputs/index.ts';
 

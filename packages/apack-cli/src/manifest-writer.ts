@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { FeatureEntrySchema, ManifestSchema, type PackManifest } from '@apackdev/sdk/build';
+import { FeatureEntrySchema, ManifestSchema, type PackManifest } from '@apackdev/pack-format';
 
 const shape = ManifestSchema.shape;
 const rootFields = Object.keys(shape);

@@ -12,7 +12,7 @@ import { createPackCompilerInputView } from '@apackdev/host/build/compiler-input
 import { writePackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
 import { readPackageInputs } from '@apackdev/host/build/package-inputs';
 
-import { _declarationRevision } from '@apackdev/sdk/build';
+import { _declarationRevision } from '@apackdev/pack-format';
 
 const compilation = {
   hash: 'test-compiler',

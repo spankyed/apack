@@ -13,8 +13,7 @@
     "node": ">=24.12.0"
   },
   "files": [
-    "dist",
-    "apack.schema.json"
+    "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -22,10 +21,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "api:build": "node -e \"require('fs').rmSync('.temp/api-types', { recursive: true, force: true })\" && tsc -p tsconfig.api-extractor.json",
-    "schema:check": "node scripts/generate-schema.ts --check",
     "api:check": "npm run api:build && node ../../scripts/api-reports.ts .",
-    "api:update": "npm run api:build && node ../../scripts/api-reports.ts . --local",
-    "schema:update": "node scripts/generate-schema.ts"
+    "api:update": "npm run api:build && node ../../scripts/api-reports.ts . --local"
   },
   "exports": {
     ".": {
@@ -189,7 +186,6 @@
       "types": "./dist/testing/fe.d.ts",
       "default": "./dist/testing/fe.js"
     },
-    "./apack.schema.json": "./apack.schema.json",
     "./runtime/internals": {
       "@apackdev/source": "./src/runtime/internals.ts"
     },
@@ -208,11 +204,8 @@
     "@tiptap/vue-3": "^3.32.0",
     "ai": "^7.0.0",
     "elmdb": "0.1.0",
-    "esbuild": "^0.25.0",
-    "typescript": ">=5.7",
     "vue": "^3.5.18",
-    "xstate": "^5.19.2",
-    "zod": "^4.6.7"
+    "xstate": "^5.19.2"
   },
   "peerDependenciesMeta": {
     "@tiptap/pm": {
@@ -220,37 +213,21 @@
     },
     "@tiptap/vue-3": {
       "optional": true
-    },
-    "esbuild": {
-      "optional": true
-    },
-    "typescript": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@microsoft/api-extractor": "^7.59.1",
-    "@types/mdast": "^4.0.4",
     "ai": "^7.0.100",
-    "esbuild": "^0.25.0",
-    "typescript": "^5.8.3",
     "vite": "^7.3.7",
     "vitest": "^4.1.12",
     "xstate": "^5.19.2",
-    "jsdom": "^26.1.0",
-    "@types/semver": "^7.8.0",
-    "vscode-json-languageservice": "^5.7.2"
+    "jsdom": "^26.1.0"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "dependencies": {
-    "@elmdb/ears": "0.1.0",
-    "json-schema-to-typescript": "^15.0.4",
-    "mdast-util-from-markdown": "^2.0.2",
-    "mdast-util-to-markdown": "^2.1.2",
-    "semver": "^7.8.5",
-    "yaml": "^2.9.1"
+    "@elmdb/ears": "0.1.0"
   }
 }

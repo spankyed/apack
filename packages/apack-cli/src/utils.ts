@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { parseManifest, type PackManifest } from '@apackdev/sdk/build';
+import { parseManifest, type PackManifest } from '@apackdev/pack-format';
 import { settingsDeclarationDiagnostics } from '@apackdev/host/packs';
 import { cliDirs } from './app/pack-host';
 import { resolveStoredProfile } from './app/profiles';

@@ -6,7 +6,8 @@ import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { afterEach, describe, expect, it } from 'vitest';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
-import { generatePackFiles, type PackManifest } from '@apackdev/sdk/build';
+import { generatePackFiles } from '@apackdev/pack-build';
+import type { PackManifest } from '@apackdev/pack-format';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { bundlePackWorkers } from '../../src/build/be-bundler';
 

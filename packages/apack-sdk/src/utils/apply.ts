@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { boundHost } from '../runtime/host-runtime.ts';
-import { parseContentIndex } from '../build/content-index.ts';
+import { PACK_ID_PATTERN } from '../ids/refs.ts';
+import { isPlainObject } from './shared.ts';
+import type { ContentIndex } from '../content/index-types.ts';
 import type { ApplyRecord, ContentSelection, ImportMode, ImportResult } from './apply-types.ts';
 
 export { applyRecord } from './apply-types.ts';
@@ -17,13 +19,27 @@ export function registeredContentKeys(packId: string): string[] {
 /** The index compilePack writes next to a pack's compiled content */
 export const CONTENT_INDEX_FILE = 'content.json';
 
+/** @internal Read a compiled `content.json` index at runtime without pulling schema validators into the SDK. */
+export function _readContentIndex(compiledDir: string): ContentIndex {
+  const indexFile = path.join(compiledDir, CONTENT_INDEX_FILE);
+  const raw = JSON.parse(fs.readFileSync(indexFile, 'utf8')) as unknown;
+  if (!isPlainObject(raw) || raw.version !== 1 || typeof raw.packId !== 'string' || !PACK_ID_PATTERN.test(raw.packId) || !Array.isArray(raw.entries)) {
+    throw new Error(`Invalid ${CONTENT_INDEX_FILE}: expected version 1, valid packId, and entries array`);
+  }
+  for (const entry of raw.entries) {
+    if (!isPlainObject(entry) || typeof entry.key !== 'string' || entry.key.length === 0 || typeof entry.written !== 'boolean' || !Array.isArray(entry.items)) {
+      throw new Error(`Invalid ${CONTENT_INDEX_FILE}: malformed entry`);
+    }
+  }
+  return raw as unknown as ContentIndex;
+}
+
 /**
  * The pack that compiled a content directory, from its content.json. Content keys start with it, so two
  * packs' records with the same entry key and identity write an entity each.
  */
 export function contentPackId(compiledDir: string): string {
-  const indexFile = path.join(compiledDir, CONTENT_INDEX_FILE);
-  return parseContentIndex(JSON.parse(fs.readFileSync(indexFile, 'utf8'))).packId;
+  return _readContentIndex(compiledDir).packId;
 }
 
 /** Content a pack's compiled content directory with the appliers of the registered pack its content.json names */

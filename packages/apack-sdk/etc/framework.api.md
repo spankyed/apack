@@ -18,6 +18,9 @@ import type { RelationRules } from '@elmdb/ears';
 import type { RowRules } from '@elmdb/ears';
 import type { SearchDeclaration } from '@elmdb/ears';
 
+// @public
+export const ALLOWABLE_PACK_CHECKS: readonly ["cross-feature-imports", "untyped-sends", "raw-transport", "backend-console", "repository-casts"];
+
 // @public (undocumented)
 export type AllowablePackCheck = (typeof ALLOWABLE_PACK_CHECKS)[number];
 
@@ -134,6 +137,9 @@ export type ComponentTarget = string | {
 };
 
 // @public (undocumented)
+export const CONTENT_EDIT_POLICIES: readonly ["theirs", "offer"];
+
+// @public (undocumented)
 export interface ContentConfig {
     // (undocumented)
     datasets?: Record<string, ContentSourceConfig>;
@@ -224,6 +230,9 @@ export type DeclarationData<T> = T extends object ? {
 } : T;
 
 // @public
+export function declarationJson(value: object): string;
+
+// @public
 export const DECLARED_COMMANDS_KEY = "declared-commands";
 
 // @public
@@ -292,6 +301,17 @@ export interface DslDeclaration {
     targets: 'monaco'[];
 }
 
+// @public
+export function dslDefinitionsProblem(declarations: Readonly<Record<string, {
+    readonly targets: readonly string[];
+}>> | undefined, definitions: Readonly<Record<string, string>> | undefined): string | undefined;
+
+// @public (undocumented)
+export type DslEntry = DslDeclaration;
+
+// @public
+export const _ENTITY_NAME_PATTERN: RegExp;
+
 // @internal
 export function _entityDestinationsProblem(destinations: Readonly<Record<string, string>>, features: Readonly<Record<string, {
     readonly surface?: unknown;
@@ -330,6 +350,9 @@ export interface FeatureEventContract {
         asks?: Readonly<Record<string, readonly string[]>>;
     };
 }
+
+// @public
+export const _FIELD_NAME_PATTERN: RegExp;
 
 // @public
 export function formatReferenceHref(target: ReferenceTarget): string;
@@ -450,7 +473,20 @@ export type MachineMatchesContract<Entry, C extends SystemContract> = Entry exte
 } ? [Spec, SystemSpec<C>] extends [SystemSpec<C>, Spec] ? true : 'this system\'s defineSystem<…> declares a contract that is not the one apack.json names for its feature' : 'this system\'s default export has no `spec` from defineSystem<…>';
 
 // @public
+// @public
+export const MIGRATION_LINES: readonly ["app", "pack"];
+
+// @public
+export const MIGRATION_TARGET_PATTERN: RegExp;
+
+// @public
 export type MigrationLine = (typeof MIGRATION_LINES)[number];
+
+// @public (undocumented)
+export const _MODULE_PATH_PATTERN: RegExp;
+
+// @public (undocumented)
+export const _MODULE_REFERENCE_PATTERN: RegExp;
 
 // @public
 export interface NativePackDeclaration extends PackDataDeclarations, FrontendDeclaration {
@@ -762,6 +798,9 @@ export interface PackFlowHelpers {
     types: string;
 }
 
+// @public (undocumented)
+export type PackLifecycleConfig = PackLifecycleDeclaration;
+
 // @public
 export type PackLifecycleDeclaration = Partial<Record<typeof LIFECYCLE_HOOK_NAMES[number], string>>;
 
@@ -829,6 +868,12 @@ export interface PackMigrationDeclaration {
     description: string;
     // (undocumented)
     up: string;
+}
+
+// @public
+export interface PackMigrations {
+    app?: PackMigration[];
+    pack?: PackMigration[];
 }
 
 // @public (undocumented)
@@ -959,13 +1004,6 @@ export interface _PackServiceDeclarations {
 export function _packServiceDeclarations(pack: _PackServiceDeclarations): readonly _PackServiceDeclaration[];
 
 // @internal
-export function _packServiceSelection(pack: _PackServiceDeclarations, provider: (packId: string, ref: string) => _PackServiceDeclarations | undefined): readonly {
-    readonly ref: string;
-    readonly packId: string;
-    readonly name: string;
-}[];
-
-// @internal
 export function _packShortCodes(declaration: PackDataDeclarations): Record<string, string>;
 
 // @public (undocumented)
@@ -986,6 +1024,9 @@ export interface PackSnapshot {
     // (undocumented)
     types: PackTypeManifest;
 }
+
+// @public (undocumented)
+export type PackSurfaceEntry = SurfaceDeclaration;
 
 // @public
 export function packSystem(entry: SystemEntry, options: {
@@ -1019,6 +1060,18 @@ export function _packWeightedKinds(declaration: PackDataDeclarations): Record<st
 
 // @internal
 export function _parseEventContracts(data: unknown, features: Parameters<typeof _eventContractsProblem>[1], native?: boolean): PackEventContracts;
+
+// @internal
+export function _parseEventContractsShape(data: unknown): PackEventContracts;
+
+// @internal
+export function _parseModulePath(target: string, label: string): string;
+
+// @internal
+export function _parseModuleReference(target: string, label: string, defaultExport?: 'default'): {
+    source: string;
+    exportName: string;
+};
 
 // @public
 export function parseReferenceHref(href: string): ReferenceTarget | undefined;
@@ -1105,8 +1158,16 @@ export interface ReferenceTypeDeclaration {
     svgElements: readonly ReferenceSvgElement[];
 }
 
+// @internal
+export const _SEARCH_STEM_LANGUAGES: readonly ["ar", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pt", "ro", "ru", "sv", "ta", "tr"];
+
+// Warning: (ae-incompatible-release-tags) The symbol "SearchStemLanguage" is marked as @public, but its signature references "_SEARCH_STEM_LANGUAGES" which is marked as @internal
+//
 // @public
 export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
+
+// @internal
+export const _SERVICE_NAME_PATTERN: RegExp;
 
 // @internal
 export function _serviceProviderProblem(pack: Pick<_PackServiceDeclarations, 'id' | 'dependencies'>, ref: string): string | undefined;
@@ -1167,6 +1228,9 @@ export const _SHORT_CODE_PATTERN: RegExp;
 
 // @internal
 export function _shortCodeTypes(rules: ReadonlyArray<readonly [string, Partial<RowRules>]>): (code: string) => string | undefined;
+
+// @public
+export const SPECIALTY_CONTENT_KEYS: readonly string[];
 
 // @internal
 export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build' | 'trigger'>>): {
@@ -1566,6 +1630,9 @@ export type ViewUpdate<Result = unknown> = {
     commit: number;
     diagnostics?: ViewDiagnostics;
 };
+
+// @public
+export const _WIRE_NAME_PATTERN: RegExp;
 
 // (No @packageDocumentation comment for this package)
 

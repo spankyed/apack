@@ -4,7 +4,7 @@
 // holds.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { PackManifest } from '@apackdev/sdk/build';
+import type { PackManifest } from '@apackdev/pack-format';
 import { writeManifest } from '../../manifest-writer.ts';
 import { addContentSource } from './manifest';
 import { logCreated, validateName } from './write';

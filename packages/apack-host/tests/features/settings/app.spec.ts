@@ -3,7 +3,7 @@ import { beforeEach, expect, it } from 'vitest';
 import { boundEars, untypedQuery, untypedCreate } from '@apackdev/sdk/ears';
 import type { EARS } from '@apackdev/sdk';
 import { resetTestData } from '@apackdev/sdk/testing';
-import { generateSettingsTypes } from '@apackdev/sdk/build';
+import { generateSettingsTypes } from '@apackdev/pack-build';
 import { registry } from '../../packs/runtime/test-host.ts';
 import { appSettingsDefinition } from '../../../src/features/settings/be/app-definition.ts';
 import { compileSettingsDefinition } from '../../../src/features/settings/compile.ts';

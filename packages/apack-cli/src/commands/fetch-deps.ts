@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { satisfies, rcompare, clean } from 'semver';
-import { parsePackDependency, CONTENT_INDEX_FILE, _cliFormatMismatchMessage, _snapshotFormatMismatch, type PackDependencySnapshot } from '@apackdev/sdk/build';
+import { parsePackDependency, CONTENT_INDEX_FILE, _cliFormatMismatchMessage, _snapshotFormatMismatch, type PackDependencySnapshot } from '@apackdev/pack-format';
 import { findPackRoot, readManifest } from '../utils';
 import { PACK_LAYOUT, extractPackArchive, verifyPack, readDependencyBuild, readCachedDependency, cacheDependency, type DependencyOrigin, type DependencyResolution, type CachedDependencyBuild } from '@apackdev/host/packs';
 import { waitForPackBuild } from '../build/build-lock.ts';

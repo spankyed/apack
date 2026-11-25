@@ -93,7 +93,7 @@ describe('what a target plans', () => {
   it('partitions every package into those that reach a pack suite and those that do not', () => {
     const reaches = PACKAGE_DIRS.filter((dir) => affectedPackSuites([dir]).length > 0);
     expect(reaches, 'a dependency edge changed: check the partition is still what you meant, and that no doc '
-      + 'comment states a count').toEqual(['apack-host', 'apack-sdk', 'apack-testing', 'apack-ui']);
+      + 'comment states a count').toEqual(['apack-host', 'apack-pack-build', 'apack-pack-format', 'apack-sdk', 'apack-testing', 'apack-ui']);
     // And the rest genuinely say nothing, rather than being absent from a list
     for (const dir of PACKAGE_DIRS.filter((d) => !reaches.includes(d))) {
       expect(affectedPackSuites([dir]), dir).toEqual([]);

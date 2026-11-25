@@ -21,7 +21,7 @@ import { parseDbArgs } from '../../src/commands/db/target';
 import { dbRepl } from '../../src/commands/db/repl';
 import { mintProfile, openProfile } from '../../src/app/profiles';
 import type { CliDirs } from '../../src/app/pack-host';
-import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { sealPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { settles } from '@apackdev/sdk/testing/waiting';

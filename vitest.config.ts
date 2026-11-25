@@ -43,6 +43,8 @@ export default defineConfig({
      */
     projects: [
       ...sdkProjects,
+      'packages/apack-pack-format',
+      'packages/apack-pack-build',
       ...cliProjects,
       ...hostProjects,
       'packages/server',
