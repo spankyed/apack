@@ -16,7 +16,14 @@ import { appLaunchEnv, pinsViewport } from './launch-env.ts';
 import { assertCheckoutPackagesFresh } from './checkout-freshness.ts';
 import { assertPrebuiltPackCurrent, packArchiveAcceptance } from './prebuilt-pack.ts';
 import { connectToApp, type AppConnection } from './connection.ts';
-import { describeQuitStage, type QuitProgress } from './quit-stage.ts';
+import {
+  WILL_QUIT_MARKER,
+  chromiumHelperPidsToKill,
+  describeQuitStage,
+  parseWillQuitLine,
+  terminateHelperPids,
+  type QuitProgress,
+} from './quit-stage.ts';
 export type { AppConnection, BusMessage, PackRuntime } from './connection.ts';
 
 export interface AppDriver {
@@ -246,32 +253,92 @@ function captureOutput(app: ElectronApplication, logFile?: string): void {
   app.process().stderr?.on('data', onData);
 }
 
-const WILL_QUIT_MARKER = '[e2e] will-quit';
+const API_UTILITY_SERVICE_NAME = 'apack API Server';
 
 /**
  * Settles once the app's own quit sequence has finished: Electron emits `will-quit` only after
  * `before-quit` has let it through, which the API server's handler does once the API child has exited.
  * What Electron does after that is Chromium's shutdown, flushing the profile — slow under load, and the
  * fixture's to skip for a profile it deletes (the teardown below).
+ *
+ * The `will-quit` line also carries Electron's live Chromium helper PIDs (`app.getAppMetrics()`, excluding
+ * the API utility process) so skipping profile writes terminates the browser process and its helpers
+ * together instead of leaving a `NetworkService` helper holding stdout/stderr open under PID 1.
  */
-type QuitSequence = { done: Promise<void>; progress(): QuitProgress };
+type QuitSequence = { done: Promise<void>; progress(): QuitProgress; helperPids(): readonly number[] };
 const quitSequences = new WeakMap<ElectronApplication, QuitSequence>();
 
 async function watchQuitSequence(app: ElectronApplication): Promise<QuitSequence> {
   const child = app.process();
   let willQuit = false;
+  let capturedHelperPids: readonly number[] = [];
   const done = new Promise<void>(resolve => {
-    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) { willQuit = true; resolve(); } };
+    let buffer = '';
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      child.stdout?.off('data', onData);
+      resolve();
+    };
+    const inspectLine = (line: string): boolean => {
+      const pids = parseWillQuitLine(line);
+      if (pids === undefined) return false;
+      willQuit = true;
+      capturedHelperPids = pids;
+      finish();
+      return true;
+    };
+    const onData = (data: Buffer) => {
+      buffer += data.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (inspectLine(line)) return;
+      }
+    };
     child.stdout?.on('data', onData);
-    child.once('exit', () => resolve());
+    child.once('exit', () => {
+      if (buffer) inspectLine(buffer);
+      finish();
+    });
   });
-  await app.evaluate(({ app }, marker) => {
-    app.once('will-quit', () => { process.stdout.write(`${marker}\n`); });
-  }, WILL_QUIT_MARKER);
+  await app.evaluate(({ app }, { marker, apiServiceName }) => {
+    app.once('will-quit', () => {
+      // Exclude the API server utility process so `closeApp`'s post-close API liveness check can never be masked.
+      const pids = app.getAppMetrics()
+        .filter((metric) => !(metric.type === 'Utility' && (metric.name === apiServiceName || metric.serviceName === apiServiceName)))
+        .map((metric) => metric.pid);
+      process.stdout.write(`${marker} ${JSON.stringify(pids)}\n`);
+    });
+  }, { marker: WILL_QUIT_MARKER, apiServiceName: API_UTILITY_SERVICE_NAME });
   // Wrapped, since an async function returning a promise would hand back its settlement instead
-  const sequence = { done, progress: () => ({ willQuit, exitCode: child.exitCode, signalCode: child.signalCode }) };
+  const sequence: QuitSequence = {
+    done,
+    progress: () => ({ willQuit, exitCode: child.exitCode, signalCode: child.signalCode }),
+    helperPids: () => capturedHelperPids,
+  };
   quitSequences.set(app, sequence);
   return sequence;
+}
+
+/** Best-effort snapshot of live Chromium helper PIDs when tearing down a stuck main process (bounded to 1 s). */
+async function snapshotLiveHelperPids(app: ElectronApplication): Promise<readonly number[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      app.evaluate(({ app }, apiServiceName) => app.getAppMetrics()
+        .filter((metric) => !(metric.type === 'Utility' && (metric.name === apiServiceName || metric.serviceName === apiServiceName)))
+        .map((metric) => metric.pid), API_UTILITY_SERVICE_NAME)
+        .catch(() => [] as number[]),
+      new Promise<number[]>((resolve) => {
+        timer = setTimeout(() => resolve([]), 1000);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /** How `launchApp` starts an app */
@@ -377,7 +444,12 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
       await quitSequence.done;
       if (app.process().exitCode === null && app.process().signalCode === null) {
         console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
+        // Kill Electron main first so it cannot respawn helpers, then terminate Chromium helpers
+        // (`NetworkService`, `GPU`, etc.) that can otherwise outlive a `SIGKILL`'d browser process
+        // and hold inherited stdout/stderr open under PID 1. `apiPid` is excluded so the check
+        // below still catches a leaked API child.
         app.process().kill('SIGKILL');
+        terminateHelperPids(chromiumHelperPidsToKill(quitSequence.helperPids(), { mainPid: pid, apiPid }));
       }
     }
     // Playwright's close answers once the app and its helpers have gone, so their going is what is waited
@@ -398,7 +470,12 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
     const running = app.process().exitCode === null && app.process().signalCode === null;
     // Taken before the kill, which leaves nothing to say where the process was stuck
     const sample = running && pid !== undefined ? await sampleStuckApp(pid, log) : undefined;
+    const liveHelperPids = running ? await snapshotLiveHelperPids(app) : [];
     if (running) app.process().kill('SIGKILL');
+    terminateHelperPids(chromiumHelperPidsToKill(
+      [...liveHelperPids, ...quitSequence.helperPids()],
+      { mainPid: pid, apiPid },
+    ));
     if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
     throw new Error(`${error instanceof Error ? error.message : String(error)}: ${stage}.`
       + (log ? ` Full Electron and API output: ${log}` : '')
