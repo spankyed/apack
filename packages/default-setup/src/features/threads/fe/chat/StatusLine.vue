@@ -1,12 +1,12 @@
 <template>
   <div ref="strip" v-if="nativeUi?.ide || nativeStatus || nativePermissionMode || statusLine || nativeUi?.billing || nativeUi?.status === 'connecting' || nativeUi?.status === 'error' || hasContent" :style="{ minHeight: stripMinimumHeight }"
-    class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'shrink-0': !toolsOpen, 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
+    class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'shrink-0': !toolsExpanded, 'native-strip--open': toolsExpanded, 'border-b border-white/[0.06]': toolsExpanded || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
         :title="cwd || statusLine" @click="emit('click')"><FolderOpen v-if="cwd" :size="12" class="shrink-0" aria-hidden="true" /><span class="min-w-0" :class="'truncate'">{{ displayPath }}</span></button>
       <span v-if="nativePermissionMode" role="status" aria-label="Claude permission mode" title="Current Claude Code permission mode" class="inline-flex shrink-0 items-center rounded border border-white/[0.08] px-1.5 py-0.5 text-[11px] text-neutral-300">Permissions: {{ permissionLabels[nativePermissionMode] }}</span>
       <span v-for="context in ideContext ? [ideContext] : []" :key="context.revision" role="status" aria-label="Claude IDE context" class="inline-flex min-w-0 max-w-[55%] items-center gap-1 text-[11px]" :title="context.text"><span class="truncate">{{ context.text }}</span><button type="button" aria-label="Dismiss IDE context" class="shrink-0 rounded px-1 py-0.5 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400" @click="emit('press', context.actionId)">×</button></span>
-      <button v-if="hasContent" type="button" aria-label="Session tools" :aria-expanded="toolsOpen" class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium text-neutral-300 hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-blue-400" @click="toolsOpen = !toolsOpen">
+      <button v-if="hasContent" ref="toolsToggle" type="button" aria-label="Session tools" :aria-expanded="toolsOpen" class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium text-neutral-300 hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-blue-400" @click="toolsOpen = !toolsOpen">
         <span>Session tools</span> <ChevronDown :size="12" aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': toolsOpen }" />
       </button>
     </div>
@@ -41,6 +41,7 @@ watch(() => props.nativeUi, () => hover.invalidate(), { flush: 'post' })
 const permissionLabels: Record<PermissionMode, string> = { default: 'Default', acceptEdits: 'Accept edits', plan: 'Plan', bypassPermissions: 'Bypass', dontAsk: "Don’t ask", auto: 'Auto' }
 const ideContext = computed(() => props.nativeUi?.ide ? {...props.nativeUi.ide} : undefined)
 const toolsOpen = ref(false)
+const toolsToggle = ref<HTMLButtonElement | null>(null)
 provide(claudeClientVisible, computed(() => toolsOpen.value))
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))
 const displayPath = computed(() => {
@@ -56,7 +57,7 @@ watch(() => props.nativeStatus, text => {
 })
 const strip = ref<HTMLElement | null>(null), minimumHeight = ref<number>(), naturalMinimumHeight = ref<number>()
 const stripMinimumHeight = computed(() => {
-  const natural = toolsOpen.value && naturalMinimumHeight.value ? `min(${naturalMinimumHeight.value}px, calc(var(--composer-available-height) * 0.5))` : undefined
+  const natural = toolsExpanded.value && naturalMinimumHeight.value ? `min(${naturalMinimumHeight.value}px, calc(var(--composer-available-height) * 0.5))` : undefined
   return minimumHeight.value === undefined ? natural : natural ? `max(${minimumHeight.value}px, ${natural})` : minimumHeight.value + 'px'
 })
 const nativeSite = ref<HTMLElement | null>(null), cellMeasure = ref<HTMLElement | null>(null)
@@ -117,6 +118,9 @@ function reportFocusIn(event: FocusEvent) {
 }
 function reportFocusOut(event: FocusEvent) {
   if (nativeSite.value?.contains(event.relatedTarget as Node | null)) return
+  releaseNativeFocus()
+}
+function releaseNativeFocus() {
   minimumHeight.value = undefined
   if (!held) return
   held = false
@@ -156,12 +160,6 @@ watch(() => props.nativeFocus, reply => {
     }
   } finally { applyingFocus = false }
 })
-watch(() => props.nativeUi?.status, status => {
-  if (status !== 'live' && status !== 'rendering' && held) {
-    held = false
-    emit('focus-report', { revision: ++focusRevision, isHeld: false, by: 'person' })
-  }
-})
 function handleStripKey(event: KeyboardEvent) {
   // Tab belongs to the native site's DOM focus order, not the composer's phase shortcut.
   if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation()
@@ -186,7 +184,20 @@ function visible(node: ClaudeUiNode): boolean {
   return node.kind !== 'unsupported' || node.component !== 'engine'
 }
 const hasContent = computed(() => props.nativeUi?.status === 'live' && visible(props.nativeUi.tree))
-watch(() => toolsOpen.value && hasContent.value, value => emit('tools-expanded', value), { immediate: true })
+const toolsExpanded = computed(() => toolsOpen.value && hasContent.value)
+watch(toolsExpanded, value => emit('tools-expanded', value), { immediate: true })
+watch([hasContent, toolsExpanded], ([available, expanded]) => {
+  if (expanded) return
+  // Read the old DOM before Vue removes the active control or hides the site.
+  const active = document.activeElement
+  const wasInSite = !!nativeSite.value?.contains(active)
+  const toggleIsLeaving = !available && active === toolsToggle.value
+  composing.value = false
+  releaseNativeFocus()
+  if (!document.hasFocus()) return
+  if (toggleIsLeaving || (wasInSite && !available)) emit('return-focus')
+  else if (wasInSite) toolsToggle.value?.focus({ preventScroll: true })
+})
 </script>
 
 <style scoped>

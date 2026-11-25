@@ -794,6 +794,45 @@ it('starts session tools collapsed and expands them without submitting or replac
   expect(site.style.display).toBe('none'); expect(editor.value).toBe('Unsent draft'); expect(f.submit).not.toHaveBeenCalled()
 })
 
+it.each(['native control', 'disclosure'])('returns focus from retired Session tools when the %s had focus', async focused => {
+  const f = await mount({ statusLine: '/release', nativeUi: live })
+  const editor = f.root.querySelector('textarea')!
+  editor.value = 'Keep my release notes.'
+  f.returnFocus.mockImplementation(() => editor.focus())
+  const control = f.root.querySelector<HTMLButtonElement>('[aria-label="Run fixture"]')!
+  const toggle = f.root.querySelector<HTMLButtonElement>('[aria-label="Session tools"]')!
+  const active = focused === 'native control' ? control : toggle
+  active.focus()
+  expect(document.activeElement).toBe(active)
+  f.focusReport.mockClear()
+
+  f.state.nativeUi = { status: 'live', tree: { kind: 'unsupported', component: 'engine' } }
+  await nextTick()
+  expect(active.isConnected).toBe(false)
+  expect(document.activeElement).toBe(editor)
+  expect(f.returnFocus).toHaveBeenCalledOnce()
+  if (focused === 'native control') {
+    expect(f.focusReport).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ isHeld: false }))
+  } else {
+    expect(f.focusReport).not.toHaveBeenCalled()
+  }
+  expect(editor.value).toBe('Keep my release notes.')
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('preserves the composer selection when Session tools withdraw in the background', async () => {
+  const f = await mount({ statusLine: '/release', nativeUi: live })
+  const editor = f.root.querySelector('textarea')!
+  editor.value = 'Keep my release notes.'
+  editor.focus()
+  editor.setSelectionRange(5, 7)
+  f.state.nativeUi = { status: 'live', tree: { kind: 'unsupported', component: 'engine' } }
+  await nextTick()
+  expect(document.activeElement).toBe(editor)
+  expect([editor.selectionStart, editor.selectionEnd]).toEqual([5, 7])
+  expect(f.returnFocus).not.toHaveBeenCalled()
+})
+
 it('maps native ANSI theme color forms through the same bounded status palette',()=>{
  expect(claudeUiColor('ansi:blue')).toBe('#60a5fa')
  expect(claudeUiColor('ansi:whiteBright')).toBe('#fafafa')
