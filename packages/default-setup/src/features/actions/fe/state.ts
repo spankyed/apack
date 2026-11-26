@@ -1,28 +1,18 @@
-import { entityIs, freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
-import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
-import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
-import { safeEvents } from '@apackdev/sdk/fe'
-import {
-  targetIs,
-  TRAIL_CLICK,
-  type TrailClickEvent,
-} from '@apackdev/sdk/fe'
-import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
-import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
-import type { EARS } from '#generated/ears.ts'
-import { fromAsk } from '#generated/events.ts'
-import { Trash2 } from 'lucide-vue-next'
-import { contextMenuFn } from '@apackdev/sdk/fe'
+import type { OutcomeOf, Read, Value } from '@apackdev/state';
+import type { OpenEntity } from '@apackdev/sdk/events';
+import { entityIs, type SurfaceChrome, type TrailClickEvent } from '@apackdev/sdk/fe';
+import type { ActionEntity, ActionParameter } from '@apackdev/sdk';
+import { Trash2 } from 'lucide-vue-next';
+import type { EARS } from '#generated/ears.ts';
+import { state, type PackNet } from '#generated/state.ts';
+import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts';
 
-/* ─────────────────────────────────────────────────────────── */
-/* Machine Types                                               */
-/* ─────────────────────────────────────────────────────────── */
 export const id = 'actions' as const;
-export type ActionsState = ActorRefFrom<typeof actionsState>
 
 /** How many more actions the list shows each time the user reaches its end */
-export const ACTIONS_PAGE_SIZE = 20
+export const ACTIONS_PAGE_SIZE = 20;
+
+type ActionsAsks = PackNet['systems']['actions']['asks'];
 
 type UIEvent =
   | { type: 'CLEAR_WRITE_ERROR' }
@@ -50,260 +40,117 @@ type UIEvent =
   | { type: 'ACTIONS.IMPORT'; actions: unknown }
   | { type: 'ACTIONS.FORGET_IMPORT' }
   | { type: 'ACTIONS.EXPORT'; directory: string }
-  | { type: 'ACTIONS.FORGET_EXPORT' }
+  | { type: 'ACTIONS.FORGET_EXPORT' };
 
-/**
- * The asks this window makes. Each write is asked on its own, so one refused says so whatever else is under way; an
- * import and an export are one at a time
- */
-const made = makes(({ one, each }) => ({
-  createAction: each(fromAsk('actions', 'CREATE_ACTION')),
-  updateAction: each(fromAsk('actions', 'UPDATE_ACTION')),
-  deleteAction: each(fromAsk('actions', 'DELETE_ACTION')),
-  importActions: one(fromAsk('actions', 'IMPORT_ACTIONS')),
-  exportActions: one(fromAsk('actions', 'EXPORT_ACTIONS')),
-}))
-
-/** How an ask the machine made ended */
-type Made = MadeEvent<typeof made>
-
-/** What the machine holds: what the surface publishes, the asks under way, and how the last import and export ended */
-type ActionsMachineContext = ActionsContext & {
-  /** Which of the asks the machine makes (`made`) are under way */
-  making: Making<typeof made>
+/** What the machine holds: what the surface publishes, and how the last import and export ended */
+type ActionsData = Omit<ActionsContext, 'selectedActionId' | 'selectedLabel' | 'formFor'> & {
+  selectedActionId: EARS.EntityId | undefined;
+  selectedLabel: string | undefined;
+  formFor: EARS.EntityId | undefined;
   /** How the last import ended, until another file is picked */
-  imported?: Extract<Made, { type: 'made.importActions' }>['outcome']
+  imported: OutcomeOf<ActionsAsks['IMPORT_ACTIONS']> | undefined;
   /** How the last export ended, until another is made */
-  exported?: Extract<Made, { type: 'made.exportActions' }>['outcome']
+  exported: OutcomeOf<ActionsAsks['EXPORT_ACTIONS']> | undefined;
+};
+
+type ActionsShape = {
+  data: ActionsData;
+  calls: {
+    createAction: { readonly many: ActionsAsks['CREATE_ACTION']['args'] };
+    updateAction: { readonly many: ActionsAsks['UPDATE_ACTION']['args'] };
+    deleteAction: { readonly many: ActionsAsks['DELETE_ACTION']['args'] };
+    importActions: { readonly one: ActionsAsks['IMPORT_ACTIONS']['args'] };
+    exportActions: { readonly one: ActionsAsks['EXPORT_ACTIONS']['args'] };
+  };
+  states: {
+    list: {};
+    create: {};
+    detail: {};
+  };
+};
+
+export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent;
+
+// The list shows no action, so reopening one fills its form afresh from what its view reads then
+const CLEAR_SELECTED = {
+  selectedActionId: undefined,
+  selectedLabel: undefined,
+  formFor: undefined,
+} as const;
+
+const CREATE_FORM_DATA = {
+  label: '',
+  description: '',
+  category: '',
+  input: {},
+  actionFn: '// Your action function body here\n// Available services: logger, database, email, http\nreturn { success: true };',
+  output: undefined,
+};
+
+function selectActionData(currentId: EARS.EntityId | undefined, actionId: EARS.EntityId) {
+  if (currentId === actionId) return undefined;
+  return { selectedActionId: actionId, selectedLabel: undefined, formFor: undefined };
 }
 
-export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent | Made
+const formUpdateHandlers = {
+  'FORM.UPDATE_LABEL': (event: Extract<ActionsEvents, { type: 'FORM.UPDATE_LABEL' }>, { data }: { data: Read<ActionsData> }) => ({
+    data: { formData: { ...data.formData, label: event.label } },
+  }),
+  'FORM.UPDATE_DESCRIPTION': (event: Extract<ActionsEvents, { type: 'FORM.UPDATE_DESCRIPTION' }>, { data }: { data: Read<ActionsData> }) => ({
+    data: { formData: { ...data.formData, description: event.description } },
+  }),
+  'FORM.UPDATE_PARAMETERS': (event: Extract<ActionsEvents, { type: 'FORM.UPDATE_PARAMETERS' }>, { data }: { data: Read<ActionsData> }) => ({
+    data: { formData: { ...data.formData, input: event.input } },
+  }),
+  'FORM.UPDATE_ACTION': (event: Extract<ActionsEvents, { type: 'FORM.UPDATE_ACTION' }>, { data }: { data: Read<ActionsData> }) => ({
+    data: { formData: { ...data.formData, actionFn: event.actionFn } },
+  }),
+  'FORM.UPDATE_OUTPUT': (event: Extract<ActionsEvents, { type: 'FORM.UPDATE_OUTPUT' }>, { data }: { data: Read<ActionsData> }) => ({
+    data: { formData: { ...data.formData, output: event.output } },
+  }),
+  'FORM.UPDATE_CATEGORY': (event: Extract<ActionsEvents, { type: 'FORM.UPDATE_CATEGORY' }>, { data }: { data: Read<ActionsData> }) => ({
+    data: { formData: { ...data.formData, category: event.category } },
+  }),
+};
 
-const typeOf = safeEvents<ActionsEvents>()
-
-const actionsState = setup({
-  types: {
-    context: {} as ActionsMachineContext,
-    events: {} as ActionsEvents,
+export const actionsChrome: SurfaceChrome<Value<ActionsShape>> = {
+  default: { label: 'Actions', target: 'list' },
+  states: {
+    list: {
+      breadcrumb: { label: 'Actions', target: 'list' },
+    },
+    create: {
+      breadcrumb: { label: 'New Action', target: 'create' },
+    },
+    detail: {
+      breadcrumb: ({ data }) => ({
+        label: data.selectedLabel || data.selectedActionId || '',
+        target: 'detail',
+      }),
+      menu: ({ data }) => [
+        {
+          label: 'Delete Action',
+          icon: Trash2,
+          event: { type: 'ACTION.DELETE' as const, actionId: data.selectedActionId! },
+          iconColor: 'text-red-400',
+          confirm: `Are you sure you want to delete "${data.selectedLabel || 'this action'}"?`,
+        },
+      ],
+    },
   },
-  actors: made.actors,
-  actions: {
-    // The list shows no action, so reopening one fills its form afresh from what its view reads then
-    clearSelectedAction: assign({ selectedActionId: undefined, selectedLabel: undefined, formFor: undefined }),
+};
 
-    /* ── action interactions ────────────────────────────── */
-    selectAction: assign(({ event, context }) => {
-      const actionId = event.type === 'OPEN_ENTITY' ? event.id as EARS.EntityId : typeOf('ACTION.SELECT', event).actionId;
-      if (context.selectedActionId === actionId) return {};
-      return { selectedActionId: actionId, selectedLabel: undefined, formFor: undefined };
-    }),
-
-    showLoadedAction: assign(({ event, context }) => {
-      const { actionId, action } = typeOf('ACTION.LOADED', event);
-      if (!action) return {};
-      // The form is filled once per opening: a change the view brings later (another window's edit) leaves what the
-      // user is typing alone, and saving writes the form as it stands
-      if (context.formFor === actionId) return { selectedLabel: action.label };
-      return {
-        selectedLabel: action.label,
-        formFor: actionId,
-        formData: {
-          label: action.label,
-          description: action.description,
-          category: action.category,
-          input: action.input,
-          actionFn: action.actionFn,
-          output: action.output,
-        },
-      };
-    }),
-
-    initCreateForm: assign({
-      formData: {
-        label: '',
-        description: '',
-        category: '',
-        input: {},
-        actionFn: '// Your action function body here\n// Available services: logger, database, email, http\nreturn { success: true };',
-        output: undefined,
-      },
-      selectedActionId: undefined,
-      selectedLabel: undefined,
-      formFor: undefined,
-    }),
-
-    sendSaveAction: enqueueActions(({ context, enqueue }) => {
-      // Creating or updating, by whether one is open
-      if (!context.selectedActionId) made.make(enqueue, 'createAction', freshKey(), context.formData)
-      else made.make(enqueue, 'updateAction', freshKey(), { actionId: context.selectedActionId, ...context.formData })
-    }),
-
-    sendDeleteAction: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('ACTION.DELETE', event);
-      made.make(enqueue, 'deleteAction', freshKey(), { actionId: ev.actionId })
-    }),
-
-    updateActionInput: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('ACTION.UPDATE_INPUT', event);
-      made.make(enqueue, 'updateAction', freshKey(), { actionId: ev.actionId, input: ev.input })
-    }),
-
-    createActionInline: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('ACTION.CREATE_INLINE', event);
-      made.make(enqueue, 'createAction', freshKey(), { label: ev.label, actionFn: ev.actionFn, input: ev.input })
-    }),
-
-    updateActionLabel: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('ACTION.UPDATE_LABEL', event);
-      made.make(enqueue, 'updateAction', freshKey(), { actionId: ev.actionId, label: ev.label })
-    }),
-
-    /** A write this window asked for and did not get, shown until dismissed */
-    showRefusal: assign(({ event }) => {
-      const { outcome } = typeOf(['made.createAction', 'made.updateAction', 'made.deleteAction'], event)
-      return outcome.ok ? {} : { writeError: outcome.failure.message }
-    }),
-
-    /* ── import and export ───────────────────────────────── */
-    importActions: enqueueActions(({ event, enqueue }) => {
-      enqueue.assign({ imported: undefined })
-      made.make(enqueue, 'importActions', { actions: typeOf('ACTIONS.IMPORT', event).actions })
-    }),
-
-    exportActions: enqueueActions(({ event, enqueue }) => {
-      enqueue.assign({ exported: undefined })
-      made.make(enqueue, 'exportActions', { directory: typeOf('ACTIONS.EXPORT', event).directory })
-    }),
-
-    /* ── form updates ────────────────────────────────────── */
-    updateFormLabel: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_LABEL', event);
-      return {
-        formData: {
-          ...context.formData,
-          label: ev.label,
-        },
-      };
-    }),
-
-    updateFormDescription: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_DESCRIPTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          description: ev.description,
-        },
-      };
-    }),
-
-    updateFormParameters: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_PARAMETERS', event);
-      return {
-        formData: {
-          ...context.formData,
-          input: ev.input,
-        },
-      };
-    }),
-
-    updateFormAction: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_ACTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          actionFn: ev.actionFn,
-        },
-      };
-    }),
-
-    updateFormOutput: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_OUTPUT', event);
-      return {
-        formData: {
-          ...context.formData,
-          output: ev.output,
-        },
-      };
-    }),
-
-    updateFormCategory: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_CATEGORY', event);
-      return {
-        formData: {
-          ...context.formData,
-          category: ev.category,
-        },
-      };
-    }),
-
-    toggleParametersSection: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_PARAMETERS_SECTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          parametersExpanded: ev.show,
-        },
-      };
-    }),
-
-    toggleOutputSection: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_OUTPUT_SECTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          outputExpanded: ev.show,
-        },
-      };
-    }),
-
-    toggleMetadataSection: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_METADATA_SECTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          metadataExpanded: ev.show,
-        },
-      };
-    }),
-
-    /* ── the list ─────────────────────────────────────────── */
-    showMore: assign(({ context }) => ({ listLimit: context.listLimit + ACTIONS_PAGE_SIZE })),
-
-    /* ── filter actions ──────────────────────────────────── */
-    toggleCategoryFilter: assign(({ event, context }) => {
-      const ev = typeOf('FILTER.TOGGLE_CATEGORY', event);
-      const categoryName = ev.categoryName;
-      const isSelected = context.selectedCategories.includes(categoryName);
-
-      return {
-        selectedCategories: isSelected
-          ? context.selectedCategories.filter(c => c !== categoryName)
-          : [...context.selectedCategories, categoryName]
-      };
-    }),
-
-    clearCategoryFilters: assign({
-      selectedCategories: []
-    }),
-  },
-  guards: { entityIs: entityIs<Contract['opens']>,
-    targetIs,
-    /** Whether what was loaded is the action open now, rather than one the user has since moved on from */
-    loadsSelected: ({ context, event }) => typeOf('ACTION.LOADED', event).actionId === context.selectedActionId,
-    /** Whether the open action is gone */
-    loadsNothing: ({ event }) => typeOf('ACTION.LOADED', event).action === null,
-  },
-}).createMachine({
-  id,
+const actionsState = state<ActionsShape, ActionsEvents>()({
   initial: 'list',
-  context: {
+  data: {
     selectedActionId: undefined,
     selectedLabel: undefined,
     formFor: undefined,
+    imported: undefined,
+    exported: undefined,
     listLimit: ACTIONS_PAGE_SIZE,
     writeError: null,
-    making: made.none(),
-    selectedCategories: [], // Filter state
+    selectedCategories: [],
     formData: {
       label: '',
       description: '',
@@ -313,105 +160,147 @@ const actionsState = setup({
       output: undefined,
     },
   },
+  calls: ({ one, many }) => ({
+    // What a write changed reaches every window through the views, so a landed one needs nothing here;
+    // a refused write is shown until dismissed.
+    createAction: many('actions', 'CREATE_ACTION', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    updateAction: many('actions', 'UPDATE_ACTION', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    deleteAction: many('actions', 'DELETE_ACTION', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    importActions: one('actions', 'IMPORT_ACTIONS', {
+      done: (outcome) => ({ data: { imported: outcome } }),
+    }),
+    exportActions: one('actions', 'EXPORT_ACTIONS', {
+      done: (outcome) => ({ data: { exported: outcome } }),
+    }),
+  }),
   on: {
-    // What a write changed reaches every window through the views, so a landed one needs nothing here
-    [made.done]: { actions: made.settle() },
-    'made.createAction': { actions: 'showRefusal' },
-    'made.updateAction': { actions: 'showRefusal' },
-    'made.deleteAction': { actions: 'showRefusal' },
-    'ACTIONS.IMPORT': { actions: 'importActions' },
-    'ACTIONS.FORGET_IMPORT': { actions: assign({ imported: undefined }) },
-    'made.importActions': { actions: assign(({ event }) => ({ imported: event.outcome })) },
-    'ACTIONS.EXPORT': { actions: 'exportActions' },
-    'ACTIONS.FORGET_EXPORT': { actions: assign({ exported: undefined }) },
-    'made.exportActions': { actions: assign(({ event }) => ({ exported: event.outcome })) },
-    CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
-    OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
-    'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },
-    'VIEW_LIST': {
-      target: '.list',
+    'ACTIONS.IMPORT': (event, { call }) => {
+      call('importActions', { actions: event.actions });
+      return { data: { imported: undefined } };
     },
-    TOGGLE_PARAMETERS_SECTION: { actions: 'toggleParametersSection' },
-    TOGGLE_OUTPUT_SECTION: { actions: 'toggleOutputSection' },
-    TOGGLE_METADATA_SECTION: { actions: 'toggleMetadataSection' },
-    'ACTIONS.LOAD_MORE': { actions: 'showMore' },
-    'FILTER.TOGGLE_CATEGORY': { actions: 'toggleCategoryFilter' },
-    'FILTER.CLEAR': { actions: 'clearCategoryFilters' },
-    'ACTION.UPDATE_INPUT': { actions: 'updateActionInput' },
-    'ACTION.CREATE_INLINE': { actions: 'createActionInline' },
-    'ACTION.UPDATE_LABEL': { actions: 'updateActionLabel' },
-    ...TRAIL_CLICK([
-      ['.list', 'list'],
-      ['.create', 'create'],
-      ['.detail', 'detail'],
-    ]),
+    'ACTIONS.FORGET_IMPORT': () => ({ data: { imported: undefined } }),
+    'ACTIONS.EXPORT': (event, { call }) => {
+      call('exportActions', { directory: event.directory });
+      return { data: { exported: undefined } };
+    },
+    'ACTIONS.FORGET_EXPORT': () => ({ data: { exported: undefined } }),
+    CLEAR_WRITE_ERROR: () => ({ data: { writeError: null } }),
+    OPEN_ENTITY: (event, { data }) => {
+      if (!entityIs<Contract['opens']>({ event }, { entity: 'Action' })) return;
+      const updates = selectActionData(data.selectedActionId, event.id as EARS.EntityId);
+      return updates ? { at: 'detail', data: updates } : { at: 'detail' };
+    },
+    'ACTION.SELECT': (event, { data }) => {
+      const updates = selectActionData(data.selectedActionId, event.actionId);
+      return updates ? { at: 'detail', data: updates } : { at: 'detail' };
+    },
+    VIEW_LIST: () => ({ at: 'list', data: CLEAR_SELECTED }),
+    TOGGLE_PARAMETERS_SECTION: (event, { data }) => ({
+      data: { formData: { ...data.formData, parametersExpanded: event.show } },
+    }),
+    TOGGLE_OUTPUT_SECTION: (event, { data }) => ({
+      data: { formData: { ...data.formData, outputExpanded: event.show } },
+    }),
+    TOGGLE_METADATA_SECTION: (event, { data }) => ({
+      data: { formData: { ...data.formData, metadataExpanded: event.show } },
+    }),
+    'ACTIONS.LOAD_MORE': (_event, { data }) => ({
+      data: { listLimit: data.listLimit + ACTIONS_PAGE_SIZE },
+    }),
+    'FILTER.TOGGLE_CATEGORY': (event, { data }) => {
+      const categoryName = event.categoryName;
+      const isSelected = data.selectedCategories.includes(categoryName);
+      return {
+        data: {
+          selectedCategories: isSelected
+            ? data.selectedCategories.filter(c => c !== categoryName)
+            : [...data.selectedCategories, categoryName],
+        },
+      };
+    },
+    'FILTER.CLEAR': () => ({ data: { selectedCategories: [] } }),
+    'ACTION.UPDATE_INPUT': (event, { call }) => {
+      call('updateAction', { actionId: event.actionId, input: event.input });
+    },
+    'ACTION.CREATE_INLINE': (event, { call }) => {
+      call('createAction', { label: event.label, actionFn: event.actionFn, input: event.input });
+    },
+    'ACTION.UPDATE_LABEL': (event, { call }) => {
+      call('updateAction', { actionId: event.actionId, label: event.label });
+    },
+    TRAIL_CLICK: (event) => {
+      if (event.target === 'list') return { at: 'list', data: CLEAR_SELECTED };
+      if (event.target === 'create') return { at: 'create' };
+      if (event.target === 'detail') return { at: 'detail' };
+    },
   },
   states: {
     list: {
-      entry: 'clearSelectedAction',
-      tags: ['list-actions'],
-      meta: { ...breadcrumb('list', 'Actions', true) },
       on: {
-        'ACTION.CREATE': {
-          actions: 'initCreateForm',
-          target: 'create',
+        'ACTION.CREATE': () => ({
+          at: 'create',
+          data: {
+            formData: CREATE_FORM_DATA,
+            ...CLEAR_SELECTED,
+          },
+        }),
+        'ACTION.DELETE': (event, { call }) => {
+          call('deleteAction', { actionId: event.actionId });
         },
-        'ACTION.DELETE': {
-          actions: 'sendDeleteAction',
-        },
-      }
+      },
     },
     create: {
-      tags: ['create-action'],
-      meta: { ...breadcrumb('create', 'New Action') },
       on: {
-        'FORM.UPDATE_LABEL': { actions: 'updateFormLabel' },
-        'FORM.UPDATE_DESCRIPTION': { actions: 'updateFormDescription' },
-        'FORM.UPDATE_PARAMETERS': { actions: 'updateFormParameters' },
-        'FORM.UPDATE_ACTION': { actions: 'updateFormAction' },
-        'FORM.UPDATE_OUTPUT': { actions: 'updateFormOutput' },
-        'FORM.UPDATE_CATEGORY': { actions: 'updateFormCategory' },
-        'ACTION.SAVE': {
-          actions: 'sendSaveAction',
-          target: 'list',
+        ...formUpdateHandlers,
+        'ACTION.SAVE': (_event, { data, call }) => {
+          if (!data.selectedActionId) call('createAction', data.formData);
+          else call('updateAction', { actionId: data.selectedActionId, ...data.formData });
+          return { at: 'list', data: CLEAR_SELECTED };
         },
       },
     },
     detail: {
-      tags: ['detail-action'],
-      meta: {
-        ...breadcrumbWithParams<ActionsContext>({
-          target: 'detail',
-          getLabel: (ctx) => {
-            return ctx.selectedLabel || ctx.selectedActionId || '';
-          }
-        }),
-        ...contextMenuFn<ActionsContext>((ctx) => [
-          { label: 'Delete Action', icon: Trash2, event: { type: 'ACTION.DELETE' as const, actionId: ctx.selectedActionId! }, iconColor: 'text-red-400', confirm: `Are you sure you want to delete "${ctx.selectedLabel || 'this action'}"?` },
-        ]),
-      },
       on: {
         // The open action deleted, here or in another window: there is nothing left to show
-        'ACTION.LOADED': [
-          { guard: and(['loadsSelected', 'loadsNothing']), target: 'list' },
-          { guard: 'loadsSelected', actions: 'showLoadedAction' },
-        ],
-        'FORM.UPDATE_LABEL': { actions: 'updateFormLabel' },
-        'FORM.UPDATE_DESCRIPTION': { actions: 'updateFormDescription' },
-        'FORM.UPDATE_PARAMETERS': { actions: 'updateFormParameters' },
-        'FORM.UPDATE_ACTION': { actions: 'updateFormAction' },
-        'FORM.UPDATE_OUTPUT': { actions: 'updateFormOutput' },
-        'FORM.UPDATE_CATEGORY': { actions: 'updateFormCategory' },
-        'ACTION.SAVE': {
-          actions: 'sendSaveAction',
-          target: 'list',
+        'ACTION.LOADED': (event, { data }) => {
+          if (event.actionId !== data.selectedActionId) return;
+          if (event.action === null) return { at: 'list', data: CLEAR_SELECTED };
+          // The form is filled once per opening: a change the view brings later (another window's edit) leaves what the
+          // user is typing alone, and saving writes the form as it stands
+          if (data.formFor === event.actionId) return { data: { selectedLabel: event.action.label } };
+          return {
+            data: {
+              selectedLabel: event.action.label,
+              formFor: event.actionId,
+              formData: {
+                label: event.action.label,
+                description: event.action.description,
+                category: event.action.category,
+                input: event.action.input,
+                actionFn: event.action.actionFn,
+                output: event.action.output,
+              },
+            },
+          };
         },
-        'ACTION.DELETE': {
-          actions: 'sendDeleteAction',
+        ...formUpdateHandlers,
+        'ACTION.SAVE': (_event, { data, call }) => {
+          if (!data.selectedActionId) call('createAction', data.formData);
+          else call('updateAction', { actionId: data.selectedActionId, ...data.formData });
+          return { at: 'list', data: CLEAR_SELECTED };
+        },
+        'ACTION.DELETE': (event, { call }) => {
+          call('deleteAction', { actionId: event.actionId });
         },
       },
     },
   },
-})
+});
 
-export default actionsState
+export default actionsState;

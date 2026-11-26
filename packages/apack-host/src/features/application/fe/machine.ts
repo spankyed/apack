@@ -671,7 +671,11 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
     // `#application.*` targets name this id; the actor runs as HOST.application
     id: 'application',
     context: ({ input, spawn, self }) => {
-      const bridge = createWindowStateBridge({ client, designation: (role) => packs.designation(role) });
+      const bridge = createWindowStateBridge({
+        client,
+        designation: (role) => packs.designation(role),
+        shell: (event) => notifySurfaceActor(self, HOST.application, event),
+      });
       shellBridges.set(self, bridge);
       registerShellStateSystem(self, bridge.system);
       const surfaces = withHostLast(packs.getRegisteredSurfaces());

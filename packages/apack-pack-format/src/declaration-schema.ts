@@ -605,6 +605,7 @@ const SurfaceSchema = z.object({
   label: z.string().min(1).refine(value => value.trim().length > 0, 'Must have a visible label')
     .describe('Surface display name used by shell navigation and menus.'),
   state: ModuleTargetSchema.describe('Machine module, by default export or path#exportName.'),
+  chrome: ModuleTargetSchema.describe('Declarative surface chrome (breadcrumbs and context menu) module, by default export or path#exportName.').optional(),
   icon: z.union([z.string().regex(/^[A-Z][A-Za-z0-9]*$/, 'Must name a lucide-vue-next export'), ComponentModuleSchema])
     .describe('Lucide icon export name or component module displayed in shell navigation.').optional(),
   canvas: z.union([ComponentTargetSchema, z.object({ routes: declarationRecord(z.string().min(1)

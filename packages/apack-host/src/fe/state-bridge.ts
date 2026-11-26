@@ -39,6 +39,8 @@ export interface WindowStateBridgeOptions {
   readonly client: Pick<ShellClient, 'send' | 'watchView'>;
   /** Resolves a role designation (`'brain'`, `'code'`) for peer tells from frontend surfaces. */
   designation?(role: string): string | undefined;
+  /** Delivers peer tells addressed to `'shell'` onto the XState shell actor. */
+  shell?(event: StateEvent): void;
   /** Optional clock override; defaults to `boundFeHost().clock` when bound, else wall clock. */
   clock?: Clock;
 }
@@ -216,6 +218,14 @@ export function createWindowStateBridge(options: WindowStateBridgeOptions): Wind
         },
       }));
     }
+  }
+
+  if (options.shell) {
+    cleanups.push(sys.attach('shell', {
+      tell: (_name, event) => {
+        options.shell?.(event as StateEvent);
+      },
+    }));
   }
 
   const activeSurfaces = new Map<string, ActiveSurface>();

@@ -51,6 +51,7 @@ export function nativeFrontendDeclarationFixture(fixture: PackFERegistration): N
 function surfaceDeclaration(surface: SurfaceDefinition): SurfaceDeclaration {
   return {
     label: surface.label, state: 'fixtures/frontend.ts#State',
+    ...(surface.chrome !== undefined && { chrome: 'fixtures/frontend.ts#chrome' }),
     ...(surface.icon !== undefined && { icon: 'Box' }),
     ...(surface.canvas !== undefined && { canvas: 'fixtures/canvas.vue' }),
     ...(surface.panel !== undefined && { panel: 'fixtures/panel.vue' }),

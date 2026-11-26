@@ -1461,6 +1461,7 @@
         "label": "Actions",
         "icon": "Play",
         "state": "src/features/actions/fe/state.ts",
+        "chrome": "src/features/actions/fe/state.ts#actionsChrome",
         "canvas": "src/features/actions/fe/canvas.vue",
         "isPinned": true,
         "options": {}
@@ -1544,6 +1545,7 @@
         "label": "Prompts",
         "icon": "Sparkle",
         "state": "src/features/prompts/fe/state.ts",
+        "chrome": "src/features/prompts/fe/state.ts#promptsChrome",
         "canvas": "src/features/prompts/fe/canvas.vue",
         "isPinned": true,
         "options": {}

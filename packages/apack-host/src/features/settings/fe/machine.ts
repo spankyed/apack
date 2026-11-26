@@ -1,22 +1,13 @@
-import { assign, setup, type ActorRefFrom } from 'xstate'
-import breadcrumb from '@apackdev/sdk/fe'
-import { safeEvents } from '@apackdev/sdk/fe'
-import { type TrailClickEvent } from '@apackdev/sdk/fe'
-import type { OutgoingSettingsEvents } from '../be/types.ts'
-import type { SecretMetadata, SecretsStatus } from '@apackdev/sdk/services'
-import { tell } from '../../../events.ts'
-import type { PackContentPreview } from '@apackdev/sdk/framework'
-import type { FeatureRef } from '@apackdev/sdk/ids';
-
-import { splitRef } from '@apackdev/sdk/ids';
+import type { Value } from '@apackdev/state';
+import type { SurfaceChrome, TrailClickEvent } from '@apackdev/sdk/fe';
+import type { PackContentPreview } from '@apackdev/sdk/framework';
+import { splitRef, type FeatureRef } from '@apackdev/sdk/ids';
+import type { SecretMetadata, SecretsStatus } from '@apackdev/sdk/services';
+import { hostState } from '../../../state.ts';
+import type { OutgoingSettingsEvents } from '../be/types.ts';
 import { createHelpContext, reduceHelp, type HelpContext, type HelpEvent } from './help.ts';
 
-/* ─────────────────────────────────────────────────────────── */
-/* Machine Types                                               */
-/* ─────────────────────────────────────────────────────────── */
 export const id = 'settings' as const;
-
-// Use backend types directly
 
 export type ImportMode = 'keep-existing' | 'replace-on-collision' | 'wipe-and-replace';
 
@@ -35,7 +26,6 @@ export interface PackContentImport {
   errors: string[];
   error: string | null;
 }
-
 
 function freshContentImport(): PackContentImport {
   return {
@@ -81,17 +71,20 @@ type UIEvent =
   | { type: 'PACK_CONTENT.CONFIRM_IMPORT' }
   | { type: 'PACK_CONTENT.CANCEL' }
   | { type: 'PACK_CONTENT.RESET_STATUS' }
-  | { type: 'APP.RESET' }
+  | { type: 'APP.RESET' };
 
-export type SettingsEvents = UIEvent | Exclude<OutgoingSettingsEvents, { type: 'SETTINGS_LOADED' | 'SETTINGS_UPDATED' | 'SETTINGS_RESET' }> | TrailClickEvent | HelpEvent
+export type SettingsEvents =
+  | UIEvent
+  | Extract<OutgoingSettingsEvents, { type: 'SECRETS_UPDATED' }>
+  | TrailClickEvent
+  | HelpEvent
   | { type: 'PACK_CONTENT_IMPORTED'; result: Record<string, { created: number; updated: number; skipped: number }>; errors: string[] }
   | { type: 'PACK_CONTENT_IMPORT_FAILED'; error: string }
   | { type: 'PACK_CONTENT_PREVIEW'; preview: PackContentPreview }
   | { type: 'PACK_CONTENT_PREVIEW_FAILED'; error: string }
   | { type: 'APP_RESET_COMPLETE' }
   | { type: 'APP_RESET_FAILED'; error: string }
-  | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string }
-const typeOf = safeEvents<SettingsEvents>()
+  | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string };
 
 /** Window operations, including explicitly authorized host administration. */
 export interface SettingsIO {
@@ -103,360 +96,286 @@ export interface SettingsIO {
   report(message: string): void;
 }
 
-export function createSettingsMachine(io: SettingsIO) {
-  return setup({
-  types: {
-    context: {} as SettingsContext,
-    events: {} as SettingsEvents,
-  },
-  actions: {
-    setSecrets: assign(({ event }) => {
-      const ev = typeOf('SECRETS_UPDATED', event);
-      return { secrets: ev.secrets, secretsStatus: ev.status };
-    }),
-
-    updateHelp: assign(({ context, event }) => ({ help: reduceHelp(context.help, event as HelpEvent) })),
-
-    /* ── tab navigation ────────────────────────────────── */
-    selectTab: assign(({ event }) => {
-      const ev = typeOf('TAB.SELECT', event);
-      return {
-        activeTab: ev.tab,
-      }
-    }),
-
-    selectGeneralNavItem: assign(({ event }) => {
-      const ev = typeOf('GENERAL_NAV.SELECT', event);
-      return {
-        generalNavItem: ev.item,
-      }
-    }),
-
-    selectFeature: assign(({ context, event }) => {
-      const ev = typeOf('FEATURE.SELECT', event);
-      // Another pack may send it, so a bad one is reported and ignored rather than stopping the settings surface
-      if (!splitRef(ev.featureId)) {
-        console.error(`FEATURE.SELECT names "${ev.featureId}", which isn't a feature's ref, "<packId>/<featureId>"`);
-        return { selectedFeatureId: context.selectedFeatureId };
-      }
-      return { selectedFeatureId: ev.featureId };
-    }),
-
-    testCliProvider: assign(({ context, event }) => {
-      const ev = typeOf('CLI.TEST', event);
-      // The code feature resolves CLIs: `resolve-cli` and the stored paths are its own
-      tell({ role: 'code' }, {
-        type: 'TEST_CLI_PROVIDER',
-        provider: ev.provider,
-      });
-      return {
-        cliTestResults: { ...context.cliTestResults, [ev.provider]: { status: 'testing' as const } },
-      };
-    }),
-
-    setCliTestResult: assign(({ context, event }) => {
-      const ev = typeOf('CLI_TEST_RESULT', event);
-      return {
-        cliTestResults: {
-          ...context.cliTestResults,
-          [ev.provider]: {
-            status: ev.success ? 'success' as const : 'error' as const,
-            resolvedPath: ev.resolvedPath,
-            error: ev.error,
-          },
-        },
-      };
-    }),
-
-    previewPackContent: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT.PREVIEW', event);
-      // The packs system owns content orchestration; its answers come back to this surface, which draws them
-      tell('packs', {
-        type: 'PREVIEW_PACK_CONTENT',
-        directory: ev.directory,
-      });
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          status: 'previewing' as const,
-          directory: ev.directory,
-          preview: null,
-          selection: {},
-          expanded: {},
-          result: null,
-          errors: [],
-          error: null,
-        },
-      };
-    }),
-
-    setContentPreview: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT_PREVIEW', event);
-      const selection = Object.fromEntries(Object.entries(ev.preview.content).map(([key, items]) => [key, items.map(i => i.key)]));
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          status: 'selecting' as const,
-          preview: ev.preview,
-          selection,
-          expanded: {},
-          result: null,
-          errors: [],
-          error: null,
-        },
-      };
-    }),
-
-    setContentPreviewFailed: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT_PREVIEW_FAILED', event);
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          status: 'error' as const,
-          preview: null,
-          result: null,
-          errors: [],
-          error: ev.error,
-        },
-      };
-    }),
-
-    toggleContentExpand: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT.TOGGLE_EXPAND', event);
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          expanded: {
-            ...context.packContentImport.expanded,
-            [ev.key]: !context.packContentImport.expanded[ev.key],
-          },
-        },
-      };
-    }),
-
-    toggleContentTypeAll: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT.TOGGLE_TYPE_ALL', event);
-      const preview = context.packContentImport.preview;
-      if (!preview) return {};
-      const currentlySelected = context.packContentImport.selection[ev.key] ?? [];
-      const allKeys = (preview.content[ev.key] ?? []).map(i => i.key);
-      const nextSelection = currentlySelected.length === allKeys.length ? [] : allKeys;
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          selection: {
-            ...context.packContentImport.selection,
-            [ev.key]: nextSelection,
-          },
-        },
-      };
-    }),
-
-    toggleContentItem: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT.TOGGLE_ITEM', event);
-      const current = context.packContentImport.selection[ev.key] ?? [];
-      const next = current.includes(ev.item)
-        ? current.filter(k => k !== ev.item)
-        : [...current, ev.item];
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          selection: {
-            ...context.packContentImport.selection,
-            [ev.key]: next,
-          },
-        },
-      };
-    }),
-
-    confirmContentImport: assign(({ context }) => {
-      const { directory, preview, selection, importMode, restartBrain } = context.packContentImport;
-      if (!directory || !preview) return {};
-
-      // null = import all items of this key, [] = skip, string[] = filter.
-      // An empty key should be skipped — not treated as "import everything".
-      const toIncludeField = (key: string): string[] | null => {
-        const selected = selection[key] ?? [];
-        const total = preview.content[key].length;
-        if (total === 0) return [];
-        return selected.length === total ? null : selected;
-      };
-
-      tell('packs', {
-        type: 'IMPORT_PACK_CONTENT',
-        directory,
-        include: Object.fromEntries(Object.keys(preview.content).map((key) => [key, toIncludeField(key)])),
-        mode: importMode,
-        restartBrain,
-      });
-
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          status: 'importing' as const,
-          result: null,
-          errors: [],
-          error: null,
-        },
-      };
-    }),
-
-    cancelContentImport: assign(() => ({
-      packContentImport: freshContentImport(),
-    })),
-
-    setContentImported: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT_IMPORTED', event);
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          status: 'success' as const,
-          result: ev.result,
-          errors: ev.errors,
-          error: null,
-        },
-      };
-    }),
-
-    setContentImportFailed: assign(({ context, event }) => {
-      const ev = typeOf('PACK_CONTENT_IMPORT_FAILED', event);
-      return {
-        packContentImport: {
-          ...context.packContentImport,
-          status: 'error' as const,
-          result: null,
-          errors: [],
-          error: ev.error,
-        },
-      };
-    }),
-
-    resetContentImportStatus: assign(() => ({
-      packContentImport: freshContentImport(),
-    })),
-  },
-  }).createMachine({
-  id,
-  
-  initial: 'ready',
-  entry: () => tell('help', { type: 'GET_HELP' }),
-  on: {
-    HELP_CATALOG: { actions: 'updateHelp' },
-    'HELP.OPEN': { actions: ['updateHelp', assign({ activeTab: 'help' })] },
-    'HELP.READ': { actions: 'updateHelp' },
-    'HELP.BACK': { actions: 'updateHelp' },
-    'HELP.SEARCH': { actions: 'updateHelp' },
-  },
-  context: () => ({
-    secrets: [],
-    secretsStatus: null,
-    cliTestResults: {},
-    packContentImport: freshContentImport(),
-    activeTab: 'general',
-    help: createHelpContext(),
-    generalNavItem: 'application',
-    selectedFeatureId: null as string | null,
-    resetting: false,
-  }),
+type SettingsShape = {
+  data: SettingsContext;
   states: {
-    ready: {
-      meta: breadcrumb('settings', 'Settings', true),
-      on: {
-        'TAB.SELECT': {
-          actions: 'selectTab',
+    idle: {};
+    resetting: {};
+  };
+};
+
+export const settingsChrome: SurfaceChrome<Value<SettingsShape>> = {
+  default: { label: 'Settings', target: 'idle' },
+};
+
+/**
+ * The Settings surface's state, over the two acts only a window can do: starting the app over once a reset has
+ * finished, and telling the user a reset failed. The renderer passes the window's; a test passes fakes.
+ */
+export function createSettingsMachine(io: SettingsIO) {
+  return hostState<SettingsShape, SettingsEvents>()({
+    initial: 'idle',
+    data: {
+      secrets: [],
+      secretsStatus: null,
+      cliTestResults: {},
+      packContentImport: freshContentImport(),
+      activeTab: 'general',
+      help: createHelpContext(),
+      generalNavItem: 'application',
+      selectedFeatureId: null,
+      resetting: false,
+    },
+    run: ({ tell }) => {
+      tell('help', { type: 'GET_HELP' });
+    },
+    on: {
+      TRAIL_CLICK: () => {},
+      HELP_CATALOG: (event, { data }) => ({ data: { help: reduceHelp(data.help, event) } }),
+      'HELP.OPEN': (event, { data }) => ({ data: { help: reduceHelp(data.help, event), activeTab: 'help' } }),
+      'HELP.READ': (event, { data }) => ({ data: { help: reduceHelp(data.help, event) } }),
+      'HELP.BACK': (event, { data }) => ({ data: { help: reduceHelp(data.help, event) } }),
+      'HELP.SEARCH': (event, { data }) => ({ data: { help: reduceHelp(data.help, event) } }),
+      'TAB.SELECT': (event) => ({ data: { activeTab: event.tab } }),
+      'GENERAL_NAV.SELECT': (event) => ({ data: { generalNavItem: event.item } }),
+      'FEATURE.SELECT': (event, { data }) => {
+        // Another pack may send it, so a bad one is reported and ignored rather than stopping the settings surface
+        if (!splitRef(event.featureId)) {
+          console.error(`FEATURE.SELECT names "${event.featureId}", which isn't a feature's ref, "<packId>/<featureId>"`);
+          return { data: { selectedFeatureId: data.selectedFeatureId } };
+        }
+        return { data: { selectedFeatureId: event.featureId } };
+      },
+      SECRETS_UPDATED: (event) => ({
+        data: { secrets: event.secrets, secretsStatus: event.status },
+      }),
+      'CLI.TEST': (event, { data, tell }) => {
+        // The code feature resolves CLIs: `resolve-cli` and the stored paths are its own
+        tell({ peer: 'role:code' }, {
+          type: 'TEST_CLI_PROVIDER',
+          provider: event.provider,
+        });
+        return {
+          data: {
+            cliTestResults: { ...data.cliTestResults, [event.provider]: { status: 'testing' as const } },
+          },
+        };
+      },
+      CLI_TEST_RESULT: (event, { data }) => ({
+        data: {
+          cliTestResults: {
+            ...data.cliTestResults,
+            [event.provider]: {
+              status: event.success ? 'success' as const : 'error' as const,
+              resolvedPath: event.resolvedPath,
+              error: event.error,
+            },
+          },
         },
-        'GENERAL_NAV.SELECT': {
-          actions: 'selectGeneralNavItem',
-        },
-        'FEATURE.SELECT': {
-          actions: 'selectFeature',
-        },
-        SECRETS_UPDATED: {
-          actions: 'setSecrets',
-        },
-        'CLI.TEST': {
-          actions: 'testCliProvider',
-        },
-        'CLI_TEST_RESULT': {
-          actions: 'setCliTestResult',
-        },
-        'PACK_CONTENT.PREVIEW': {
-          actions: 'previewPackContent',
-        },
-        'PACK_CONTENT.TOGGLE_EXPAND': {
-          actions: 'toggleContentExpand',
-        },
-        'PACK_CONTENT.TOGGLE_TYPE_ALL': {
-          actions: 'toggleContentTypeAll',
-        },
-        'PACK_CONTENT.TOGGLE_ITEM': {
-          actions: 'toggleContentItem',
-        },
-        'PACK_CONTENT.SET_MODE': {
-          actions: assign(({ context, event }) => ({
+      }),
+      'PACK_CONTENT.PREVIEW': (event, { data, tell }) => {
+        // The packs system owns content orchestration; its answers come back to this surface, which draws them
+        tell('packs', {
+          type: 'PREVIEW_PACK_CONTENT',
+          directory: event.directory,
+        });
+        return {
+          data: {
             packContentImport: {
-              ...context.packContentImport,
-              importMode: typeOf('PACK_CONTENT.SET_MODE', event).mode,
+              ...data.packContentImport,
+              status: 'previewing' as const,
+              directory: event.directory,
+              preview: null,
+              selection: {},
+              expanded: {},
+              result: null,
+              errors: [],
+              error: null,
             },
-          })),
-        },
-        'PACK_CONTENT.TOGGLE_RESTART_BRAIN': {
-          actions: assign(({ context }) => ({
+          },
+        };
+      },
+      PACK_CONTENT_PREVIEW: (event, { data }) => {
+        const selection = Object.fromEntries(
+          Object.entries(event.preview.content).map(([key, items]) => [key, items.map(i => i.key)]),
+        );
+        return {
+          data: {
             packContentImport: {
-              ...context.packContentImport,
-              restartBrain: !context.packContentImport.restartBrain,
+              ...data.packContentImport,
+              status: 'selecting' as const,
+              preview: event.preview,
+              selection,
+              expanded: {},
+              result: null,
+              errors: [],
+              error: null,
             },
-          })),
+          },
+        };
+      },
+      PACK_CONTENT_PREVIEW_FAILED: (event, { data }) => ({
+        data: {
+          packContentImport: {
+            ...data.packContentImport,
+            status: 'error' as const,
+            preview: null,
+            result: null,
+            errors: [],
+            error: event.error,
+          },
         },
-        'PACK_CONTENT.CONFIRM_IMPORT': {
-          actions: 'confirmContentImport',
-        },
-        'PACK_CONTENT.CANCEL': {
-          actions: 'cancelContentImport',
-        },
-        'PACK_CONTENT.RESET_STATUS': {
-          actions: 'resetContentImportStatus',
-        },
-        PACK_CONTENT_PREVIEW: {
-          actions: 'setContentPreview',
-        },
-        PACK_CONTENT_PREVIEW_FAILED: {
-          actions: 'setContentPreviewFailed',
-        },
-        PACK_CONTENT_IMPORTED: {
-          actions: 'setContentImported',
-        },
-        PACK_CONTENT_IMPORT_FAILED: {
-          actions: 'setContentImportFailed',
-        },
-        'APP.RESET': {
-          guard: ({ context }) => !context.resetting,
-          actions: [
-            assign({ resetting: true }),
-            ({ self }) => {
-              void io.reset().catch(error => self.send({ type: 'APP_RESET_FAILED', error: String(error) }));
+      }),
+      'PACK_CONTENT.TOGGLE_EXPAND': (event, { data }) => ({
+        data: {
+          packContentImport: {
+            ...data.packContentImport,
+            expanded: {
+              ...data.packContentImport.expanded,
+              [event.key]: !data.packContentImport.expanded[event.key],
             },
-          ],
+          },
         },
-        APP_RESET_COMPLETE: {
-          // Starting over is the window's act, not this machine's
-          actions: () => io.restart(),
+      }),
+      'PACK_CONTENT.TOGGLE_TYPE_ALL': (event, { data }) => {
+        const preview = data.packContentImport.preview;
+        if (!preview) return;
+        const currentlySelected = data.packContentImport.selection[event.key] ?? [];
+        const allKeys = (preview.content[event.key] ?? []).map(i => i.key);
+        const nextSelection = currentlySelected.length === allKeys.length ? [] : allKeys;
+        return {
+          data: {
+            packContentImport: {
+              ...data.packContentImport,
+              selection: {
+                ...data.packContentImport.selection,
+                [event.key]: nextSelection,
+              },
+            },
+          },
+        };
+      },
+      'PACK_CONTENT.TOGGLE_ITEM': (event, { data }) => {
+        const current = data.packContentImport.selection[event.key] ?? [];
+        const next = current.includes(event.item)
+          ? current.filter(k => k !== event.item)
+          : [...current, event.item];
+        return {
+          data: {
+            packContentImport: {
+              ...data.packContentImport,
+              selection: {
+                ...data.packContentImport.selection,
+                [event.key]: next,
+              },
+            },
+          },
+        };
+      },
+      'PACK_CONTENT.SET_MODE': (event, { data }) => ({
+        data: {
+          packContentImport: {
+            ...data.packContentImport,
+            importMode: event.mode,
+          },
         },
-        APP_RESET_FAILED: {
-          actions: [
-            assign({ resetting: false }),
-            ({ event }) => io.report(`Reset failed: ${typeOf('APP_RESET_FAILED', event).error}`),
-          ],
+      }),
+      'PACK_CONTENT.TOGGLE_RESTART_BRAIN': (_event, { data }) => ({
+        data: {
+          packContentImport: {
+            ...data.packContentImport,
+            restartBrain: !data.packContentImport.restartBrain,
+          },
         },
+      }),
+      'PACK_CONTENT.CONFIRM_IMPORT': (_event, { data, tell }) => {
+        const { directory, preview, selection, importMode, restartBrain } = data.packContentImport;
+        if (!directory || !preview) return;
+
+        // null = import all items of this key, [] = skip, string[] = filter.
+        // An empty key should be skipped — not treated as "import everything".
+        const toIncludeField = (key: string): string[] | null => {
+          const selected = selection[key] ?? [];
+          const total = preview.content[key].length;
+          if (total === 0) return [];
+          return selected.length === total ? null : [...selected];
+        };
+
+        tell('packs', {
+          type: 'IMPORT_PACK_CONTENT',
+          directory,
+          include: Object.fromEntries(Object.keys(preview.content).map((key) => [key, toIncludeField(key)])),
+          mode: importMode,
+          restartBrain,
+        });
+
+        return {
+          data: {
+            packContentImport: {
+              ...data.packContentImport,
+              status: 'importing' as const,
+              result: null,
+              errors: [],
+              error: null,
+            },
+          },
+        };
+      },
+      'PACK_CONTENT.CANCEL': () => ({
+        data: { packContentImport: freshContentImport() },
+      }),
+      'PACK_CONTENT.RESET_STATUS': () => ({
+        data: { packContentImport: freshContentImport() },
+      }),
+      PACK_CONTENT_IMPORTED: (event, { data }) => ({
+        data: {
+          packContentImport: {
+            ...data.packContentImport,
+            status: 'success' as const,
+            result: event.result,
+            errors: event.errors,
+            error: null,
+          },
+        },
+      }),
+      PACK_CONTENT_IMPORT_FAILED: (event, { data }) => ({
+        data: {
+          packContentImport: {
+            ...data.packContentImport,
+            status: 'error' as const,
+            result: null,
+            errors: [],
+            error: event.error,
+          },
+        },
+      }),
+      APP_RESET_COMPLETE: () => {
+        // Starting over is the window's act, not this machine's
+        io.restart();
+      },
+      APP_RESET_FAILED: (event) => {
+        io.report(`Reset failed: ${event.error}`);
+        return { at: 'idle', data: { resetting: false } };
       },
     },
+    states: {
+      idle: {
+        on: {
+          'APP.RESET': () => ({ at: 'resetting', data: { resetting: true } }),
+        },
+      },
+      resetting: {
+        run: () => io.reset(),
+        failed: (error) => {
+          io.report(`Reset failed: ${String(error)}`);
+          return { at: 'idle', data: { resetting: false } };
+        },
+        on: {
+          'APP.RESET': () => {},
+        },
+      },
     },
   });
 }
 
-/**
- * The Settings surface's machine, over the two acts only a window can do: starting the app over once a reset has
- * finished, and telling the user a reset failed. The renderer passes the window's; a test passes fakes.
- */
-
-export type SettingsState = ActorRefFrom<ReturnType<typeof createSettingsMachine>>;
+export type SettingsState = ReturnType<typeof createSettingsMachine>;

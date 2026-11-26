@@ -1,14 +1,14 @@
 import { computed } from 'vue';
-import type { SnapshotFrom } from 'xstate';
-import type { HelpArticle } from '@apackdev/sdk/framework';
-import { useUntypedSurfaceState, openHelp } from '@apackdev/sdk/fe';
+import { openHelp } from '@apackdev/sdk/fe';
 import { splitRef } from '@apackdev/sdk/ids';
-import { HOST, type SettingsState } from '@apackdev/host/fe';
+import { useHostState } from '@apackdev/host/fe';
 
 /** Read the same live catalog as Help; contextual links disappear when their pack unloads. */
 export function useContextualHelp() {
-  const articles = useUntypedSurfaceState<SnapshotFrom<SettingsState>, HelpArticle[]>(HOST.settings, s => s.context.help.catalog.articles);
-  const features = computed(() => new Set((articles.value ?? []).flatMap(a => (a.features ?? []).map(f => `${a.packId}/${f}`))));
+  const { state: settings } = useHostState('settings');
+  const features = computed(() =>
+    new Set((settings.value.data.help.catalog.articles ?? []).flatMap(a => (a.features ?? []).map(f => `${a.packId}/${f}`))),
+  );
   return {
     hasHelp: (ref: string) => features.value.has(ref),
     openFeatureHelp: (ref: string) => { const target = splitRef(ref); if (target) openHelp(target); },

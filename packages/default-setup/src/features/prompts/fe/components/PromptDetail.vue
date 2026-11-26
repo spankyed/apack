@@ -104,7 +104,6 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
 import { computed } from 'vue';
 import { ExternalLink } from 'lucide-vue-next';
 import NameSaveHeader from '@apackdev/ui/design/NameSaveHeader';
@@ -113,9 +112,8 @@ import type { Category } from '#generated/types.ts';
 import PromptInputsEditor from './PromptInputsEditor.vue';
 import PromptTemplateEditor from './PromptTemplateEditor.vue';
 import JsonSchemaEditor from '@apackdev/ui/components/JsonSchemaEditor';
-import { useCollapsibleState } from '@apackdev/ui/composables/useCollapsibleState';
 import { openSurface } from '#generated/fe.ts'
-import type { PromptsState } from '#features/prompts/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 import type { PromptEntity } from '@apackdev/sdk';
 import type { TemplateInput } from '@apackdev/sdk';
 
@@ -143,13 +141,20 @@ const emit = defineEmits<{
   back: [];
 }>();
 
-// Get the prompts state machine actor
-const actor: PromptsState = useSurface();
+const { state: prompts, send } = useState('prompts');
 
-// Use the composable for managing collapsible section states
-const inputsExpanded = useCollapsibleState(actor, ['formData', 'inputsExpanded'], 'TOGGLE_INPUTS_SECTION');
-const outputExpanded = useCollapsibleState(actor, ['formData', 'outputExpanded'], 'TOGGLE_OUTPUT_SECTION');
-const metadataExpanded = useCollapsibleState(actor, ['formData', 'metadataExpanded'], 'TOGGLE_METADATA_SECTION');
+const inputsExpanded = computed({
+  get: () => Boolean(prompts.value.data.formData.inputsExpanded),
+  set: (show: boolean) => send({ type: 'TOGGLE_INPUTS_SECTION', show }),
+});
+const outputExpanded = computed({
+  get: () => Boolean(prompts.value.data.formData.outputExpanded),
+  set: (show: boolean) => send({ type: 'TOGGLE_OUTPUT_SECTION', show }),
+});
+const metadataExpanded = computed({
+  get: () => Boolean(prompts.value.data.formData.metadataExpanded),
+  set: (show: boolean) => send({ type: 'TOGGLE_METADATA_SECTION', show }),
+});
 
 const isValid = computed(() => {
   return props.formData.label.trim() !== '' && props.formData.templateFn.trim() !== '';

@@ -106,7 +106,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ExternalLink, ShieldAlert, ShieldCheck } from 'lucide-vue-next'
-import { openLink, secretsClient, useState, useSurface } from '@apackdev/sdk/fe'
+import { openLink, secretsClient } from '@apackdev/sdk/fe'
 import { providerLabels } from '@apackdev/sdk/models'
 import type { SecretMetadata, SecretProvider } from '@apackdev/sdk/services'
 import { API_KEY_URLS, REQUIRED_PROVIDERS } from '@/views/settings/constants'
@@ -114,10 +114,9 @@ import CliProviders from './CliProviders.vue'
 import SecretKeyRow from './SecretKeyRow.vue'
 import NewSecretRow from './NewSecretRow.vue'
 import { errorMessage } from '@apackdev/sdk/utils/pure';
-import type { SettingsState } from '@apackdev/host/fe'
+import { useHostState } from '@apackdev/host/fe'
 
-const settingsActor: SettingsState = useSurface()
-const { state: settings } = useState(settingsActor)
+const { state: settings } = useHostState('settings')
 const error = ref<string | null>(null)
 
 const descriptions: Record<keyof typeof providerLabels, string> = {

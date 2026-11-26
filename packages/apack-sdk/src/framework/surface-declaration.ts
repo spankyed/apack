@@ -5,6 +5,7 @@ export type ComponentTarget = string | { entry: string; load?: 'lazy' };
 export interface SurfaceDeclaration {
   label: string;
   state: string;
+  chrome?: string;
   icon?: string | { entry: string; load?: 'lazy' };
   canvas?: ComponentTarget | { routes: Record<string, ComponentTarget> };
   panel?: ComponentTarget;
@@ -25,6 +26,7 @@ export function _surfaceTargets(surface: SurfaceDeclaration): [string, string][]
   const canvas = surface.canvas;
   return [
     ['state', surface.state],
+    ...(surface.chrome ? [['chrome', surface.chrome] as [string, string]] : []),
     ...component('icon', typeof surface.icon === 'object' ? surface.icon : undefined),
     ...(canvas && typeof canvas === 'object' && 'routes' in canvas
       ? Object.entries(canvas.routes).flatMap(([route, target]) => component(`canvas.routes.${route}`, target))

@@ -1204,6 +1204,7 @@ ${contractCheck}`;
       const binding = frontendBindings(surfaceBinding(feature.id), `features.${feature.id}.surface`);
       const { target, component } = binding;
       const properties = [`label: ${dataLiteral(surface.label)}`, `state: ${target(surface.state)}`];
+      if (surface.chrome) properties.push(`chrome: ${target(surface.chrome, 'chrome')}`);
       if (surface.icon) properties.push(`icon: ${binding.icon(surface.icon)}`);
       if (surface.canvas !== undefined) {
         const canvas = surface.canvas;

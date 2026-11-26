@@ -99,12 +99,12 @@ describe('frontend declaration binding', () => {
 it('checks declared presentation and panes without resolving a component or predicate', () => {
   const { manifest, registration, component } = fixture();
   const declaration = manifest.features!.notes.surface!;
-  Object.assign(declaration, { label: 'Notes', isPinned: true, icon: 'NotebookText',
+  Object.assign(declaration, { label: 'Notes', chrome: 'src/surface.ts#notesChrome', isPinned: true, icon: 'NotebookText',
     canvas: { routes: { list: 'src/list.vue', view: { entry: 'src/view.vue', load: 'lazy' } } },
     panel: 'src/panel.vue', chat: 'src/chat.vue', hotkeys: [{ action: 'open', global: false }],
     options: { headerClass: 'notes' }, fallbackPanel: { label: 'Inspect', toggle: { type: 'INSPECT' }, isShown: 'src/predicate.ts#isShown' } });
   const isShown = vi.fn();
-  Object.assign(registration.features.notes.surface, { icon: component, isPinned: true,
+  Object.assign(registration.features.notes.surface, { chrome: { default: { label: 'Notes', target: 'list' } }, icon: component, isPinned: true,
     canvas: { list: component, view: component }, panel: component, chat: component,
     hotkeys: [{ action: 'open', global: false }], options: { headerClass: 'notes' },
     fallbackPanel: { label: 'Inspect', toggle: { type: 'INSPECT' }, isShown } });
@@ -113,7 +113,7 @@ it('checks declared presentation and panes without resolving a component or pred
   expect(component.render).not.toHaveBeenCalled();
   const surface = registration.features.notes.surface as Record<string, unknown>;
   const changes: [string, unknown][] = [
-    ['label', 'Wrong'], ['isPinned', false], ['icon', undefined], ['canvas', { list: component }],
+    ['label', 'Wrong'], ['chrome', undefined], ['isPinned', false], ['icon', undefined], ['canvas', { list: component }],
     ['panel', undefined], ['chat', undefined], ['hotkeys', [{ action: 'other' }]],
     ['options', { headerClass: 'other' }], ['fallbackPanel', { label: 'Inspect', toggle: { type: 'OTHER' }, isShown }],
     ['undeclared', true],

@@ -24,17 +24,16 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useFeatureSettings, useState, useSurface } from '@apackdev/sdk/fe'
+import { useFeatureSettings } from '@apackdev/sdk/fe'
 import { useSettingsSaveStatus } from '@/views/settings/save'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
 import CliProviderRow from './CliProviderRow.vue'
 import { resolveName } from '@apackdev/sdk/ids';
-import type { SettingsState } from '@apackdev/host/fe'
+import { useHostState } from '@apackdev/host/fe'
 
 const { updateSettings } = useSettingsSaveStatus()
 
-const settingsActor: SettingsState = useSurface()
-const { state: settings, send } = useState(settingsActor)
+const { state: settings, send } = useHostState('settings')
 
 const providers = [
   { key: 'copilot', label: 'Copilot CLI', installHint: 'Install via npm', installCmd: 'npm install -g @github/copilot' },

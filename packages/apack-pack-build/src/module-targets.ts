@@ -36,7 +36,7 @@ export function _packModuleTargets(manifest: Partial<PackManifest>): ModuleTarge
     field('views', feature.views);
     field('projections', feature.projections);
     for (const [name, target] of feature.surface ? _surfaceTargets(feature.surface) : []) {
-      field(`surface.${name}`, target, name === 'state' || name === 'fallbackPanel.isShown' ? 'script' : 'component', name === 'fallbackPanel.isShown' ? 'named' : 'default');
+      field(`surface.${name}`, target, name === 'state' || name === 'chrome' || name === 'fallbackPanel.isShown' ? 'script' : 'component', name === 'fallbackPanel.isShown' ? 'named' : 'default');
     }
     field('types', feature.types, 'types', 'module');
   }

@@ -165,8 +165,8 @@
 
 <script setup lang="ts">
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
-import type { ActionsState } from './state.ts'
+import { useSettingsDraft } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
 import { computed, ref } from 'vue'
@@ -222,13 +222,13 @@ const removeCategory = (index: number) => {
 
 // The import and the export are the surface's machine's: it makes each, and holds how the last one ended. What an
 // earlier visit to this form left is not shown again
-const { state: surface, send } = useState<ActionsState>()
+const { state: surface, send } = useState('actions')
 send({ type: 'ACTIONS.FORGET_IMPORT' })
 send({ type: 'ACTIONS.FORGET_EXPORT' })
 
 // How the last import ended, shown until another is picked
 const imported = computed(() => surface.value.data.imported)
-const isImporting = computed(() => surface.value.data.making.importActions)
+const isImporting = computed(() => surface.value.pending.importActions)
 const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
 const applyErrors = computed(() => {
   if (imported.value === undefined) return []
@@ -239,7 +239,7 @@ const importedCount = computed(() => (imported.value?.ok ? imported.value.value.
 // How the last export ended, shown until another is made
 const exportDirectory = ref<string>('')
 const exported = computed(() => surface.value.data.exported)
-const isExporting = computed(() => surface.value.data.making.exportActions)
+const isExporting = computed(() => surface.value.pending.exportActions)
 const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
 const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
 const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
