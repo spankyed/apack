@@ -132,8 +132,6 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed } from 'vue';
 import { 
   ChevronRight, 
@@ -146,10 +144,9 @@ import {
   Search, 
   X,
   FoldVertical,} from 'lucide-vue-next';
-import { type DatabaseState } from '../state.ts';
+import { useState } from '#generated/state-fe.ts';
 
-const actor: DatabaseState = useSurface()
-const { state: database, send } = useState(actor);
+const { state: database, send } = useState('database');
 
 const searchQuery = ref('');
 const expandedItems = ref<string[]>([]);

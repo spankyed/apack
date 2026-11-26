@@ -94,8 +94,6 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
-
 import { computed, ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, Node as VueFlowNode, EdgeUpdateEvent, EdgeMouseEvent } from '@vue-flow/core'
@@ -105,9 +103,9 @@ import { useNodeStyles } from '@apackdev/ui/components/node-styles'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
-import { type FlowsState } from '#features/flows/fe/state.ts'
 import { useView } from '#generated/fe.ts'
 import { useSettings } from '#generated/settings-fe.ts'
+import { useState } from '#generated/state-fe.ts'
 
 // Import sub-components
 import FlowsList from './components/FlowsList.vue'
@@ -131,7 +129,7 @@ const targetFlow = ref<Partial<FlowEntity> | null>(null)
 /* ------------------------------------------------------------ */
 /*  reactive state from the actor                               */
 /* ------------------------------------------------------------ */
-const { state: flowsMachine, send } = useState<FlowsState>()
+const { state: flowsMachine, send } = useState('flows')
 
 const inListState = computed(() => flowsMachine.value.at === 'list')
 const inViewState = computed(() => flowsMachine.value.at === 'view')

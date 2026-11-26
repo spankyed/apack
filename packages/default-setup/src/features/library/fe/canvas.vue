@@ -18,18 +18,17 @@
 
 <script setup lang="ts">
 import type { EARS } from '#generated/ears.ts'
-import { useState } from '@apackdev/sdk/fe'
 
 import { computed, watch } from 'vue'
 import { useView } from '#generated/fe.ts'
+import { useState } from '#generated/state-fe.ts'
 import FolderReader from './components/FolderReader.vue'
 import DocumentEditor from './components/DocumentEditor.vue'
 // [SEARCH_INDEX_FF] import CreateIndexView from './components/search-index/CreateIndexView.vue'
 // [SEARCH_INDEX_FF] import TestIndexView from './components/search-index/TestIndexView.vue'
 import FileSystemBrowser from './components/FileSystemBrowser.vue'
-import type { LibraryActor } from './state.ts'
 
-const { state: library, send } = useState<LibraryActor>()
+const { state: library, send } = useState('library')
 
 // The folder open and each one expanded, each watched by its own reader
 const shownFolders = computed(() => [...new Set([library.value.data.currentFolderId, ...library.value.data.expandedFolderIds])])
@@ -119,13 +118,6 @@ const currentEvents = computed(() => {
     // UPDATE_SEARCH_INDEX: (payload: { indexId: string; config: any }) => send({ type: 'UPDATE_SEARCH_INDEX', ...payload }),
     // DELETE_SEARCH_INDEX: (payload: { indexId: string }) => send({ type: 'DELETE_SEARCH_INDEX', ...payload }),
     // CANCEL_EDIT_INDEX: () => send({ type: 'CANCEL_EDIT_INDEX' }),
-
-    CREATE_COLLECTION: (payload: { name: string; description?: string; parentId?: EARS.EntityId }) =>
-      send({ type: 'CREATE_COLLECTION', ...payload }),
-    
-    // Navigation
-    TRAIL_CLICK: (payload: { trail: string[] }) =>
-      send({ type: 'TRAIL_CLICK', ...payload }),
   }
 
   const fileBrowserEvents = {

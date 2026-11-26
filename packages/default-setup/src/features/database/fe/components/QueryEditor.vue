@@ -89,17 +89,15 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
-import { isRunningCode, type DatabaseState } from '../state.ts';
+import { useState } from '#generated/state-fe.ts';
+import { isRunningCode } from '../state.ts';
 import QueryEditorHeader from './query-editor/QueryEditorHeader.vue';
 import SimpleMonacoEditor from '@apackdev/ui/components/SimpleMonacoEditor';
 import QueryEditorExamples from './query-editor/QueryEditorExamples.vue';
 
-const actor: DatabaseState = useSurface();
-const { state: database, send } = useState(actor);
-const isLoading = computed(() => isRunningCode(database.value.data.making));
+const { state: database, send } = useState('database');
+const isLoading = computed(() => isRunningCode(database.value.pending));
 
 // Props and emits
 defineProps<{

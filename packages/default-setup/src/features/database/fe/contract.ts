@@ -3,20 +3,12 @@
 // A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears` — which is what lets
 // codegen read the contract without resolving the machine, whose imports cycle back through `#generated/events`.
 // `apack.json` names it at `features[].surface.contract`.
-import type { MakingOf, SurfaceInbox } from '@apackdev/sdk/fe'
+import type { SurfaceInbox } from '@apackdev/sdk/fe'
 import type { RunTree, RunNode } from '@apackdev/sdk/steps'
 import type { DatabaseSettings } from '#generated/types.ts'
 import type { DatabaseSchemaInfo } from '../be/types.ts'
 
 export interface DatabaseContext {
-  /**
-   * Which of the asks this window makes are under way, by the name the machine makes each under. A node's details
-   * are asked for per node, so those are the ids of the nodes being read
-   */
-  making: MakingOf<{
-    query: 'one'; transaction: 'one'; aiQuery: 'one'; flowRuns: 'one'; flowEvents: 'one'; backupInfo: 'one';
-    export: 'one'; import: 'one'; reset: 'one'; nodeDetails: 'each';
-  }>;
   schema: DatabaseSchemaInfo;
   currentQuery: string;
   queryResult: any;

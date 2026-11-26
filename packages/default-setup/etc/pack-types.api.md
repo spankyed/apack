@@ -11,7 +11,7 @@ import * as _apackdev_sdk_ears from '@apackdev/sdk/ears';
 import * as _elmdb_ears from '@apackdev/sdk/ears';
 import { ShortCode } from '@apackdev/sdk/ears';
 import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToWindow, TypedTell } from '@apackdev/sdk/events';
-import { HotkeysMap, MakingOf, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
+import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -1974,22 +1974,6 @@ type DatabaseAsks = {
 };
 
 interface DatabaseContext {
-    /**
-     * Which of the asks this window makes are under way, by the name the machine makes each under. A node's details
-     * are asked for per node, so those are the ids of the nodes being read
-     */
-    making: MakingOf<{
-        query: 'one';
-        transaction: 'one';
-        aiQuery: 'one';
-        flowRuns: 'one';
-        flowEvents: 'one';
-        backupInfo: 'one';
-        export: 'one';
-        import: 'one';
-        reset: 'one';
-        nodeDetails: 'each';
-    }>;
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;

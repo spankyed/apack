@@ -77,18 +77,15 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed } from 'vue'
-import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
+import { useState } from '#generated/state-fe.ts'
+import { isLoadingRuns as readingRuns } from '../../state.ts'
 import { GitBranch, Loader2, ArrowLeft } from 'lucide-vue-next'
 import type { RunStatus } from '@apackdev/sdk/steps'
 
-const databaseActor: DatabaseState = useSurface()
-
 // State selectors
-const { state: database, send } = useState(databaseActor)
-const isLoadingRuns = computed(() => readingRuns(database.value.data.making))
+const { state: database, send } = useState('database')
+const isLoadingRuns = computed(() => readingRuns(database.value.pending))
 
 // Actions
 function selectFlow(flowId: string) {

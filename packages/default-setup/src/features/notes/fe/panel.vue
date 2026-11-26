@@ -258,8 +258,8 @@
 <script setup lang="ts">
 import { useView } from '#generated/fe.ts'
 import { useSettings } from '#generated/settings-fe.ts'
+import { useState } from '#generated/state-fe.ts'
 import { computed, ref, nextTick, watch } from 'vue'
-import { type NotesState } from './state.ts'
 import NoteTreeItem from './components/NoteTreeItem.vue'
 import { Plus, ListChecks, MoreVertical, Star, ChevronRight, Trash2, ArrowLeft, Undo2, Search, X, FileText, CircleCheck } from 'lucide-vue-next'
 import {
@@ -271,9 +271,9 @@ import {
 } from 'reka-ui'
 import { useNoteTreeDragDrop } from './composables/useNoteTreeDragDrop.ts'
 import type { MenuItem } from '@apackdev/ui/composables/useContextMenu'
-import { useTrackedMenuOpen, useState } from '@apackdev/sdk/fe'
+import { useTrackedMenuOpen } from '@apackdev/sdk/fe'
 
-const { state: notesMachine, send } = useState<NotesState>()
+const { state: notesMachine, send } = useState('notes')
 
 const dropdownOpen = ref(false)
 const favoritesExpanded = ref(true)
