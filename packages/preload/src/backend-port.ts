@@ -141,15 +141,22 @@ export function wrapMessagePort(port: BackendPortLike): {
 /**
  * Creates the preload `backendPort` bridge bound to `ipc` and optional `pageTarget` (`window`).
  *
- * Sends `api:request-port` only when `connect()` is called so existing windows pay zero overhead until Wave 0
- * attaches, closes the active port on `pagehide` or `api:port-closed`, and leaves zero listeners on unsubscribe.
+ * Enforces at most one active subscriber per bridge so concurrent callers cannot race on the same transferred
+ * `MessagePort`. Sends `api:request-port` only when `connect()` is called, closes the active port on `pagehide`
+ * or `api:port-closed`, and leaves zero listeners on unsubscribe so a subsequent `connect()` can re-attach cleanly.
  */
 export function createBackendPortBridge(
   ipc: BackendPortIpc,
   pageTarget?: PageHideTarget,
 ): _HostBridge['backendPort'] {
+  let hasActiveSubscriber = false;
+
   return {
     connect(onPort) {
+      if (hasActiveSubscriber) {
+        throw new Error('backendPort.connect() already has an active subscriber; unsubscribe before connecting again');
+      }
+      hasActiveSubscriber = true;
       let unsubscribed = false;
       let active: { generation: number; transport: _BackendPortTransport; closeFromHost: () => void } | undefined;
 
@@ -186,14 +193,10 @@ export function createBackendPortBridge(
         current?.transport.close();
       };
 
-      ipc.on(CHANNEL_PORT, handlePort);
-      ipc.on(CHANNEL_CLOSED, handlePortClosed);
-      pageTarget?.addEventListener('pagehide', handlePageHide);
-      ipc.send(CHANNEL_REQUEST);
-
-      return () => {
+      const unsubscribe = (): void => {
         if (unsubscribed) return;
         unsubscribed = true;
+        hasActiveSubscriber = false;
         ipc.removeListener(CHANNEL_PORT, handlePort);
         ipc.removeListener(CHANNEL_CLOSED, handlePortClosed);
         pageTarget?.removeEventListener('pagehide', handlePageHide);
@@ -201,6 +204,18 @@ export function createBackendPortBridge(
         active = undefined;
         current?.transport.close();
       };
+
+      try {
+        ipc.on(CHANNEL_PORT, handlePort);
+        ipc.on(CHANNEL_CLOSED, handlePortClosed);
+        pageTarget?.addEventListener('pagehide', handlePageHide);
+        ipc.send(CHANNEL_REQUEST);
+      } catch (error) {
+        unsubscribe();
+        throw error;
+      }
+
+      return unsubscribe;
     },
   };
 }

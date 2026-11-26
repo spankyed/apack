@@ -203,4 +203,55 @@ describe('backendPort preload bridge', () => {
 
     unsubscribe();
   });
+
+  it('rejects concurrent connect() calls without attaching listeners or re-requesting, and allows re-subscribing after unsubscribe', () => {
+    const h = fakeHarness();
+    const bridge = createBackendPortBridge(h.ipc, h.pageTarget);
+    const firstSeen: _BackendPortTransport[] = [];
+    const secondSeen: _BackendPortTransport[] = [];
+
+    const unsubscribeFirst = bridge.connect((transport) => firstSeen.push(transport));
+    expect(h.sent).toEqual([{ channel: 'api:request-port', args: [] }]);
+    expect(h.listenerCount()).toBe(2);
+    expect(h.pageHideCount()).toBe(1);
+
+    // Second concurrent connect() throws and leaves IPC listeners & requests untouched
+    expect(() => bridge.connect((transport) => secondSeen.push(transport))).toThrow(/active subscriber/i);
+    expect(h.sent).toEqual([{ channel: 'api:request-port', args: [] }]);
+    expect(h.listenerCount()).toBe(2);
+    expect(h.pageHideCount()).toBe(1);
+
+    const p1 = fakeDomPort();
+    h.emitIpc('api:port', { ports: [p1.port] }, { generation: 1 });
+    expect(firstSeen).toHaveLength(1);
+    expect(secondSeen).toHaveLength(0);
+
+    // Unsubscribing closes the active port and releases the single-subscriber slot
+    unsubscribeFirst();
+    expect(p1.isClosed()).toBe(true);
+    expect(h.listenerCount()).toBe(0);
+    expect(h.pageHideCount()).toBe(0);
+
+    // Subsequent connect() succeeds and receives the fresh handoff
+    const unsubscribeSecond = bridge.connect((transport) => secondSeen.push(transport));
+    expect(h.sent).toEqual([
+      { channel: 'api:request-port', args: [] },
+      { channel: 'api:request-port', args: [] },
+    ]);
+    expect(h.listenerCount()).toBe(2);
+    expect(h.pageHideCount()).toBe(1);
+
+    // Calling the stale first unsubscribe again does NOT release the second subscriber's lock
+    unsubscribeFirst();
+    expect(() => bridge.connect(() => {})).toThrow(/active subscriber/i);
+    expect(h.listenerCount()).toBe(2);
+
+    const p2 = fakeDomPort();
+    h.emitIpc('api:port', { ports: [p2.port] }, { generation: 2 });
+    expect(secondSeen).toHaveLength(1);
+
+    unsubscribeSecond();
+    expect(h.listenerCount()).toBe(0);
+    expect(h.pageHideCount()).toBe(0);
+  });
 });

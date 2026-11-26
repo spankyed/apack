@@ -189,4 +189,43 @@ describe('boot lifecycle bridge', () => {
     portEmitter.emit('message', { data: { type: 'window-port', windowId: 5, generation: 1 }, ports: [afterShutdown.port] });
     expect(afterShutdown.isClosed()).toBe(true);
   });
+
+  it('buffers early window-gone messages, validates windowId, delivers live ones, and clears on shutdown', () => {
+    const { proc, portEmitter } = fakeEnv();
+    const bridge = createLifecycleBridge(proc);
+    bridge.installShutdownBridge();
+
+    // Early valid messages queue; malformed windowId payloads are ignored
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: 11 } });
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: '12' } });
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: Number.NaN } });
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: Number.POSITIVE_INFINITY } });
+    portEmitter.emit('message', { data: { type: 'window-gone' } });
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: 12 } });
+
+    const seen: number[] = [];
+    const unsubscribe = bridge.registerWindowGoneHandler((windowId) => {
+      seen.push(windowId);
+    });
+    expect(seen).toEqual([11, 12]);
+
+    // Live dispatch
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: 13 } });
+    expect(seen).toEqual([11, 12, 13]);
+
+    // Unsubscribe stops delivery and re-buffers until a new handler attaches or shutdown clears it
+    unsubscribe();
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: 14 } });
+    expect(seen).toEqual([11, 12, 13]);
+
+    // Shutdown clears buffered events and drops subsequent arrivals
+    portEmitter.emit('message', { data: { type: 'shutdown' } });
+    portEmitter.emit('message', { data: { type: 'window-gone', windowId: 15 } });
+
+    const afterShutdownSeen: number[] = [];
+    bridge.registerWindowGoneHandler((windowId) => {
+      afterShutdownSeen.push(windowId);
+    });
+    expect(afterShutdownSeen).toEqual([]);
+  });
 });

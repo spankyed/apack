@@ -181,8 +181,55 @@ describe('PortBroker', () => {
     expect(win.listenerCount('destroyed')).toBe(1);
     expect(win.listenerCount('render-process-gone')).toBe(1);
     expect(created).toHaveLength(2);
+    // Soft reload keeps the window alive and never emits window-gone
+    expect(be.posted.filter((entry) => (entry.message as { type?: string }).type === 'window-gone')).toEqual([]);
 
     win.crashRenderer();
+    expect(broker.windowCount()).toBe(0);
+    expect(be.posted.at(-1)).toEqual({ message: { type: 'window-gone', windowId: 7 }, transfer: undefined });
+  });
+
+  it('emits window-gone once per window teardown across render-process-gone + destroyed, and skips when backend is down', () => {
+    const { createChannel } = fakeChannelFactory();
+    const broker = new PortBroker<FakePort>({ createChannel, isAuthorized: () => true });
+    const w1 = fakeWindow(41);
+    const w2 = fakeWindow(42);
+    const be = fakeBackend();
+    broker.onBackendReady(be.backend);
+
+    expect(broker.requestPort(w1.contents)).toBe(true);
+    expect(broker.requestPort(w2.contents)).toBe(true);
+    be.posted.length = 0;
+
+    // Both render-process-gone and destroyed firing for the same window only emit window-gone once
+    w1.crashRenderer();
+    w1.destroy();
+    expect(be.posted).toEqual([{ message: { type: 'window-gone', windowId: 41 }, transfer: undefined }]);
+    expect(broker.windowCount()).toBe(1);
+
+    // Direct destroy emits window-gone once
+    w2.destroy();
+    expect(be.posted).toEqual([
+      { message: { type: 'window-gone', windowId: 41 }, transfer: undefined },
+      { message: { type: 'window-gone', windowId: 42 }, transfer: undefined },
+    ]);
+    expect(broker.windowCount()).toBe(0);
+
+    // Window teardown while backend is stopped does not post anything
+    const w3 = fakeWindow(43);
+    expect(broker.requestPort(w3.contents)).toBe(true);
+    be.posted.length = 0;
+    broker.onBackendStopped();
+    w3.destroy();
+    expect(be.posted).toEqual([]);
+    expect(broker.windowCount()).toBe(0);
+
+    // Backend postMessage failure during window teardown is caught cleanly
+    const w4 = fakeWindow(44);
+    broker.onBackendReady(be.backend);
+    expect(broker.requestPort(w4.contents)).toBe(true);
+    be.failNext(true);
+    expect(() => w4.destroy()).not.toThrow();
     expect(broker.windowCount()).toBe(0);
   });
 

@@ -53,6 +53,7 @@
     "./testing": "./src/testing/pack-registry.ts",
     "./fe/testing": "./src/testing/frontend-registry.ts",
     "./settings": "./src/features/settings/be/index.ts",
+    "./transport/mux": "./src/transport/mux.ts",
     "./views": "./src/views/index.ts"
   },
   "dependencies": {
