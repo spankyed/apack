@@ -205,15 +205,13 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
-
 import { ref, computed, watch, nextTick, type ComponentPublicInstance } from 'vue'
 import { FileText, Search, Hash, Copy, ChevronRight } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
 import type { IndexSearchResult } from '#generated/types.ts'
-import type { LibraryActor } from '../../state.ts'
+import { useState } from '#generated/state-fe.ts'
 
-const { state: library, send } = useState<LibraryActor>()
+const { state: library } = useState('library')
 
 const localQuery = ref('')
 const expandedChunks = ref(new Set<string>())
@@ -246,7 +244,7 @@ const uniqueDocumentCount = computed(() => groupedResults.value.size)
 
 // Sync with state machine
 watch(() => library.value.data.testQuery, (newVal) => localQuery.value = newVal)
-watch(localQuery, (newVal) => send({ type: 'UPDATE_TEST_QUERY', query: newVal }))
+// [SEARCH_INDEX_FF] watch(localQuery, (newVal) => send({ type: 'UPDATE_TEST_QUERY', query: newVal }))
 
 const handleEnterKey = (event: KeyboardEvent) => {
   if (!event.shiftKey) {
@@ -259,7 +257,7 @@ const executeSearch = () => {
   if (localQuery.value && !library.value.data.isSearching) {
     expandedChunks.value.clear()
     expandedDocuments.value.clear()
-    send({ type: 'EXECUTE_TEST_SEARCH' })
+    // [SEARCH_INDEX_FF] send({ type: 'EXECUTE_TEST_SEARCH' })
   }
 }
 
@@ -271,7 +269,8 @@ watch(() => library.value.data.testResults, (newResults) => {
   }
 })
 
-const cancel = () => send({ type: 'CANCEL_TEST_SEARCH' })
+// [SEARCH_INDEX_FF] const cancel = () => send({ type: 'CANCEL_TEST_SEARCH' })
+const cancel = () => {}
 
 const getChunkId = (result: IndexSearchResult, index: number): string => `${result.documentId}-${index}`
 

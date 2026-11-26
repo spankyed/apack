@@ -1,14 +1,12 @@
 import { watch, nextTick, type Ref } from 'vue'
-import { useState } from '@apackdev/sdk/fe'
-import type { NotesState } from '../state.ts'
+import { useState } from '#generated/state-fe.ts'
 import type TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 
 export function useNoteFocus(
-  actor: NotesState,
   titleRef: Ref<HTMLInputElement | null>,
   editorRef: Ref<InstanceType<typeof TiptapEditor> | null>,
 ) {
-  const { state: notes } = useState(actor)
+  const { state: notes } = useState('notes')
 
   watch(() => notes.value.data.currentNote, (note, oldNote) => {
     if (!note || note.id === oldNote?.id) return

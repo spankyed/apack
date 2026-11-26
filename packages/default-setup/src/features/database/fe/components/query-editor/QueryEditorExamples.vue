@@ -14,16 +14,13 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed } from 'vue';
-import type { DatabaseState } from '../../state.ts';
+import { useState } from '#generated/state-fe.ts';
 import ExampleCard from './ExampleCard.vue';
 import { queryExamples } from './query-examples.ts';
 import { transactionExamples } from './transaction-examples.ts';
 
-const actor: DatabaseState = useSurface();
-const { state: database } = useState(actor);
+const { state: database } = useState('database');
 
 const examples = computed(() => 
   database.value.data.mode === 'query' ? queryExamples : transactionExamples

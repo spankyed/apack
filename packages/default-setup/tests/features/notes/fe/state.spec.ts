@@ -2,112 +2,153 @@
 // (`NOTE.READ`); it applies them, or holds them behind this window's unanswered writes — a result from before a write
 // would put old text back under the user's typing — and asks for them again (`writes.refreshes`) once the last write
 // has ended. The note this window creates opens here and nowhere else.
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
+import { expect, it } from 'vitest';
+import { system, type EventsOf, type Outcome } from '@apackdev/state';
+import { defectGuard } from '@apackdev/state/testing';
 import type { NoteDTO, NoteSummary } from '#generated/types.ts';
+import notesState from '#features/notes/fe/state.ts';
 
-// Each write is an ask the machine spawns: recorded here as it is made, and ended when a case says how
-type Outcome = { ok: true; value: unknown } | { ok: false; failure: { kind: string; message: string } };
-const asks = vi.hoisted(() => [] as { type: string; end(outcome: Outcome): void }[]);
-vi.mock('#generated/events.ts', async () => {
-  const { fromPromise } = await import('xstate');
-  return {
-    tell: vi.fn(),
-    fromAsk: (_to: string, type: string) => fromPromise(() => new Promise<Outcome>((end) => { asks.push({ type, end }); })),
-  };
-});
-const { default: notesState } = await import('#features/notes/fe/state.ts');
+interface RecordedAsk {
+  name: string;
+  done: (outcome: Outcome<unknown>) => void;
+}
 
-const actors: ReturnType<typeof createActor<typeof notesState>>[] = [];
-const start = () => { const actor = createActor(notesState).start(); actors.push(actor); return actor; };
 const summary = (id: string, title = id, parentId: string | null = null): NoteSummary => ({
   id, parentId, title, icon: null, noteType: 'document', completed: false, hideCompletedChildren: false,
   displayOrder: 0, savedDisplayOrder: null, childCount: 0, createdAt: 1, favorite: false,
 });
 const full = (id: string, content: string): NoteDTO => ({ ...summary(id), content, updatedAt: 1, lastSeen: 0 });
-const context = (actor: ReturnType<typeof start>) => actor.getSnapshot().context;
-/** Ends the nth `UPDATE_NOTE`, or whatever `type`, this window asked for, and waits for the machine to hear of it */
-const end = async (actor: ReturnType<typeof start>, type: string, outcome: Outcome, nth = 0) => {
-  const before = Object.keys(context(actor).writes.pending).length;
-  asks.filter(each => each.type === type)[nth].end(outcome);
-  await vi.waitFor(() => expect(Object.keys(context(actor).writes.pending)).toHaveLength(before - 1));
-};
 
-beforeEach(() => { asks.length = 0; });
-afterEach(() => actors.splice(0).forEach(actor => actor.stop()));
+function start() {
+  const asks: RecordedAsk[] = [];
+  const guard = defectGuard();
+  const sys = system({ side: 'window', onDefect: guard.onDefect });
+  sys.attach({
+    tell: () => {},
+    ask: (_to, name, _args, _progress, done) => {
+      asks.push({ name, done });
+      return () => {};
+    },
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'not used' });
+      return { stop: () => {} };
+    },
+  });
+  const handle = sys.start('default-setup/notes', notesState);
+
+  return {
+    asks,
+    read: () => sys.read(handle),
+    data: () => sys.read(handle).data,
+    send: (event: EventsOf<typeof notesState>) => sys.send(handle, event),
+    end: async (name: string, outcome: Outcome<unknown>, nth = 0) => {
+      asks.filter(each => each.name === name)[nth].done(outcome);
+      await sys.idle();
+    },
+    cleanup: () => {
+      guard.assertNone();
+      sys.stop();
+      guard[Symbol.dispose]();
+    },
+  };
+}
 
 /** A note open in the editor, its text read */
 function open(id = 'Note-a', text = 'stored') {
-  const actor = start();
-  actor.send({ type: 'NOTES.READ', notes: [summary(id)] });
-  actor.send({ type: 'NOTE.SELECT', noteId: id });
-  actor.send({ type: 'NOTE.READ', noteId: id, note: full(id, text) });
-  return actor;
+  const ctx = start();
+  ctx.send({ type: 'NOTES.READ', notes: [summary(id)] });
+  ctx.send({ type: 'NOTE.SELECT', noteId: id });
+  ctx.send({ type: 'NOTE.READ', noteId: id, note: full(id, text) });
+  return ctx;
 }
 
 it('opens a note from the tree and takes its text from its view', () => {
-  const actor = open();
-  expect(actor.getSnapshot().hasTag('editor')).toBe(true);
-  expect(context(actor).currentNote?.id).toBe('Note-a');
-  expect(context(actor).contents['Note-a']).toBe('stored');
+  const ctx = open();
+  try {
+    expect(ctx.read().at).toBe('editor');
+    expect(ctx.data().currentNote?.id).toBe('Note-a');
+    expect(ctx.data().contents['Note-a']).toBe('stored');
+  } finally {
+    ctx.cleanup();
+  }
 });
 
 it('holds a read behind an unanswered write, and reads again once the write is answered', async () => {
-  const actor = open();
-  actor.send({ type: 'NOTE.UPDATE_CONTENT', noteId: 'Note-a', content: 'typed' });
-  // A read from before the write landed would put the old text back under the typing
-  actor.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'stored') });
-  expect(context(actor).contents['Note-a']).toBe('typed');
+  const ctx = open();
+  try {
+    ctx.send({ type: 'NOTE.UPDATE_CONTENT', noteId: 'Note-a', content: 'typed' });
+    // A read from before the write landed would put the old text back under the typing
+    ctx.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'stored') });
+    expect(ctx.data().contents['Note-a']).toBe('typed');
 
-  const before = context(actor).writes.refreshes;
-  await end(actor, 'UPDATE_NOTE', { ok: true, value: undefined });
-  expect(context(actor).writes.refreshes).toBe(before + 1);
-  actor.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'typed') });
-  expect(context(actor).contents['Note-a']).toBe('typed');
+    const before = ctx.data().writes.refreshes;
+    await ctx.end('UPDATE_NOTE', { ok: true, value: undefined });
+    expect(ctx.data().writes.refreshes).toBe(before + 1);
+    ctx.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'typed') });
+    expect(ctx.data().contents['Note-a']).toBe('typed');
+  } finally {
+    ctx.cleanup();
+  }
 });
 
 it('follows the tree: a rename elsewhere reaches the open note, and its deletion returns to the welcome page', () => {
-  const actor = open();
-  actor.send({ type: 'NOTES.READ', notes: [summary('Note-a', 'renamed elsewhere')] });
-  expect(context(actor).currentNote?.title).toBe('renamed elsewhere');
+  const ctx = open();
+  try {
+    ctx.send({ type: 'NOTES.READ', notes: [summary('Note-a', 'renamed elsewhere')] });
+    expect(ctx.data().currentNote?.title).toBe('renamed elsewhere');
 
-  actor.send({ type: 'NOTES.READ', notes: [] });
-  expect(actor.getSnapshot().hasTag('welcome')).toBe(true);
-  expect(context(actor).currentNoteId).toBeNull();
+    ctx.send({ type: 'NOTES.READ', notes: [] });
+    expect(ctx.read().at).toBe('welcome');
+    expect(ctx.data().currentNoteId).toBeNull();
+  } finally {
+    ctx.cleanup();
+  }
 });
 
 it('opens the note this window created, by the answer, once, and marks it new', async () => {
-  const actor = start();
-  actor.send({ type: 'NOTES.READ', notes: [] });
-  actor.send({ type: 'NOTE.CREATE' });
-  await end(actor, 'CREATE_NOTE', { ok: true, value: { note: summary('Note-new', 'Untitled') } });
-  expect(actor.getSnapshot().hasTag('editor')).toBe(true);
-  expect(context(actor)).toMatchObject({ currentNoteId: 'Note-new', createdNoteId: 'Note-new' });
+  const ctx = start();
+  try {
+    ctx.send({ type: 'NOTES.READ', notes: [] });
+    ctx.send({ type: 'NOTE.CREATE' });
+    await ctx.end('CREATE_NOTE', { ok: true, value: { note: summary('Note-new', 'Untitled') } });
+    expect(ctx.read().at).toBe('editor');
+    expect(ctx.data()).toMatchObject({ currentNoteId: 'Note-new', createdNoteId: 'Note-new' });
 
-  actor.send({ type: 'NOTES.READ', notes: [summary('Note-new', 'Untitled')] });
-  expect(context(actor).notes.map(each => each.id), 'listed once').toEqual(['Note-new']);
+    ctx.send({ type: 'NOTES.READ', notes: [summary('Note-new', 'Untitled')] });
+    expect(ctx.data().notes.map(each => each.id), 'listed once').toEqual(['Note-new']);
+  } finally {
+    ctx.cleanup();
+  }
 });
 
 it('reads again after a refused write, which left an edit on screen that is not stored', async () => {
-  const actor = open();
-  actor.send({ type: 'NOTE.UPDATE_TITLE', noteId: 'Note-a', title: 'refused' });
-  const before = context(actor).writes.refreshes;
-  await end(actor, 'UPDATE_NOTE', { ok: false, failure: { kind: 'failed', message: 'No note' } });
-  expect(context(actor).writes.refreshes).toBe(before + 1);
+  const ctx = open();
+  try {
+    ctx.send({ type: 'NOTE.UPDATE_TITLE', noteId: 'Note-a', title: 'refused' });
+    const before = ctx.data().writes.refreshes;
+    await ctx.end('UPDATE_NOTE', { ok: false, failure: { kind: 'failed', message: 'No note' } });
+    expect(ctx.data().writes.refreshes).toBe(before + 1);
+  } finally {
+    ctx.cleanup();
+  }
 });
 
 it('holds its views until the last of several writes has ended, however each ended', async () => {
-  const actor = open();
-  actor.send({ type: 'NOTE.UPDATE_TITLE', noteId: 'Note-a', title: 'one' });
-  actor.send({ type: 'NOTE.UPDATE_CONTENT', noteId: 'Note-a', content: 'two' });
-  const before = context(actor).writes.refreshes;
+  const ctx = open();
+  try {
+    ctx.send({ type: 'NOTE.UPDATE_TITLE', noteId: 'Note-a', title: 'one' });
+    ctx.send({ type: 'NOTE.UPDATE_CONTENT', noteId: 'Note-a', content: 'two' });
+    const before = ctx.data().writes.refreshes;
 
-  await end(actor, 'UPDATE_NOTE', { ok: false, failure: { kind: 'failed', message: 'No note' } }, 0);
-  actor.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'stored') });
-  expect(context(actor).contents['Note-a'], 'still held behind the second write').toBe('two');
-  expect(context(actor).writes.refreshes).toBe(before);
+    await ctx.end('UPDATE_NOTE', { ok: false, failure: { kind: 'failed', message: 'No note' } }, 0);
+    ctx.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'stored') });
+    expect(ctx.data().contents['Note-a'], 'still held behind the second write').toBe('two');
+    expect(ctx.data().writes.refreshes).toBe(before);
 
-  await end(actor, 'UPDATE_NOTE', { ok: true, value: undefined }, 1);
-  expect(context(actor).writes.refreshes).toBe(before + 1);
-  expect(Object.keys(actor.getSnapshot().children), 'no ask that ended is kept').toEqual([]);
+    await ctx.end('UPDATE_NOTE', { ok: true, value: undefined }, 1);
+    expect(ctx.data().writes.refreshes).toBe(before + 1);
+    expect(Object.keys(ctx.read().pending.updateNote), 'no ask that ended is kept').toEqual([]);
+  } finally {
+    ctx.cleanup();
+  }
 });

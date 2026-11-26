@@ -67,19 +67,16 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed } from 'vue'
-import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
+import { useState } from '#generated/state-fe.ts'
+import { isLoadingRuns as readingRuns } from '../../state.ts'
 import { RefreshCw, History } from 'lucide-vue-next'
 import RunSelector from './RunSelector.vue'
 import RunEventList from './RunEventList.vue'
 
-const databaseActor: DatabaseState = useSurface()
-
 // State selectors
-const { state: database, send } = useState(databaseActor)
-const isLoadingRuns = computed(() => readingRuns(database.value.data.making))
+const { state: database, send } = useState('database')
+const isLoadingRuns = computed(() => readingRuns(database.value.pending))
 
 // Computed properties
 const currentFlowLabel = computed(() => {

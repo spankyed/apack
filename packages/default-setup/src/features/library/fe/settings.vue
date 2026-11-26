@@ -194,8 +194,8 @@
 
 <script setup lang="ts">
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
-import type { LibraryActor } from './state.ts'
+import { useSettingsDraft } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
 import { computed, ref } from 'vue'
@@ -255,13 +255,13 @@ const removeTag = (index: number) => {
 
 // The import and the export are the surface's machine's: it makes each, and holds how the last one ended. What an
 // earlier visit to this form left is not shown again
-const { state: surface, send } = useState<LibraryActor>()
+const { state: surface, send } = useState('library')
 send({ type: 'FORGET_IMPORT' })
 send({ type: 'FORGET_EXPORT' })
 
 // How the last import ended, shown until another is picked
 const imported = computed(() => surface.value.data.imported)
-const isImporting = computed(() => surface.value.data.making.importLibrary)
+const isImporting = computed(() => surface.value.pending.importLibrary)
 const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
 const applyErrors = computed(() => {
   if (imported.value === undefined) return []
@@ -273,7 +273,7 @@ const importedCount = computed(() => (imported.value?.ok ? imported.value.value.
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportDirectory = ref<string>('')
 const exported = computed(() => surface.value.data.exported)
-const isExporting = computed(() => surface.value.data.making.exportLibrary)
+const isExporting = computed(() => surface.value.pending.exportLibrary)
 const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
 const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
 const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))

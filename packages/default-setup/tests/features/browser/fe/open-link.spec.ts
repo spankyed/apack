@@ -2,7 +2,8 @@
 // system's browser. Both branches are the setting being read — the thing that broke when a feature's
 // settings stopped reaching its surface — so the assertion is which of the two the surface reached for.
 import { afterAll, beforeEach, expect, it, vi } from 'vitest'
-import { createActor } from 'xstate'
+import { system, type EventsOf } from '@apackdev/state'
+import { defectGuard } from '@apackdev/state/testing'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
 import browserState from '#features/browser/fe/state.ts'
 
@@ -32,25 +33,53 @@ beforeEach(() => {
 })
 
 function startBrowser(settings?: Record<string, unknown>) {
-  const actor = createActor(browserState).start()
-  if (settings) actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings } as never)
-  return actor
+  const guard = defectGuard()
+  const sys = system({ side: 'window', onDefect: guard.onDefect })
+  sys.attach({
+    tell: () => {},
+    ask: () => () => {},
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'not used' })
+      return { stop: () => {} }
+    },
+  })
+  const handle = sys.start('default-setup/browser', browserState)
+  const send = (event: EventsOf<typeof browserState>) => sys.send(handle, event)
+  if (settings) send({ type: 'FEATURE_SETTINGS_UPDATED', settings } as never)
+  return {
+    send,
+    cleanup: () => {
+      guard.assertNone()
+      sys.stop()
+      guard[Symbol.dispose]()
+    },
+  }
 }
 
 it('opens a link in its own tab by default, which is what no setting means', () => {
-  startBrowser().send({ type: 'LINK.OPEN', url: 'https://example.test/a' })
+  const ctx = startBrowser()
+  try {
+    ctx.send({ type: 'LINK.OPEN', url: 'https://example.test/a' })
 
-  expect(asked).toEqual([{
-    type: 'OPEN_SURFACE',
-    surface: 'default-setup/browser',
-    events: [{ type: 'TAB.CREATE', url: 'https://example.test/a' }],
-  }])
-  expect(external).toEqual([])
+    expect(asked).toEqual([{
+      type: 'OPEN_SURFACE',
+      surface: 'default-setup/browser',
+      events: [{ type: 'TAB.CREATE', url: 'https://example.test/a' }],
+    }])
+    expect(external).toEqual([])
+  } finally {
+    ctx.cleanup()
+  }
 })
 
 it("hands it to the system's browser when the setting says so, asking the shell for nothing", () => {
-  startBrowser({ openLinksInApp: false }).send({ type: 'LINK.OPEN', url: 'https://example.test/b' })
+  const ctx = startBrowser({ openLinksInApp: false })
+  try {
+    ctx.send({ type: 'LINK.OPEN', url: 'https://example.test/b' })
 
-  expect(external).toEqual(['https://example.test/b'])
-  expect(asked).toEqual([])
+    expect(external).toEqual(['https://example.test/b'])
+    expect(asked).toEqual([])
+  } finally {
+    ctx.cleanup()
+  }
 })

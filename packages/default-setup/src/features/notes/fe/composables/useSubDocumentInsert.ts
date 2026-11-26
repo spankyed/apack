@@ -1,15 +1,13 @@
 import { watch, type Ref } from 'vue'
-import { useState } from '@apackdev/sdk/fe'
-import type { NotesState } from '../state.ts'
+import { useState } from '#generated/state-fe.ts'
 import type { NoteSummary } from '#generated/types.ts'
 import type TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 
 export function useSubDocumentInsert(
-  actor: NotesState,
   editorRef: Ref<InstanceType<typeof TiptapEditor> | null>,
   editingNote: Ref<NoteSummary | null>,
 ) {
-  const { state: notesMachine, send } = useState(actor)
+  const { state: notesMachine, send } = useState('notes')
 
   watch(
     () => notesMachine.value.data.pendingSubDocumentInsert,
@@ -21,7 +19,7 @@ export function useSubDocumentInsert(
       const editor = editorRef.value?.editor
       if (!noteId || !editor) return
 
-      const { notes, lastSubDocumentInsertChildId } = actor.getSnapshot().context
+      const { notes, lastSubDocumentInsertChildId } = notesMachine.value.data
       if (!lastSubDocumentInsertChildId) return
 
       const newChild = notes.find(n => n.id === lastSubDocumentInsertChildId)

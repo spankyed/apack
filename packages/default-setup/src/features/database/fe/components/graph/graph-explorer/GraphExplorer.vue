@@ -49,8 +49,6 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed, watch, onMounted, onUnmounted, shallowRef } from 'vue';
 import { Graph } from '@antv/g6';
 import type { GraphData, NodeData, EdgeData } from '@antv/g6';
@@ -62,7 +60,7 @@ import LoadingState from './components/LoadingState.vue';
 import NodeInfoPanel from './components/NodeInfoPanel.vue';
 import GraphLegend from './components/GraphLegend.vue';
 import GraphToolbar from './components/GraphToolbar.vue';
-import type { DatabaseState } from '../../../state.ts'
+import { useState } from '#generated/state-fe.ts';
 
 // Props & Emits
 interface Props {
@@ -74,8 +72,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // State Management
-const actor: DatabaseState = useSurface();
-const { state: database } = useState(actor);
+const { state: database } = useState('database');
 
 // Component State
 const graphContainer = ref<HTMLElement>();
