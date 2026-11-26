@@ -180,6 +180,8 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
  */
 const INLINED_FROM = {
   '@apackdev/sdk': ({ pkgFile }) => [pkgFile('apack-sdk', 'src'), pkgFile('apack-sdk', 'package.json')],
+  '@apackdev/state': ({ repoFile }) => [repoFile('node_modules', '@apackdev', 'state', 'dist'),
+    repoFile('node_modules', '@apackdev', 'state', 'package.json')],
   '@elmdb/ears': ({ repoFile }) => [repoFile('node_modules', '@elmdb', 'ears', 'dist'),
     repoFile('node_modules', '@elmdb', 'ears', 'package.json')],
 } satisfies Record<(typeof SHARED_INSTANCE_PACKAGES)[number], (at: CheckoutPaths) => string[]> & Record<string, (at: CheckoutPaths) => string[]>;

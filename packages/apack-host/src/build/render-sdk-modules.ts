@@ -22,6 +22,12 @@ export const APP_UNBRIDGED: Readonly<Record<string, string>> = {
   // Waiting for an event rather than for a duration, shared by the suites that need it. Source-only for the
   // same reason: it is this repo's test support, and a pack's tests wait through the harness instead
   '@apackdev/sdk/testing/waiting': 'repo test support, resolvable only under @apackdev/source',
+  // Frontend Vue binding (pulls @vue/runtime-core): reaches pack FE via the document import map, never the CJS bridge
+  '@apackdev/state/vue': 'frontend Vue binding only, served to pack frontends through the import map',
+  // Unit-test helpers (e.g. defectGuard): loaded by unit tests, never by a pack runtime in the app
+  '@apackdev/state/testing': 'unit-test runtime only',
+  // Static graph extractor (pulls TypeScript): build and analysis tooling only, never pack runtime code
+  '@apackdev/state/graph': 'static analysis tooling only, pulls TypeScript',
 };
 
 /** The shared-instance specifiers the app bridges, from each package's exports map as `fromFile` resolves it */

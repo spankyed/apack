@@ -229,7 +229,7 @@ describe('SDK bridge drift', () => {
     }
 
     const source = fs.readFileSync(RUNTIME_ENTRY, 'utf8');
-    const required = [...source.matchAll(/['"](@apackdev\/(?:sdk|ears|host)(?:\/[a-zA-Z0-9._/-]+)?)['"]/g)]
+    const required = [...source.matchAll(/['"](@apackdev\/(?:sdk|ears|host|state)(?:\/[a-zA-Z0-9._/-]+)?)['"]/g)]
       .map((m) => m[1]);
     expect(required.length, 'found no @apackdev/sdk specifiers — regex or bundle shape changed')
       .toBeGreaterThan(0);
