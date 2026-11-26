@@ -55,7 +55,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
         scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
-        outcome: "incomplete" | "failed" | "passed" | "cancelled";
+        outcome: "incomplete" | "failed" | "cancelled" | "passed";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -65,7 +65,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
         scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
-        outcome: "incomplete" | "failed" | "passed" | "cancelled";
+        outcome: "incomplete" | "failed" | "cancelled" | "passed";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -334,7 +334,7 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "incomplete" | "failed" | "passed" | "cancelled";
+            outcome: "incomplete" | "failed" | "cancelled" | "passed";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -356,7 +356,7 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "incomplete" | "failed" | "passed" | "cancelled";
+            outcome: "incomplete" | "failed" | "cancelled" | "passed";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -390,7 +390,7 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "incomplete" | "failed" | "passed" | "cancelled";
+            outcome: "incomplete" | "failed" | "cancelled" | "passed";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -412,7 +412,7 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
             scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
-            outcome: "incomplete" | "failed" | "passed" | "cancelled";
+            outcome: "incomplete" | "failed" | "cancelled" | "passed";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -440,7 +440,7 @@ export function readPerformanceRun(directory: string, measured?: number): {
         scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
-        outcome: "incomplete" | "failed" | "passed" | "cancelled";
+        outcome: "incomplete" | "failed" | "cancelled" | "passed";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -522,8 +522,8 @@ export const trialSchema: z.ZodObject<{
     outcome: z.ZodEnum<{
         incomplete: "incomplete";
         failed: "failed";
-        passed: "passed";
         cancelled: "cancelled";
+        passed: "passed";
     }>;
     durationMs: z.ZodOptional<z.ZodNumber>;
     correct: z.ZodBoolean;
