@@ -1597,6 +1597,7 @@
         "label": "Brain",
         "icon": "Brain",
         "state": "src/features/brain/fe/state.ts",
+        "chrome": "src/features/brain/fe/state.ts#brainChrome",
         "canvas": {
           "entry": "src/features/brain/fe/canvas.vue",
           "load": "lazy"

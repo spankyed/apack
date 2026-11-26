@@ -14,7 +14,7 @@ const MAIN = 'c-main'
 /** Every message the bus carried to the Brain surface, with the connection it was addressed to */
 function recording() {
   const sent: Array<{ type: string; client?: string }> = []
-  const stop = testRootEvents.onSurfaceSend((message) => {
+  const stop = testRootEvents.onOutgoing((message) => {
     if (message.to === BRAIN) sent.push({ type: message.event.type, client: message.client })
   })
   return { sent, stop }

@@ -1,14 +1,39 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { codemodSource } from '../../../scripts/codemod-xstate-to-state.mts';
 
-const repoRoot = resolve(import.meta.dirname, '../../..');
-
 describe('codemod-xstate-to-state', () => {
-  it('flags database/be/system.ts with BAIL_CLIENT_OR_ROLE and BAIL_EXTERNAL_HELPER_SENDS', () => {
-    const file = resolve(repoRoot, 'packages/default-setup/src/features/database/be/system.ts');
-    const result = codemodSource(file, readFileSync(file, 'utf8'));
+  it('flags an XState system using client and external helper sends with BAIL_CLIENT_OR_ROLE and BAIL_EXTERNAL_HELPER_SENDS', () => {
+    const sample = `
+import { broadcast, tell } from '#generated/events.ts';
+import { setup } from 'xstate';
+import { defineSystem } from '@apackdev/sdk/framework';
+import type { Contract } from './contract.ts';
+
+const spec = defineSystem<Contract>();
+const replaced = () => broadcast('demo', { type: 'REPLACED' });
+
+export const answers = spec.answers({
+  GENERATE: ({ args: { prompt }, client }) => {
+    tell('brain', { type: 'HANDLE_BRAIN_EVENT', eventType: 'demo.query', payload: { prompt, ...(client && { client }) } });
+  },
+  IMPORT: () => {
+    replaced();
+  },
+});
+
+export const demoSystem = setup({
+  types: spec.types,
+  actions: { ...answers.actions },
+}).createMachine({
+  id: 'demo',
+  initial: 'idle',
+  context: () => ({}),
+  states: { idle: { on: { ...answers.on } } },
+});
+
+export default { spec, machine: demoSystem };
+`;
+    const result = codemodSource('demo/system.ts', sample);
     expect(result.status).toBe('BAIL-OUT');
     const rules = new Set(result.diagnostics.map((d) => d.rule));
     expect(rules.has('BAIL_CLIENT_OR_ROLE')).toBe(true);

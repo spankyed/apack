@@ -124,7 +124,7 @@ it('restores unfinished onboarding and resumes it only after an explicit restart
 
     await services.appData.importBackup(backup);
     const brain = bus.system.get('default-setup/brain');
-    expect(brain.getSnapshot().matches('stopped')).toBe(true);
+    expect(brain.getSnapshot().value).toBe('stopped');
     expect(context()).toEqual(progress);
     expect(services.onboarding.isComplete()).toBe(false);
     rootEvents.emitPackClientConnected('default-setup');

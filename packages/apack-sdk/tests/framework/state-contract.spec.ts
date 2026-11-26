@@ -101,6 +101,18 @@ describe('@apackdev/state contract normalizers and StateMatchesContract', () => 
       on: { PING: () => {}, SEND_STATE: () => {}, FEATURE_SETTINGS_UPDATED: () => {} },
     });
 
+    const withInternalReports = state<
+      {},
+      { type: 'PING'; id: string } | { type: 'SELF_TICK' },
+      NormalizedAsks
+    >()({
+      answers: {
+        GET: (args) => ({ title: args.id }),
+        FLUSH: () => {},
+      },
+      on: { PING: () => {}, SELF_TICK: () => {} },
+    });
+
     const missingEvent = state<{}, never, NormalizedAsks>()({
       answers: {
         GET: (args) => ({ title: args.id }),
@@ -152,6 +164,7 @@ describe('@apackdev/state contract normalizers and StateMatchesContract', () => 
 
     expectTypeOf<StateMatchesContract<typeof exact, Contract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof withLifecycle, Contract>>().toEqualTypeOf<true>();
+    expectTypeOf<StateMatchesContract<typeof withInternalReports, Contract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof askOnlyNoEvents, AskOnlyContract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof askOnlyWithLifecycle, AskOnlyContract>>().toEqualTypeOf<true>();
 

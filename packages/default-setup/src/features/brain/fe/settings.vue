@@ -142,12 +142,11 @@
 <script setup lang="ts">
 import { RefreshCw, AlertTriangle, Power, CheckCircle, PlayCircle } from 'lucide-vue-next'
 import type { SettingsOf } from '#generated/settings-fe.ts'
-import { useState } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 import { ref, computed } from 'vue'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
 import { tell } from '#generated/events.ts'
-import type { BrainState } from '#features/brain/fe/state.ts'
 import { useView } from '#generated/fe.ts'
 
 interface Props {
@@ -159,7 +158,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Get brain state from brain state machine
-const { state: brain } = useState<BrainState>();
+const { state: brain } = useState('brain');
 // The root flow is the flows feature's (the flow with the root role), as its list view reads it
 const flowList = useView('flows', 'list')
 const rootFlowId = computed(() => flowList.data?.rootFlowId)

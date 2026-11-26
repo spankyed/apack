@@ -90,7 +90,6 @@ export interface StepBuildFacet {
  * packs get real types instead of `unknown` casts.
  *─────────────────────────────────────────────────────────────────*/
 
-import type { AnyActorRef } from 'xstate';
 import type { EARS } from '../types/entities.ts';
 import type { RunNode, RunNodeId } from '../services/run-history.ts';
 import type { PackServiceAccess } from '../services/pack-service-access.ts';
@@ -118,7 +117,7 @@ export interface StepRun {
 }
 
 export interface RuntimeServices {
-  getFlowActor: (flowRunNodeId: EARS.EntityId) => AnyActorRef | undefined;
+  killFlow: (flowRunNodeId: EARS.EntityId) => void;
   servicesForAction: PackServiceAccess['servicesForAction'];
 }
 
@@ -172,7 +171,7 @@ export interface StepRuntimeFacet {
    * Generic conventions the brain honours from handler results:
    * - **Branching**: `{ sourceHandle: 'branch-N' }` → routes to named branch
    * - **No-match**: `{ noMatch: true }` → terminates the current chain
-   * - **Kill**: send `KILL_FLOW` to `ctx.runtime.getFlowActor(flowRunNodeId)`
+   * - **Kill**: call `ctx.runtime.killFlow(flowRunNodeId)`
    * - **Keep-alive**: never send COMPLETE → actor stays in executing state
    * - **Final**: set `final: true` on the compiled node → triggers flow completion
    */
