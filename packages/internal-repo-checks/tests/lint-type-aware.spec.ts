@@ -42,16 +42,19 @@ describe('type-aware oxlint boundary', () => {
     ].join('\n'));
 
     let stdout = '';
+    let stderr = '';
     try {
-      ({ stdout } = await execFileWhileWorking(
+      ({ stdout, stderr } = await execFileWhileWorking(
         OXLINT,
         ['--type-aware', '-c', CONFIG, '-f', 'json', path.join(dir, 'bad.ts')],
         { cwd: dir },
       ));
     } catch (error) {
       stdout = (error as { stdout?: string }).stdout ?? '';
+      stderr = (error as { stderr?: string }).stderr ?? '';
     }
 
+    expect(stdout.trim(), `oxlint produced no JSON stdout (stderr: ${stderr})`).not.toBe('');
     const parsed = JSON.parse(stdout) as { diagnostics?: Array<{ code?: string }> };
     const codes = new Set((parsed.diagnostics ?? []).map((d) => d.code ?? ''));
     expect(codes).toContain('typescript(no-floating-promises)');

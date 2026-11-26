@@ -18,7 +18,7 @@
     "npm": ">=11"
   },
   "scripts": {
-    "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '⚠️  NODE_ENV=production — devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",
+    "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '\u26a0\ufe0f  NODE_ENV=production \u2014 devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",
     "postinstall": "node scripts/postinstall.mjs",
     "deps:pin": "node scripts/deps.mjs pin",
     "deps:local": "node scripts/deps.mjs local",
@@ -46,18 +46,18 @@
     "verify-signing": "node scripts/packaged-app.ts verify-signing",
     "chain": "node scripts/chain.ts",
     "typecheck": "node scripts/typecheck.ts",
-    "typecheck:renderer": "npm run type-check --workspace @app/renderer && echo '✅ Frontend type check passed'",
-    "typecheck:server": "cd packages/server && npx tsc -p . --noEmit && npx tsc -p tsconfig.test.json && npx tsc -p tsconfig.scripts.json && echo '✅ Backend type check passed'",
-    "typecheck:main": "npm run typecheck --workspace @app/main && echo '✅ Electron main type check passed'",
-    "typecheck:preload": "npm run typecheck --workspace @app/preload && echo '✅ Preload type check passed'",
-    "typecheck:pack": "npm run packages:ensure && npm run typecheck --workspace @app/default-setup && echo '✅ Default-setup pack type check passed'",
-    "typecheck:sdk": "npm run typecheck --workspace @apackdev/sdk && echo '✅ SDK type check passed'",
-    "typecheck:pack-format": "npm run typecheck --workspace @apackdev/pack-format && echo '✅ Pack-format type check passed'",
-    "typecheck:pack-build": "npm run typecheck --workspace @apackdev/pack-build && echo '✅ Pack-build type check passed'",
-    "typecheck:host": "npm run typecheck --workspace @apackdev/host && echo '✅ Host type check passed'",
-    "typecheck:ui": "npm run typecheck --workspace @apackdev/ui && echo '✅ UI type check passed'",
-    "typecheck:cli": "npm run typecheck --workspace @apackdev/cli --workspace @apackdev/testing && echo '✅ CLI + testing type check passed'",
-    "typecheck:scripts": "tsc -p scripts && tsc -p tests && tsc -p packages/internal-repo-checks && tsc -p packages/internal-publish-checks && echo '✅ Scripts, repo and publish checks, and E2E type check passed'",
+    "typecheck:renderer": "npm run type-check --workspace @app/renderer && echo '\u2705 Frontend type check passed'",
+    "typecheck:server": "cd packages/server && npx tsc -p . --noEmit && npx tsc -p tsconfig.test.json && npx tsc -p tsconfig.scripts.json && echo '\u2705 Backend type check passed'",
+    "typecheck:main": "npm run typecheck --workspace @app/main && echo '\u2705 Electron main type check passed'",
+    "typecheck:preload": "npm run typecheck --workspace @app/preload && echo '\u2705 Preload type check passed'",
+    "typecheck:pack": "npm run packages:ensure && npm run typecheck --workspace @app/default-setup && echo '\u2705 Default-setup pack type check passed'",
+    "typecheck:sdk": "npm run typecheck --workspace @apackdev/sdk && echo '\u2705 SDK type check passed'",
+    "typecheck:pack-format": "npm run typecheck --workspace @apackdev/pack-format && echo '\u2705 Pack-format type check passed'",
+    "typecheck:pack-build": "npm run typecheck --workspace @apackdev/pack-build && echo '\u2705 Pack-build type check passed'",
+    "typecheck:host": "npm run typecheck --workspace @apackdev/host && echo '\u2705 Host type check passed'",
+    "typecheck:ui": "npm run typecheck --workspace @apackdev/ui && echo '\u2705 UI type check passed'",
+    "typecheck:cli": "npm run typecheck --workspace @apackdev/cli --workspace @apackdev/testing && echo '\u2705 CLI + testing type check passed'",
+    "typecheck:scripts": "tsc -p scripts && tsc -p tests && tsc -p packages/internal-repo-checks && tsc -p packages/internal-publish-checks && echo '\u2705 Scripts, repo and publish checks, and E2E type check passed'",
     "lint:type-aware": "oxlint --type-aware -c .oxlintrc.type-aware.json packages/main/src/modules/api-server/port-broker.ts packages/main/src/modules/api-server/process-manager.ts packages/preload/src/backend-port.ts packages/server/src/boot packages/apack-host/src/database packages/main/tests/port-broker.spec.ts packages/preload/tests/backend-port.spec.ts packages/server/tests/boot/lifecycle.spec.ts",
     "lint:check": "npm run lint:check -ws --if-present && oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'docs/**' --ignore-pattern 'packages/apack-cli/templates/**' && npm run lint:type-aware",
     "lint:fix": "npm run lint:fix -ws --if-present && oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'docs/**' --ignore-pattern 'packages/apack-cli/templates/**' --fix",
@@ -150,8 +150,8 @@
     "vue-component-type-helpers": "^2.2.12"
   },
   "dependencies": {
-    "@app/main": "*",
-    "@app/server": "*"
+    "@app/server": "*",
+    "@app/main": "*"
   },
   "overrides": {
     "dompurify": "^3.4.17",
