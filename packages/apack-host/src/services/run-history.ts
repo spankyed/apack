@@ -16,7 +16,7 @@ export const RUN_HISTORY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export function createRunHistory(runs: Ears): RunHistory {
   const history = _createRunHistory(runs);
   history.stopActive();
-  const removed = history.prune({ before: Date.now() - RUN_HISTORY_RETENTION_MS });
+  const removed = history.prune({ before: runs.now() - RUN_HISTORY_RETENTION_MS });
   if (removed > 0) logger.info(`Removed ${removed} run(s) older than ${RUN_HISTORY_RETENTION_MS / 86_400_000} days`);
   return history;
 }

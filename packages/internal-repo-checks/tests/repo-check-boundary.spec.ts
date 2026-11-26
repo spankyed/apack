@@ -81,6 +81,11 @@ const LAYOUT_CHECKS: Record<string, string> = {
     + 'runner, read from git, over the repo\'s own config as well as the packs\'',
   'tests/lint-scope.spec.ts': 'what the root lint command excludes from packages/ — a property of the '
     + 'script at the tree\'s root and the templates it names, with no scripts/ module behind it',
+  'tests/lint-type-aware.spec.ts': 'that the root .oxlintrc.type-aware.json config loads oxlint-tsgolint '
+    + 'and catches type-aware promise bugs — a property of the root lint config, with no scripts/ module behind it',
+  'tests/clock-boundary.spec.ts': 'that SDK and host domain services, repositories, and database helpers use '
+    + 'engine.now() / injected Clock rather than bare Date.now()/setTimeout()/setInterval() — a cross-package '
+    + 'invariant spanning @apackdev/sdk and @apackdev/host, with no scripts/ module behind it',
   'tests/identity-guard.spec.ts': 'that only @apackdev/sdk/env decides the app\'s environment and data '
     + 'paths — a property of every tracked file, read from git, with no scripts/ module behind it. It is '
     + 'here because its subject is the repo: a suite whose project does not declare the repo is not re-run '

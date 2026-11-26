@@ -133,12 +133,10 @@ function announceWrites<T extends Record<string, (...args: never[]) => unknown>>
 const documentWrites = {
   create: (data: DocumentInput): DocumentEntity => {
     const { parentId, id, tags, documentType, contentHash, ...fields } = data;
-    const now = Date.now();
     // Read before the row exists, which would then sort as its own sibling; `create` numbers its short code
     const displayOrder = nextDisplayOrder(parentId ?? null);
     const documentId = untypedCreate(EARS.Entity.Document, {
       ...(id && { id: id as EARS.EntityId }),
-      createdAt: now,
       ...fields,
       displayOrder,
       tags: tags ?? [],
@@ -212,12 +210,10 @@ export const collectionRepository = {
 
   create: (data: CollectionInput): CollectionEntity => {
     const { parentId, id, description, contentHash, ...fields } = data;
-    const now = Date.now();
     // Read before the row exists, which would otherwise sort as its own sibling
     const displayOrder = nextDisplayOrder(parentId ?? null);
     const collectionId = untypedCreate(EARS.Entity.Collection, {
       ...(id && { id: id as EARS.EntityId }),
-      createdAt: now,
       ...fields,
       displayOrder,
       ...(contentHash && { contentHash }),

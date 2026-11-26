@@ -268,8 +268,25 @@ const API_UTILITY_SERVICE_NAME = 'apack API Server';
 type QuitSequence = { done: Promise<void>; progress(): QuitProgress; helperPids(): readonly number[] };
 const quitSequences = new WeakMap<ElectronApplication, QuitSequence>();
 
+function appProcess(app: ElectronApplication): ReturnType<ElectronApplication['process']> | undefined {
+  try {
+    return app.process();
+  } catch {
+    return undefined;
+  }
+}
+
 async function watchQuitSequence(app: ElectronApplication): Promise<QuitSequence> {
-  const child = app.process();
+  const child = appProcess(app);
+  if (!child || child.exitCode !== null || child.signalCode !== null) {
+    const sequence: QuitSequence = {
+      done: Promise.resolve(),
+      progress: () => ({ willQuit: false, exitCode: child?.exitCode ?? null, signalCode: child?.signalCode ?? null }),
+      helperPids: () => [],
+    };
+    quitSequences.set(app, sequence);
+    return sequence;
+  }
   let willQuit = false;
   let capturedHelperPids: readonly number[] = [];
   const done = new Promise<void>(resolve => {
@@ -437,21 +454,28 @@ export interface CloseAppOptions {
 export async function closeApp(app: ElectronApplication, { userDataDir, keepProfile }: CloseAppOptions): Promise<void> {
   const quitSequence = quitSequences.get(app) ?? await watchQuitSequence(app);
   const apiPid = apiPidIn(userDataDir);
-  const closing = app.close();
-  const pid = app.process().pid;
+  // Capture the ChildProcess handle before `app.close()`: Playwright clears its internal `_process` once Electron
+  // finishes exiting, which would make a subsequent `app.process()` call throw `Cannot read properties of undefined`.
+  const proc = appProcess(app);
+  const pid = proc?.pid;
   // Its output closing, and not its exit: Chromium's helper processes hold the output and are still
-  // writing the profile for a moment after the process that started them has gone
-  const gone = new Promise<void>((resolve) => { app.process().once('close', () => resolve()); });
+  // writing the profile for a moment after the process that started them has gone. If the process had
+  // already exited before we attached `'close'`, resolve immediately so we do not wait forever on a
+  // missed event.
+  const gone = !proc || proc.exitCode !== null || proc.signalCode !== null
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => { proc.once('close', () => resolve()); });
+  const closing = app.close();
   const closed = (async () => {
     if (!keepProfile) {
       await quitSequence.done;
-      if (app.process().exitCode === null && app.process().signalCode === null) {
+      if (proc && proc.exitCode === null && proc.signalCode === null) {
         console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
         // Kill Electron main first so it cannot respawn helpers, then terminate Chromium helpers
         // (`NetworkService`, `GPU`, etc.) that can otherwise outlive a `SIGKILL`'d browser process
         // and hold inherited stdout/stderr open under PID 1. `apiPid` is excluded so the check
         // below still catches a leaked API child.
-        app.process().kill('SIGKILL');
+        proc.kill('SIGKILL');
         terminateHelperPids(chromiumHelperPidsToKill(quitSequence.helperPids(), { mainPid: pid, apiPid }));
       }
     }
@@ -470,11 +494,11 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
     // Read before the kills, which would make every quit read as one that exited
     const stage = describeQuitStage(quitSequence.progress());
     const log = appLogs.get(app);
-    const running = app.process().exitCode === null && app.process().signalCode === null;
+    const running = proc !== undefined && proc.exitCode === null && proc.signalCode === null;
     // Taken before the kill, which leaves nothing to say where the process was stuck
     const sample = running && pid !== undefined ? await sampleStuckApp(pid, log) : undefined;
     const liveHelperPids = running ? await snapshotLiveHelperPids(app) : [];
-    if (running) app.process().kill('SIGKILL');
+    if (running && proc) proc.kill('SIGKILL');
     terminateHelperPids(chromiumHelperPidsToKill(
       liveHelperPids.length > 0 ? liveHelperPids : quitSequence.helperPids(),
       { mainPid: pid, apiPid },
@@ -484,16 +508,22 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
       + (log ? ` Full Electron and API output: ${log}` : '')
       + (sample ? ` Where its main process was stuck: ${sample}` : ''), { cause: error });
   }
-  // Electron close must include its API child; otherwise deleting storage races the final writes
+  // Electron close must include its API child; otherwise deleting storage races the final writes.
+  // Allow a brief kernel reap window after Electron exits so an already-exiting API child isn't flagged as leaked.
   if (apiPid !== undefined) {
-    let alive = true;
-    try {
-      process.kill(apiPid, 0);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-      alive = false;
+    const deadline = performance.now() + 250;
+    for (;;) {
+      try {
+        process.kill(apiPid, 0);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+        break;
+      }
+      if (performance.now() >= deadline) {
+        throw new Error(`Electron closed while API process ${apiPid} was still alive`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    if (alive) throw new Error(`Electron closed while API process ${apiPid} was still alive`);
   }
 }
 

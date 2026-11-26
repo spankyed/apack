@@ -167,6 +167,11 @@ export function _installProjections(engine: EarsEngine): ProjectionRunner {
         try {
           step = engine.admin.transactWithoutHook(() => chunk(engine, each, own));
         } catch (error) {
+          // Database closed before a queued catch-up or between chunks: stop silently rather than logging a retry loop
+          if ((error as { code?: unknown })?.code === 'CLOSED') {
+            again = false;
+            return;
+          }
           logger.error(`Catching up the projection ${each.name} failed, and it will try again:`, error as Error);
           break;
         }
