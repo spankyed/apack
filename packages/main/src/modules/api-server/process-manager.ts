@@ -1,5 +1,5 @@
 import type { EventEmitter } from 'node:events';
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, app, type MessagePortMain } from 'electron';
 import { API_EVENTS } from './config.ts';
 import { logInfo, logError, logWarn } from './logger.ts';
 
@@ -11,7 +11,7 @@ export interface ManagedProcess extends EventEmitter {
   readonly pid?: number;
   readonly stdout: NodeJS.ReadableStream | null;
   readonly stderr: NodeJS.ReadableStream | null;
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: MessagePortMain[]): void;
   kill(): boolean;
 }
 
@@ -299,6 +299,10 @@ export class ProcessManager {
 
   getPid(): number | undefined {
     return this.process?.pid;
+  }
+
+  getProcess(): ManagedProcess | undefined {
+    return this.isRunning() ? this.process : undefined;
   }
 
   getLastStderr(): string {

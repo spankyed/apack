@@ -24,6 +24,13 @@ export const API_EVENTS = {
   LOG: 'api:log',
 } as const;
 
+// Direct MessagePort channels brokered between app windows and the API UtilityProcess
+export const API_PORT_CHANNELS = {
+  REQUEST: 'api:request-port',
+  PORT: 'api:port',
+  CLOSED: 'api:port-closed',
+} as const;
+
 // Path Configuration
 export const getApiPaths = () => {
   const isDev = !app.isPackaged;

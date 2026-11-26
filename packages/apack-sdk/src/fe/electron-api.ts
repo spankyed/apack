@@ -6,6 +6,20 @@ import type { SpeechEvent } from './speech-event.ts';
 import type { TerminalViewStream } from './terminal-views.ts';
 
 /**
+ * A direct window ↔ backend `MessagePort` channel wrapped by preload.
+ * Matches `@apackdev/link`'s `Transport` contract structurally so the renderer host can pass it straight
+ * to `dial(...)` with no adapter layer.
+ *
+ * @internal
+ */
+export interface _BackendPortTransport {
+  send(message: string | Uint8Array): void;
+  onData(listener: (message: string | Uint8Array) => void): void;
+  onClose(listener: () => void): void;
+  close(): void;
+}
+
+/**
  * **The whole bridge, which is the one declaration of it.**
  *
  * `packages/preload` builds an object and asserts it `satisfies` this, so the compiler holds the exposed
@@ -167,6 +181,14 @@ export interface _HostBridge {
      */
     views: (target?: string) => TerminalViewStream;
   };
+  /**
+   * Direct `MessagePort` channels brokered by Electron main between this window and the API `UtilityProcess`.
+   * Preload holds each DOM `MessagePort`, closes it on `pagehide` or when main reports backend exit, and
+   * automatically delivers a fresh transport whenever the backend restarts or reloads. Host-only.
+   */
+  backendPort: {
+    connect: (onPort: (transport: _BackendPortTransport, info: { generation: number }) => void) => () => void;
+  };
   rendererReady: () => void;
   apiPort: number;
   startupId?: string;
@@ -193,7 +215,7 @@ export interface _HostBridge {
  * (`docs/goals/goal-pack-security-isolation.md`), and until that exists this is a signpost — which
  * is why it drops members no pack has a reason to want.
  */
-type PackFacingBridge = Omit<_HostBridge, 'apiToken' | 'performance'> & {
+type PackFacingBridge = Omit<_HostBridge, 'apiToken' | 'performance' | 'backendPort'> & {
   apiStatus: Omit<_HostBridge['apiStatus'], 'openLogFile'>;
 };
 

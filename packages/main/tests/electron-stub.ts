@@ -29,6 +29,7 @@ export function resetElectronStub(): void {
   notifications.supported = true;
   clipboard.current = '';
   ipcMain.handlers.clear();
+  ipcMain.listeners.clear();
   app.isPackaged = false;
   app.name = 'apack';
   app.paths.clear();
@@ -39,10 +40,13 @@ export function resetElectronStub(): void {
 /** The handlers a window registered, so a test invokes one as the renderer would */
 export const ipcMain = {
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
+  listeners: new Map<string, ((event: unknown, ...args: unknown[]) => void)[]>(),
   handle(channel: string, listener: (event: unknown, ...args: unknown[]) => unknown): void {
     ipcMain.handlers.set(channel, listener);
   },
-  on: () => {},
+  on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): void {
+    ipcMain.listeners.set(channel, [...(ipcMain.listeners.get(channel) ?? []), listener]);
+  },
 };
 /** What this process put on the clipboard, in order, so a test reads the write rather than the call */
 export const clipboard = {
@@ -120,3 +124,8 @@ export const utilityProcess = {
     throw new Error('utilityProcess.fork is not implemented in electron-stub');
   },
 };
+/** Electron's `MessageChannelMain`: stubbed so main-process unit tests can import `PortBroker` without Electron. */
+export class MessageChannelMain {
+  readonly port1 = { close: () => {} };
+  readonly port2 = { close: () => {} };
+}

@@ -96,6 +96,7 @@ describe('every subscription', () => {
       ['browser.onTabUpdated', api.browser.onTabUpdated(() => {})],
       ['browser.onActiveTabChanged', api.browser.onActiveTabChanged(() => {})],
       ['browser.onFocusAddressBar', api.browser.onFocusAddressBar(() => {})],
+      ['backendPort.connect', api.backendPort.connect(() => {})],
     ];
     // The subject is not empty, which is the half that keeps failing: a renamed member would otherwise
     // leave this asserting that nothing leaks nothing

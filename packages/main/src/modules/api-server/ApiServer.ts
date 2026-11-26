@@ -9,11 +9,13 @@ import { MainModuleScope } from '../../MainModuleScope.ts';
 import {
   API_CONFIG,
   API_EVENTS,
+  API_PORT_CHANNELS,
   getApiPaths,
   getEnvironment,
   getUtilityExecArgv,
 } from './config.ts';
 import { ProcessManager, broadcastEvent } from './process-manager.ts';
+import { PortBroker } from './port-broker.ts';
 import { logInfo, logError, logWarn, getLogger, logStartupBanner } from './logger.ts';
 import { getAppEnvironment } from '../../app-environment.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
@@ -21,6 +23,7 @@ import { answerWhileWorking, processWork, type WorkReading } from '@apackdev/sdk
 
 export class ApiServer implements AppModule {
   private processManager: ProcessManager;
+  private readonly portBroker = new PortBroker();
   private isShuttingDown = false;
   private shutdownComplete = false;
   private shutdown?: Promise<void>;
@@ -88,6 +91,9 @@ export class ApiServer implements AppModule {
     // The app's windows read the API token as their preload loads
     ipcMain.on('api:token', (event) => { event.returnValue = this.apiToken; });
 
+    // Direct MessagePort handoff between app windows and the API UtilityProcess
+    ipcMain.on(API_PORT_CHANNELS.REQUEST, (event) => { this.portBroker.handleRequest(event); });
+
     // Let renderer query current API status on startup (avoids IPC race condition)
     ipcMain.handle('api:get-status', () => ({
       running: this.processManager.isRunning(),
@@ -129,6 +135,7 @@ export class ApiServer implements AppModule {
       if (this.shutdownComplete) return;
       event.preventDefault();
       this.isShuttingDown = true;
+      this.portBroker.onBackendStopped();
       this.shutdown ??= this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT)
         .catch(error => { logError('[MAIN] API shutdown failed; quitting without it:', error); })
         .then(() => {
@@ -258,6 +265,8 @@ export class ApiServer implements AppModule {
     this.preferredPort = port;
     this.lastError = undefined;
     logInfo(`[MAIN] API server is running on port ${port}`);
+    const activeProcess = this.processManager.getProcess();
+    if (activeProcess) this.portBroker.onBackendReady(activeProcess);
     // `reloaded` says the old socket died on purpose, which is what lets the window resubscribe at once
     // rather than wait out its client's backoff — see `reloadApiServer`
     const reloaded = this.announceReload;
@@ -273,6 +282,7 @@ export class ApiServer implements AppModule {
 
   private handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void {
     logError(`[MAIN] API server exited with code ${code} and signal ${signal}`);
+    this.portBroker.onBackendStopped();
     // This launch did not stay up, so it forgives nothing
     clearTimeout(this.restartReset);
     const errors = this.processManager.getFatalErrors();
@@ -357,6 +367,7 @@ export class ApiServer implements AppModule {
         // Read by `handleServerReady`, which happens after this resolves — so it is a flag and not this
         // promise, however much one field would be tidier than two
         this.announceReload = true;
+        this.portBroker.onBackendStopped();
         await this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT);
         await this.startApiServer();
       } finally {

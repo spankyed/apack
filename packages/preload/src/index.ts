@@ -1,6 +1,7 @@
 import {ipcRenderer, contextBridge, webFrame, webUtils} from 'electron';
 import {connect} from 'node:net';
 import type {_HostBridge, SpeechEvent, TerminalViewStream} from '@apackdev/sdk/fe';
+import {createBackendPortBridge, type BackendPortIpc} from './backend-port.ts';
 
 const DEFAULT_API_PORT = 3001;
 
@@ -331,6 +332,11 @@ const terminal = {
   },
 } satisfies _HostBridge['terminal'];
 
+const backendPort = createBackendPortBridge(
+  ipcRenderer as unknown as BackendPortIpc,
+  typeof window !== 'undefined' ? window : undefined,
+) satisfies _HostBridge['backendPort'];
+
 const electronAPI = {
   performance,
   windowControls,
@@ -350,6 +356,7 @@ const electronAPI = {
   browser,
   protocolAction,
   terminal,
+  backendPort,
   rendererReady: () => ipcRenderer.send('renderer:ready'),
 } satisfies _HostBridge;
 
