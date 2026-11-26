@@ -61,4 +61,16 @@ describe('closeApp()', () => {
 
     await expect(closeApp(app, { userDataDir: tempDir(), keepProfile: true })).resolves.toBeUndefined();
   });
+
+  it('handles Playwright already clearing its internal process handle before closeApp() is called', async () => {
+    const app = {
+      process() {
+        throw new TypeError("Cannot read properties of undefined (reading '_object')");
+      },
+      async evaluate() { return []; },
+      async close() {},
+    } as unknown as ElectronApplication;
+
+    await expect(closeApp(app, { userDataDir: tempDir(), keepProfile: true })).resolves.toBeUndefined();
+  });
 });

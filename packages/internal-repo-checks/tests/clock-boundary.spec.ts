@@ -7,8 +7,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
 const MONITORED_DIRS = [
   'packages/apack-sdk/src/services',
@@ -35,6 +34,11 @@ function isCommentLine(line: string): boolean {
   return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
 }
 
+function stripTrailingLineComment(line: string): string {
+  const idx = line.indexOf('//');
+  return idx === -1 ? line : line.slice(0, idx);
+}
+
 describe('clock boundary in SDK and host domain code', () => {
   it('uses engine.now() / Clock instead of bare Date.now(), setTimeout(), or setInterval()', () => {
     const files = MONITORED_DIRS.flatMap((rel) => collectTsFiles(path.join(REPO_ROOT, rel)));
@@ -45,7 +49,7 @@ describe('clock boundary in SDK and host domain code', () => {
       const lines = fs.readFileSync(file, 'utf8').split('\n');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
-        if (isCommentLine(line) || !FORBIDDEN.test(line)) continue;
+        if (isCommentLine(line) || !FORBIDDEN.test(stripTrailingLineComment(line))) continue;
         const prev = i > 0 ? lines[i - 1]! : '';
         if (ALLOW_MARKER.test(line) || ALLOW_MARKER.test(prev)) continue;
         violations.push(`${path.relative(REPO_ROOT, file)}:${i + 1}: ${line.trim()}`);
