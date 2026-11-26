@@ -2,29 +2,39 @@
 // loading: a surface asked for while its pack loads opens once it arrives, one no pack provides is refused once
 // loading settles, and one whose pack goes away meanwhile is dropped.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createActor, setup, type Actor } from 'xstate';
-import type { Surface } from '@apackdev/sdk/fe';
-import { createShellMachine, type ShellMachine } from '../../../../src/fe/index.ts';
+import { state } from '@apackdev/state';
+import type { Surface, SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import type { ShellEvent } from '../../../../src/features/application/fe/types.ts';
 import { fakeShell, settle } from './fakes.ts';
 
 /** What reached each surface, in order, and whether it was open then */
 let heard: Array<{ surface: string; type: string; open: boolean }>;
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 let shell: ReturnType<typeof fakeShell>;
 
-/** A surface whose actor records every event it receives, and whether the shell had it open */
+type RecordingEvent =
+  | SurfaceLifecycleEvent
+  | { type: 'FEATURE.SELECT'; featureId: string }
+  | { type: 'MEMO.OPEN'; id: string }
+  | { type: 'MEMO.HIGHLIGHT'; memoId: string };
+
+/** A surface whose state records every event it receives, and whether the shell had it open */
 function recording(id: string): Surface {
-  const state = setup({}).createMachine({
+  const record = (event: { type: string }) => {
+    heard.push({ surface: id, type: event.type, open: app?.getSnapshot().context.activeSurface.id === id });
+  };
+  const s = state<{}, RecordingEvent>()({
     on: {
-      '*': {
-        actions: ({ event }) => {
-          heard.push({ surface: id, type: event.type, open: app?.getSnapshot().context.activeSurface.id === id });
-        },
-      },
+      SURFACE_STARTED: record,
+      SURFACE_ACTIVATED: record,
+      SURFACE_DEACTIVATED: record,
+      'FEATURE.SELECT': record,
+      'MEMO.OPEN': record,
+      'MEMO.HIGHLIGHT': record,
     },
   });
-  return { id, label: id, icon: 'Zap', state, canvas: {} } as unknown as Surface;
+  return { id, label: id, icon: 'Zap', state: s, canvas: {} } as unknown as Surface;
 }
 
 const opened = () => app.getSnapshot().context.activeSurface.id;
@@ -33,7 +43,7 @@ const eventsOf = (surface: string) => heard.filter((h) => h.surface === surface 
 beforeEach(() => {
   heard = [];
   shell = fakeShell({ surfaces: [recording('default-setup/notes'), recording('default-setup/settings')] });
-  app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: false } }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
 });
 
 afterEach(() => app.stop());
@@ -254,7 +264,7 @@ describe('a request from the app to open a surface', () => {
   it('opens the surface in a main window, with the events', async () => {
     // The fake client holds one window's subscription: this test's window is a main one
     app.stop();
-    app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: true } }).start();
+    app = createShell(shell.options, { ownsLastActiveSurface: true }).start();
     shell.client.connect();
     shell.client.receive({ to: 'host/application', event: { type: 'CLIENT_CONNECTED', hasOnboarded: true, surfaceVisibility: {} } });
     await settle();
@@ -274,7 +284,7 @@ describe('a request from the app to open a surface', () => {
     ['an event without a type', [{ id: 'm1' }]],
   ])('refuses %s, and opens nothing', async (_, events) => {
     app.stop();
-    app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: true } }).start();
+    app = createShell(shell.options, { ownsLastActiveSurface: true }).start();
     shell.client.connect();
     shell.client.receive({ to: 'host/application', event: { type: 'CLIENT_CONNECTED', hasOnboarded: true, surfaceVisibility: {} } });
     await settle();

@@ -5,6 +5,7 @@
 // `check:specifiers` refuses. A feature's modules are otherwise its own, exactly as a pack's are.
 import { vueBinding } from '@apackdev/state/vue';
 import { HOST_PACK_ID, resolveName } from '@apackdev/sdk/ids';
+import type { ShellState } from '../features/application/fe/machine.ts';
 import type packsMachineRef from '../features/packs/fe/machine.ts';
 import type { createSettingsMachine as createSettingsMachineRef } from '../features/settings/fe/machine.ts';
 
@@ -20,19 +21,19 @@ export { runWindowStorageMigrations, type WindowStorageMigration, type WindowSto
 export type { ShellPackFrontends } from './pack-frontends.ts';
 
 // The app shell (`features/application/fe/`)
-export { createShellMachine, type ShellMachine } from '../features/application/fe/machine.ts';
+export {
+  createShell,
+  createShellState,
+  type ShellObserver,
+  type ShellRuntime,
+  type ShellShape,
+  type ShellSnapshot,
+  type ShellState,
+} from '../features/application/fe/machine.ts';
 export { withHostLast } from '../features/application/fe/surfaces.ts';
 export { surfaceNavigationItems, type SurfaceNavigationItem } from './surface-navigation.ts';
-export { notifySurfaceActor, sendToSurfaceActor } from './surface-delivery.ts';
-export {
-  createWindowStateBridge,
-  stateSystemOf,
-  type StateSurfaceMeta,
-  type StateSurfaceSnapshot,
-  type WindowStateBridge,
-  type WindowStateBridgeOptions,
-} from './state-bridge.ts';
-export { computeCrumbs, type BreadcrumbItem } from '../features/application/fe/trail.ts';
+export { notifySurfaceActor, sendToSurfaceActor, type SurfaceEventTarget } from './surface-delivery.ts';
+export { computeCrumbs, type BreadcrumbItem, type TrailSurfaceState } from '../features/application/fe/trail.ts';
 export {
   computeTrail,
   topLevelState,
@@ -41,7 +42,7 @@ export {
   type SurfaceStateChrome,
   type SurfaceStateValue,
 } from '../features/application/fe/chrome.ts';
-export type { ShellNotify, ShellOptions, ShellStorage } from '../features/application/fe/types.ts';
+export type { ShellNotify, ShellOptions, ShellParams, ShellStorage } from '../features/application/fe/types.ts';
 
 // The Packs surface, the pack-frontend loader the shell is given, and the install a deep link asks for
 // (`features/packs/fe/`)
@@ -53,6 +54,7 @@ export { installFromProtocol, packInstallRequest, requestPackInstall, type PackI
 export { createSettingsMachine, settingsChrome, type SettingsContext, type SettingsEvents, type SettingsIO, type SettingsState } from '../features/settings/fe/machine.ts';
 
 export type HostSurfaces = {
+  application: ShellState;
   packs: typeof packsMachineRef;
   settings: ReturnType<typeof createSettingsMachineRef>;
 };

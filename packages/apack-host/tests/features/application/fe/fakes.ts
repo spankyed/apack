@@ -1,7 +1,7 @@
 // The shell's I/O, faked for its specs: a client to no API that the test plays the connection of, pack frontends the
 // test loads, storage kept in memory, and records of what the shell reported to the user
 import { vi } from 'vitest';
-import { setup } from 'xstate';
+import { state } from '@apackdev/state';
 import type { FeatureRef } from '@apackdev/sdk/ids';
 import type { SurfaceCatalogEntry } from '../../../../src/packs/catalog.ts';
 import type { SurfaceFrontendBinding } from '../../../../src/fe/pack-store.ts';
@@ -9,9 +9,9 @@ import type { Message } from '@apackdev/sdk/events';
 import type { Surface, ShellPanelSizes } from '@apackdev/sdk/fe';
 import type { LoadedPackEntry, ShellClient, ShellConnection, ShellFailure, ShellOptions } from '../../../../src/fe/index.ts';
 
-/** A surface with an empty machine */
+/** A surface with an empty `@apackdev/state` state */
 export function surface(id: string): Surface {
-  return { id, label: id, icon: 'Zap', state: setup({}).createMachine({}), canvas: {} } as unknown as Surface;
+  return { id, label: id, icon: 'Zap', state: state<{}, never>()({}), canvas: {} } as unknown as Surface;
 }
 
 export function fakeClient() {

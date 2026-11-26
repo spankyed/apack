@@ -10,7 +10,7 @@ function bindWith(browserRole: string | undefined) {
   const openExternal = vi.fn();
   (globalThis as any).window = { electronAPI: { shell: { openExternal } } };
   bindFeHost({ catalog: {} as never,
-    application: { system: { get: (id: string) => (id === browserRole ? browser : undefined) } } as never,
+    application: { surface: (id: string) => (id === browserRole ? browser : undefined) } as never,
     secrets: {} as never,
     settings: {} as never,
     client: { send() {}, watchView: () => () => {} },

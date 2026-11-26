@@ -35,6 +35,7 @@ import { Ref } from 'vue';
 import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
 import type { SnapshotFrom } from 'xstate';
+import type { System } from '@apackdev/state';
 import { VNode } from 'vue';
 
 // @public
@@ -480,9 +481,8 @@ export interface HostShell {
     subscribe(observer: (snapshot: HostShellSnapshot) => void): {
         unsubscribe(): void;
     };
-    system: {
-        get(id: string): AnyActorRef | undefined;
-    };
+    surface(ref: string): HostShellSurfaceRef | undefined;
+    readonly system: System;
 }
 
 // @public
@@ -541,6 +541,8 @@ export interface HostShellSnapshot {
     // (undocumented)
     context: HostShellState;
     hasTag(tag: string): boolean;
+    // (undocumented)
+    readonly value?: string;
 }
 
 // @public
@@ -551,6 +553,32 @@ export interface HostShellState {
     panelSizes: ShellPanelSizes;
     surfaces: readonly Surface[];
     surfaceVisibility: Readonly<Record<string, boolean>>;
+}
+
+// @public
+export interface HostShellSurfaceRef {
+    // (undocumented)
+    getSnapshot(): HostShellSurfaceSnapshot;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    send(event: SurfaceEvent): void;
+    // (undocumented)
+    readonly sessionId: string;
+    // (undocumented)
+    subscribe(observer: (snapshot: HostShellSurfaceSnapshot) => void): {
+        unsubscribe(): void;
+    };
+}
+
+// @public
+export interface HostShellSurfaceSnapshot {
+    // (undocumented)
+    readonly context: Record<string, unknown>;
+    // (undocumented)
+    readonly status: 'active' | 'stopped';
+    // (undocumented)
+    readonly value: string;
 }
 
 // @public (undocumented)

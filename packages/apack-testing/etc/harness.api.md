@@ -13,6 +13,7 @@ import { FakeInference } from '@apackdev/sdk/testing';
 import { fakeInference } from '@apackdev/sdk/testing';
 import { FlowDSL } from '@apackdev/sdk/build';
 import type { HostShell } from '@apackdev/sdk/fe';
+import type { HostShellSurfaceRef } from '@apackdev/sdk/fe';
 import { ImportMode } from '@apackdev/sdk/utils';
 import { ImportResult } from '@apackdev/sdk/utils';
 import { Message } from '@apackdev/sdk/events';
@@ -172,7 +173,7 @@ export interface TestShell {
     opened(): string;
     readonly stateSystem: System;
     stop(): void;
-    surface(name: string): AnyActorRef;
+    surface(name: string): HostShellSurfaceRef;
 }
 
 // @public

@@ -49,6 +49,10 @@ async function reloadWindow(page: Page): Promise<void> {
   await page.waitForFunction(() => {
     const app = window as unknown as AppWindow;
     const value = app.applicationState?.getSnapshot().value;
+    if (typeof value === 'string') {
+      if (value === 'onboarding' || value.startsWith('onboarding.')) app.__disableOnboardingUI?.();
+      return value === 'running.connected';
+    }
     if (typeof value !== 'object' || value === null) return false;
     // The fixture dismisses onboarding once, as the app launches, so a reloaded window comes back sitting
     // in it. Dismissed from inside the poll because it can arrive at any point during the boot

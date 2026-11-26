@@ -3,11 +3,10 @@
 // fails, but it does not interrupt someone who can do nothing about it — a send to a surface no pack
 // declares is for whoever wrote the send, and it is already in the Logs surface.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, type Actor } from 'xstate';
-import { createShellMachine, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, surface } from './fakes.ts';
 
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 let shell: ReturnType<typeof fakeShell>;
 let toast: ReturnType<typeof fakeShell>['notify'];
 // The error page, which replaces the window
@@ -17,10 +16,7 @@ beforeEach(() => {
   shell = fakeShell({ surfaces: [surface('notes')] });
   toast = shell.notify;
   showErrorPage = shell.notify.errorPage;
-  app = createActor(createShellMachine(shell.options), {
-    systemId: 'host/application',
-    input: { ownsLastActiveSurface: false },
-  }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
 });
 afterEach(() => app.stop());
 

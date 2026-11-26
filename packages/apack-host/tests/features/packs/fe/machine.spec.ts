@@ -2,13 +2,12 @@
 // are gone. It doesn't unload the pack's frontend itself: the shell loads a pack's frontend and the shell
 // unloads it, so a pack that comes back is loaded once and taken out once.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, type Actor, type AnyActorRef } from 'xstate';
 import type { Surface } from '@apackdev/sdk/fe';
-import { createShellMachine, stateSystemOf, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import packsMachine, { packsChrome } from '../../../../src/features/packs/fe/machine.ts';
 import { fakeShell, surface } from '../../application/fe/fakes.ts';
 
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 let shell: ReturnType<typeof fakeShell>;
 
 /** The Packs tab as the renderer registers it: the host's state, with its declarative chrome */
@@ -23,10 +22,7 @@ const packsSurface = {
 
 beforeEach(() => {
   shell = fakeShell({ surfaces: [surface('notes'), packsSurface] });
-  app = createActor(createShellMachine(shell.options), {
-    systemId: 'host/application',
-    input: { ownsLastActiveSurface: false },
-  }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
   shell.client.connect();
   shell.client.receive({ to: 'host/application', event: { type: 'CLIENT_CONNECTED', hasOnboarded: true, surfaceVisibility: {} } });
 });
@@ -35,8 +31,8 @@ afterEach(() => { app.stop(); });
 
 /** What the `host/packs` system sent its surface */
 const receive = (event: Record<string, unknown>) => shell.client.receive({ to: 'host/packs', event: event as never });
-const packsTab = () => app.system.get('host/packs') as AnyActorRef;
-const packsData = () => (stateSystemOf(app).read({ ref: 'host/packs' }) as { data: Record<string, unknown> }).data;
+const packsTab = () => app.surface('host/packs')!;
+const packsData = () => (app.system.read({ ref: 'host/packs' }) as { data: Record<string, unknown> }).data;
 
 describe('the Packs surface', () => {
   it("has the shell unload a deactivated pack's frontend, rather than unloading it itself", () => {

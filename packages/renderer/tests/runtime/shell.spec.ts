@@ -2,7 +2,7 @@ import { nativeFrontendDeclarationFixture } from '@apackdev/sdk/testing';
 // The window's shell reads the panel sizes the user set from localStorage: a saved value it can't read leaves the
 // window on the defaults, rather than failing the shell and the window with it.
 import { afterEach, expect, it, vi } from 'vitest';
-import { createActor, setup } from 'xstate';
+import { state } from '@apackdev/state';
 
 vi.mock('@/transport/client', () => ({
   feClient: {
@@ -12,6 +12,7 @@ vi.mock('@/transport/client', () => ({
     loadedPacks: () => Promise.resolve([]),
     entityExists: () => Promise.resolve(true),
     describeConnection: () => Promise.resolve(''),
+    watchView: () => () => {},
   },
 }));
 vi.mock('@/adapters/toast', () => ({ globalToast: { error: vi.fn() } }));
@@ -19,11 +20,10 @@ vi.mock('@/adapters/pack-frontends', () => ({ packFrontendIO: { importModule: vi
 
 const { createAppShell } = await import('@/runtime/shell');
 const { fePacks } = await import('@/runtime/packs');
-const { HOST } = await import('@apackdev/host/fe');
 
 const registration = {
   id: 'memo-pack',
-  features: { memos: { surface: { label: 'Memos', icon: {}, state: setup({}).createMachine({}), canvas: {} }, default: true as const } },
+  features: { memos: { surface: { label: 'Memos', icon: {}, state: state<Record<string, never>, never>()({}), canvas: {} }, default: true as const } },
 };
 fePacks.registerPackFE({ kind: 'native', declaration: nativeFrontendDeclarationFixture(registration) }, registration);
 
@@ -32,8 +32,7 @@ const PANEL_SIZES_KEY = 'apack-panel-sizes';
 afterEach(() => localStorage.removeItem(PANEL_SIZES_KEY));
 
 const openedPanelSizes = () => {
-  // Under the id main.ts gives it: the shell's own children reach it there
-  const shell = createActor(createAppShell(), { systemId: HOST.application, input: { ownsLastActiveSurface: false } }).start();
+  const shell = createAppShell({ ownsLastActiveSurface: false }).start();
   const { panelSizes } = shell.getSnapshot().context;
   shell.stop();
   return panelSizes;

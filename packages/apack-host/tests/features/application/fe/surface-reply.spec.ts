@@ -11,12 +11,11 @@
 // surface share one — so `_Asker` carries the way back, and the `does not go out onto the bus` case is what
 // fails if that distinction is ever collapsed.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, setup, type AnyEventObject, type MachineContext } from 'xstate';
-import type { Surface } from '@apackdev/sdk/fe';
+import { state } from '@apackdev/state';
+import type { Surface, SurfaceEvent, SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { _currentDelivery, _replyTo, type Reply } from '@apackdev/sdk/events';
-import { defineHandlers } from '@apackdev/sdk/framework';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
-import { createShellMachine } from '../../../../src/fe/index.ts';
+import { createShell } from '../../../../src/fe/index.ts';
 import { fakeShell, settle } from './fakes.ts';
 
 const NOTES = 'default-setup/notes';
@@ -29,44 +28,44 @@ let handed: Array<{ surface: string; type: string; canAnswer: boolean }>;
 /** What a surface beside the answerer heard, so a local answer can be told from one that went nowhere */
 let heard: Array<{ surface: string; type: string }>;
 
-const handlers = defineHandlers<MachineContext, AnyEventObject>();
-
 /**
  * The answer for `event`, where it is the message being delivered: what an ask's answer is sent through, read as
  * the `answers` table reads it, and nothing for an event the machine made itself
  */
-const answerFor = (event: AnyEventObject): Reply | undefined => {
+const answerFor = (event: SurfaceEvent): Reply | undefined => {
   const delivery = _currentDelivery();
   return delivery?.event === event ? _replyTo(delivery) : undefined;
 };
 
+type AnswerSurfaceEvent =
+  | SurfaceLifecycleEvent
+  | { type: 'ASK'; tag: string }
+  | { type: 'NEWS' }
+  | { type: 'ANSWER'; asked: string };
+
 /** A surface that answers an `ASK` and records whether its delivery gave it an answer to send */
 function answering(id: string): Surface {
-  const state = setup({
-    actions: handlers.actions({
-      note: ({ event }) => {
-        const reply = answerFor(event);
-        handed.push({ surface: id, type: event.type, canAnswer: reply !== undefined });
-        if (event.type !== 'ASK') return;
-        reply?.({ type: 'ANSWER', asked: event.tag as string });
-      },
-      overhear: ({ event }) => { heard.push({ surface: id, type: event.type }); },
-    }),
-  }).createMachine({
+  const note = (event: AnswerSurfaceEvent) => {
+    const reply = answerFor(event);
+    handed.push({ surface: id, type: event.type, canAnswer: reply !== undefined });
+    if (event.type !== 'ASK') return;
+    reply?.({ type: 'ANSWER', asked: event.tag });
+  };
+  const s = state<{}, AnswerSurfaceEvent>()({
     on: {
-      ASK: { actions: 'note' },
-      SURFACE_ACTIVATED: { actions: 'note' },
-      NEWS: { actions: 'note' },
-      ANSWER: { actions: 'overhear' },
+      ASK: note,
+      SURFACE_ACTIVATED: note,
+      NEWS: note,
+      ANSWER: (event) => { heard.push({ surface: id, type: event.type }); },
     },
   });
-  return { id, label: id, icon: 'Zap', state, canvas: {} } as unknown as Surface;
+  return { id, label: id, icon: 'Zap', state: s, canvas: {} } as unknown as Surface;
 }
 
-/** One window: its shell, its subscription, its own copies of both surfaces' actors */
+/** One window: its shell, its subscription, its own copies of both surfaces' states */
 function windowWithSurfaces() {
   const shell = fakeShell({ surfaces: [answering(NOTES), answering(THREADS)] });
-  const app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: false } }).start();
+  const app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
   shell.client.connect();
   return { shell, app };
 }

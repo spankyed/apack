@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createActor } from 'xstate';
 import { createRenderer, defineComponent, h } from 'vue';
 import { forNet } from '@apackdev/state';
 import { vueBinding } from '@apackdev/state/vue';
 import type { Surface, SurfaceChrome, SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import type { ViewUpdate } from '@apackdev/sdk/framework';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
-import { createShellMachine, HOST, stateSystemOf } from '../../src/fe/index.ts';
-import { fakeShell, settle, surface as xstateSurface } from '../features/application/fe/fakes.ts';
+import { createShell, HOST, type ShellRuntime } from '../../../../src/fe/index.ts';
+import { fakeShell, settle, surface as emptySurface } from './fakes.ts';
 
 const PACK_ID = 'notes-pack';
 const NOTES_REF = `${PACK_ID}/notes` as FeatureRef;
@@ -158,24 +157,21 @@ function buildBoardState(hooks: { onExit?: () => void } = {}) {
   });
 }
 
-const activeActors: Array<{ stop(): void }> = [];
+const activeShells: ShellRuntime[] = [];
 afterEach(() => {
-  for (const actor of activeActors.splice(0)) actor.stop();
+  for (const shell of activeShells.splice(0)) shell.stop();
 });
 
 function startFakeShell(surfaces: Surface[]) {
   const fake = fakeShell({ surfaces });
-  const shell = createActor(createShellMachine(fake.options), {
-    systemId: HOST.application,
-    input: { ownsLastActiveSurface: true },
-  }).start();
-  activeActors.push(shell);
+  const shell = createShell(fake.options, { ownsLastActiveSurface: true }).start();
+  activeShells.push(shell);
   fake.client.connect();
   return { fake, shell };
 }
 
-describe('frontend @apackdev/state shell bridge', () => {
-  it('delivers SURFACE_STARTED, bridges loads/calls asks with progress and cancellation, tells, and follows views', async () => {
+describe('frontend @apackdev/state shell system', () => {
+  it('delivers SURFACE_STARTED, runs loads/calls asks with progress and cancellation, tells, and follows views', async () => {
     const viewObservers: Array<(u: ViewUpdate) => void> = [];
     let viewStops = 0;
 
@@ -192,15 +188,12 @@ describe('frontend @apackdev/state shell bridge', () => {
       viewObservers.push(observer);
       return () => { viewStops++; };
     });
-    const shell = createActor(createShellMachine(fake.options), {
-      systemId: HOST.application,
-      input: { ownsLastActiveSurface: true },
-    }).start();
-    activeActors.push(shell);
+    const shell = createShell(fake.options, { ownsLastActiveSurface: true }).start();
+    activeShells.push(shell);
     fake.client.connect();
     await settle();
 
-    const notesActor = shell.system.get(NOTES_REF)!;
+    const notesActor = shell.surface(NOTES_REF)!;
     expect(notesActor.getSnapshot()).toMatchObject({
       status: 'active',
       value: 'list',
@@ -295,7 +288,7 @@ describe('frontend @apackdev/state shell bridge', () => {
     expect(shell.getSnapshot().context.targetView).toBe('list');
 
     // Move to detail: prepends default crumb and merges state menu with separator
-    shell.system.get(NOTES_REF)!.send({ type: 'OPEN_DETAIL', id: '42' });
+    shell.surface(NOTES_REF)!.send({ type: 'OPEN_DETAIL', id: '42' });
     await settle();
     expect(shell.getSnapshot().context.breadcrumbs).toEqual([
       { label: 'Notes', target: 'list' },
@@ -318,7 +311,7 @@ describe('frontend @apackdev/state shell bridge', () => {
     expect(shell.getSnapshot().context.breadcrumbs).toEqual([{ label: 'Board', target: '' }]);
   });
 
-  it('works with @apackdev/state/vue vueBinding(resolve) provide/useState', async () => {
+  it('works with @apackdev/state/vue vueBinding(resolve) provide/useState directly from shell.system', async () => {
     const notesState = buildNotesState();
     const notesSurface: Surface = {
       id: NOTES_REF,
@@ -360,7 +353,7 @@ describe('frontend @apackdev/state shell bridge', () => {
     });
 
     const app = createApp(Comp);
-    provide(app, stateSystemOf(shell));
+    provide(app, shell.system);
     app.mount({});
 
     expect(observedAt).toBe('list');
@@ -390,36 +383,36 @@ describe('frontend @apackdev/state shell bridge', () => {
       canvas: {},
     };
 
-    const { fake, shell } = startFakeShell([xstateSurface('host/packs'), makeNotesSurface(), boardSurface]);
+    const { fake, shell } = startFakeShell([emptySurface('host/packs'), makeNotesSurface(), boardSurface]);
     await settle();
-    expect(stateSystemOf(shell).read({ ref: NOTES_REF })).toBeDefined();
-    expect(stateSystemOf(shell).read({ ref: OTHER_REF })).toBeDefined();
+    expect(shell.system.read({ ref: NOTES_REF })).toBeDefined();
+    expect(shell.system.read({ ref: OTHER_REF })).toBeDefined();
 
     // Mutate sibling board's in-memory state before unloading notes-pack
-    shell.system.get(OTHER_REF)!.send({ type: 'SET_FILTER', filter: 'keep-me' });
+    shell.surface(OTHER_REF)!.send({ type: 'SET_FILTER', filter: 'keep-me' });
     await settle();
-    expect(shell.system.get(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
+    expect(shell.surface(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
 
     // Unload notes-pack: stops only notes via per-ref handle; sibling board stays running untouched
     shell.send({ type: 'PACK_SURFACES_UNLOADED', packId: PACK_ID });
     await settle();
     expect(notesExits).toBe(1);
-    expect(stateSystemOf(shell).read({ ref: NOTES_REF })).toBeUndefined();
+    expect(shell.system.read({ ref: NOTES_REF })).toBeUndefined();
     expect(boardExits).toBe(0);
-    expect(stateSystemOf(shell).read({ ref: OTHER_REF })).toMatchObject({
+    expect(shell.system.read({ ref: OTHER_REF })).toMatchObject({
       data: { startedCount: 1, filter: 'keep-me' },
     });
-    expect(shell.system.get(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
+    expect(shell.surface(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
 
     // Reload notes-pack: starts fresh with no duplicate-ref collision and still does not disturb board
     const reloaded = makeNotesSurface();
     fake.acceptSurface(reloaded);
     shell.send({ type: 'PACK_FRONTEND_LOADED', packId: PACK_ID, registrationId: 'reg-2', surfaces: [reloaded] });
     await settle();
-    expect(stateSystemOf(shell).read({ ref: NOTES_REF })).toBeDefined();
-    expect(shell.system.get(NOTES_REF)!.getSnapshot()).toMatchObject({ status: 'active', value: 'list' });
+    expect(shell.system.read({ ref: NOTES_REF })).toBeDefined();
+    expect(shell.surface(NOTES_REF)!.getSnapshot()).toMatchObject({ status: 'active', value: 'list' });
     expect(boardExits).toBe(0);
-    expect(shell.system.get(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
+    expect(shell.surface(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
 
     // Stopping shell stops all remaining surfaces cleanly
     shell.stop();

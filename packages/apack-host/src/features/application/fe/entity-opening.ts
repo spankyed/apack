@@ -1,47 +1,80 @@
-import { assign, enqueueActions, fromPromise, setup, type ActorRefFrom } from 'xstate';
-import { entityTypeOf } from '@apackdev/sdk/fe';
+import { state, type Value } from '@apackdev/state';
+import { entityTypeOf, type SurfaceEvent } from '@apackdev/sdk/fe';
 import type { EARS } from '@apackdev/sdk';
 import { newCall, type OpenEntity } from '@apackdev/sdk/events';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { isEqual } from '../../settings/document.ts';
-import { selectEntityDestination, getEligibleSurface, type EntityDestinationSelection, type ShellSurfaceCatalog } from '../../../fe/surface-selection.ts';
-import { notifySurfaceActor } from '../../../fe/surface-delivery.ts';
+import {
+  selectEntityDestination,
+  getEligibleSurface,
+  type EntityDestinationSelection,
+  type ShellSurfaceCatalog,
+} from '../../../fe/surface-selection.ts';
 import type { SurfaceFrontendBinding } from '../../../fe/pack-store.ts';
 import type { SurfaceCatalogEntry } from '../../../packs/catalog.ts';
 import type { ShellClient } from '../../../fe/client.ts';
 
 export const ENTITY_OPENING_ID = 'entity-opening';
 
-interface EntityOpenRequest {
-  id: EARS.EntityId;
-  token: string;
-  target?: { declaration: SurfaceCatalogEntry; binding?: SurfaceFrontendBinding };
+export interface EntityOpenRequest {
+  readonly id: EARS.EntityId;
+  readonly token: string;
+  readonly target?: {
+    readonly declaration: SurfaceCatalogEntry;
+    readonly binding?: SurfaceFrontendBinding;
+  };
 }
 
-type EntityOpeningEvent = OpenEntity
-  | { type: 'CANCEL' | 'CHANGED' }
+export type EntityOpeningEvent =
+  | OpenEntity
+  | { type: 'CANCEL' }
+  | { type: 'CHANGED' }
   | { type: 'UNLOADED'; packId: string }
   | { type: 'RUNTIMES_UPDATED'; runtimes: Record<string, string> }
-  | { type: 'READY' | 'DELIVER'; token: string }
+  | { type: 'READY'; token: string }
+  | { type: 'DELIVER'; token: string }
   | { type: 'REFUSED'; token: string; detail: string };
 
-interface EntityOpeningOptions {
+export type EntityOpeningReport =
+  | { type: 'ENTITY_OPEN_FINISHED'; token: string }
+  | { type: 'OPEN_SURFACE'; surface: string; events: SurfaceEvent[]; entityToken: string };
+
+export type EntityOpeningShape = {
+  data: {
+    request: EntityOpenRequest | null;
+  };
+  reports: EntityOpeningReport;
+  states: {
+    idle: {};
+    catalog: {};
+    checking: {};
+    waiting: {};
+  };
+};
+
+export interface EntityOpeningOptions {
   client: ShellClient;
   catalog: ShellSurfaceCatalog;
   bindings(): ReadonlyMap<string, SurfaceFrontendBinding>;
+  isConnected(): boolean;
+  hasSurface(surfaceRef: string): boolean;
+  deliverEntity(surfaceRef: string, event: OpenEntity): void;
   refuse(title: string, detail: string): void;
 }
 
 function destinationDetail(selection: EntityDestinationSelection): string {
   switch (selection.status) {
-    case 'disabled': return `The destination is disabled: ${selection.destinations.map(entry => entry.featureRef).join(', ')}.`;
-    case 'ambiguous': return `Multiple destinations claim this entity: ${selection.destinations.map(entry => entry.featureRef).join(', ')}.`;
+    case 'disabled': return `The destination is disabled: ${selection.destinations.map((entry) => entry.featureRef).join(', ')}.`;
+    case 'ambiguous': return `Multiple destinations claim this entity: ${selection.destinations.map((entry) => entry.featureRef).join(', ')}.`;
     case 'unclaimed': return 'No enabled feature declares that it opens this entity type.';
     default: return 'Entity destinations are unavailable.';
   }
 }
 
-function destinationProblem(options: EntityOpeningOptions, request: EntityOpenRequest): string | undefined {
+export function destinationProblem(
+  options: Pick<EntityOpeningOptions, 'catalog' | 'bindings'>,
+  request: EntityOpenRequest,
+): string | undefined {
   const selection = selectEntityDestination(options.catalog, entityTypeOf(request.id));
   if (selection.status !== 'declared') return destinationDetail(selection);
   if (request.target && (!isEqual(selection.destination, request.target.declaration)
@@ -51,118 +84,194 @@ function destinationProblem(options: EntityOpeningOptions, request: EntityOpenRe
 }
 
 /** One owner from intent to delivery; the shell readiness queue carries only its token. */
-export function createEntityOpeningMachine(options: EntityOpeningOptions) {
+export function createEntityOpeningState(options: EntityOpeningOptions) {
   const { client, catalog, bindings } = options;
   const refuse = (request: EntityOpenRequest | null, detail: string) => {
     if (request) options.refuse(`Couldn't open ${request.id}`, detail);
   };
-  return setup({
-    types: {
-      context: {} as { request: EntityOpenRequest | null; isConnected(): boolean },
-      input: {} as { isConnected(): boolean },
-      events: {} as EntityOpeningEvent,
-    },
-    actors: {
-      exists: fromPromise<boolean, EARS.EntityId>(({ input, signal }) => client.entityExists(input, signal)),
-    },
-    guards: {
-      currentToken: ({ context, event }) => 'token' in event && event.token === context.request?.token,
-      changedDestination: ({ context }) => !!context.request?.target && !!destinationProblem(options, context.request),
-    },
-    actions: {
-      finish: enqueueActions(({ context, enqueue }) => {
-        if (context.request) enqueue.sendParent({ type: 'ENTITY_OPEN_FINISHED', token: context.request.token });
-        enqueue.assign({ request: null });
-      }),
-      refuseChanged: ({ context }) => refuse(context.request, destinationProblem(options, context.request!)!),
-    },
-  }).createMachine({
-    id: ENTITY_OPENING_ID,
-    context: ({ input }) => ({ request: null, isConnected: input.isConnected }),
+
+  return state<EntityOpeningShape, EntityOpeningEvent>()({
     initial: 'idle',
+    data: {
+      request: null,
+    },
     on: {
-      OPEN_ENTITY: {
-        target: '.resolving', reenter: true,
-        actions: ['finish', assign({ request: ({ event }) => ({ id: event.id, token: newCall() }) })],
+      OPEN_ENTITY: (event, { data, report }) => {
+        if (data.request) report({ type: 'ENTITY_OPEN_FINISHED', token: data.request.token });
+        const request: EntityOpenRequest = { id: event.id, token: newCall() };
+        if (typeof request.id !== 'string' || !request.id.includes('-')) {
+          refuse(request, 'The entity ID is invalid.');
+          report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+          return { at: 'idle', data: { request: null } };
+        }
+        if (!options.isConnected()) {
+          refuse(request, 'The app is disconnected.');
+          report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+          return { at: 'idle', data: { request: null } };
+        }
+        if (catalog.status() === 'loading') {
+          return { at: 'catalog', data: { request } };
+        }
+        const problem = destinationProblem(options, request);
+        if (problem) {
+          refuse(request, problem);
+          report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+          return { at: 'idle', data: { request: null } };
+        }
+        const selection = selectEntityDestination(catalog, entityTypeOf(request.id));
+        if (selection.status !== 'declared') throw new Error('Entity destination was not resolved');
+        const declaration = selection.destination;
+        const binding = getEligibleSurface(catalog, bindings(), declaration.featureRef)
+          ? bindings().get(declaration.featureRef)
+          : undefined;
+        return {
+          at: 'checking',
+          data: { request: { ...request, target: { declaration, binding } } },
+        };
       },
-      CANCEL: '.idle',
-      REFUSED: { guard: 'currentToken', target: '.idle', actions: ({ context, event }) => refuse(context.request, event.detail) },
-      UNLOADED: {
-        guard: ({ context, event }) => context.request?.target?.declaration.packId === event.packId,
-        target: '.idle', actions: ({ context }) => refuse(context.request, 'Its destination was unloaded.'),
+      CANCEL: (_event, { data, report }) => {
+        if (data.request) report({ type: 'ENTITY_OPEN_FINISHED', token: data.request.token });
+        return { at: 'idle', data: { request: null } };
       },
-      RUNTIMES_UPDATED: {
-        guard: ({ context, event }) => {
-          const binding = context.request?.target?.binding;
-          return !!binding?.registrationId && event.runtimes[binding.packId] !== binding.registrationId;
-        },
-        target: '.idle', actions: ({ context }) => refuse(context.request, 'Its destination was replaced. Open it again.'),
+      REFUSED: (event, { data, report }) => {
+        if (!data.request || data.request.token !== event.token) return;
+        refuse(data.request, event.detail);
+        report({ type: 'ENTITY_OPEN_FINISHED', token: data.request.token });
+        return { at: 'idle', data: { request: null } };
       },
-      CHANGED: { guard: 'changedDestination', target: '.idle', actions: 'refuseChanged' },
+      UNLOADED: (event, { data, report }) => {
+        if (data.request?.target?.declaration.packId !== event.packId) return;
+        refuse(data.request, 'Its destination was unloaded.');
+        report({ type: 'ENTITY_OPEN_FINISHED', token: data.request.token });
+        return { at: 'idle', data: { request: null } };
+      },
+      RUNTIMES_UPDATED: (event, { data, report }) => {
+        const binding = data.request?.target?.binding;
+        if (!binding?.registrationId || event.runtimes[binding.packId] === binding.registrationId) return;
+        refuse(data.request, 'Its destination was replaced. Open it again.');
+        report({ type: 'ENTITY_OPEN_FINISHED', token: data.request!.token });
+        return { at: 'idle', data: { request: null } };
+      },
+      CHANGED: (_event, { data, report }) => {
+        if (!data.request?.target) return;
+        const problem = destinationProblem(options, data.request);
+        if (!problem) return;
+        refuse(data.request, problem);
+        report({ type: 'ENTITY_OPEN_FINISHED', token: data.request.token });
+        return { at: 'idle', data: { request: null } };
+      },
     },
     states: {
-      idle: { entry: 'finish' },
-      resolving: {
-        always: [
-          { guard: ({ context }) => typeof context.request!.id !== 'string' || !context.request!.id.includes('-'),
-            target: 'idle', actions: ({ context }) => refuse(context.request, 'The entity ID is invalid.') },
-          { guard: ({ context }) => !context.isConnected(), target: 'idle',
-            actions: ({ context }) => refuse(context.request, 'The app is disconnected.') },
-          { guard: () => catalog.status() === 'loading', target: 'catalog' },
-          { guard: ({ context }) => !!destinationProblem(options, context.request!), target: 'idle', actions: 'refuseChanged' },
-          { target: 'checking', actions: assign(({ context }) => {
-            const selection = selectEntityDestination(catalog, entityTypeOf(context.request!.id));
+      idle: {},
+      catalog: {
+        on: {
+          CHANGED: (_event, { data, report }) => {
+            const request = data.request;
+            if (!request) return { at: 'idle', data: { request: null } };
+            if (!options.isConnected()) {
+              refuse(request, 'The app is disconnected.');
+              report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+              return { at: 'idle', data: { request: null } };
+            }
+            if (catalog.status() === 'loading') return;
+            const problem = destinationProblem(options, request);
+            if (problem) {
+              refuse(request, problem);
+              report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+              return { at: 'idle', data: { request: null } };
+            }
+            const selection = selectEntityDestination(catalog, entityTypeOf(request.id));
             if (selection.status !== 'declared') throw new Error('Entity destination was not resolved');
             const declaration = selection.destination;
-            return { request: { ...context.request!, target: { declaration,
-              binding: getEligibleSurface(catalog, bindings(), declaration.featureRef) ? bindings().get(declaration.featureRef) : undefined } } };
-          }) },
-        ],
+            const binding = getEligibleSurface(catalog, bindings(), declaration.featureRef)
+              ? bindings().get(declaration.featureRef)
+              : undefined;
+            return {
+              at: 'checking',
+              data: { request: { ...request, target: { declaration, binding } } },
+            };
+          },
+        },
       },
-      catalog: { on: { CHANGED: 'resolving' } },
       checking: {
-        invoke: {
-          src: 'exists', input: ({ context }) => context.request!.id,
-          onError: { target: 'idle', actions: ({ context, event }) => refuse(context.request, errorMessage(event.error)) },
-          onDone: [
-            { guard: ({ event }) => !event.output, target: 'idle',
-              actions: ({ context }) => refuse(context.request, 'This entity no longer exists or is in the trash.') },
-            { target: 'waiting', actions: enqueueActions(({ context, enqueue }) => {
-              const request = context.request!;
-              enqueue.sendParent({ type: 'OPEN_SURFACE', surface: request.target!.declaration.featureRef,
-                events: [], entityToken: request.token });
-            }) },
-          ],
+        run: async ({ data, signal, report }) => {
+          const request = data.request;
+          if (!request) return { at: 'idle', data: { request: null } };
+          const exists = await client.entityExists(request.id, signal);
+          if (signal.aborted) return;
+          if (!exists) {
+            refuse(request, 'This entity no longer exists or is in the trash.');
+            report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+            return { at: 'idle', data: { request: null } };
+          }
+          return { at: 'waiting' };
+        },
+        failed: (error, { data, report }) => {
+          const request = data.request;
+          refuse(request, errorMessage(error));
+          if (request) report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+          return { at: 'idle', data: { request: null } };
         },
       },
       waiting: {
+        run: ({ data, report }) => {
+          const request = data.request;
+          if (!request?.target) return;
+          report({
+            type: 'OPEN_SURFACE',
+            surface: request.target.declaration.featureRef,
+            events: [],
+            entityToken: request.token,
+          });
+        },
         on: {
-          READY: [
-            { guard: ({ context, event }) => context.request?.token === event.token && !!destinationProblem(options, context.request),
-              target: 'idle', actions: 'refuseChanged' },
-            { guard: 'currentToken', actions: assign(({ context }) => ({ request: { ...context.request!,
-              target: { ...context.request!.target!, binding: context.request!.target!.binding ?? bindings().get(context.request!.target!.declaration.featureRef) } } })) },
-          ],
-          DELIVER: { guard: 'currentToken', target: 'idle', actions: ({ context, system }) => {
-            const request = context.request!;
+          READY: (event, { data, report }) => {
+            const request = data.request;
+            if (!request || request.token !== event.token) return;
+            const problem = destinationProblem(options, request);
+            if (problem) {
+              refuse(request, problem);
+              report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+              return { at: 'idle', data: { request: null } };
+            }
+            return {
+              data: {
+                request: {
+                  ...request,
+                  target: {
+                    ...request.target!,
+                    binding: request.target!.binding ?? bindings().get(request.target!.declaration.featureRef),
+                  },
+                },
+              },
+            };
+          },
+          DELIVER: (event, { data, report }) => {
+            const request = data.request;
+            if (!request || request.token !== event.token) return;
             const surface = request.target!.declaration.featureRef;
-            const actor = system.get(surface);
             const problem = destinationProblem(options, request)
               ?? (!getEligibleSurface(catalog, bindings(), surface) ? `The surface "${surface}" is no longer ready.` : undefined)
-              ?? (!actor ? `The destination actor "${surface}" is no longer available.` : undefined);
+              ?? (!options.hasSurface(surface) ? `The destination actor "${surface}" is no longer available.` : undefined);
             if (problem) refuse(request, problem);
-            else notifySurfaceActor(actor, surface, { type: 'OPEN_ENTITY', id: request.id });
-          } },
+            else options.deliverEntity(surface, { type: 'OPEN_ENTITY', id: request.id });
+            report({ type: 'ENTITY_OPEN_FINISHED', token: request.token });
+            return { at: 'idle', data: { request: null } };
+          },
         },
       },
     },
   });
 }
 
-export type EntityOpeningActor = ActorRefFrom<ReturnType<typeof createEntityOpeningMachine>>;
+export type EntityOpeningState = ReturnType<typeof createEntityOpeningState>;
 
 /** Queue admission reads the owner's current request; it never captures another request copy. */
-export function checkEntityOpening(owner: EntityOpeningActor, token: string, options: EntityOpeningOptions): { current: false } | { current: true; problem?: string } {
-  const request = owner.getSnapshot().context.request;
+export function checkEntityOpening(
+  opening: Value<EntityOpeningShape> | undefined,
+  token: string,
+  options: Pick<EntityOpeningOptions, 'catalog' | 'bindings'>,
+): { current: false } | { current: true; problem?: string } {
+  const request = opening?.data.request ?? null;
   return request?.token === token ? { current: true, problem: destinationProblem(options, request) } : { current: false };
 }

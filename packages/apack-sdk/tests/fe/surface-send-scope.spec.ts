@@ -48,7 +48,7 @@ beforeEach(() => {
     'memo-pack/counter': live,
   };
   bindFeHost({ catalog: {} as never,
-    application: { system: { get: (ref: string) => running[ref] }, subscribe: () => ({ unsubscribe() {} }) } as never,
+    application: { surface: (ref: string) => running[ref], subscribe: () => ({ unsubscribe() {} }) } as never,
     secrets: {} as never,
     settings: {} as never,
     client: { send() {}, watchView: () => () => {} },
