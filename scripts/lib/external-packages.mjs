@@ -85,21 +85,30 @@ function workspaceNodeModulesDirs(root) {
   return dirs;
 }
 
-/** @param {string} target @returns {boolean} */
-function entryExists(target) {
+/** @param {string} target @returns {import('node:fs').Stats | undefined} */
+function lstatOrUndefined(target) {
   try {
-    lstatSync(target);
-    return true;
+    return lstatSync(target);
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-/** @param {string} root @param {string} nodeModules @param {string} name @returns {string | undefined} */
-function removePackageEntry(root, nodeModules, name) {
+/** @param {string} target @returns {string | undefined} */
+function realpathOrUndefined(target) {
+  try {
+    return realpathSync(target);
+  } catch {
+    return undefined;
+  }
+}
+
+/** @param {string} root @param {string} nodeModules @param {string} name @param {boolean} onlySymlinks @returns {string | undefined} */
+function removePackageEntry(root, nodeModules, name, onlySymlinks) {
   const segments = name.split('/');
   const target = path.join(nodeModules, ...segments);
-  if (!entryExists(target)) return undefined;
+  const stat = lstatOrUndefined(target);
+  if (stat === undefined || (onlySymlinks && !stat.isSymbolicLink())) return undefined;
   rmSync(target, { recursive: true, force: true });
   // Remove now-empty @scope folder so stale empty scope directories do not linger
   if (segments.length === 2) {
@@ -114,22 +123,28 @@ function removePackageEntry(root, nodeModules, name) {
 }
 
 /**
- * Removes existing root `node_modules/<pkg>` and nested `packages/<ws>/node_modules/<pkg>` copies/symlinks for
- * `packageNames` before reinstalling after an override switch (`deps:local` <-> `deps:pin` / `deps:released`), so
- * npm hoists a single clean install into root `node_modules` instead of leaving stale tarballs or links behind.
+ * Removes stale nested workspace `packages/<ws>/node_modules/<pkg>` copies/symlinks and stale root `node_modules/<pkg>`
+ * symlinks for `packageNames` before reinstalling after an override switch (`deps:local` <-> `deps:pin` /
+ * `deps:released`), so npm hoists a single clean copy into root `node_modules` without wiping a working real root
+ * directory if `npm install` fails.
  *
  * @param {string} root
  * @param {readonly string[]} packageNames
  * @returns {string[]} paths removed, relative to `root`
  */
-export function pruneSwitchedOverrides(root, packageNames) {
+export function pruneNestedOverrides(root, packageNames) {
   /** @type {string[]} */
   const removed = [];
   const rootNodeModules = path.join(root, 'node_modules');
-  const dirs = [...(existsSync(rootNodeModules) ? [rootNodeModules] : []), ...workspaceNodeModulesDirs(root)];
-  for (const nodeModules of dirs) {
+  if (existsSync(rootNodeModules)) {
     for (const name of packageNames) {
-      const rel = removePackageEntry(root, nodeModules, name);
+      const rel = removePackageEntry(root, rootNodeModules, name, true);
+      if (rel !== undefined) removed.push(rel);
+    }
+  }
+  for (const nodeModules of workspaceNodeModulesDirs(root)) {
+    for (const name of packageNames) {
+      const rel = removePackageEntry(root, nodeModules, name, false);
       if (rel !== undefined) removed.push(rel);
     }
   }
@@ -141,7 +156,8 @@ export function pruneSwitchedOverrides(root, packageNames) {
  * - present in root `node_modules` with a readable `package.json`,
  * - installed with the right kind (`file:` -> symlink resolving to the requested directory; release URL -> real
  *   directory, not a leftover symlink), and
- * - not nested under any `packages/<ws>/node_modules/<pkg>`.
+ * - no duplicate nested copy under `packages/<ws>/node_modules/<pkg>` (nested symlinks resolving to the same
+ *   `realpath` as root are allowed, since npm can link both root and a workspace to the same `file:` checkout).
  *
  * @param {string} root
  * @param {Readonly<Record<string, string>>} specs
@@ -154,24 +170,21 @@ export function verifyHoistedOverrides(root, specs) {
   for (const [name, spec] of Object.entries(specs)) {
     const segments = name.split('/');
     const rootTarget = path.join(root, 'node_modules', ...segments);
+    /** @type {string | undefined} */
+    let rootReal;
     if (!existsSync(path.join(rootTarget, 'package.json'))) {
       problems.push(`${name}: missing from root node_modules (no package.json)`);
     } else {
       const isLink = lstatSync(rootTarget).isSymbolicLink();
+      rootReal = realpathOrUndefined(rootTarget);
       if (spec.startsWith('file:')) {
         if (!isLink) {
           problems.push(`${name}: expected symlink to ${spec} in root node_modules, found a real directory`);
         } else {
           const expectedPath = path.resolve(root, spec.slice('file:'.length));
-          const actualReal = realpathSync(rootTarget);
-          let expectedReal = expectedPath;
-          try {
-            expectedReal = realpathSync(expectedPath);
-          } catch {
-            // Keep resolved path when expected target does not exist
-          }
-          if (actualReal !== expectedReal) {
-            problems.push(`${name}: root node_modules symlink resolves to ${actualReal}, expected ${expectedReal}`);
+          const expectedReal = realpathOrUndefined(expectedPath) ?? expectedPath;
+          if (rootReal !== expectedReal) {
+            problems.push(`${name}: root node_modules symlink resolves to ${rootReal ?? rootTarget}, expected ${expectedReal}`);
           }
         }
       } else if (isLink) {
@@ -180,9 +193,12 @@ export function verifyHoistedOverrides(root, specs) {
     }
     for (const nodeModules of nestedDirs) {
       const nestedTarget = path.join(nodeModules, ...segments);
-      if (entryExists(nestedTarget)) {
-        problems.push(`${name}: still nested at ${path.relative(root, nestedTarget).split(path.sep).join('/')}`);
+      const nestedStat = lstatOrUndefined(nestedTarget);
+      if (nestedStat === undefined) continue;
+      if (nestedStat.isSymbolicLink() && rootReal !== undefined && realpathOrUndefined(nestedTarget) === rootReal) {
+        continue;
       }
+      problems.push(`${name}: duplicate nested install at ${path.relative(root, nestedTarget).split(path.sep).join('/')}`);
     }
   }
   return problems;

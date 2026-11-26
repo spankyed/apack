@@ -13,7 +13,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPOSITORIES, pruneSwitchedOverrides, releaseOf, releaseUrl, verifyHoistedOverrides } from './lib/external-packages.mjs';
+import { REPOSITORIES, pruneNestedOverrides, releaseOf, releaseUrl, verifyHoistedOverrides } from './lib/external-packages.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -67,7 +67,7 @@ function install(switchedSpecs) {
     refuse(`npm ${version} does not apply a changed override to a locked package; this needs npm ${NPM_FLOOR.join('.')} or later `
       + `(npm install -g npm@${NPM_FLOOR.join('.')}). package.json is rewritten: run npm install with it.`);
   }
-  const pruned = pruneSwitchedOverrides(ROOT, Object.keys(switchedSpecs));
+  const pruned = pruneNestedOverrides(ROOT, Object.keys(switchedSpecs));
   if (pruned.length > 0) console.log(`Removed ${pruned.length} stale override path(s): ${pruned.join(', ')}`);
   const npm = spawnSync(npmCommand, ['install', '--no-audit', '--no-fund'], {
     cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32',

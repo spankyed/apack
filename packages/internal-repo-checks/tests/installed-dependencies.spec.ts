@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { duplicateCopies, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
 import { missingBroker } from '../../../scripts/lib/broker-installed.mjs';
-import { pruneSwitchedOverrides, verifyHoistedOverrides } from '../../../scripts/lib/external-packages.mjs';
+import { pruneNestedOverrides, verifyHoistedOverrides } from '../../../scripts/lib/external-packages.mjs';
 
 
 let dir: string | undefined;
@@ -134,12 +134,10 @@ describe("the terminal broker's platform package", () => {
 describe('override switching cleanup and hoisting verification', () => {
   const dirLinkType: fs.symlink.Type = process.platform === 'win32' ? 'junction' : 'dir';
 
-  it('prunes root and nested workspace copies/symlinks for switched packages while preserving unrelated packages', () => {
-    const root = aDir('prune-switched-');
-    // Both a real root directory (previous tarball) and a root symlink (previous deps:local) are pruned,
-    // while unrelated root packages remain intact
+  it('prunes nested workspace copies and stale root/workspace symlinks for switched packages while preserving real root and unrelated packages', () => {
+    const root = aDir('prune-nested-');
+    // Real root directory stays untouched (safe if npm install fails); stale root symlink (left by deps:local) is pruned
     fs.mkdirSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'node_modules', 'other-root-pkg'), { recursive: true });
     fs.symlinkSync(path.join(root, 'local-elmdb'), path.join(root, 'node_modules', 'elmdb'), dirLinkType);
     // Workspace A has a scoped directory + unrelated package
     fs.mkdirSync(path.join(root, 'packages', 'apack-host', 'node_modules', '@elmdb', 'ears'), { recursive: true });
@@ -149,23 +147,21 @@ describe('override switching cleanup and hoisting verification', () => {
     fs.symlinkSync(path.join(root, 'does-not-exist'), path.join(root, 'packages', 'server', 'node_modules', 'elmdb'), dirLinkType);
     fs.symlinkSync(path.join(root, 'node_modules', '@elmdb', 'ears'), path.join(root, 'packages', 'server', 'node_modules', '@elmdb', 'ears'), dirLinkType);
 
-    const removed = pruneSwitchedOverrides(root, ['elmdb', '@elmdb/ears']).sort();
+    const removed = pruneNestedOverrides(root, ['elmdb', '@elmdb/ears']).sort();
     expect(removed).toEqual([
-      'node_modules/@elmdb/ears',
       'node_modules/elmdb',
       'packages/apack-host/node_modules/@elmdb/ears',
       'packages/server/node_modules/@elmdb/ears',
       'packages/server/node_modules/elmdb',
     ]);
-    // Empty @elmdb scope dirs are cleaned up in root and workspaces; unrelated packages remain
-    expect(fs.existsSync(path.join(root, 'node_modules', '@elmdb'))).toBe(false);
+    // Empty @elmdb scope dirs are cleaned up too; unrelated and real root packages remain
     expect(fs.existsSync(path.join(root, 'packages', 'apack-host', 'node_modules', '@elmdb'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages', 'server', 'node_modules', '@elmdb'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'node_modules', 'other-root-pkg'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'other-pkg'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'node_modules', '@elmdb', 'ears'))).toBe(true);
   });
 
-  it('verifies release URL overrides are real root directories with package.json and no nested copies', () => {
+  it('verifies release URL overrides are real root directories with package.json and no duplicate nested copies', () => {
     const root = aDir('verify-release-');
     const specs = {
       elmdb: 'https://github.com/spankyed/elmdb/releases/download/pkg-0000000000000000000000000000000000000000/elmdb-0.1.0.tgz',
@@ -189,13 +185,13 @@ describe('override switching cleanup and hoisting verification', () => {
       expect.stringContaining('@elmdb/ears: expected installed package in root node_modules'),
     ]);
 
-    // Replace symlink with real directory, but introduce a nested workspace copy
+    // Replace symlink with real directory, but introduce a nested duplicate copy
     fs.rmSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true, force: true });
     fs.mkdirSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true });
     fs.writeFileSync(path.join(root, 'node_modules', '@elmdb', 'ears', 'package.json'), '{}');
     fs.mkdirSync(path.join(root, 'packages', 'server', 'node_modules', 'elmdb'), { recursive: true });
     expect(verifyHoistedOverrides(root, specs)).toEqual([
-      'elmdb: still nested at packages/server/node_modules/elmdb',
+      'elmdb: duplicate nested install at packages/server/node_modules/elmdb',
     ]);
 
     // Clean once the nested copy is gone
@@ -203,7 +199,7 @@ describe('override switching cleanup and hoisting verification', () => {
     expect(verifyHoistedOverrides(root, specs)).toEqual([]);
   });
 
-  it('verifies file: overrides are root symlinks resolving to the target checkout with no nested copies', () => {
+  it('verifies file: overrides are root symlinks resolving to the target checkout and allows same-target nested symlinks', () => {
     const root = aDir('verify-local-');
     const targetElmdb = path.join(root, 'sibling-elmdb', 'crates', 'elmdb-node');
     const wrongElmdb = path.join(root, 'other-elmdb', 'crates', 'elmdb-node');
@@ -221,7 +217,7 @@ describe('override switching cleanup and hoisting verification', () => {
     fs.symlinkSync(targetElmdb, path.join(root, 'packages', 'apack-host', 'node_modules', 'elmdb'), dirLinkType);
     expect(verifyHoistedOverrides(root, specs)).toEqual([
       'elmdb: expected symlink to file:sibling-elmdb/crates/elmdb-node in root node_modules, found a real directory',
-      'elmdb: still nested at packages/apack-host/node_modules/elmdb',
+      'elmdb: duplicate nested install at packages/apack-host/node_modules/elmdb',
     ]);
 
     // Symlink pointing at the wrong checkout must fail
@@ -232,9 +228,17 @@ describe('override switching cleanup and hoisting verification', () => {
       expect.stringContaining('elmdb: root node_modules symlink resolves to '),
     ]);
 
-    // Symlink pointing at the requested checkout passes
+    // Root symlink + nested workspace symlink both resolving to the same target checkout pass (single copy)
     fs.rmSync(path.join(root, 'node_modules', 'elmdb'), { recursive: true, force: true });
     fs.symlinkSync(targetElmdb, path.join(root, 'node_modules', 'elmdb'), dirLinkType);
+    fs.symlinkSync(targetElmdb, path.join(root, 'packages', 'apack-host', 'node_modules', 'elmdb'), dirLinkType);
     expect(verifyHoistedOverrides(root, specs)).toEqual([]);
+
+    // A nested symlink pointing to a different target (or broken) still fails
+    fs.rmSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'elmdb'), { recursive: true, force: true });
+    fs.symlinkSync(wrongElmdb, path.join(root, 'packages', 'apack-host', 'node_modules', 'elmdb'), dirLinkType);
+    expect(verifyHoistedOverrides(root, specs)).toEqual([
+      'elmdb: duplicate nested install at packages/apack-host/node_modules/elmdb',
+    ]);
   });
 });
