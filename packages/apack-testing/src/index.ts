@@ -16,6 +16,7 @@ import { appLaunchEnv, pinsViewport } from './launch-env.ts';
 import { assertCheckoutPackagesFresh } from './checkout-freshness.ts';
 import { assertPrebuiltPackCurrent, packArchiveAcceptance } from './prebuilt-pack.ts';
 import { connectToApp, type AppConnection } from './connection.ts';
+import { readApiRuntimeIn } from './engine/tool-client.ts';
 import {
   WILL_QUIT_MARKER,
   chromiumHelperPidsToKill,
@@ -578,6 +579,8 @@ function apiPidOf(app: ElectronApplication): number | undefined {
 
 /** The same, read from the data dir an app runs on; where that file sits does not depend on the environment */
 function apiPidIn(userDataDir: string): number | undefined {
+  const runtime = readApiRuntimeIn(userDataDir);
+  if (runtime !== undefined) return runtime.pid;
   const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
   try { return (JSON.parse(fs.readFileSync(endpointFile, 'utf8')) as { pid?: number }).pid; }
   catch (error) {

@@ -16,7 +16,7 @@ export interface ManagedProcess extends EventEmitter {
 }
 
 export interface ProcessHandlers {
-  onReady?: (port: number) => void;
+  onReady?: (port: number, socket?: string) => void;
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
   onError?: (error: Error) => void;
   onStdout?: (data: string) => void;
@@ -29,6 +29,7 @@ export class ProcessManager {
   private process?: ManagedProcess;
   private handlers: ProcessHandlers;
   private serverReady = false;
+  private toolSocket?: string;
   private exited = false;
   private powerState: 'active' | 'suspended' = 'active';
   private stopping?: Promise<void>;
@@ -43,6 +44,7 @@ export class ProcessManager {
   setProcess(process: ManagedProcess): void {
     this.process = process;
     this.serverReady = false;
+    this.toolSocket = undefined;
     this.exited = false;
     this.lastStderr = '';
     this.stderrBuffer = '';
@@ -65,10 +67,11 @@ export class ProcessManager {
     } catch { /* child exited before taking the message */ }
   }
 
-  private markReady(port: number): void {
+  private markReady(port: number, socket?: string): void {
     if (this.serverReady) return;
     this.serverReady = true;
-    this.handlers.onReady?.(port);
+    this.toolSocket = socket;
+    this.handlers.onReady?.(port, socket);
   }
 
   private parseFatalLine(line: string): void {
@@ -97,9 +100,10 @@ export class ProcessManager {
     // Structured control messages from the utility process's `parentPort`
     this.process.on('message', (message: unknown) => {
       if (!message || typeof message !== 'object') return;
-      const payload = message as { type?: unknown; port?: unknown };
+      const payload = message as { type?: unknown; port?: unknown; socket?: unknown };
       if (payload.type === 'ready' && typeof payload.port === 'number' && Number.isInteger(payload.port) && payload.port > 0) {
-        this.markReady(payload.port);
+        const socket = typeof payload.socket === 'string' && payload.socket.length > 0 ? payload.socket : undefined;
+        this.markReady(payload.port, socket);
       }
     });
 
@@ -303,6 +307,10 @@ export class ProcessManager {
 
   getProcess(): ManagedProcess | undefined {
     return this.isRunning() ? this.process : undefined;
+  }
+
+  getSocket(): string | undefined {
+    return this.isRunning() ? this.toolSocket : undefined;
   }
 
   getLastStderr(): string {

@@ -49,6 +49,16 @@ describe('findRunningApp', () => {
     expect(findRunningApp(live)?.why).toBe(`its API is running on port 3001 (pid ${process.pid})`);
   });
 
+  it('counts a live api-runtime.json record ({ pid } or { pid, socket, token }) and ignores stale ones', async () => {
+    const live = context();
+    fs.writeFileSync(path.join(_appDirOf(live.userDataDir), 'api-runtime.json'), JSON.stringify({ pid: process.pid }));
+    expect(findRunningApp(live)).toEqual({ why: `its API is running (pid ${process.pid})`, pid: process.pid });
+
+    const stale = context();
+    fs.writeFileSync(path.join(_appDirOf(stale.userDataDir), 'api-runtime.json'), JSON.stringify({ pid: await exitedPid() }));
+    expect(findRunningApp(stale)).toBeNull();
+  });
+
   it("doesn't count a port file a crashed run left behind, or one it can't read", async () => {
     const crashed = context();
     publishApi(crashed.userDataDir, { pid: await exitedPid() });

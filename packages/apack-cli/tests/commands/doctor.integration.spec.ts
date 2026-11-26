@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { runtimeFilePath, writeApiRuntimeFile } from '@apackdev/host/transport/tool-socket';
 import { doctorChannel, inspectApp } from '../../src/commands/doctor';
 import { doctor as packDoctor } from '../../src/commands/pack-doctor';
 import { dev, holdSession } from '../../src/commands/dev';
@@ -36,10 +37,19 @@ it('defaults to production and rejects pack or development arguments', () => {
 });
 
 macOnly('checks a closed installed app without creating data or probing an API', async () => {
-  const probe = vi.fn(async () => true);
-  await inspectApp('production', { applications, dataDir, probe });
-  expect(probe).not.toHaveBeenCalled();
+  const probeSocket = vi.fn(async () => true);
+  await inspectApp('production', { applications, dataDir, probeSocket });
+  expect(probeSocket).not.toHaveBeenCalled();
   expect(fs.existsSync(dataDir)).toBe(false);
+});
+
+macOnly('accepts a live production api-runtime.json with { pid } only without probing any socket', async () => {
+  const context = resolveAppEnvironment({ env: 'production', userDataDir: dataDir });
+  fs.mkdirSync(context.appDir, { recursive: true });
+  writeApiRuntimeFile(context.appDir, { pid: process.pid });
+  const probeSocket = vi.fn(async () => false);
+  await inspectApp('production', { applications, dataDir, probeSocket });
+  expect(probeSocket).not.toHaveBeenCalled();
 });
 
 macOnly('fails for an invalid installation and leaves the bundle intact', async () => {
@@ -49,12 +59,26 @@ macOnly('fails for an invalid installation and leaves the bundle intact', async 
   expect(fs.readFileSync(executable, 'utf8')).toBe('#!/bin/sh\n');
 });
 
-macOnly('fails when a live API record has an unreachable listener', async () => {
+macOnly('probes the local tool socket when present and fails if unreachable while leaving api-runtime.json intact', async () => {
   const context = resolveAppEnvironment({ env: 'production', userDataDir: dataDir });
-  fs.mkdirSync(path.dirname(context.apiPortFile), { recursive: true });
-  fs.writeFileSync(context.apiPortFile, JSON.stringify({ port: 12345, pid: process.pid }));
-  await expect(inspectApp('production', { applications, dataDir, probe: async () => false })).rejects.toThrow('health check failed');
-  expect(fs.existsSync(context.apiPortFile)).toBe(true);
+  fs.mkdirSync(context.appDir, { recursive: true });
+  const socket = '/tmp/apack-501/api-0123456789abcdef.sock';
+  writeApiRuntimeFile(context.appDir, { pid: process.pid, socket, token: 'tok' });
+
+  const probed: string[] = [];
+  await inspectApp('production', {
+    applications,
+    dataDir,
+    probeSocket: async (addr) => { probed.push(addr); return true; },
+  });
+  expect(probed).toEqual([socket]);
+
+  await expect(inspectApp('production', {
+    applications,
+    dataDir,
+    probeSocket: async () => false,
+  })).rejects.toThrow('health check failed');
+  expect(fs.existsSync(runtimeFilePath(context.appDir))).toBe(true);
 });
 
 it('pack doctor fails for missing source files and accepts warnings alone', async () => {

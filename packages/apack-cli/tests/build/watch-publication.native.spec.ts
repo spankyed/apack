@@ -1,8 +1,7 @@
-// @slow: real filesystem watching, staged builds, installation and HTTP-driven host runtime reload.
+// @slow: real filesystem watching, staged builds, installation and tool-socket-driven host runtime reload.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createServer } from 'node:http';
 import { createActor, createMachine } from 'xstate';
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
@@ -10,10 +9,13 @@ import { boundEars } from '@apackdev/sdk/ears';
 import { createSettingsStore, createSettingsService } from '@apackdev/host/settings';
 import { startTestRuntime, resetTestData } from '@apackdev/sdk/testing';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { createPackRegistry, readPackBuild, stagePack } from '@apackdev/host/packs';
 import { reloadPackById } from '@apackdev/host/packs/runtime';
 import { HOST_ENTITY_TYPES } from '@apackdev/host/app-state';
+import { createControlServer, muxTransport } from '@apackdev/host/transport/mux';
+import type { HostControlContract } from '@apackdev/host/transport/control-contract';
+import { toolSocketTransport } from '@apackdev/host/transport/tool-client';
+import { startToolSocketServer, type ToolSocketServer } from '@apackdev/host/transport/tool-socket';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
@@ -54,17 +56,7 @@ async function startWatchedPack(signal: AbortSignal): Promise<WatchedPack & { cl
   const installed = path.join(environment.packsDir, 'watched-pack');
   const backend = createActor(createMachine({})).start();
   const state = { reloads: 0, publications: 0 };
-  const server = createServer(async (request, response) => {
-    try {
-      expect(request.headers[API_TOKEN_HEADER]).toBe('watch-test-token');
-      const chunks: Buffer[] = [];
-      for await (const chunk of request) chunks.push(Buffer.from(chunk));
-      expect(JSON.parse(Buffer.concat(chunks).toString()).packId).toBe('watched-pack');
-      await reloadPackById(registry, 'watched-pack', backend);
-      state.reloads++;
-      response.end('ok');
-    } catch (error) { response.statusCode = 500; response.end(String(error)); }
-  });
+  let toolServer: ToolSocketServer | undefined;
   let watcher: TestPackBuildWatcher | undefined;
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
   const lifecycle = (value: string) => `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, '${value}'); export function init() { return '${value}'; }`;
@@ -72,8 +64,7 @@ async function startWatchedPack(signal: AbortSignal): Promise<WatchedPack & { cl
     await watcher?.close();
     if (registry.getPackRegistration('watched-pack')) registry.unregisterPack('watched-pack');
     backend.stop();
-    server.closeAllConnections();
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await toolServer?.close();
     errors.mockRestore();
     vi.unstubAllEnvs();
     fs.rmSync(temporary, { recursive: true, force: true });
@@ -89,12 +80,26 @@ async function startWatchedPack(signal: AbortSignal): Promise<WatchedPack & { cl
     fs.symlinkSync(path.join(hooks, 'manifest.json'), path.join(shared, 'manifest.json'));
     fs.symlinkSync(shared, path.join(root, 'config'), 'dir');
     fs.symlinkSync(path.join(root, 'config/manifest.json'), path.join(root, 'apack.json'));
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-    const address = server.address();
-    if (!address || typeof address === 'string') throw new Error('No test API port');
-    fs.mkdirSync(path.dirname(environment.apiPortFile), { recursive: true });
-    fs.writeFileSync(environment.apiPortFile, JSON.stringify({ port: address.port, pid: process.pid }));
-    fs.writeFileSync(environment.apiTokenFile, 'watch-test-token');
+    fs.mkdirSync(environment.appDir, { recursive: true });
+    toolServer = await startToolSocketServer({
+      appDir: environment.appDir,
+      token: 'watch-test-token',
+      onConnection: (socket, initialBytes) => {
+        const mux = muxTransport(toolSocketTransport(socket, initialBytes));
+        createControlServer<{
+          readonly requests: Pick<HostControlContract['requests'], 'dev.reload'>;
+        }>(mux.control, {
+          requests: {
+            'dev.reload': async (input) => {
+              expect(input.packId).toBe('watched-pack');
+              await reloadPackById(registry, 'watched-pack', backend);
+              state.reloads++;
+              return { ok: true };
+            },
+          },
+        });
+      },
+    });
     watcher = await startTestPackBuildWatcher(root, {
       captureCompiler: sharedCompiler.capture,
       signal,

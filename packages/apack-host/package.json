@@ -53,7 +53,10 @@
     "./testing": "./src/testing/pack-registry.ts",
     "./fe/testing": "./src/testing/frontend-registry.ts",
     "./settings": "./src/features/settings/be/index.ts",
+    "./transport/control-contract": "./src/transport/control-contract.ts",
     "./transport/mux": "./src/transport/mux.ts",
+    "./transport/tool-client": "./src/transport/tool-client.ts",
+    "./transport/tool-socket": "./src/transport/tool-socket.ts",
     "./views": "./src/views/index.ts"
   },
   "dependencies": {
