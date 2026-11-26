@@ -26,7 +26,7 @@ async function codeOverPlainDirectory() {
   await app.connect();
   await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['defaultBaseDirectory'], value: directory }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
   await app.settle();
-  await expect.poll(() => app!.system('code').getSnapshot().context.gitWatcher?.isActive()).toBe(true);
+  await expect.poll(() => (app!.system('code').read().data.gitWatcher as { isActive(): boolean } | undefined)?.isActive()).toBe(true);
   return { directory, broker };
 }
 const announcements = () => app!.emitted('code').filter(event => event.type === 'commit.REPOSITORY_CHANGED').length;

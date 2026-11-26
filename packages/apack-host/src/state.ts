@@ -12,7 +12,7 @@ import type {
   NormalizeAsks,
 } from '@apackdev/sdk/events';
 import { HOST_PACK_ID, resolveName } from '@apackdev/sdk/ids';
-import type { ActivatePackEvent, PackChangedEvent, ReloadPackEvent, TeardownPackEvent } from './bus/machine.ts';
+import type { ActivatePackEvent, PackChangedEvent, ReloadPackEvent, TeardownPackEvent } from './bus/bus.ts';
 import type { Contract as ApplicationContract } from './features/application/be/contract.ts';
 import type { ApplicationSurfaceEvents } from './features/application/events.ts';
 import type {

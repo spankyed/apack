@@ -2,16 +2,16 @@
 // surface get FEATURE_SETTINGS_UPDATED, which the SDK declares for every system and surface, whatever changed the
 // settings. A feature with no system, or no surface, just doesn't get that half.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { assign, setup } from 'xstate';
+import { state } from '@apackdev/state';
 import { getTestSettings, mockService, registerPack, startApp, takeSystemErrors, unregisterPack } from '@apackdev/testing/harness';
 import { untypedCreate, untypedUpsert } from '@apackdev/sdk/ears';
 import type { EARS } from '@apackdev/sdk';
 
 
 /** A system that keeps each FEATURE_SETTINGS_UPDATED it gets */
-const recorder = setup({ types: { context: {} as { heard: unknown[] } } }).createMachine({
-  context: { heard: [] },
-  on: { FEATURE_SETTINGS_UPDATED: { actions: assign({ heard: ({ context, event }) => [...context.heard, event] }) } },
+const recorder = state<{ data: { heard: unknown[] } }, { type: 'FEATURE_SETTINGS_UPDATED'; settings?: unknown; changes?: unknown }>()({
+  data: { heard: [] },
+  on: { FEATURE_SETTINGS_UPDATED: (event, { data }) => ({ data: { heard: [...data.heard, event] } }) },
 });
 
 beforeEach(() => {
@@ -29,7 +29,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const heardBy = (app: Awaited<ReturnType<typeof startApp>>) => (app.system('memo-pack/memos').getSnapshot().context as { heard: any[] }).heard;
+const heardBy = (app: Awaited<ReturnType<typeof startApp>>) => (app.system('memo-pack/memos').read().data as { heard: any[] }).heard;
 
 describe('a feature whose settings change', () => {
   it('tells its system, with what changed in its lists, and its surface', async () => {

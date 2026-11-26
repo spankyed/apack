@@ -46,7 +46,7 @@ const { secretsStore, forwardSecretsChanges } = await import('@apackdev/host/sec
 const { boundHost } = await import('@apackdev/sdk/runtime/internals');
 const { services } = boundHost();
 const { _getSecretsFilePath } = await import('@apackdev/sdk/utils');
-const { setup } = await import('xstate');
+const { state } = await import('@apackdev/state');
 
 const KEY = 'sk-proj-SPECKEY1234567890abcdefghij';
 const caller = secretsRouter.createCaller({ client: 'c-test', closed: new AbortController().signal });
@@ -59,7 +59,7 @@ packs.registerPack({ id: 'test', features: { settings: {} } });
 // The same pack again, now running that feature's system, which declares the event and so is sent it
 const registerSettingsSystem = () => {
   packs.unregisterPack('test');
-  packs.registerPack({ id: 'test', features: { settings: { system: { machine: setup({}).createMachine({}), receives: ['SECRETS_CHANGED'] } } } });
+  packs.registerPack({ id: 'test', features: { settings: { system: { machine: state()({}), receives: ['SECRETS_CHANGED'] } } } });
 };
 
 /** The incoming events `run` sends */

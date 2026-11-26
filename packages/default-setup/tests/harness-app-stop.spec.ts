@@ -15,7 +15,7 @@ import { listen, notify } from '#features/brain/be/services/brain.ts'
 import { services } from '#generated/services.ts'
 
 const activeFlowIds = (app: TestApp) =>
-  Object.keys((app.system('brain').getSnapshot().context as { flows?: Record<string, unknown> }).flows ?? {})
+  Object.keys((app.system('brain').read().data as { flows?: Record<string, unknown> }).flows ?? {})
 
 const EVERY_SECOND = '* * * * * *'
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

@@ -5,10 +5,10 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // every system says what it holds now. That consequence has a name of its own (`SEND_STATE`), so a system
 // wires it once instead of once per cause, and a fact is left for what publishing cannot fix.
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { createActor, setup, type AnyActorRef } from 'xstate';
+import { state } from '@apackdev/state';
 import { untypedTell } from '@apackdev/sdk/events';
 import { startTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 import { HOST } from '../../src/refs.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 
@@ -18,13 +18,13 @@ startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 const seen: Record<string, string[]> = {};
 
 /** A system whose whole behaviour is recording the events it declares, in the order they arrive */
-const records = (feature: string, ...types: string[]) => setup({}).createMachine({
-  on: Object.fromEntries(types.map((type) => [type, { actions: () => seen[feature].push(type) }])),
+const records = (feature: string, ...types: string[]) => state<{}, { type: string }>()({
+  on: Object.fromEntries(types.map((type) => [type, () => { seen[feature].push(type); }])) as Record<string, () => void>,
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-let bus: AnyActorRef | undefined;
+let bus: BackendBus | undefined;
 
 beforeEach(async () => {
   seen.watcher = [];
@@ -38,7 +38,7 @@ beforeEach(async () => {
       quiet: { system: { machine: records('quiet', 'SEND_STATE'), receives: [] } },
     },
   });
-  bus = createActor(createAppBus(registry), { systemId: HOST.bus }).start();
+  bus = createAppBus(registry).start();
   await settle();
 });
 

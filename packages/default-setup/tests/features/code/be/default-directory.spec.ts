@@ -24,7 +24,7 @@ afterEach(() => {
 
 const setCodeSetting = (key: string, value: unknown) =>
   app!.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: [key], value }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
-const explorerDirectory = () => (app!.system('code').getSnapshot().context as { baseDirectory: string | null }).baseDirectory;
+const explorerDirectory = () => (app!.system('code').read().data as { baseDirectory: string | null }).baseDirectory;
 
 describe("the code explorer's directory", () => {
   it('closes real Git watchers when the Code actor stops', async () => {
@@ -32,7 +32,7 @@ describe("the code explorer's directory", () => {
     await execFileWhileWorking('git', ['init', '--quiet', directory]);
     app = await startApp({ systems: ['code', 'host/settings'] });
     await setCodeSetting('defaultBaseDirectory', directory);
-    const watcher = app.system('code').getSnapshot().context.gitWatcher;
+    const watcher = app.system('code').read().data.gitWatcher as { isActive(): boolean };
     await expect.poll(() => watcher.isActive()).toBe(true);
     app.stop();
     await expect.poll(() => watcher.isActive()).toBe(false);
@@ -44,7 +44,7 @@ describe("the code explorer's directory", () => {
     const directory = tempDir();
     await setCodeSetting('defaultBaseDirectory', directory);
     await app.settle();
-    const before = app.system('code').getSnapshot().context;
+    const before = app.system('code').read().data;
     // Choosing the folder that is already open moves nothing, so no window is told the directory changed
     const refreshes = () => app!.emitted('code').filter(event => event.type === 'BASE_DIRECTORY_CHANGED').length;
     const originalRefreshes = refreshes();
@@ -60,7 +60,7 @@ describe("the code explorer's directory", () => {
     await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
     await app.settle();
     expect(getTestSettings().getOverrides().features?.['default-setup/code']).toHaveProperty('baseDirectory', directory);
-    const after = app.system('code').getSnapshot().context;
+    const after = app.system('code').read().data;
     expect(after.gitRepository).toBe(before.gitRepository);
     expect(after.gitWatcher).toBe(before.gitWatcher);
     expect(refreshes()).toBe(originalRefreshes);

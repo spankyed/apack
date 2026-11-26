@@ -3,24 +3,24 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // and a system's event against what the surface declares it receives. A send nobody declared is reported
 // as a system error and dropped, rather than thrown — the caller is a running system.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, setup, type AnyActorRef } from 'xstate';
+import { state } from '@apackdev/state';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
 import { onLog } from '@apackdev/sdk/logger';
 import type { Message } from '@apackdev/sdk/events';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 import { hostRegistration } from '../../src/features/registration.ts';
 
 const registry = createNativePackTestRegistry();
 startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 
-const machine = setup({}).createMachine({});
+const machine = state()({});
 /** The memos feature: a system that takes PING, and a surface receiving what the system sends it */
 const memoFeatures = {
   memos: { system: { machine, receives: ['PING'] }, surface: { receives: ['MEMOS_CONNECTED', 'MEMO_ADDED'] } },
 };
 
-let bus: AnyActorRef;
+let bus: BackendBus;
 const outgoing: Message[] = [];
 /** What reached a surface, less the SYSTEM_ERROR events reportError sends there itself */
 const delivered = () => outgoing.filter(({ event }) => event.type !== 'SYSTEM_ERROR' && event.type !== 'CLIENT_CONNECTED');
@@ -43,7 +43,7 @@ beforeEach(async () => {
   stopOutgoing = testRootEvents.onOutgoing((event) => { outgoing.push(event); });
   registry.registerPack({ id: 'memo-pack', features: memoFeatures });
   registry.registerPack(hostRegistration());
-  bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
   await connect();
   // Each case measures its own sends, after host systems publish their initial state.
   outgoing.length = 0;
