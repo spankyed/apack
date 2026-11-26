@@ -5,7 +5,6 @@
 ```ts
 
 import { addTestSecret } from '@apackdev/sdk/testing';
-import { AnyActorRef } from 'xstate';
 import { ContentApplier } from '@apackdev/sdk/utils';
 import { ContentRuntime } from '@apackdev/sdk/framework';
 import { EarsClock } from '@apackdev/sdk/ears';

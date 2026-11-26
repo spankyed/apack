@@ -31,8 +31,6 @@ describe('resolveAppEnvironment', () => {
     expect(ctx.userDataDir.startsWith(os.homedir())).toBe(true);
     expect(ctx.packsDir).toBe(path.join(ctx.appDir, 'packs'));
     expect(ctx.installedPacksFile).toBe(path.join(ctx.appDir, 'installed-packs.json'));
-    expect(ctx.apiPortFile).toBe(path.join(ctx.appDir, 'api-port'));
-    expect(ctx.apiTokenFile).toBe(path.join(ctx.appDir, 'api-token'));
     expect(ctx.urlScheme).toBe('apack-beta');
   });
 

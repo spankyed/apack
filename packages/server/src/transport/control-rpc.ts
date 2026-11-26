@@ -48,7 +48,7 @@ const SETTINGS_OPEN_PACK_KEYS: ReadonlySet<string> = new Set([
   'buildRevision',
 ]);
 const SETTINGS_CLOSE_KEYS: ReadonlySet<string> = new Set(['credential']);
-const SETTINGS_MUTATE_KEYS: ReadonlySet<string> = new Set(['credential', 'event']);
+const SETTINGS_MUTATE_KEYS: ReadonlySet<string> = new Set(['credential', 'event', 'sender', 'call', 'from']);
 const PACKS_CLIENT_READY_KEYS: ReadonlySet<string> = new Set(['packId', 'registrationId']);
 const DEV_RELOAD_KEYS: ReadonlySet<string> = new Set(['packId']);
 const DEV_INSTALL_KEYS: ReadonlySet<string> = new Set(['root']);
@@ -67,11 +67,22 @@ export interface HostControlSecretsDeps {
   allowUnprotected(): void | Promise<void>;
 }
 
+export interface HostControlSettingsMutateMeta {
+  readonly sender?: string;
+  readonly call?: string;
+  readonly from?: string;
+}
+
 export interface HostControlSettingsDeps {
   openHost(connectionId: string): string | Promise<string>;
   openPack(connectionId: string, expected: SettingsPackIdentity): string | Promise<string>;
   close(connectionId: string, credential: string): void | Promise<void>;
-  mutate(connectionId: string, credential: string, event: SettingsMutationEvent): void | Promise<void>;
+  mutate(
+    connectionId: string,
+    credential: string,
+    event: SettingsMutationEvent,
+    meta?: HostControlSettingsMutateMeta,
+  ): void | Promise<void>;
   releaseConnection(connectionId: string): void;
 }
 
@@ -430,9 +441,19 @@ export function createHostControlServer(
         const eventObj = asPlainObject(obj.event, 'settings.mutate.event');
         const type = assertBoundedString(eventObj.type, 'event.type', 1);
         const event: SettingsMutationEvent = { ...eventObj, type };
+        const sender = obj.sender === undefined ? undefined : assertBoundedString(obj.sender, 'sender', 1);
+        const call = obj.call === undefined ? undefined : assertBoundedString(obj.call, 'call', 1);
+        const from = obj.from === undefined ? undefined : assertBoundedString(obj.from, 'from', 1);
+        const mutateMeta: HostControlSettingsMutateMeta | undefined = sender !== undefined || call !== undefined || from !== undefined
+          ? {
+              ...(sender !== undefined ? { sender } : {}),
+              ...(call !== undefined ? { call } : {}),
+              ...(from !== undefined ? { from } : {}),
+            }
+          : undefined;
         assertSettingsConnectionOpen(meta.signal);
         try {
-          await deps.settings.mutate(deps.connectionId, credential, event);
+          await deps.settings.mutate(deps.connectionId, credential, event, mutateMeta);
         } catch (error) {
           mapSettingsError(error);
         }

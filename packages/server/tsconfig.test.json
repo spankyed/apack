@@ -10,7 +10,7 @@
     // and one shared .tsbuildinfo would have them overwrite each other, so none of them stays warm
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/server-test.tsbuildinfo",
     // `globals: true` in vitest.config.ts, so `describe`/`it`/`expect` are ambient here and nowhere else
-    "types": ["vitest/globals"]
+    "types": ["node", "vitest/globals"]
   },
   "include": ["src", "tests"]
 }

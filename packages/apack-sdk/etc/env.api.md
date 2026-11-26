@@ -8,7 +8,7 @@
 export const APP_ENVS: readonly ["production", "beta", "preview", "development", "test"];
 
 // @public
-export const APP_PROCESS_ENV_VARS: readonly ["NODE_ENV", "API_PORT", "APACK_API_TOKEN", "APACK_STARTUP_ID", "APACK_LOG_DIR", "SHIPPED_PACKS_DIR", "APACK_ENV", "APACK_APP_MANIFEST", "APACK_USER_DATA_DIR", "ELECTRON_RUN_AS_NODE"];
+export const APP_PROCESS_ENV_VARS: readonly ["NODE_ENV", "APACK_STARTUP_ID", "APACK_LOG_DIR", "SHIPPED_PACKS_DIR", "APACK_ENV", "APACK_APP_MANIFEST", "APACK_USER_DATA_DIR", "ELECTRON_RUN_AS_NODE"];
 
 // @public
 export type AppChannel = Extract<AppEnv, 'production' | 'beta' | 'preview'>;
@@ -24,8 +24,6 @@ export type AppEnv = (typeof APP_ENVS)[number];
 
 // @public (undocumented)
 export interface AppEnvironment {
-    apiPortFile: string;
-    apiTokenFile: string;
     appDir: string;
     appName: string;
     env: AppEnv;

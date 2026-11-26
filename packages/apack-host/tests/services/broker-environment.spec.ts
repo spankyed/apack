@@ -69,7 +69,7 @@ describe("what the broker's shells inherit", () => {
     // above while protecting nothing
     expect(APP_PROCESS_ENV_VARS.length).toBeGreaterThan(5);
     expect(APP_PROCESS_ENV_VARS).toContain('ELECTRON_RUN_AS_NODE');
-    expect(APP_PROCESS_ENV_VARS).toContain('APACK_API_TOKEN');
+    expect(APP_PROCESS_ENV_VARS).toContain('APACK_USER_DATA_DIR');
   });
 });
 

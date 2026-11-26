@@ -19,7 +19,7 @@
  * is the one thing that is safe to do to an environment nothing may remove.
  */
 import * as fs from 'node:fs';
-import { _appDirOf, APP_ENVS, appDataDirFor, resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
+import { _appDirOf, APP_ENVS, appDataDirFor, type AppEnv } from '@apackdev/sdk/env';
 import { readHostCompatibility } from '@apackdev/host/packs';
 import { readSession } from '@apackdev/host/dev-session';
 import { findRunningApp } from '@apackdev/host/database';
@@ -329,12 +329,8 @@ export async function stop(
 export function pidHolding(dir: string): number | undefined {
   const session = readSession(dir);
   if (session !== undefined) return session.supervisorPid;
-  // Through the resolver rather than a join of its own, for `dataDirInUse`'s reason: the API writes that
-  // file and a second opinion about where it is becomes a refusal that never fires. The runtime environment is immaterial
-  // — every path in the context is joined onto the dir it is given
-  const { apiPortFile } = resolveAppEnvironment({ env: 'development', userDataDir: dir });
-  // Last, the browser's own lock: an app whose session, app lock and port file have all gone is still one
-  return findRunningApp({ userDataDir: dir, apiPortFile })?.pid ?? chromiumHolding(dir);
+  // Last, the browser's own lock: an app whose session, app lock and runtime file have all gone is still one
+  return findRunningApp({ userDataDir: dir })?.pid ?? chromiumHolding(dir);
 }
 
 export async function profiles(args: string[]): Promise<void> {

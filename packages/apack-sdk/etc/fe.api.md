@@ -306,12 +306,9 @@ export function hasDesignation(role: string): boolean;
 // @internal
 export interface _HostBridge {
     // (undocumented)
-    apiPort: number;
-    // (undocumented)
     apiStatus: {
         getStatus: () => Promise<{
             running: boolean;
-            port?: number;
             error?: {
                 message: string;
                 stack?: string;
@@ -330,11 +327,9 @@ export interface _HostBridge {
             error?: string;
             attempt?: number;
             maxAttempts?: number;
-            port?: number;
             reloaded?: boolean;
         }) => void) => () => void;
     };
-    apiToken: string;
     backendPort: {
         connect: (onPort: (transport: _BackendPortTransport, info: {
             generation: number;

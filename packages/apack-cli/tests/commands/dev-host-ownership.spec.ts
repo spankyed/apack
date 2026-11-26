@@ -11,9 +11,9 @@ vi.mock('../../src/app/pack-host', async importOriginal => ({
 }));
 const { build } = vi.hoisted(() => ({ build: vi.fn(async () => {}) }));
 vi.mock('../../src/build/build-process.ts', () => ({ createPackBuilder: () => ({ build, close: async () => {} }) }));
-vi.mock('@apackdev/host/process-liveness', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/host/process-liveness')>(),
-  readApiEndpoint: () => ({ port: 1234, pid: process.pid }),
+vi.mock('@apackdev/host/transport/tool-client', async importOriginal => ({
+  ...await importOriginal<typeof import('@apackdev/host/transport/tool-client')>(),
+  readApiRuntime: () => ({ pid: process.pid }),
 }));
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', async importOriginal => ({

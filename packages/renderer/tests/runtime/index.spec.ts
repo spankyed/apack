@@ -8,7 +8,12 @@ const mutate = vi.hoisted(() => vi.fn<(event: unknown) => Promise<void>>());
 const secretsList = vi.hoisted(() => vi.fn(() => Promise.resolve({ secrets: [], status: { protection: 'os-keystore', backend: 'test' } })));
 const toastError = vi.hoisted(() => vi.fn());
 
-vi.mock('@/transport', () => ({ trpc: { bus: { send: { mutate } }, secrets: { list: { query: secretsList } } } }));
+vi.mock('@/transport', () => ({
+  windowTransport: {
+    linkSend: mutate,
+    controlCall: (method: string) => (method === 'secrets.list' ? secretsList() : Promise.resolve()),
+  },
+}));
 vi.mock('@/adapters/toast', () => ({ globalToast: { error: toastError } }));
 
 const logWrite = vi.hoisted(() => vi.fn(() => Promise.resolve()));

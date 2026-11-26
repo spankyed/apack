@@ -2,8 +2,7 @@ import { execFile } from 'child_process';
 import { ipcMain, powerMonitor, shell, utilityProcess } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { randomBytes, randomUUID } from 'crypto';
-import getPort, { clearLockedPorts } from 'get-port';
+import { randomUUID } from 'crypto';
 import { AppModule } from '../../AppModule.ts';
 import { MainModuleScope } from '../../MainModuleScope.ts';
 import {
@@ -38,27 +37,18 @@ export class ApiServer implements AppModule {
   private serverReady: Promise<void>;
   private serverReadyResolve?: () => void;
   private serverReadyReject?: (error: Error) => void;
-  private actualPort?: number;
   private actualSocket?: string;
-  /** The port the last successful launch used, reused on restart so the renderer's URL stays valid */
-  private preferredPort: number = API_CONFIG.DEFAULT_PORT;
   private lastError?: { message: string; stack?: string };
   /** The reload in flight, so a rebuild arriving mid-reload joins it rather than starting a second API */
   private reloading?: Promise<void>;
   /** Whether the next readiness is a reload's, which `handleServerReady` consumes onto `api:started` */
   private announceReload = false;
   private readonly startupId = randomUUID();
-  /**
-   * The API's token for this app run: the API refuses connections and requests without it. The API process gets it
-   * in its environment, the app's windows through the preload (`api:token`); web pages in the in-app browser have
-   * no preload and never see it.
-   */
-  private readonly apiToken = randomBytes(32).toString('base64url');
 
   constructor() {
     process.env.APACK_STARTUP_ID = this.startupId;
     this.processManager = new ProcessManager({
-      onReady: (port, socket) => this.handleServerReady(port, socket),
+      onReady: (socket) => this.handleServerReady(socket),
       onExit: (code, signal) => this.handleProcessExit(code, signal),
       onError: (error) => this.handleProcessError(error),
     });
@@ -89,16 +79,12 @@ export class ApiServer implements AppModule {
       logInfo('App events log file location:', getLogger().getAppEventsLogPath());
     }
 
-    // The app's windows read the API token as their preload loads
-    ipcMain.on('api:token', (event) => { event.returnValue = this.apiToken; });
-
     // Direct MessagePort handoff between app windows and the API UtilityProcess
     ipcMain.on(API_PORT_CHANNELS.REQUEST, (event) => { this.portBroker.handleRequest(event); });
 
     // Let renderer query current API status on startup (avoids IPC race condition)
     ipcMain.handle('api:get-status', () => ({
       running: this.processManager.isRunning(),
-      port: this.actualPort,
       error: this.lastError,
       restartAttempts: this.restartAttempts,
       startupId: this.startupId,
@@ -226,15 +212,7 @@ export class ApiServer implements AppModule {
       return;
     }
     logInfo('[MAIN] Server file found, proceeding with launch...');
-
-    // Prefer the port the renderer already knows. get-port locks a port it hands out for 15-30s,
-    // so asking for the same one again inside RESTART_DELAY falls back to a random port and leaves
-    // the renderer's WebSocket pointed at the old one. clearLockedPorts releases our own lock; if
-    // the port is genuinely taken, get-port still moves on.
-    clearLockedPorts();
-    const port = await getPort({ port: this.preferredPort });
     if (this.isShuttingDown) return;
-    logInfo(`[MAIN] Selected port ${port} for API server`);
 
     // Fork as an Electron UtilityProcess so the API runs on Electron's built-in Node 24 in both dev and production
     // and can receive brokered MessagePortMain channels directly from main.
@@ -247,8 +225,7 @@ export class ApiServer implements AppModule {
 
     const apiProcess = utilityProcess.fork(serverPath, [], {
       cwd: apiPath,
-      env: getEnvironment(port, {
-        apiToken: this.apiToken,
+      env: getEnvironment({
         startupId: this.startupId,
         logDir: getAppEnvironment().logsDir,
       }),
@@ -261,19 +238,15 @@ export class ApiServer implements AppModule {
     this.scheduleRestartResetTimeout();
   }
 
-  private handleServerReady(port: number, socket?: string): void {
-    this.actualPort = port;
+  private handleServerReady(socket?: string): void {
     this.actualSocket = socket;
-    this.preferredPort = port;
     this.lastError = undefined;
-    logInfo(socket ? `[MAIN] API server is running on port ${port} (tool socket: ${socket})` : `[MAIN] API server is running on port ${port}`);
+    logInfo(socket ? `[MAIN] API server is ready (tool socket: ${socket})` : '[MAIN] API server is ready');
     const activeProcess = this.processManager.getProcess();
     if (activeProcess) this.portBroker.onBackendReady(activeProcess);
-    // `reloaded` says the old socket died on purpose, which is what lets the window resubscribe at once
-    // rather than wait out its client's backoff — see `reloadApiServer`
     const reloaded = this.announceReload;
     this.announceReload = false;
-    broadcastEvent(API_EVENTS.STARTED, { port, startupId: this.startupId, ...(reloaded && { reloaded: true }) });
+    broadcastEvent(API_EVENTS.STARTED, { startupId: this.startupId, ...(reloaded && { reloaded: true }) });
     
     if (this.serverReadyResolve) {
       this.serverReadyResolve();
@@ -301,7 +274,6 @@ export class ApiServer implements AppModule {
     broadcastEvent(API_EVENTS.STOPPED, { error: this.lastError, restarting: willRestart });
 
     // Reset state
-    this.actualPort = undefined;
     this.actualSocket = undefined;
 
     // Handle restart
@@ -383,7 +355,6 @@ export class ApiServer implements AppModule {
   public getStatus(): {
     running: boolean;
     pid?: number;
-    port?: number;
     socket?: string;
     restartAttempts: number;
     startupId: string;
@@ -394,7 +365,6 @@ export class ApiServer implements AppModule {
     return {
       running: this.processManager.isRunning(),
       pid: this.processManager.getPid(),
-      port: this.actualPort,
       ...(this.actualSocket !== undefined ? { socket: this.actualSocket } : {}),
       restartAttempts: this.restartAttempts,
       startupId: this.startupId,

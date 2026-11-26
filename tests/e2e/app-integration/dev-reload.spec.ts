@@ -10,7 +10,6 @@
 // reload loads it from there.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { test, expect } from '@apackdev/testing';
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
@@ -45,33 +44,21 @@ function renameWrittenDocument(records: LibraryRecord[], from: string, to: strin
  * loaded yet is refused: the next spec on this worker to open the code surface found its canvas missing.
  */
 const originalFiles = new Map<string, Buffer>();
-let reloadedFrom: { apiPort: number; apiToken: string; revision: string } | undefined;
-test.afterEach(async ({ appPage }) => {
+let reloadedFrom: { revision: string } | undefined;
+test.afterEach(async ({ appPage, connection }) => {
   for (const [file, bytes] of originalFiles) fs.writeFileSync(file, bytes);
   originalFiles.clear();
   if (!reloadedFrom) return;
-  const { apiPort, apiToken, revision } = reloadedFrom;
+  const { revision } = reloadedFrom;
   reloadedFrom = undefined;
-  const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
-    body: JSON.stringify({ packId: PACK_ID }),
-  });
-  expect(response.status, await response.text()).toBe(200);
+  await connection.reloadPack(PACK_ID);
   // A reloaded frontend's stylesheet is linked from the build the window accepted, so this is the window on the
   // restored build rather than the API alone
   await expect.poll(() => appPage.evaluate((base) => document.querySelector(`link[href^="${base}"]`) !== null,
     `pack://${PACK_ID}/builds/${revision}/`), `the window loads ${PACK_ID} from its restored build`).toBe(true);
 });
 
-test('a rebuilt built-in pack reloads with the content the rebuild changed', async ({ app, appPage, electronApp }) => {
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
-  });
-  expect(apiPort, 'the renderer knows the API port').toBeTruthy();
-  expect(apiToken, 'the renderer knows the API token').toBeTruthy();
-
+test('a rebuilt built-in pack reloads with the content the rebuild changed', async ({ app, appPage, electronApp, connection }) => {
   await app.waitForSurface('default-setup/library');
   await app.navigate('default-setup/library');
   await expect.poll(() => libraryDocuments(appPage)).toContain(WRITTEN_DOCUMENT);
@@ -94,13 +81,8 @@ test('a rebuilt built-in pack reloads with the content the rebuild changed', asy
   const manifest = JSON.parse(originalFiles.get(path.join(installed, PACK_LAYOUT.manifest))!.toString());
   sealPackBuild(installed, manifest, build.integrity.sdkVersion);
 
-  reloadedFrom = { apiPort: apiPort!, apiToken, revision: build.revision };
-  const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
-    body: JSON.stringify({ packId: PACK_ID }),
-  });
-  expect(response.status, await response.text()).toBe(200);
+  reloadedFrom = { revision: build.revision };
+  await connection.reloadPack(PACK_ID);
 
   // The reload re-applies the content, and the library's views carry the change to the tree
   await expect.poll(() => libraryDocuments(appPage)).toContain(REBUILT_DOCUMENT);

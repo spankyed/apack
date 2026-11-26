@@ -47,8 +47,6 @@ export interface DevSession {
   readonly env: 'development';
   /** Chromium's `--remote-debugging-port`, as it reported it. Absent means the app is not attachable */
   readonly debugPort: number;
-  /** The app's API, so a session can reach the bus without going through the page */
-  readonly apiPort?: number;
   /** Where the app's output went, which is what a failure to become attachable is explained from */
   readonly logPath?: string;
   readonly dataDir: string;

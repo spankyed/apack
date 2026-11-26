@@ -21,7 +21,6 @@ import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { describeRefusal, processWork, watchWork } from '@apackdev/sdk/progress';
 import type { AppEnv } from '@apackdev/sdk/env';
-import { readApiEndpoint } from '@apackdev/host/process-liveness';
 import { readApiRuntime } from '@apackdev/host/transport/tool-client';
 import { runtimeFilePath } from '@apackdev/host/transport/tool-socket';
 import { withoutSourceCondition } from '@apackdev/host/build/source-resolution';
@@ -226,11 +225,11 @@ export function idleVerdict(lastAttachedMs: number, nowMs: number, idleMs: numbe
  * `other` is not a failure: one app per data dir, so the app that got there first is the one to use. Only
  * both — no child and no API — is.
  */
-function apiIsLive(appDir: string, apiPortFile: string): boolean {
-  return readApiRuntime(appDir) !== undefined || readApiEndpoint(apiPortFile) !== null;
+function apiIsLive(appDir: string): boolean {
+  return readApiRuntime(appDir) !== undefined;
 }
 
-async function waitForApi(appDir: string, apiPortFile: string, child: ChildProcess): Promise<'ours' | 'other'> {
+async function waitForApi(appDir: string, child: ChildProcess): Promise<'ours' | 'other'> {
   // For as long as the app is working to start: a cold start on a busy machine is slow, and only a stall is a failure
   let stalled: string | undefined;
   const watch = child.pid === undefined ? undefined
@@ -238,10 +237,10 @@ async function waitForApi(appDir: string, apiPortFile: string, child: ChildProce
   try {
     for (;;) {
       if (child.exitCode !== null || child.signalCode !== null) {
-        if (apiIsLive(appDir, apiPortFile)) return 'other';
+        if (apiIsLive(appDir)) return 'other';
         throw new Error(`The app exited (${child.exitCode ?? child.signalCode}) before its API came up`);
       }
-      if (apiIsLive(appDir, apiPortFile)) return 'ours';
+      if (apiIsLive(appDir)) return 'ours';
       if (stalled !== undefined) throw new Error(`The app did not publish ${runtimeFilePath(appDir)}: it ${stalled}`);
       await new Promise(resolve => setTimeout(resolve, 200));
     }
@@ -305,7 +304,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
   setHostHandoff(app, process.env);
   const profile = sharedDevelopment ? undefined : profileFor(mode, cliDirs());
   const place: AppPlace = { env, ...(profile ? { userDataDir: profile.dir } : {}) };
-  const { userDataDir, appDir, apiPortFile } = resolveAppEnvironment(place);
+  const { userDataDir, appDir } = resolveAppEnvironment(place);
 
   /**
    * What this session holds, and what letting go of it means (`app/dev-hold.ts` owns the order).
@@ -363,7 +362,6 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
         host: { kind: 'source', root: app.root },
         env: 'development',
         debugPort,
-        apiPort: readApiEndpoint(apiPortFile)?.port,
         dataDir: userDataDir,
         supervisorPid: process.pid,
         startedBy: startedByFromEnv(),
@@ -462,7 +460,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
 
   // An app already on this data dir is the one to use: a second Electron over the same database is not a
   // choice anyone wants. Only an app this command started is one it may close.
-  if (apiIsLive(appDir, apiPortFile)) {
+  if (apiIsLive(appDir)) {
     verifyRunningSession();
     console.log(`Using the ${env} app already running.\n`);
   } else {
@@ -479,7 +477,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
     const spawned = launchApp(app, place);
     hold.holdsApp(spawned);
     held = spawned;
-    const whose = await waitForApi(appDir, apiPortFile, spawned);
+    const whose = await waitForApi(appDir, spawned);
     if (whose === 'other') {
       // Ours was refused the data dir and another app has it. Forgetting it is what keeps the release
       // honest: it closes an app this command started, and this one started none that lived
@@ -539,7 +537,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
     const next = launchApp(app, place);
     hold.holdsApp(next);
     held = next;
-    if (await waitForApi(appDir, apiPortFile, next) === 'other') {
+    if (await waitForApi(appDir, next) === 'other') {
       hold.forgetApp();
       held = undefined;
       throw new Error('Another app took the data dir while this one restarted');

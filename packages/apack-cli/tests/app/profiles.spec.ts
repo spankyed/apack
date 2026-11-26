@@ -178,9 +178,9 @@ describe('renaming a profile', () => {
   // directory, so moving it leaves the app writing somewhere that no longer exists
   it('refuses while an app has it open', () => {
     const live = openProfile(dirs, 'live');
-    const { apiPortFile } = resolveAppEnvironment({ env: 'development', userDataDir: live.dir });
-    fs.mkdirSync(path.dirname(apiPortFile), { recursive: true });
-    fs.writeFileSync(apiPortFile, JSON.stringify({ port: 51234, pid: process.pid }));
+    const { appDir } = resolveAppEnvironment({ env: 'development', userDataDir: live.dir });
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(appDir, 'api-runtime.json'), JSON.stringify({ pid: process.pid }));
 
     expect(() => renameProfile(dirs, 'live', 'moved')).toThrow(/An app is running on/);
     expect(fs.existsSync(live.dir)).toBe(true);
@@ -282,9 +282,9 @@ describe('a profile an app still has open', () => {
   // Where the API actually publishes it, asked of the same resolver the app uses — a literal path here is a
   // second guess, and the one time it disagreed with the app this assertion still passed
   const publishApi = (dir: string, pid: number) => {
-    const { apiPortFile } = resolveAppEnvironment({ env: 'development', userDataDir: dir });
-    fs.mkdirSync(path.dirname(apiPortFile), { recursive: true });
-    fs.writeFileSync(apiPortFile, JSON.stringify({ port: 51234, pid }));
+    const { appDir } = resolveAppEnvironment({ env: 'development', userDataDir: dir });
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(appDir, 'api-runtime.json'), JSON.stringify({ pid }));
   };
 
   it('is in use, and not a leak, even when the run that made it has gone', () => {

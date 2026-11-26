@@ -27,8 +27,6 @@ vi.mock('@apackdev/sdk/env', async (importOriginal) => ({
     appDir,
     packsDir: path.join(userDataDir, 'packs'),
     installedPacksFile: path.join(userDataDir, 'installed-packs.json'),
-    apiPortFile: path.join(appDir, 'api-port'),
-    apiTokenFile: path.join(appDir, 'api-token'),
   }),
 }));
 

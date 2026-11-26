@@ -40,7 +40,6 @@
     "@tiptap/extension-task-list": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
     "@tiptap/vue-3": "^3.32.0",
-    "@trpc/client": "^11.1.2",
     "@vue-flow/core": "^1.44.0",
     "@xstate/vue": "^4.0.2",
     "highlight.js": "^11.11.1",
@@ -54,7 +53,6 @@
     "xstate": "^5.19.2"
   },
   "devDependencies": {
-    "@app/server": "*",
     "@tailwindcss/container-queries": "^0.1.1",
     "@tsconfig/node22": "^22.0.2",
     "@types/jsdom": "^21.1.7",

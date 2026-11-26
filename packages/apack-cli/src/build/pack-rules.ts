@@ -365,10 +365,16 @@ const RULE_LIST = [
     check(view, _place) {
       return view.visit((node) => {
         const module = moduleOf(node);
-        if (module && /^@apackdev\/sdk\/rpc(\/|$)/.test(module)) return [module];
+        if (module && (/^@apackdev\/sdk\/rpc(\/|$)/.test(module) || /^@apackdev\/link(\/|$)/.test(module))) return [module];
         if (ts.isIdentifier(node) && node.text === '_rootEvents') return ['_rootEvents'];
-        if (ts.isPropertyAccessExpression(node) && node.name.text === 'bus'
-          && ts.isIdentifier(node.expression) && node.expression.text === 'trpc') return ['trpc.bus'];
+        if (ts.isPropertyAccessExpression(node) && node.name.text === 'backendPort'
+          && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'electronAPI') {
+          return ['electronAPI.backendPort'];
+        }
+        if (ts.isPropertyAccessExpression(node) && node.name.text === 'backendPort'
+          && ts.isIdentifier(node.expression) && node.expression.text === 'electronAPI') {
+          return ['electronAPI.backendPort'];
+        }
         return undefined;
       });
     },

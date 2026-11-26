@@ -54,6 +54,7 @@
     "./fe/testing": "./src/testing/frontend-registry.ts",
     "./settings": "./src/features/settings/be/index.ts",
     "./transport/control-contract": "./src/transport/control-contract.ts",
+    "./transport/link-protocol": "./src/transport/link-protocol.ts",
     "./transport/mux": "./src/transport/mux.ts",
     "./transport/tool-client": "./src/transport/tool-client.ts",
     "./transport/tool-socket": "./src/transport/tool-socket.ts",

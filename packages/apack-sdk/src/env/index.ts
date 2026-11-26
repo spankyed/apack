@@ -61,10 +61,6 @@ export interface AppEnvironment {
   packsDir: string;
   /** Build output (types/, build/) of the app's built-in packs, for pack authors' dependency resolution. */
   installedPacksFile: string;
-  /** Where a running API publishes its port and process id, so local tools find it (`@apackdev/host/process-liveness`) */
-  apiPortFile: string;
-  /** A development app's API token, for local tools calling its API (written by the API, readable only by the user) */
-  apiTokenFile: string;
   urlScheme: string;
 }
 
@@ -128,8 +124,6 @@ export function resolveAppEnvironment(input: { env?: AppEnv; userDataDir?: strin
     appDir,
     packsDir: path.join(appDir, 'packs'),
     installedPacksFile: path.join(appDir, 'installed-packs.json'),
-    apiPortFile: path.join(appDir, 'api-port'),
-    apiTokenFile: path.join(appDir, 'api-token'),
     urlScheme: env === 'beta' ? 'apack-beta' : env === 'preview' ? 'apack-preview' : 'apack',
   };
 }
@@ -183,8 +177,6 @@ export function getAppVersion(): string {
  */
 export const APP_PROCESS_ENV_VARS = [
   'NODE_ENV',
-  'API_PORT',
-  'APACK_API_TOKEN',
   'APACK_STARTUP_ID',
   'APACK_LOG_DIR',
   'SHIPPED_PACKS_DIR',

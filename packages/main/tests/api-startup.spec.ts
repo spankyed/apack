@@ -21,7 +21,7 @@ function server() {
   const api = new ApiServer() as unknown as {
     startApiServer(): Promise<void>;
     handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void;
-    handleServerReady(port: number): void;
+    handleServerReady(socket?: string): void;
     waitForReady(): Promise<void>;
     launchApiServer(apiPath: string): Promise<void>;
     cleanupOrphanedApiChildren(apiPath: string): Promise<void>;
@@ -61,7 +61,7 @@ it("resolves the window's wait when a launch after a crash becomes ready", async
   await api.startApiServer();
   api.handleProcessExit(1, null);
   await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
-  api.handleServerReady(3000);
+  api.handleServerReady();
   expect(await outcome).toBe('ready');
 });
 

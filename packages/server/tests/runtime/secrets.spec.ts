@@ -38,7 +38,11 @@ process.env.APACK_USER_DATA_DIR = dataDir;
 process.env.APACK_LOG_DIR = logDir;
 const { openAppStore } = await import('../../src/runtime/index.ts');
 const { database: store, engine, packs } = openAppStore();
-const { secretsRouter } = await import('../../src/transport/secrets.ts');
+const { memoryPair } = await import('@apackdev/link');
+const { muxTransport } = await import('@apackdev/host/transport/mux');
+const { createHostControlClient } = await import('@apackdev/host/transport/control-contract');
+const { createHostControlServer } = await import('../../src/transport/control-rpc.ts');
+const { createRuntimeControlDepsFactory } = await import('../../src/transport/tool-server.ts');
 const { rootEvents } = await import('../../src/transport/emitter.ts');
 const { createLogger, reportError } = await import('@apackdev/sdk/logger');
 const { originalConsole, initializeLogCapture, restoreConsole } = await import('../../src/adapters/logging.ts');
@@ -49,7 +53,21 @@ const { _getSecretsFilePath } = await import('@apackdev/sdk/utils');
 const { state } = await import('@apackdev/state');
 
 const KEY = 'sk-proj-SPECKEY1234567890abcdefghij';
-const caller = secretsRouter.createCaller({ client: 'c-test', closed: new AbortController().signal });
+const [clientRaw, serverRaw] = memoryPair();
+const clientMux = muxTransport(clientRaw);
+const serverMux = muxTransport(serverRaw);
+const controlServer = createHostControlServer(serverMux.control, createRuntimeControlDepsFactory('test')('c-test'));
+const controlClient = createHostControlClient(clientMux.control);
+const caller = {
+  list: () => controlClient.call('secrets.list'),
+  add: (input: { provider: import('@apackdev/sdk/services').SecretProvider; label: string; value: string }) =>
+    controlClient.call('secrets.add', input),
+  replaceValue: (input: { id: string; value: string }) => controlClient.call('secrets.replaceValue', input),
+  select: (input: { id: string }) => controlClient.call('secrets.select', input),
+  rename: (input: { id: string; label: string }) => controlClient.call('secrets.rename', input),
+  delete: (input: { id: string }) => controlClient.call('secrets.delete', input),
+  allowUnprotected: () => controlClient.call('secrets.allowUnprotected'),
+};
 // What the API's boot registers; the settings system is registered in the first test, once it checks changes made before
 forwardSecretsChanges(packs);
 // A pack with a settings feature, whose system isn't running yet: a system is sent the event because it declares
@@ -76,6 +94,10 @@ async function incomingDuring(run: () => Promise<unknown> | unknown): Promise<Me
 const CHANGED = { to: 'test/settings', event: { type: 'SECRETS_CHANGED' } };
 
 afterAll(() => {
+  controlClient.dispose();
+  controlServer.dispose();
+  clientMux.close();
+  serverMux.close();
   store.close();
   fs.rmSync(dataDir, { recursive: true, force: true });
   fs.rmSync(logDir, { recursive: true, force: true });

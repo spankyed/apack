@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { test, expect } from '@apackdev/testing';
 
 const root = fileURLToPath(new URL('../../../../../', import.meta.url));
@@ -21,7 +20,7 @@ test.beforeAll(() => {
   expect(fs.existsSync(`${archive}.sha256`)).toBe(true);
 });
 
-if (!restarting) test('an externally built default fork refreshes both windows and survives actual dev reload', async ({ app, appPage, electronApp }) => {
+if (!restarting) test('an externally built default fork refreshes both windows and survives actual dev reload', async ({ app, appPage, electronApp, connection }) => {
   // Replacement and restoration each await their install's outcome, however long it takes on this machine; that,
   // the reload and restoration then await a frontend publication (30s), plus windows/UI (60s). Individual value
   // assertions retain their existing 5s limits.
@@ -84,11 +83,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     await expect(appPage.getByTestId('fork-component')).toBeVisible();
     await expect(second.getByText('Acceptance fork', { exact: true })).toBeVisible();
     const previous = await runtime(appPage);
-    const api = await appPage.evaluate(() => ({ port: (window as any).electronAPI.apiPort, token: (window as any).electronAPI.apiToken }));
-    const response = await fetch(`http://127.0.0.1:${api.port}/dev/reload`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: api.token }, body: JSON.stringify({ packId: 'default-setup' }),
-    });
-    expect(response.status, await response.text()).toBe(200);
+    await connection.reloadPack('default-setup');
     await Promise.all([waitForReplacement(appPage, previous), waitForReplacement(second, previous)]);
     await expect.poll(() => label(appPage)).toBe('Fork Notes');
     await expect.poll(() => label(second)).toBe('Fork Notes');

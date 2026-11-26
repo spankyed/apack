@@ -87,8 +87,8 @@ test('backup import restores all settings owners and updates an open window', as
       if (process.env.DEBUG_E2E === 'sample' && process.platform === 'darwin') {
         try {
           const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'));
-          const { apiPortFile } = resolveAppEnvironment({ env: 'test', userDataDir });
-          const { pid } = JSON.parse(fs.readFileSync(apiPortFile, 'utf8'));
+          const { appDir } = resolveAppEnvironment({ env: 'test', userDataDir });
+          const { pid } = JSON.parse(fs.readFileSync(path.join(appDir, 'api-runtime.json'), 'utf8'));
           const parent = Number(execFileSync('/bin/ps', ['-p', String(pid), '-o', 'ppid='], { encoding: 'utf8' }));
           if (parent !== electronApp.process().pid) throw new Error('The recorded API is not this fixture’s child');
           const sample = test.info().outputPath('backup-api.sample.txt');

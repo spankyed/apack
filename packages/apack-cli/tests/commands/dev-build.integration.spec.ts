@@ -16,9 +16,9 @@ vi.mock('../../src/app/pack-host', async importOriginal => ({
   cliDirs: () => ({ cache: path.join(fixture.root, 'cache'), data: path.join(fixture.root, 'data') }),
   resolvePackHost: () => ({ kind: 'packaged', executable: path.join(fixture.root, 'apack Beta.app/Contents/MacOS/apack Beta'), version: '0.4.0' }),
 }));
-vi.mock('@apackdev/host/process-liveness', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/host/process-liveness')>(),
-  readApiEndpoint: () => ({ port: 1234, pid: process.pid }),
+vi.mock('@apackdev/host/transport/tool-client', async importOriginal => ({
+  ...await importOriginal<typeof import('@apackdev/host/transport/tool-client')>(),
+  readApiRuntime: () => ({ pid: process.pid }),
 }));
 vi.mock('../../src/commands/build', () => ({
   build: vi.fn(() => { throw new Error('Supervisor retained its old compiler'); }),

@@ -117,7 +117,7 @@ describe('findJsSpecifiers', () => {
 
 /** Code none of the pack rules flag: comments, string text and the allowed imports */
 const ALLOWED = [
-  "// import { untypedBroadcast } from '@apackdev/sdk/events'; _rootEvents; trpc.bus; console.log('x')",
+  "// import { untypedBroadcast } from '@apackdev/sdk/events'; _rootEvents; electronAPI.backendPort; console.log('x')",
   "/* import * as events from '@apackdev/sdk/events'; console.log('x') */",
   "const url = 'https://console.anthropic.com/settings/keys';",
   "const prompt = `_rootEvents.emitOutgoing(event); console.log(ev.type)`;",
@@ -126,7 +126,7 @@ const ALLOWED = [
   "import { emit as emitEvent } from 'xstate';",
   "import * as ears from '@elmdb/ears';",
   "import { x } from '@apackdev/sdk/rpcx';",
-  'const { busId } = trpc; trpc.buses.list();',
+  'const { backendPortId } = electronAPI; electronAPI.other.list();',
   "logger.info('saved');",
 ].join('\n');
 
@@ -189,11 +189,12 @@ describe('findRawPackHelpers', () => {
 
 describe('findRawTransport', () => {
   it.each([
-    ["import { trpc } from '@apackdev/sdk/rpc';", '@apackdev/sdk/rpc'],
+    ["import { link } from '@apackdev/sdk/rpc';", '@apackdev/sdk/rpc'],
     ["const rpc = await import('@apackdev/sdk/rpc/client');", '@apackdev/sdk/rpc/client'],
+    ["import { dial } from '@apackdev/link';", '@apackdev/link'],
     ['_rootEvents.emitOutgoing(event);', '_rootEvents'],
-    ["trpc.bus.send.mutate({ systemId: 'notes', type: 'GET_NOTES' });", 'trpc.bus'],
-    ['trpc?.bus.send.mutate(event);', 'trpc.bus'],
+    ['window.electronAPI.backendPort.connect(() => {});', 'electronAPI.backendPort'],
+    ['electronAPI?.backendPort.connect(() => {});', 'electronAPI.backendPort'],
   ])('flags %s', (code, problem) => {
     write('pack/feature.ts', code);
     expect(findRawTransport(['src/pack'], root)).toEqual([`src/pack/feature.ts:1: ${problem}`]);

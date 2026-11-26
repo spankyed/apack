@@ -90,7 +90,7 @@ describe('a live app on an environment row', () => {
     const appDir = _appDirOf(dir);
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(appDir, 'host.json'), JSON.stringify({ version: '0.3.14' }));
-    fs.writeFileSync(path.join(appDir, 'api-port'), JSON.stringify({ port: 3001, pid }));
+    fs.writeFileSync(path.join(appDir, 'api-runtime.json'), JSON.stringify({ pid }));
     publishSession({ host: { kind: 'source', root: process.cwd() }, env: 'development', debugPort: 51873, dataDir: dir, supervisorPid: pid, startedBy });
   };
 
@@ -126,7 +126,7 @@ describe('a live app on an environment row', () => {
     const appDir = _appDirOf(dir);
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(appDir, 'host.json'), JSON.stringify({ version: '0.3.14' }));
-    fs.writeFileSync(path.join(appDir, 'api-port'), JSON.stringify({ port: 3001, pid: process.pid }));
+    fs.writeFileSync(path.join(appDir, 'api-runtime.json'), JSON.stringify({ pid: process.pid }));
 
     list(dirs, { sizes: false, all: false, resolve, bytes });
 
@@ -289,7 +289,7 @@ describe('trim', () => {
    */
   it('skips a dir an app is running on, and says so', () => {
     const dir = dataDir('development');
-    fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port: 3001, pid: process.pid }));
+    fs.writeFileSync(path.join(_appDirOf(dir), 'api-runtime.json'), JSON.stringify({ pid: process.pid }));
 
     trim(dirs, ['development'], { resolve, bytes: () => 1024 });
 

@@ -227,6 +227,7 @@ export async function askAttached<T>(
   fs.mkdirSync(screenshotDir, { recursive: true });
   const attached = await attachedSession({
     debugPort: app.session.debugPort,
+    dataDir: app.session.dataDir,
     screenshotDir,
     ...(app.logPath !== undefined ? { logPath: app.logPath } : {}),
   });

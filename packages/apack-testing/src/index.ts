@@ -577,17 +577,9 @@ function apiPidOf(app: ElectronApplication): number | undefined {
   return userDataDir === undefined ? undefined : apiPidIn(userDataDir);
 }
 
-/** The same, read from the data dir an app runs on; where that file sits does not depend on the environment */
+/** The pid of the API serving `userDataDir`, read from `apack/api-runtime.json`. */
 function apiPidIn(userDataDir: string): number | undefined {
-  const runtime = readApiRuntimeIn(userDataDir);
-  if (runtime !== undefined) return runtime.pid;
-  const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
-  try { return (JSON.parse(fs.readFileSync(endpointFile, 'utf8')) as { pid?: number }).pid; }
-  catch (error) {
-    // No file is no API yet (or one that has exited); a file that cannot be read is a fault worth hearing about
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw error;
-  }
+  return readApiRuntimeIn(userDataDir)?.pid;
 }
 
 const ERROR_LINE = /error|exception|failed|cannot|not found|no machine export/i;
@@ -1078,8 +1070,12 @@ export function createTest(options: CreateTestOptions = {}) {
     },
 
     // Opened only for a test that names it, and closed after it, so its claim on `HOST.e2eConnection` ends with it
-    connection: async ({ appPage: page, electronApp }, use) => {
-      const connection = await connectToApp(page, { resolve: resolveFeature, appPid: electronApp.process().pid });
+    connection: async ({ appPage: _page, electronApp }, use) => {
+      const userDataDir = userDataDirs.get(electronApp);
+      if (userDataDir === undefined) {
+        throw new Error('The test fixture has no userDataDir recorded for this Electron app.');
+      }
+      const connection = await connectToApp(userDataDir, { resolve: resolveFeature, appPid: electronApp.process().pid });
       try {
         await use(connection);
       } finally {
