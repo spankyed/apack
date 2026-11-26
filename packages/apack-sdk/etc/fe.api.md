@@ -904,7 +904,7 @@ export interface Surface {
     canvas?: Component | RouteComponents;
     // (undocumented)
     chat?: Component;
-    chrome?: SurfaceChrome<any>;
+    chrome?: SurfaceChrome<never>;
     fallbackPanel?: {
         label: string;
         isShown: (state: {

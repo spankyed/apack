@@ -2,7 +2,7 @@
 // `contextMenu`) or a `@apackdev/state` surface's `chrome` table each time its state changes, by a child actor
 // that follows whichever surface is open.
 import { fromCallback, type AnyActorRef, type AnyMachineSnapshot } from 'xstate';
-import type { BreadcrumbItem, ContextMenuItem, ContextMenuMeta } from '@apackdev/sdk/fe';
+import type { BreadcrumbItem, ContextMenuItem, ContextMenuMeta, SurfaceChrome } from '@apackdev/sdk/fe';
 import { splitRef } from '@apackdev/sdk/ids';
 import type { StateSurfaceMeta } from '../../../fe/state-bridge.ts';
 import { HOST } from '../../../refs.ts';
@@ -30,7 +30,7 @@ export function computeCrumbs(state: AnyMachineSnapshot): UpdateData {
   const stateSurface = (state as { _stateSurface?: StateSurfaceMeta })._stateSurface;
   if (stateSurface || !Array.isArray(state._nodes)) {
     const at = typeof state.value === 'string' && state.value !== '' ? state.value : undefined;
-    const computed = computeTrail(stateSurface?.chrome, { ...(at !== undefined ? { at } : {}), data: state.context });
+    const computed = computeTrail(stateSurface?.chrome as SurfaceChrome | undefined, { ...(at !== undefined ? { at } : {}), data: state.context });
     const fallbackLabel = stateSurface
       ? capitalizeFirstLetter(splitRef(stateSurface.id)?.featureId ?? stateSurface.id)
       : '';
