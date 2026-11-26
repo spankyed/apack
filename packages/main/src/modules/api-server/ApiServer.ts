@@ -93,6 +93,7 @@ export class ApiServer implements AppModule {
 
     // Direct MessagePort handoff between app windows and the API UtilityProcess
     ipcMain.on(API_PORT_CHANNELS.REQUEST, (event) => { this.portBroker.handleRequest(event); });
+    ipcMain.on(API_PORT_CHANNELS.RELEASE, (event) => { this.portBroker.handleRelease(event); });
 
     // Let renderer query current API status on startup (avoids IPC race condition)
     ipcMain.handle('api:get-status', () => ({

@@ -68,6 +68,10 @@ function fakeWindow(id: number) {
       emitter.once(event, listener);
       return contents;
     },
+    removeListener(event, listener) {
+      emitter.removeListener(event, listener);
+      return contents;
+    },
   };
 
   return {
@@ -113,7 +117,15 @@ describe('PortBroker', () => {
     expect(broker.handleRequest({ sender: appWin.contents as never, senderFrame: { frameId: 999 } as never })).toBe(false);
     expect(broker.windowCount()).toBe(0);
 
+    // Null/navigating senderFrame or null mainFrame → rejected (even if both are null)
+    expect(broker.handleRequest({ sender: appWin.contents as never, senderFrame: null as never })).toBe(false);
+    const nullFrameWin = { ...appWin.contents, mainFrame: null };
+    BrowserWindow.current = { webContents: nullFrameWin };
+    expect(broker.handleRequest({ sender: nullFrameWin as never, senderFrame: null as never })).toBe(false);
+    expect(broker.windowCount()).toBe(0);
+
     // Matching BrowserWindow and mainFrame → accepted
+    BrowserWindow.current = { webContents: appWin.contents };
     expect(broker.handleRequest({ sender: appWin.contents as never, senderFrame: appWin.mainFrame as never })).toBe(true);
     expect(broker.windowCount()).toBe(1);
   });
@@ -205,5 +217,30 @@ describe('PortBroker', () => {
     expect(broker.requestPort(win.contents)).toBe(false);
     expect(created[1]!.port1.closed).toBe(false);
     expect(created[1]!.port2.closed).toBe(true);
+  });
+
+  it('unregisters windows on api:release-port so later backend restarts do not mint stranded channels', () => {
+    const { createChannel, created } = fakeChannelFactory();
+    const broker = new PortBroker<FakePort>({ createChannel });
+    const win = fakeWindow(11);
+    const be1 = fakeBackend();
+    const be2 = fakeBackend();
+    BrowserWindow.current = { webContents: win.contents };
+
+    broker.onBackendReady(be1.backend);
+    expect(broker.handleRequest({ sender: win.contents as never, senderFrame: win.mainFrame as never })).toBe(true);
+    expect(broker.windowCount()).toBe(1);
+    expect(win.listenerCount('destroyed')).toBe(1);
+    expect(created).toHaveLength(1);
+
+    expect(broker.handleRelease({ sender: win.contents as never, senderFrame: win.mainFrame as never })).toBe(true);
+    expect(broker.windowCount()).toBe(0);
+    expect(win.listenerCount('destroyed')).toBe(0);
+    expect(win.listenerCount('render-process-gone')).toBe(0);
+
+    broker.onBackendStopped();
+    broker.onBackendReady(be2.backend);
+    expect(be2.posted).toEqual([]);
+    expect(created).toHaveLength(1);
   });
 });

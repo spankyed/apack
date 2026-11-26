@@ -26,25 +26,32 @@ export interface PortWebContents<P extends BrokerMessagePort = MessagePortMain> 
   postMessage(channel: string, message: unknown, transfer?: P[]): void;
   send(channel: string, ...args: unknown[]): void;
   once(event: 'destroyed' | 'render-process-gone', listener: () => void): unknown;
+  removeListener?(event: 'destroyed' | 'render-process-gone', listener: () => void): unknown;
 }
 
 export interface PortBrokerOptions<P extends BrokerMessagePort = MessagePortMain> {
   /** Creates a paired channel; defaults to Electron's `new MessageChannelMain()`. */
   createChannel?: () => BrokerMessageChannel<P>;
   /**
-   * Authorizes an `api:request-port` sender. Defaults to allowing only the top-level main frame of an app
-   * `BrowserWindow` (`win.webContents === event.sender`), rejecting subframes and `<WebContentsView>` tabs.
+   * Authorizes an `api:request-port` / `api:release-port` sender. Defaults to allowing only the top-level main
+   * frame of an app `BrowserWindow` (`win.webContents === event.sender`), rejecting null/navigating frames,
+   * subframes, and `<WebContentsView>` tabs.
    */
   isAuthorized?: (sender: PortWebContents<P>, senderFrame: unknown) => boolean;
 }
 
 function defaultIsAuthorized(sender: PortWebContents<MessagePortMain>, senderFrame: unknown): boolean {
   if (sender.isDestroyed()) return false;
-  if (senderFrame !== undefined && sender.mainFrame !== undefined && senderFrame !== sender.mainFrame) {
+  if (!senderFrame || !sender.mainFrame || senderFrame !== sender.mainFrame) {
     return false;
   }
   const win = BrowserWindow.fromWebContents(sender as unknown as Electron.WebContents);
   return win !== null && (win as unknown as { webContents?: unknown }).webContents === sender;
+}
+
+interface TrackedWindow<P extends BrokerMessagePort> {
+  readonly sender: PortWebContents<P>;
+  readonly release: () => void;
 }
 
 /**
@@ -58,7 +65,7 @@ function defaultIsAuthorized(sender: PortWebContents<MessagePortMain>, senderFra
 export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
   private readonly createChannel: () => BrokerMessageChannel<P>;
   private readonly isAuthorized: (sender: PortWebContents<P>, senderFrame: unknown) => boolean;
-  private readonly windows = new Map<number, PortWebContents<P>>();
+  private readonly windows = new Map<number, TrackedWindow<P>>();
   private backend?: PortBackend<P>;
   private generation = 0;
 
@@ -77,17 +84,26 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
     return this.requestPort(sender);
   }
 
+  /** Handles an `ipcMain.on('api:release-port')` event when a window unsubscribes from backend ports. */
+  handleRelease(event: Pick<IpcMainEvent, 'sender' | 'senderFrame'>): boolean {
+    const sender = event.sender as unknown as PortWebContents<P>;
+    if (!this.isAuthorized(sender, event.senderFrame)) return false;
+    return this.releasePort(sender);
+  }
+
   /** Registers an authorized window and hands it a direct backend port immediately if the backend is ready. */
   requestPort(sender: PortWebContents<P>): boolean {
     if (sender.isDestroyed()) return false;
-    const isNew = !this.windows.has(sender.id);
-    this.windows.set(sender.id, sender);
-    if (isNew) {
+    const existing = this.windows.get(sender.id);
+    if (!existing || existing.sender !== sender) {
+      if (existing) this.detachWindow(sender.id, existing);
       const release = () => {
-        if (this.windows.get(sender.id) === sender) {
-          this.windows.delete(sender.id);
+        const current = this.windows.get(sender.id);
+        if (current?.sender === sender) {
+          this.detachWindow(sender.id, current);
         }
       };
+      this.windows.set(sender.id, { sender, release });
       sender.once('destroyed', release);
       sender.once('render-process-gone', release);
     }
@@ -97,17 +113,25 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
     return true;
   }
 
+  /** Unregisters a window so future backend restarts do not mint stranded ports for it. */
+  releasePort(sender: PortWebContents<P>): boolean {
+    const tracked = this.windows.get(sender.id);
+    if (!tracked || tracked.sender !== sender) return false;
+    this.detachWindow(sender.id, tracked);
+    return true;
+  }
+
   /** Marks the backend ready and hands a fresh channel to every currently registered live window. */
   onBackendReady(backend: PortBackend<P>): number {
     this.backend = backend;
     this.generation += 1;
     const generation = this.generation;
-    for (const [id, sender] of Array.from(this.windows)) {
-      if (sender.isDestroyed()) {
-        this.windows.delete(id);
+    for (const [id, tracked] of Array.from(this.windows)) {
+      if (tracked.sender.isDestroyed()) {
+        this.detachWindow(id, tracked);
         continue;
       }
-      this.handoff(sender, backend, generation);
+      this.handoff(tracked.sender, backend, generation);
     }
     return generation;
   }
@@ -122,15 +146,15 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
     if (!this.backend) return;
     const closedGeneration = this.generation;
     this.backend = undefined;
-    for (const [id, sender] of Array.from(this.windows)) {
-      if (sender.isDestroyed()) {
-        this.windows.delete(id);
+    for (const [id, tracked] of Array.from(this.windows)) {
+      if (tracked.sender.isDestroyed()) {
+        this.detachWindow(id, tracked);
         continue;
       }
       try {
-        sender.send(API_PORT_CHANNELS.CLOSED, { generation: closedGeneration });
+        tracked.sender.send(API_PORT_CHANNELS.CLOSED, { generation: closedGeneration });
       } catch {
-        this.windows.delete(id);
+        this.detachWindow(id, tracked);
       }
     }
   }
@@ -143,6 +167,12 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
   /** Number of live registered windows currently tracked by this broker. */
   windowCount(): number {
     return this.windows.size;
+  }
+
+  private detachWindow(id: number, tracked: TrackedWindow<P>): void {
+    this.windows.delete(id);
+    try { tracked.sender.removeListener?.('destroyed', tracked.release); } catch { /* already destroyed */ }
+    try { tracked.sender.removeListener?.('render-process-gone', tracked.release); } catch { /* already destroyed */ }
   }
 
   private handoff(sender: PortWebContents<P>, backend: PortBackend<P>, generation: number): boolean {
@@ -159,7 +189,10 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
         try { port1.close(); } catch { /* already closed */ }
       }
       try { port2.close(); } catch { /* already closed */ }
-      if (sender.isDestroyed()) this.windows.delete(sender.id);
+      if (sender.isDestroyed()) {
+        const tracked = this.windows.get(sender.id);
+        if (tracked?.sender === sender) this.detachWindow(sender.id, tracked);
+      }
       return false;
     }
   }

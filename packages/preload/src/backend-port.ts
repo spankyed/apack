@@ -1,6 +1,7 @@
 import type { _BackendPortTransport, _HostBridge } from '@apackdev/sdk/fe';
 
 const CHANNEL_REQUEST = 'api:request-port';
+const CHANNEL_RELEASE = 'api:release-port';
 const CHANNEL_PORT = 'api:port';
 const CHANNEL_CLOSED = 'api:port-closed';
 
@@ -148,10 +149,13 @@ export function createBackendPortBridge(
   ipc: BackendPortIpc,
   pageTarget?: PageHideTarget,
 ): _HostBridge['backendPort'] {
+  let activeSubscribers = 0;
+
   return {
     connect(onPort) {
       let unsubscribed = false;
       let active: { generation: number; transport: _BackendPortTransport; closeFromHost: () => void } | undefined;
+      activeSubscribers += 1;
 
       const handlePort = (event: BackendPortIpcEvent, data?: unknown): void => {
         const incoming = event.ports?.[0];
@@ -163,6 +167,10 @@ export function createBackendPortBridge(
         const generation = typeof (data as { generation?: unknown } | undefined)?.generation === 'number'
           ? (data as { generation: number }).generation
           : 0;
+        if (active && generation < active.generation) {
+          try { incoming.close(); } catch { /* already closed */ }
+          return;
+        }
         const previous = active;
         active = undefined;
         previous?.closeFromHost();
@@ -194,12 +202,16 @@ export function createBackendPortBridge(
       return () => {
         if (unsubscribed) return;
         unsubscribed = true;
+        activeSubscribers = Math.max(0, activeSubscribers - 1);
         ipc.removeListener(CHANNEL_PORT, handlePort);
         ipc.removeListener(CHANNEL_CLOSED, handlePortClosed);
         pageTarget?.removeEventListener('pagehide', handlePageHide);
         const current = active;
         active = undefined;
         current?.transport.close();
+        if (activeSubscribers === 0) {
+          ipc.send(CHANNEL_RELEASE);
+        }
       };
     },
   };

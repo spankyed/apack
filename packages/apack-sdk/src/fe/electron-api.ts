@@ -202,10 +202,12 @@ export interface _HostBridge {
 /**
  * The bridge as pack code sees it, which is what `window.electronAPI` is declared as.
  *
- * The two omissions are the whole difference, and the `Omit`s are the only place they are written — a
+ * The omissions are the whole difference, and the `Omit`s are the only place they are written — a
  * parallel list of member names beside them would be the same declaration twice:
  *
  * - **`apiToken`**, the token the API requires for this app run. The renderer's client is its one reader.
+ * - **`performance`**, the renderer performance profiler controls. Host-only.
+ * - **`backendPort`**, the direct window ↔ API `UtilityProcess` `MessagePort` bridge. Host-only.
  * - **`apiStatus.openLogFile`**, which opens the app's own log file; the error page is its one caller.
  *
  * **Leaving a member out does not hide it**, and that is worth being plain about rather than implying a

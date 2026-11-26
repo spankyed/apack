@@ -127,6 +127,10 @@ describe('backendPort preload bridge', () => {
     unsubscribe();
     expect(h.listenerCount()).toBe(0);
     expect(h.pageHideCount()).toBe(0);
+    expect(h.sent).toEqual([
+      { channel: 'api:request-port', args: [] },
+      { channel: 'api:release-port', args: [] },
+    ]);
   });
 
   it('sends text/bytes, closes cleanly with null EOF on local close, and closes without EOF on api:port-closed', () => {
@@ -202,5 +206,30 @@ describe('backendPort preload bridge', () => {
     expect(p2.posted).toEqual([null]);
 
     unsubscribe();
+  });
+
+  it('ignores and closes out-of-order stale generations and releases main only when the last subscriber unsubscribes', () => {
+    const h = fakeHarness();
+    const bridge = createBackendPortBridge(h.ipc, h.pageTarget);
+    const seen: number[] = [];
+    const unsub1 = bridge.connect((_transport, info) => seen.push(info.generation));
+    const unsub2 = bridge.connect(() => {});
+
+    const p2 = fakeDomPort();
+    const staleP1 = fakeDomPort();
+    h.emitIpc('api:port', { ports: [p2.port] }, { generation: 2 });
+    h.emitIpc('api:port', { ports: [staleP1.port] }, { generation: 1 });
+
+    expect(seen).toEqual([2]);
+    expect(p2.isClosed()).toBe(false);
+    expect(staleP1.isClosed()).toBe(true);
+
+    // Unsubscribing one of two subscribers does not release main yet
+    unsub1();
+    expect(h.sent.filter((s) => s.channel === 'api:release-port')).toHaveLength(0);
+
+    // Unsubscribing the last subscriber notifies main to stop brokering ports
+    unsub2();
+    expect(h.sent.filter((s) => s.channel === 'api:release-port')).toHaveLength(1);
   });
 });
