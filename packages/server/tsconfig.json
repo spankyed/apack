@@ -6,6 +6,7 @@
     "rewriteRelativeImportExtensions": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "rootDir": "src",
     "outDir": "dist",
     // tsup bundles the server as ESM
     "moduleResolution": "bundler",

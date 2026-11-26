@@ -22,5 +22,5 @@ export function useDslDeclarations(): ComputedRef<readonly DslCatalogEntry[]> {
   if (!getCurrentScope()) throw new Error('useDslDeclarations requires an active Vue effect scope');
   const revision = shallowRef(0);
   onScopeDispose(onDslDeclarationsChanged(() => { revision.value++; }));
-  return computed(() => { revision.value; return getDslDeclarations(); });
+  return computed(() => { void revision.value; return getDslDeclarations(); });
 }

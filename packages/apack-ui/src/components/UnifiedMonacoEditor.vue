@@ -150,13 +150,13 @@ const configureFile = (filePath = props.filePath || '') => {
 const resolvedLanguage = computed(() => {
   if (props.language) return props.language
   if (props.dslType) return 'typescript'
-  if (props.filePath) { dslDeclarations.value; return getLanguageFromPath(props.filePath) }
+  if (props.filePath) { void dslDeclarations.value; return getLanguageFromPath(props.filePath) }
   return 'typescript'
 })
 
 const resolvedDslType = computed(() => {
   if (props.dslType) return props.dslType
-  if (props.filePath) { dslDeclarations.value; return getDslTypeFromPath(props.filePath) }
+  if (props.filePath) { void dslDeclarations.value; return getDslTypeFromPath(props.filePath) }
   return null
 })
 

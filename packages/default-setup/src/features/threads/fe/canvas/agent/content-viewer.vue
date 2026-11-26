@@ -55,7 +55,7 @@ const selectedArtifact = computed(() =>
 const declarations = useArtifactDeclarations();
 
 function getArtifactComponent(type: string) {
-  declarations.value;
+  void declarations.value;
   return getArtifactBinding(type)?.binding.fe?.component || TextArtifact;
 }
 </script>

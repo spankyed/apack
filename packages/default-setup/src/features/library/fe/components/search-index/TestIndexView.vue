@@ -276,7 +276,8 @@ const cancel = () => send({ type: 'CANCEL_TEST_SEARCH' })
 const getChunkId = (result: IndexSearchResult, index: number): string => `${result.documentId}-${index}`
 
 const toggleExpansion = (set: Set<string>, id: string) => {
-  set.has(id) ? set.delete(id) : set.add(id)
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
 }
 
 const toggleChunkExpansion = (result: IndexSearchResult, index: number) =>

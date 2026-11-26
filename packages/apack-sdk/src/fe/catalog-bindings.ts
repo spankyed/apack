@@ -38,5 +38,5 @@ export function useFrontendDeclarations<T>(name: string, read: () => T): Compute
   if (!getCurrentScope()) throw new Error(`${name} requires an active Vue effect scope`);
   const revision = shallowRef(0);
   onScopeDispose(onFrontendCatalogChanged(() => { revision.value++; }));
-  return computed(() => { revision.value; return read(); });
+  return computed(() => { void revision.value; return read(); });
 }

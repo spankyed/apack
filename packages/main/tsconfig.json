@@ -5,6 +5,7 @@
     // instead of reparsing, and `dep-files.integration.spec.ts` reads it to hold this leg's declared scope
     // to what the compiler reported reading.
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/main.tsbuildinfo",
+    "noEmit": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "sourceMap": false,
