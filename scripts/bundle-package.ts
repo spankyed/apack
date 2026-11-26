@@ -118,14 +118,26 @@ if (!config) throw new Error(`No bundle config for ${pkg.name}`);
 const outDir = path.join(pkgDir, 'dist', 'package');
 /** Built here and renamed over `dist/package` at the end; `scripts/build-package.ts` says why */
 const stagedDir = path.join(pkgDir, '.temp', 'build');
-const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot, 'package.json')).resolve(`${name}/package.json`);
+const workspaceManifestFile = (name: string): string => {
+  try {
+    return createRequire(path.join(repoRoot, 'package.json')).resolve(`${name}/package.json`);
+  } catch {
+    const direct = path.join(repoRoot, 'node_modules', ...name.split('/'), 'package.json');
+    if (fs.existsSync(direct)) return direct;
+    throw new Error(`Cannot locate package.json for ${name}`);
+  }
+};
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
 /**
- * What the shared-instance packages take from another of our repositories (EARS, from elmdb's release,
- * `lib/external-packages.mjs`): inlined with them, as the build it was made from, since no registry holds it
+ * What the shared-instance packages and private host transport take from another of our repositories
+ * (EARS from elmdb's release, `@apackdev/link` from apack-link's release, `lib/external-packages.mjs`):
+ * inlined with them, as the build it was made from, since no registry holds them
  */
-const FROM_RELEASES = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => repositoryOf(name) !== undefined));
+const FROM_RELEASES = [...new Set([
+  ...sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => repositoryOf(name) !== undefined)),
+  '@apackdev/link',
+])];
 const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...FROM_RELEASES].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const PRIVATE_INLINED = [
   ['@apackdev/host', 'apack-host'],

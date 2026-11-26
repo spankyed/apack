@@ -1,8 +1,15 @@
 import * as fs from 'node:fs';
-import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ControlRpcError, createControlServer, muxTransport } from '@apackdev/host/transport/mux';
+import type { HostControlContract } from '@apackdev/host/transport/control-contract';
+import { toolSocketTransport } from '@apackdev/host/transport/tool-client';
+import {
+  startToolSocketServer,
+  writeApiRuntimeFile,
+  type ToolSocketServer,
+} from '@apackdev/host/transport/tool-socket';
 
 const installPackFromLocal = vi.fn(async () => ({ dir: '/installed', missingDependencies: [] }));
 vi.mock('@apackdev/host/packs', async (importOriginal) => ({
@@ -11,16 +18,24 @@ vi.mock('@apackdev/host/packs', async (importOriginal) => ({
 }));
 
 let userDataDir: string;
+let appDir: string;
 vi.mock('@apackdev/sdk/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@apackdev/sdk/env')>()),
   resolveAppEnvironment: () => ({
-    env: 'development', userDataDir, packsDir: path.join(userDataDir, 'packs'), installedPacksFile: path.join(userDataDir, 'installed-packs.json'),
-    apiPortFile: path.join(userDataDir, 'api-port'), apiTokenFile: path.join(userDataDir, 'api-token'),
+    env: 'development',
+    userDataDir,
+    appDir,
+    packsDir: path.join(userDataDir, 'packs'),
+    installedPacksFile: path.join(userDataDir, 'installed-packs.json'),
+    apiPortFile: path.join(appDir, 'api-port'),
+    apiTokenFile: path.join(appDir, 'api-token'),
   }),
 }));
 
 beforeEach(() => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-install-'));
+  appDir = path.join(userDataDir, 'apack');
+  fs.mkdirSync(appDir, { recursive: true });
   installPackFromLocal.mockClear();
 });
 afterEach(() => {
@@ -53,71 +68,97 @@ describe('apack pack dev', () => {
 });
 
 describe('apack pack dev reloads', () => {
-  /** A stand-in for the dev app's API, recording each reload request */
-  async function fakeApi(status: number): Promise<{ port: number; requests: Array<{ url?: string; token?: string | string[]; body: string }>; close: () => void }> {
-    const requests: Array<{ url?: string; token?: string | string[]; body: string }> = [];
-    const server = http.createServer((req, res) => {
-      let body = '';
-      req.on('data', (chunk) => { body += chunk; });
-      req.on('end', () => {
-        requests.push({ url: req.url, token: req.headers['x-apack-api-token'], body });
-        res.writeHead(status).end();
-      });
+  const activeServers: ToolSocketServer[] = [];
+
+  afterEach(async () => {
+    for (const server of activeServers.splice(0)) {
+      await server.close();
+    }
+  });
+
+  /** A stand-in for the dev app's tool socket + Control RPC server, recording each dev call. */
+  async function fakeToolApi(options: {
+    token?: string;
+    refuseReload?: ControlRpcError;
+  } = {}): Promise<{
+    server: ToolSocketServer;
+    calls: Array<{ method: 'dev.reload' | 'dev.install'; input: unknown }>;
+  }> {
+    const calls: Array<{ method: 'dev.reload' | 'dev.install'; input: unknown }> = [];
+    const server = await startToolSocketServer({
+      appDir,
+      token: options.token ?? 'the-dev-token',
+      onConnection: (socket, initialBytes) => {
+        const mux = muxTransport(toolSocketTransport(socket, initialBytes));
+        createControlServer<{
+          readonly requests: Pick<HostControlContract['requests'], 'dev.reload' | 'dev.install'>;
+        }>(mux.control, {
+          requests: {
+            'dev.reload': (input) => {
+              calls.push({ method: 'dev.reload', input });
+              if (options.refuseReload) throw options.refuseReload;
+              return { ok: true };
+            },
+            'dev.install': (input) => {
+              calls.push({ method: 'dev.install', input });
+              return { ok: true };
+            },
+          },
+        });
+      },
     });
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-    return { port: (server.address() as { port: number }).port, requests, close: () => server.close() };
+    activeServers.push(server);
+    return { server, calls };
   }
 
-  it("send the pack id with the token from the dev app's token file", async () => {
-    const { API_TOKEN_HEADER } = await import('@apackdev/sdk/utils/pure');
-    expect(API_TOKEN_HEADER).toBe('x-apack-api-token');
-    const api = await fakeApi(200);
-    try {
-      fs.writeFileSync(path.join(userDataDir, 'api-port'), JSON.stringify({ port: api.port, pid: process.pid }));
-      fs.writeFileSync(path.join(userDataDir, 'api-token'), 'the-dev-token\n');
-      const { reloadPack } = await import('../../src/app/app-api.ts');
-
-      expect(await reloadPack('my-pack')).toEqual({ status: 'delivered' });
-      expect(api.requests).toEqual([{ url: '/dev/reload', token: 'the-dev-token', body: JSON.stringify({ packId: 'my-pack' }) }]);
-    } finally {
-      api.close();
-    }
-  });
-
-  it('ask the app to install the build at the pack\'s absolute root, which the app copies and starts itself', async () => {
-    const api = await fakeApi(200);
-    try {
-      fs.writeFileSync(path.join(userDataDir, 'api-port'), JSON.stringify({ port: api.port, pid: process.pid }));
-      fs.writeFileSync(path.join(userDataDir, 'api-token'), 'the-dev-token');
-      const { installPackInApp } = await import('../../src/app/app-api.ts');
-
-      expect(await installPackInApp('relative/pack')).toEqual({ status: 'delivered' });
-      expect(api.requests).toEqual([{ url: '/dev/install', token: 'the-dev-token', body: JSON.stringify({ root: path.resolve('relative/pack') }) }]);
-    } finally {
-      api.close();
-    }
-  });
-
-  // Each of these needs something different of the author — start the app, read its logs, look at what
-  // holds the port — so the status alone was not enough to act on
-  it('report a refused reload, a missing port or token file, and an app that no longer answers, and say which', async () => {
+  it('sends dev.reload over the authenticated local tool socket discovered via api-runtime.json', async () => {
+    const api = await fakeToolApi();
     const { reloadPack } = await import('../../src/app/app-api.ts');
-    expect(await reloadPack('my-pack')).toMatchObject({ status: 'not-running', detail: expect.stringContaining('api-port') });
 
-    const api = await fakeApi(403);
-    fs.writeFileSync(path.join(userDataDir, 'api-port'), JSON.stringify({ port: api.port, pid: process.pid }));
-    expect(await reloadPack('my-pack'), 'no token file')
-      .toMatchObject({ status: 'not-running', detail: expect.stringContaining('api-token') });
-    fs.writeFileSync(path.join(userDataDir, 'api-token'), '\n');
-    expect(await reloadPack('my-pack'), 'an empty token file')
-      .toMatchObject({ status: 'not-running', detail: expect.stringContaining('is empty') });
-    fs.writeFileSync(path.join(userDataDir, 'api-token'), 'the-dev-token');
-    try {
-      expect(await reloadPack('my-pack')).toMatchObject({ status: 'failed', detail: expect.stringContaining('403') });
-    } finally {
-      api.close();
-    }
-    expect(await reloadPack('my-pack')).toMatchObject({ status: 'unreachable', detail: expect.stringContaining(`127.0.0.1:${api.port}`) });
+    expect(await reloadPack('my-pack')).toEqual({ status: 'delivered' });
+    expect(api.calls).toEqual([{ method: 'dev.reload', input: { packId: 'my-pack' } }]);
+  });
+
+  it("asks the app to install the build at the pack's absolute root over Control RPC", async () => {
+    const api = await fakeToolApi();
+    const { installPackInApp } = await import('../../src/app/app-api.ts');
+
+    expect(await installPackInApp('relative/pack')).toEqual({ status: 'delivered' });
+    expect(api.calls).toEqual([{ method: 'dev.install', input: { root: path.resolve('relative/pack') } }]);
+  });
+
+  it('reports a missing runtime file, pid-only runtime, refused RPC, and an unreachable socket cleanly', async () => {
+    const { reloadPack } = await import('../../src/app/app-api.ts');
+
+    expect(await reloadPack('my-pack')).toMatchObject({
+      status: 'not-running',
+      detail: expect.stringContaining('api-runtime.json'),
+    });
+
+    // Production/beta pid-only runtime exposes no local tool socket
+    writeApiRuntimeFile(appDir, { pid: process.pid });
+    expect(await reloadPack('my-pack'), 'pid-only runtime').toMatchObject({
+      status: 'not-running',
+      detail: expect.stringContaining('no local tool socket'),
+    });
+
+    // Refused Control RPC (e.g. FORBIDDEN / CONFLICT)
+    const api = await fakeToolApi({
+      refuseReload: new ControlRpcError('CONFLICT', 'another operation on this pack is in progress'),
+    });
+    const socketPath = api.server.address;
+    expect(await reloadPack('my-pack')).toMatchObject({
+      status: 'failed',
+      detail: expect.stringContaining('CONFLICT'),
+    });
+
+    // Socket closes, but api-runtime.json still points at the dead socket -> unreachable
+    await api.server.close();
+    writeApiRuntimeFile(appDir, { pid: process.pid, socket: socketPath, token: 'the-dev-token' });
+    expect(await reloadPack('my-pack')).toMatchObject({
+      status: 'unreachable',
+      detail: expect.stringContaining(socketPath),
+    });
   });
 });
 

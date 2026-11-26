@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { _appDirOf, type AppEnvironment } from '@apackdev/sdk/env';
 import { lockIsHeld, readApiEndpoint, sameWriter, type WriterRecord } from '../process-liveness.ts';
+import { readApiRuntimeFile } from '../transport/tool-socket.ts';
 
 /** What the app process publishes in the data dir for as long as it runs */
 const APP_LOCK = 'app.lock';
@@ -63,6 +64,12 @@ export function publishRunningApp(userDataDir: string): () => void {
   };
 }
 
+/** The API this data dir's `api-runtime.json` names, while its process is running */
+function liveRuntime(userDataDir: string): RunningApp | null {
+  const runtime = readApiRuntimeFile(_appDirOf(userDataDir));
+  return runtime ? { why: `its API is running (pid ${runtime.pid})`, pid: runtime.pid } : null;
+}
+
 /** The API this data dir's port file names, while its process is running */
 function liveApi(apiPortFile: string): RunningApp | null {
   const endpoint = readApiEndpoint(apiPortFile);
@@ -98,5 +105,5 @@ function liveApp(userDataDir: string): RunningApp | null {
  * process that has exited doesn't count
  */
 export function findRunningApp(context: Pick<AppEnvironment, 'userDataDir' | 'apiPortFile'>): RunningApp | null {
-  return liveApp(context.userDataDir) ?? liveApi(context.apiPortFile);
+  return liveApp(context.userDataDir) ?? liveRuntime(context.userDataDir) ?? liveApi(context.apiPortFile);
 }

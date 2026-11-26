@@ -39,6 +39,7 @@ export class ApiServer implements AppModule {
   private serverReadyResolve?: () => void;
   private serverReadyReject?: (error: Error) => void;
   private actualPort?: number;
+  private actualSocket?: string;
   /** The port the last successful launch used, reused on restart so the renderer's URL stays valid */
   private preferredPort: number = API_CONFIG.DEFAULT_PORT;
   private lastError?: { message: string; stack?: string };
@@ -57,7 +58,7 @@ export class ApiServer implements AppModule {
   constructor() {
     process.env.APACK_STARTUP_ID = this.startupId;
     this.processManager = new ProcessManager({
-      onReady: (port) => this.handleServerReady(port),
+      onReady: (port, socket) => this.handleServerReady(port, socket),
       onExit: (code, signal) => this.handleProcessExit(code, signal),
       onError: (error) => this.handleProcessError(error),
     });
@@ -260,11 +261,12 @@ export class ApiServer implements AppModule {
     this.scheduleRestartResetTimeout();
   }
 
-  private handleServerReady(port: number): void {
+  private handleServerReady(port: number, socket?: string): void {
     this.actualPort = port;
+    this.actualSocket = socket;
     this.preferredPort = port;
     this.lastError = undefined;
-    logInfo(`[MAIN] API server is running on port ${port}`);
+    logInfo(socket ? `[MAIN] API server is running on port ${port} (tool socket: ${socket})` : `[MAIN] API server is running on port ${port}`);
     const activeProcess = this.processManager.getProcess();
     if (activeProcess) this.portBroker.onBackendReady(activeProcess);
     // `reloaded` says the old socket died on purpose, which is what lets the window resubscribe at once
@@ -300,6 +302,7 @@ export class ApiServer implements AppModule {
 
     // Reset state
     this.actualPort = undefined;
+    this.actualSocket = undefined;
 
     // Handle restart
     if (willRestart) {
@@ -381,6 +384,7 @@ export class ApiServer implements AppModule {
     running: boolean;
     pid?: number;
     port?: number;
+    socket?: string;
     restartAttempts: number;
     startupId: string;
     logPath: string;
@@ -391,6 +395,7 @@ export class ApiServer implements AppModule {
       running: this.processManager.isRunning(),
       pid: this.processManager.getPid(),
       port: this.actualPort,
+      ...(this.actualSocket !== undefined ? { socket: this.actualSocket } : {}),
       restartAttempts: this.restartAttempts,
       startupId: this.startupId,
       logPath: getLogger().getLogPath(),

@@ -115,7 +115,14 @@ export function publishApiFiles(port: number, token: string): void {
   } catch {}
 }
 
-export function createWebSocketServer() {
+export interface WebSocketServerOptions {
+  /** Optional local tool socket path published alongside the WebSocket server (dev/test/`APACK_TOOL_SOCKET=1`). */
+  readonly toolSocket?: string;
+  /** Synchronous teardown callback invoked during graceful shutdown and `process.on('exit')`. */
+  readonly onShutdown?: () => void;
+}
+
+export function createWebSocketServer(options: WebSocketServerOptions = {}) {
   const port = SERVER_CONFIG.port;
   const token = apiToken();
 
@@ -134,7 +141,7 @@ export function createWebSocketServer() {
     console.log(message);
 
     publishApiFiles(port, token);
-    notifyServerReady(port);
+    notifyServerReady(port, options.toolSocket);
   });
 
   // Apply tRPC handler
@@ -150,6 +157,9 @@ export function createWebSocketServer() {
 
   // Safety net: always kill terminal processes before the API process exits
   process.on('exit', () => {
+    try {
+      options.onShutdown?.();
+    } catch {}
     appPacks?.runShutdownHooks();
     // Every write committed as it returned; closing syncs what the last group commit hadn't, so the machine failing
     // after exit loses nothing either
@@ -181,6 +191,9 @@ export function createWebSocketServer() {
     //
     // In particular **no terminal is ended here**: a session outlives the API deliberately, and what ends one
     // is the app's hold on the broker closing (`@apackdev/host`'s `holdBrokerSessions`, held by Electron main).
+    try {
+      options.onShutdown?.();
+    } catch {}
     backendActor?.stop();
     handler.broadcastReconnectNotification();
     wss.close();

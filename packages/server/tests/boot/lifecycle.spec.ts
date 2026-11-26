@@ -113,13 +113,18 @@ describe('boot lifecycle bridge', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it('posts structured ready message to parentPort when available and no-ops otherwise', () => {
+  it('posts structured ready message (with optional tool socket) to parentPort when available and no-ops otherwise', () => {
     const withPort = fakeEnv({ withParentPort: true });
-    createLifecycleBridge(withPort.proc).notifyServerReady(3042);
-    expect(withPort.posted).toEqual([{ type: 'ready', port: 3042 }]);
+    const bridge = createLifecycleBridge(withPort.proc);
+    bridge.notifyServerReady(3042);
+    bridge.notifyServerReady(3042, '/tmp/apack-501/api-abcdef0123456789.sock');
+    expect(withPort.posted).toEqual([
+      { type: 'ready', port: 3042 },
+      { type: 'ready', port: 3042, socket: '/tmp/apack-501/api-abcdef0123456789.sock' },
+    ]);
 
     const withoutPort = fakeEnv({ withParentPort: false });
-    expect(() => createLifecycleBridge(withoutPort.proc).notifyServerReady(3042)).not.toThrow();
+    expect(() => createLifecycleBridge(withoutPort.proc).notifyServerReady(3042, '/tmp/a.sock')).not.toThrow();
   });
 
   it('tracks power state as level-triggered, replays suspend on late registration, and deduplicates transitions', () => {

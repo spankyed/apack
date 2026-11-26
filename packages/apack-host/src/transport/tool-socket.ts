@@ -13,8 +13,8 @@ import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
-import { recordIsStale } from '@apackdev/host/process-liveness';
+import { writePrivateRuntimeFile } from '../private-file.ts';
+import { recordIsStale } from '../process-liveness.ts';
 import type { AppEnv } from '@apackdev/sdk/env';
 
 export const API_RUNTIME_FILE_NAME = 'api-runtime.json';
