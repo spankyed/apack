@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createActor } from 'xstate';
+import { system, type Clock } from '@apackdev/state';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { AppGitRepository } from '../../../../../src/features/code/be/services/app-git-repository.ts';
 import { commitSystem } from '../../../../../src/features/code/be/features/commit.ts';
@@ -137,9 +137,29 @@ it('fetches on the commit system with no window asking, and announces what it br
   repo.setFetchConfig(true, 180);
   let announced!: () => void;
   const announcement = new Promise<void>(resolve => { announced = resolve; });
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => announced() } }),
-    { input: { baseDirectory: null, gitRepository: repo } }).start();
-  closing.unshift(() => actor.stop());
+  const clock: Clock = {
+    now: () => Date.now(),
+    after: (ms, fn) => {
+      const timer = setTimeout(fn, ms);
+      return () => clearTimeout(timer);
+    },
+  };
+  const sys = system({ side: 'backend', clock });
+  sys.attach({
+    tell: (_to, event) => {
+      if ((event as { type?: string }).type === 'commit.REPOSITORY_CHANGED') announced();
+    },
+    ask: (_to, _name, _args, _progress, done) => {
+      done({ ok: false, failure: { kind: 'unavailable', message: 'unused' } });
+      return () => {};
+    },
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'unused' });
+      return { stop: () => {} };
+    },
+  });
+  sys.start('default-setup/code/commit', commitSystem, { baseDirectory: null, gitRepository: repo });
+  closing.unshift(() => sys.stop());
 
   await announcement;
 

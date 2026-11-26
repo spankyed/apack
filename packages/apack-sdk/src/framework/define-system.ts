@@ -1,5 +1,5 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
-import type { AnyState, AsksOf, EventsOf } from '@apackdev/state';
+import type { AllStarts, AnyEvent, AnyState, AsksOf, Each, EventsOf, ShapeOf } from '@apackdev/state';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
 import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type IncomingOnlyEventsOf, type NormalizeAsks, type RefuseOf } from '../events/index.ts';
@@ -439,14 +439,35 @@ export type MachineMatchesContract<Entry, C extends SystemContract> =
  * `State<S, E, A, G>` carries its type parameters covariantly on a phantom field, so every check below is
  * bidirectional and tuple-wrapped (so `never` cannot collapse a distributive conditional):
  * - Events: the state must accept every tell-only event in `C['incoming']`, and every event it accepts beyond
- *   `C['incoming']` must be an opt-in `HostLifecycleEvents` member or a private child-report event declared in
- *   `C['internal']` (private self-sent events belong in `Shape['internal']`, while child `report(...)` events arrive
- *   through `on` and therefore live in `E` via `C['internal']`, hidden from external facades).
+ *   `C['incoming']` must be an opt-in `HostLifecycleEvents` member, a private child-report event declared in
+ *   `C['internal']`, or a report declared by one of its started children (`Shape['starts']` → child
+ *   `Shape['reports']`). Private self-sent events belong in `Shape['internal']`, never in `E`.
  * - Asks: the state's asks must match `NormalizeAsks<ContractAsks<C>>` in both directions.
  */
 export type StateMatchesContract<T, C extends SystemContract> =
   [T] extends [AnyState]
-    ? [IncomingOnlyEventsOf<C>, Exclude<EventsOf<T>, HostLifecycleEvents | ContractInternal<C>>] extends [EventsOf<T>, IncomingOnlyEventsOf<C>]
+    ? [
+        IncomingOnlyEventsOf<C>,
+        Exclude<
+          EventsOf<T>,
+          | HostLifecycleEvents
+          | ContractInternal<C>
+          | (AllStarts<ShapeOf<T>> extends infer Starts
+              ? [keyof Starts] extends [never]
+                ? never
+                : {
+                    [K in keyof Starts]:
+                      Starts[K] extends Each<infer Inner>
+                        ? Inner extends AnyState
+                          ? ShapeOf<Inner> extends { reports: infer R extends AnyEvent } ? R : never
+                          : never
+                        : Starts[K] extends AnyState
+                          ? ShapeOf<Starts[K]> extends { reports: infer R extends AnyEvent } ? R : never
+                          : never;
+                  }[keyof Starts]
+              : never)
+        >
+      ] extends [EventsOf<T>, IncomingOnlyEventsOf<C>]
       ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>]
         ? true
         : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature'

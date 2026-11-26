@@ -162,11 +162,26 @@ describe('@apackdev/state contract normalizers and StateMatchesContract', () => 
       on: { SEND_STATE: () => {} },
     });
 
+    const reportingChild = state<{ reports: { type: 'CHILD_CHANGED' } }, never>()({});
+    const withChildReport = state<
+      { starts: { child: typeof reportingChild } },
+      { type: 'PING'; id: string } | { type: 'CHILD_CHANGED'; from?: string },
+      NormalizedAsks
+    >()({
+      starts: () => ({ child: reportingChild }),
+      answers: {
+        GET: (args) => ({ title: args.id }),
+        FLUSH: () => {},
+      },
+      on: { PING: () => {}, CHILD_CHANGED: () => {} },
+    });
+
     expectTypeOf<StateMatchesContract<typeof exact, Contract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof withLifecycle, Contract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof withInternalReports, Contract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof askOnlyNoEvents, AskOnlyContract>>().toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof askOnlyWithLifecycle, AskOnlyContract>>().toEqualTypeOf<true>();
+    expectTypeOf<StateMatchesContract<typeof withChildReport, Contract>>().toEqualTypeOf<true>();
 
     expectTypeOf<StateMatchesContract<typeof missingEvent, Contract>>().not.toEqualTypeOf<true>();
     expectTypeOf<StateMatchesContract<typeof extraEvent, Contract>>().not.toEqualTypeOf<true>();

@@ -5,9 +5,12 @@
 ```ts
 
 import type { ActionArgs } from 'xstate';
+import type { AllStarts } from '@apackdev/state';
+import type { AnyEvent } from '@apackdev/state';
 import type { AnyState } from '@apackdev/state';
 import type { AnyStateMachine } from 'xstate';
 import type { AsksOf } from '@apackdev/state';
+import type { Each } from '@apackdev/state';
 import { EARS as EARS_2 } from '@elmdb/ears';
 import type { EmbedDeclaration } from '@elmdb/ears';
 import type { EventObject } from 'xstate';
@@ -19,6 +22,7 @@ import type { RankDeclaration } from '@elmdb/ears';
 import type { RelationRules } from '@elmdb/ears';
 import type { RowRules } from '@elmdb/ears';
 import type { SearchDeclaration } from '@elmdb/ears';
+import type { ShapeOf } from '@apackdev/state';
 
 // @public
 export const ALLOWABLE_PACK_CHECKS: readonly ["cross-feature-imports", "untyped-sends", "raw-transport", "backend-console", "repository-casts"];
@@ -1309,7 +1313,16 @@ export const SPECIALTY_CONTENT_KEYS: readonly string[];
 // @public
 export type StateMatchesContract<T, C extends SystemContract> = [
 T
-] extends [AnyState] ? [IncomingOnlyEventsOf<C>, Exclude<EventsOf<T>, HostLifecycleEvents | ContractInternal<C>>] extends [EventsOf<T>, IncomingOnlyEventsOf<C>] ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>] ? true : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature' : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature' : 'this system\'s default export is not a @apackdev/state State';
+] extends [AnyState] ? [
+IncomingOnlyEventsOf<C>,
+Exclude<EventsOf<T>, HostLifecycleEvents | ContractInternal<C> | (AllStarts<ShapeOf<T>> extends infer Starts ? [keyof Starts] extends [never] ? never : {
+    [K in keyof Starts]: Starts[K] extends Each<infer Inner> ? Inner extends AnyState ? ShapeOf<Inner> extends {
+        reports: infer R extends AnyEvent;
+    } ? R : never : never : Starts[K] extends AnyState ? ShapeOf<Starts[K]> extends {
+        reports: infer R extends AnyEvent;
+    } ? R : never : never;
+}[keyof Starts] : never)>
+] extends [EventsOf<T>, IncomingOnlyEventsOf<C>] ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>] ? true : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature' : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature' : 'this system\'s default export is not a @apackdev/state State';
 
 // @internal
 export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build' | 'trigger'>>): {

@@ -1,25 +1,56 @@
-// The code system spawns a child per panel (explorer, search, commit, …), each claiming a system id other
-// systems route events to. XState tracks a parent's children by their own id, so each spawn names one:
-// without it they share a key, the parent holds only the last, and stopping it leaves the rest running with
-// their system ids taken — which is what a pack reload then collides with.
+// The code system starts a child per panel (explorer, search, commit, …) plus its git watcher, each under its own
+// slot ref. Stopping the code system tears down every started child and releases every ref so a reload or restart
+// starts cleanly with the same child set.
 import { describe, expect, it } from 'vitest';
+import { system } from '@apackdev/state';
 import { startApp } from '@apackdev/testing/harness';
+import codeSystem from '#features/code/be/system.ts';
 
 describe('the code system’s child systems', () => {
   it('are tracked by their own ids, and released when it stops', async () => {
-    const app = await startApp({ systems: ['code'] });
-    const children = app.system('code').getSnapshot().children as Record<string, unknown>;
+    const sys = system({ side: 'backend' });
+    sys.attach({
+      tell: () => {},
+      ask: (_to, _name, _args, _progress, done) => {
+        done({ ok: false, failure: { kind: 'unavailable', message: 'unused' } });
+        return () => {};
+      },
+      follow: (_feature, _view, _args, _updated, failed) => {
+        failed({ kind: 'unavailable', message: 'unused' });
+        return { stop: () => {} };
+      },
+    });
+    sys.start('default-setup/code', codeSystem);
 
-    const keys = Object.keys(children);
+    const keys = Object.keys(sys.snapshot())
+      .filter((ref) => ref.startsWith('default-setup/code/'))
+      .map((ref) => ref.slice('default-setup/code/'.length));
+
     expect(keys, `children were ${JSON.stringify(keys)}`).not.toContain('undefined');
     expect(new Set(keys).size, 'each child holds its own id').toBe(keys.length);
-    expect(keys.length).toBeGreaterThan(1);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'gitWatcher',
+        'explorer',
+        'search',
+        'commit',
+        'pr',
+        'terminal',
+        'github',
+        'codeActions',
+        'codePrompts',
+      ]),
+    );
 
+    sys.stop();
+    expect(Object.keys(sys.snapshot())).toEqual([]);
+
+    // A stopped system releases every ref it and its children held, so the next start claims them cleanly
+    const app = await startApp({ systems: ['code'] });
     app.stop();
-
-    // A stopped system releases every id it and its children held, so the next start can claim them again
     const restarted = await startApp({ systems: ['code'] });
-    expect(Object.keys(restarted.system('code').getSnapshot().children as Record<string, unknown>).sort())
-      .toEqual([...keys].sort());
+    const startAnswer = await restarted.ask('code', { type: 'GET_CODE_START' });
+    expect(startAnswer).toMatchObject({ ok: true });
+    restarted.stop();
   });
 });
