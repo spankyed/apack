@@ -9,7 +9,7 @@ import { randomId } from '../utils/random-id.ts';
 import type { ApplicationHotkeys } from '../types/index.ts';
 import { eventTypes } from './event-types.ts';
 import { _currentDelivery, type _Delivery } from './delivery.ts';
-import { ASK_ANSWER_TYPES, ASK_CANCELLED, isAskAnswer, _unavailable, type AskProgressed, type ProgressPayload, type AskAnswered, type AskFailed, type AskFailure, type AskOutcome, type AskPayload, type SystemAskMap } from './ask.ts';
+import { ASK_ANSWER_TYPES, ASK_CANCELLED, isAskAnswer, _unavailable, type AskProgressed, type ProgressPayload, type AskAnswered, type AskFailed, type AskFailure, type AskOutcome, type AskPayload, type NormalizeAsks, type SystemAskMap } from './ask.ts';
 import { fromPromise, type PromiseActorLogic } from 'xstate';
 import type { ContractIncoming, ContractOutgoing, SystemEvents } from '../framework/define-system.ts';
 
@@ -18,7 +18,7 @@ export {
   ASK_ANSWER_TYPES, ASK_CANCELLED, AskError, isAskAnswer, _answered, _askFailureOf, _failedAnswer, _progressed, _refuse, _unavailable,
   type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskEventsOf, type AskFailed,
   type AskFailure, type AskName, type AskOutcome, type AskPayload, type ContractAsks, type DeclaredFailureKind,
-  type DeclaredFailures, type RefuseOf, type StandardFailureKind, type SystemAskMap, type AskProgressed, type AsksEvents, type ProgressEventOf, type ProgressPayload,
+  type DeclaredFailures, type NormalizeAsk, type NormalizeAsks, type RefuseOf, type StandardFailureKind, type SystemAskMap, type AskProgressed, type AsksEvents, type ProgressEventOf, type ProgressPayload,
 } from './ask.ts';
 export { _currentDelivery, _runDelivery, type _Delivery, type _Asker, type _AskDelivery } from './delivery.ts';
 
@@ -344,6 +344,17 @@ type WithoutType<E> = E extends unknown ? { [K in keyof E as K extends 'type' ? 
  */
 export type IncomingEventsOf<C> = ContractIncoming<C>;
 
+/**
+ * The tell-only events a system receives from outside itself, excluding its declared asks (`Contract['incoming']`
+ * alone). `@apackdev/state` keeps tell events and asks disjoint on `Net['systems'][k]`, unlike `IncomingEventsOf<C>`
+ * which unions ask events in for XState.
+ */
+export type IncomingOnlyEventsOf<C> = [C] extends [never]
+  ? never
+  : C extends { incoming: infer Events }
+    ? Extract<Events, { type: string }>
+    : never;
+
 /** The events a system sends to surfaces, from its feature's `Contract` */
 export type OutgoingEventsOf<C> = ContractOutgoing<C>;
 
@@ -402,6 +413,9 @@ export type HostSurfaceEvents = {
  * as it includes `HostSystemEvents`, so the day one declares an ask every pack can `ask` it.
  */
 export type HostSystemAsks = {};
+
+/** Normalized asks for a host system ref, `{}` when that host system declares none. */
+export type HostSystemAsksOf<K extends string> = K extends keyof HostSystemAsks ? NormalizeAsks<HostSystemAsks[K]> : {};
 
 /** Events the host app's own systems receive from pack code, which names them `host/<feature>` */
 export type HostSystemEvents = {

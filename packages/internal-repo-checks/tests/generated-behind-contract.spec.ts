@@ -23,7 +23,7 @@ import { GENERATED_BEHIND_A_CONTRACT } from '../../../scripts/check-import-speci
 const GENERATED_MODULES = [
   'appliers', 'content-runtime', 'ears', 'events', 'fe', 'flow-helpers', 'pack-entry', 'pack-entry-fe', 'pack-types',
   'paths', 'ref', 'references', 'repositories', 'repository', 'runtime-services', 'services', 'settings', 'settings-fe',
-  'step-types', 'steps-build', 'system-specs', 'types',
+  'state', 'step-types', 'steps-build', 'system-specs', 'types',
 ];
 
 let root: string;

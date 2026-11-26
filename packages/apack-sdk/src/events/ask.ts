@@ -44,6 +44,19 @@ export type StandardFailureKind = 'failed' | 'unavailable';
 /** The asks a contract declares, by name; none when it declares none */
 export type ContractAsks<C> = C extends { asks: infer Asks } ? Asks : {};
 
+/**
+ * One `AskDeclaration` normalized to `@apackdev/state`'s `AskShape`: `args` defaults to `{}`,
+ * `answer` defaults to `void`, and `refuses` / `progress` are carried through when declared.
+ */
+export type NormalizeAsk<D> = {
+  args: D extends { args: infer P extends object } ? P : {};
+  answer: D extends { answer: infer A } ? A : void;
+} & (D extends { refuses: infer R extends string | Record<string, object> } ? { refuses: R } : {})
+  & (D extends { progress: infer P } ? { progress: P } : {});
+
+/** A contract's `asks` map normalized to `@apackdev/state`'s `Asks` (`{}` when absent or `never`). */
+export type NormalizeAsks<M> = [M] extends [never] ? {} : { [K in keyof M & string]: NormalizeAsk<M[K]> };
+
 /** The names of the asks a contract declares */
 export type AskName<C> = keyof ContractAsks<C> & string;
 

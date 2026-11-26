@@ -57,14 +57,15 @@ external_spec() {
 }
 EARS_SPEC="$(external_spec @elmdb/ears)"
 ELMDB_SPEC="$(external_spec elmdb)"
+STATE_SPEC="$(external_spec @apackdev/state)"
 
 step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # Every install revalidates npm's cached metadata, as a pack author's does: under `--prefer-offline`, metadata cached
 # before a dependency's latest release names no such version, and npm skips an optional native package it can't find
 # without an error (rollup's), so the build fails later for want of it
 mkdir "$WORK/tools"
-# The SDK's @elmdb/ears comes from its tarball too
-(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC" && npm install --loglevel=error --no-audit --no-fund "$SDK_TGZ" "$CLI_TGZ")
+# The SDK's @elmdb/ears and @apackdev/state come from their tarballs too
+(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC" "overrides.@apackdev/state=$STATE_SPEC" && npm install --loglevel=error --no-audit --no-fund "$SDK_TGZ" "$CLI_TGZ")
 APACK="$WORK/tools/node_modules/.bin/apack"
 "$APACK" --version
 
@@ -76,7 +77,7 @@ cd "$PACK"
 # The tarballs stand in for the npm registry. The scaffold names no @elmdb/ears or zod: a pack has the SDK's engine and chooses its own schema library
 [ "$(npm pkg get dependencies.@elmdb/ears devDependencies.@elmdb/ears)" = "{}" ] || fail "apack pack init added @elmdb/ears to the pack"
 [ "$(npm pkg get dependencies.zod devDependencies.zod)" = "{}" ] || fail "apack pack init added zod to the pack"
-npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC"
+npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC" "overrides.@apackdev/state=$STATE_SPEC"
 npm install --loglevel=error --no-audit --no-fund
 # @apackdev/sdk carries the platform API only; the component library and its editors come with @apackdev/ui
 for lib in @tiptap highlight.js lowlight @guolao/vue-monaco-editor; do

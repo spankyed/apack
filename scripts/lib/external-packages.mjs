@@ -40,6 +40,24 @@ export const REPOSITORIES = {
       '@apackdev/git': { file: 'apackdev-git-0.1.0.tgz', dir: '.' },
     },
   },
+  'apack-link': {
+    tag: 'pkg',
+    packages: {
+      '@apackdev/link': { file: 'apackdev-link-0.1.0.tgz', dir: '.' },
+    },
+  },
+  'apack-orderings': {
+    tag: 'pkg',
+    packages: {
+      '@apackdev/orderings': { file: 'apackdev-orderings-0.1.0.tgz', dir: '.' },
+    },
+  },
+  'apack-state': {
+    tag: 'pkg',
+    packages: {
+      '@apackdev/state': { file: 'apackdev-state-0.1.0.tgz', dir: '.' },
+    },
+  },
   // The broker's binary is in a platform package per target, `@apackdev/terminal-<platform>`, which
   // `@apackdev/terminal` names as optional dependencies by URL, so npm installs the one this machine runs
   'apack-terminal': {

@@ -194,6 +194,61 @@ export function getDesignated(role: string): FeatureRef;
 // @public (undocumented)
 export function hasDesignation(role: string): boolean;
 
+// @public
+export type HostLifecycleEvents =
+/**
+* Publish what you hold now — the one event that asks for data, and the only one most systems handle.
+*
+* It follows every fact below, so a system does not wire "send my startup data" once per cause and a new
+* cause costs it nothing. Handle a fact as well only for what publishing cannot fix: work held over rows
+* that are gone, state that tracks whether a client is attached.
+*/
+    {
+    type: 'SEND_STATE';
+}
+/** A client connected. Most systems need only the `SEND_STATE` that follows it */
+| {
+    type: 'CLIENT_CONNECTED';
+}
+/**
+* A pack was activated, reloaded or torn down while the app runs, or its content was imported: what it
+* registers (its slash commands) and the content it applied may differ. Sent once the change is complete.
+*/
+| {
+    type: 'PACK_CHANGED';
+    packId: string;
+}
+/**
+* The feature's settings changed: `settings` as they now apply, and `changes` to what they list, when the store
+* tells them. The feature's surface gets it too (`FeatureSettingsUpdated`).
+*/
+| {
+    type: 'FEATURE_SETTINGS_UPDATED';
+    settings: unknown;
+    changes?: ArrayChanges | null;
+}
+/**
+* Every row the app holds was replaced — reset, or a backup imported — and the new world is built.
+*
+* Handling it is optional: the bus also asks every system for its startup data, so a surface's view is
+* refreshed either way. Declare it only for what re-reading cannot fix, such as work held over rows that
+* are now gone.
+*/
+| {
+    type: 'DATA_REPLACED';
+}
+/**
+* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
+* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
+*
+* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
+* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
+* this arrives.
+*/
+| {
+    type: 'DATA_CHANGED_ELSEWHERE';
+};
+
 // @public (undocumented)
 export interface ListContent {
     // (undocumented)
@@ -272,59 +327,7 @@ export type Simplify<T> = {
 } & {};
 
 // @public
-export type SystemEvents =
-/**
-* Publish what you hold now — the one event that asks for data, and the only one most systems handle.
-*
-* It follows every fact below, so a system does not wire "send my startup data" once per cause and a new
-* cause costs it nothing. Handle a fact as well only for what publishing cannot fix: work held over rows
-* that are gone, state that tracks whether a client is attached.
-*/
-    {
-    type: 'SEND_STATE';
-}
-/** A client connected. Most systems need only the `SEND_STATE` that follows it */
-| {
-    type: 'CLIENT_CONNECTED';
-}
-/**
-* A pack was activated, reloaded or torn down while the app runs, or its content was imported: what it
-* registers (its slash commands) and the content it applied may differ. Sent once the change is complete.
-*/
-| {
-    type: 'PACK_CHANGED';
-    packId: string;
-}
-/**
-* The feature's settings changed: `settings` as they now apply, and `changes` to what they list, when the store
-* tells them. The feature's surface gets it too (`FeatureSettingsUpdated`).
-*/
-| {
-    type: 'FEATURE_SETTINGS_UPDATED';
-    settings: unknown;
-    changes?: ArrayChanges | null;
-}
-/**
-* Every row the app holds was replaced — reset, or a backup imported — and the new world is built.
-*
-* Handling it is optional: the bus also asks every system for its startup data, so a surface's view is
-* refreshed either way. Declare it only for what re-reading cannot fix, such as work held over rows that
-* are now gone.
-*/
-| {
-    type: 'DATA_REPLACED';
-}
-/**
-* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
-* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
-*
-* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
-* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
-* this arrives.
-*/
-| {
-    type: 'DATA_CHANGED_ELSEWHERE';
-}
+export type SystemEvents = HostLifecycleEvents
 /**
 * How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
 * no machine handles one: every system may ask, so every system receives them

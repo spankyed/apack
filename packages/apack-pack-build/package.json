@@ -24,6 +24,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@apackdev/state": "0.1.0",
     "@types/mdast": "^4.0.4"
   }
 }

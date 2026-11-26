@@ -41,6 +41,22 @@ export type ViewArgs<Read> = Read extends () => unknown ? undefined : Read exten
 /** What a view returns */
 export type ViewResult<Read> = Read extends (...args: never[]) => infer Result ? Result : never;
 
+/**
+ * One view normalized for `@apackdev/state`'s `Net['views']`: zero-arg views (`ViewArgs<Read> = undefined`)
+ * become `args: {}`, matching `Net`'s `args: object` requirement while letting `follows` omit `args`.
+ */
+export type NetView<Read> = {
+  args: [ViewArgs<Read>] extends [undefined]
+    ? {}
+    : ViewArgs<Read> extends object
+      ? ViewArgs<Read>
+      : {};
+  result: ViewResult<Read>;
+};
+
+/** A feature's `defineViews` map normalized for `@apackdev/state`'s `Net['views'][Feature]`. */
+export type NetViews<V> = [V] extends [never] ? {} : { [K in keyof V & string]: NetView<V[K]> };
+
 /** What a window asks for: a feature's view, by the feature's ref and the view's name, with its arguments */
 export interface ViewRequest {
   /** Execution metadata, excluded from the view key and never passed to the query. */
