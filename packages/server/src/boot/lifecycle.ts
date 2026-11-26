@@ -20,10 +20,14 @@ export interface LifecycleProcess {
   parentPort?: UtilityParentPort;
 }
 
+export type PowerState = 'active' | 'suspended';
+
 export interface LifecycleBridge {
   installShutdownBridge(): void;
   isShutdownRequested(): boolean;
   registerGracefulShutdown(handler: () => void): void;
+  powerState(): PowerState;
+  registerPowerState(handler: (state: PowerState) => void): () => void;
   notifyServerReady(port: number): void;
 }
 
@@ -35,12 +39,20 @@ export function createLifecycleBridge(
   let shutdownRequested = false;
   let shutdownTriggered = false;
   let shutdownHandler: (() => void) | undefined;
+  let currentPowerState: PowerState = 'active';
+  let powerHandler: ((state: PowerState) => void) | undefined;
 
   function triggerShutdown(): void {
     shutdownRequested = true;
     if (!shutdownHandler || shutdownTriggered) return;
     shutdownTriggered = true;
     shutdownHandler();
+  }
+
+  function setPowerState(next: PowerState): void {
+    if (next === currentPowerState) return;
+    currentPowerState = next;
+    powerHandler?.(next);
   }
 
   function installShutdownBridge(): void {
@@ -51,8 +63,12 @@ export function createLifecycleBridge(
 
     if (proc.parentPort) {
       proc.parentPort.on('message', (event) => {
-        if (event.data && typeof event.data === 'object' && (event.data as { type?: unknown }).type === 'shutdown') {
+        if (!event.data || typeof event.data !== 'object') return;
+        const payload = event.data as { type?: unknown; state?: unknown };
+        if (payload.type === 'shutdown') {
           triggerShutdown();
+        } else if (payload.type === 'power' && (payload.state === 'suspended' || payload.state === 'active')) {
+          setPowerState(payload.state);
         }
       });
     }
@@ -79,11 +95,24 @@ export function createLifecycleBridge(
     }
   }
 
+  function powerState(): PowerState {
+    return currentPowerState;
+  }
+
+  function registerPowerState(handler: (state: PowerState) => void): () => void {
+    installShutdownBridge();
+    powerHandler = handler;
+    if (currentPowerState === 'suspended') handler('suspended');
+    return () => {
+      if (powerHandler === handler) powerHandler = undefined;
+    };
+  }
+
   function notifyServerReady(port: number): void {
     proc.parentPort?.postMessage({ type: 'ready', port });
   }
 
-  return { installShutdownBridge, isShutdownRequested, registerGracefulShutdown, notifyServerReady };
+  return { installShutdownBridge, isShutdownRequested, registerGracefulShutdown, powerState, registerPowerState, notifyServerReady };
 }
 
 const defaultBridge = createLifecycleBridge();
@@ -95,6 +124,9 @@ export const isShutdownRequested = (): boolean => defaultBridge.isShutdownReques
 
 /** Binds the active server's graceful shutdown routine; invokes it immediately if shutdown arrived during boot. */
 export const registerGracefulShutdown = (handler: () => void): void => defaultBridge.registerGracefulShutdown(handler);
+
+/** Binds the active server's OS power-state handler; replays `'suspended'` immediately if suspend arrived during boot. */
+export const registerPowerState = (handler: (state: PowerState) => void): (() => void) => defaultBridge.registerPowerState(handler);
 
 /** Notifies Electron main over `parentPort` once the WebSocket server is listening (chunk-proof structured signal). */
 export const notifyServerReady = (port: number): void => defaultBridge.notifyServerReady(port);

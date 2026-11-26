@@ -89,4 +89,31 @@ describe('boot lifecycle bridge', () => {
     const withoutPort = fakeEnv({ withParentPort: false });
     expect(() => createLifecycleBridge(withoutPort.proc).notifyServerReady(3042)).not.toThrow();
   });
+
+  it('tracks power state as level-triggered, replays suspend on late registration, and deduplicates transitions', () => {
+    const { proc, portEmitter } = fakeEnv();
+    const bridge = createLifecycleBridge(proc);
+    bridge.installShutdownBridge();
+
+    // Suspend arrives during boot before appClock registers
+    portEmitter.emit('message', { data: { type: 'power', state: 'suspended' } });
+    expect(bridge.powerState()).toBe('suspended');
+
+    const seen: string[] = [];
+    const unregister = bridge.registerPowerState((state) => seen.push(state));
+    expect(seen).toEqual(['suspended']);
+
+    // Duplicate suspend is ignored; resume transitions once; unknown states are ignored
+    portEmitter.emit('message', { data: { type: 'power', state: 'suspended' } });
+    portEmitter.emit('message', { data: { type: 'power', state: 'bogus' } });
+    portEmitter.emit('message', { data: { type: 'power', state: 'active' } });
+    portEmitter.emit('message', { data: { type: 'power', state: 'active' } });
+    expect(seen).toEqual(['suspended', 'active']);
+
+    // Unregistering stops delivery while bridge still tracks state
+    unregister();
+    portEmitter.emit('message', { data: { type: 'power', state: 'suspended' } });
+    expect(seen).toEqual(['suspended', 'active']);
+    expect(bridge.powerState()).toBe('suspended');
+  });
 });

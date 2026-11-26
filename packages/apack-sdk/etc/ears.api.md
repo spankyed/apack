@@ -55,6 +55,9 @@ export const nextLabel: (type: EARS.Entity, base: string) => string;
 // @public
 export const NO_ENGINE_BOUND: string;
 
+// @public
+export const now: () => number;
+
 // @public (undocumented)
 export const removeRelation: (relId: EARS.RelationId) => void;
 

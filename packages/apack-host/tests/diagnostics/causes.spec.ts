@@ -19,7 +19,7 @@ function fixture() {
 it('links a coalesced read to both completed writes without selecting an action parent', async () => {
   const { controller, write } = fixture();
   write(0, 1); write(1, 2);
-  controller.execution.withCarrier(undefined, () => controller.begin('app.view.read', {}, { database: 'app', sequences: [1, 2], dropped: 0 })!.end());
+  controller.execution.withCarrier(undefined, () => controller.begin('app.view.read', {}, { database: 'app', sequences: [1, 2], dropped: 0, sources: ['local'], wildcard: false })!.end());
   const report = await controller.stop();
   expect(report.complete).toBe(true);
   const spans = report.observations.map(value => JSON.parse(value));
@@ -32,7 +32,7 @@ it('links a coalesced read to both completed writes without selecting an action 
 it('does not replace a committed cause with a no-op or refused write and exposes unknown causes', async () => {
   const { controller, write } = fixture();
   write(0, 1); write(1, 1); write(1, 2, 'error');
-  controller.begin('app.view.read', {}, { database: 'app', sequences: [1, 2], dropped: 0 })!.end();
+  controller.begin('app.view.read', {}, { database: 'app', sequences: [1, 2], dropped: 0, sources: ['local'], wildcard: false })!.end();
   const report = await controller.stop();
   const spans = report.observations.map(value => JSON.parse(value));
   const read = spans.find(span => span.name === 'app.view.read');
@@ -43,7 +43,7 @@ it('does not replace a committed cause with a no-op or refused write and exposes
 it('retains committed-not-durable causality and makes dropped causes incomplete', async () => {
   const { controller, write } = fixture();
   write(0, 1, 'committed-not-durable');
-  controller.begin('app.view.read', {}, { database: 'app', sequences: [1], dropped: 3 })!.end();
+  controller.begin('app.view.read', {}, { database: 'app', sequences: [1], dropped: 3, sources: ['local'], wildcard: false })!.end();
   const report = await controller.stop();
   expect(report).toMatchObject({ complete: false, droppedMetadata: 3 });
   const read = report.observations.map(value => JSON.parse(value)).find(span => span.name === 'app.view.read');
@@ -55,7 +55,7 @@ it('does not carry commit identities across replacement database handles', async
   const { controller, write } = fixture();
   write(0, 1);
   controller.attach({ admin: { observe() { return () => {}; } } }, 'app');
-  controller.begin('app.view.read', {}, { database: 'app', sequences: [1], dropped: 0 })!.end();
+  controller.begin('app.view.read', {}, { database: 'app', sequences: [1], dropped: 0, sources: ['local'], wildcard: false })!.end();
   const report = await controller.stop();
   const read = report.observations.map(value => JSON.parse(value)).find(span => span.name === 'app.view.read');
   expect(read.links).toEqual([]);

@@ -35,7 +35,7 @@ import { compileFlowDSL, type FlowDSL } from '@apackdev/sdk/build';
 import { compilePack, compileHelp, resolveContentSources, type ContentDependency } from '@apackdev/pack-build';
 import { parseContentIndex, CONTENT_INDEX_FILE, ManifestSchema, parseSnapshot, _declarationRevision, _snapshotFormatMismatch, _cliFormatMismatchMessage, type PackManifest, type PackSnapshot } from '@apackdev/pack-format';
 import { actionRepository, flowRepository, promptRepository } from '@apackdev/sdk/repositories';
-import { boundEars, untypedQuery } from '@apackdev/sdk/ears';
+import { boundEars, untypedQuery, type EarsClock } from '@apackdev/sdk/ears';
 import { _getMediaPath, importCompiledContent, type ImportMode, type ImportResult, type ContentApplier } from '@apackdev/sdk/utils';
 
 export { takeSystemErrors, addTestSecret, type ContentRuntime };
@@ -173,6 +173,8 @@ export interface PackTestOptions {
    * `test.root`, a workspace project's dir), given by isolatedDataDir's globalSetup, else the working directory
    */
   packDir?: string;
+  /** Clock for EARS timestamps, ids, recency queries and watches (matches `@apackdev/clock`'s `controller.clock`). */
+  clock?: EarsClock;
 }
 
 interface PackContext {
@@ -306,6 +308,7 @@ export async function setupPackTests(options: PackTestOptions): Promise<void> {
     roles: [...dependencies.values()].flatMap(({ snapshot }) => Object.values(snapshot.types.roles)),
     packs: runtimePacks,
     serviceOverrides: serviceMocks,
+    ...(options.clock && { clock: options.clock }),
     onboarding: {
       isComplete: () => appState.get().hasOnboarded,
       complete: () => appState.update({ hasOnboarded: true }),

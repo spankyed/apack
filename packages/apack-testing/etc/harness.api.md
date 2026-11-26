@@ -9,6 +9,7 @@ import { AnyActorRef } from 'xstate';
 import { AnyStateMachine } from 'xstate';
 import { ContentApplier } from '@apackdev/sdk/utils';
 import { ContentRuntime } from '@apackdev/sdk/framework';
+import { EarsClock } from '@apackdev/sdk/ears';
 import { FakeInference } from '@apackdev/sdk/testing';
 import { fakeInference } from '@apackdev/sdk/testing';
 import { FlowDSL } from '@apackdev/sdk/build';
@@ -74,6 +75,7 @@ export function mockService<S extends object = Record<string, object>, K extends
 // @public (undocumented)
 export interface PackTestOptions {
     appliers?: ContentApplier[];
+    clock?: EarsClock;
     contentRuntime: ContentRuntime;
     packDir?: string;
     registration?: PackRegistration;

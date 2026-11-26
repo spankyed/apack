@@ -91,6 +91,8 @@ export const untypedUpsert: Upsert = onBound('upsert');
 export const untypedWrite: Write = onBound('write');
 
 export const transact = onBound('transact');
+/** The bound engine's current wall-clock time in milliseconds (`clock.now()` when given, otherwise `Date.now()`) */
+export const now = onBound('now');
 export const isEntityType = onBound('isEntityType');
 export const getRelation = onBound('getRelation');
 export const findRelations = onBound('findRelations');

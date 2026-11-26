@@ -1364,7 +1364,7 @@ export interface PackSchema extends EarsSchema {
 }
 
 export const {
-  query, create, upsert, write, transact, newId, getAttr,
+  query, create, upsert, write, transact, newId, now, getAttr,
 } = /*#__PURE__*/ defineEars<PackSchema>(boundEars);
 `;
   }

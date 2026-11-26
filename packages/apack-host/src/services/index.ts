@@ -3,7 +3,7 @@ import { compileSettingsCatalog } from '../features/settings/validation.ts';
 // and the one place the app's HostRuntime is assembled.
 import { secretRedaction } from '../secrets/redaction.ts';
 import { _installProjections, type HostRuntime, type RootEvents, type PerformanceExecution } from '@apackdev/sdk/runtime';
-import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
+import type { EarsClock, EarsDatabase, EarsEngine } from '@elmdb/ears';
 import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
 import { createOnboarding } from './onboarding.ts';
@@ -49,9 +49,11 @@ export interface HostRuntimeOptions {
   countCalls?: boolean;
   /** Development/test context supplied by the composition root, never initialized by services. */
   performance?: PerformanceExecution;
+  /** Host-owned clock driving host timers such as the cross-process refresh debounce (defaults to `setTimeout`). */
+  clock?: EarsClock;
 }
 
-export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime & {
+export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance, clock }: HostRuntimeOptions): HostRuntime & {
   /** Brings the engine's projections up to what changed since each last read: at boot, once the packs have started */
   catchUpProjections(): Promise<void>;
   /**
@@ -77,11 +79,13 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     registry: packs, settings, projections,
     onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
   });
-  let refreshing: ReturnType<typeof setTimeout> | undefined;
+  let cancelRefresh: (() => void) | undefined;
   /** Runs once a burst of commits from elsewhere has passed. Nothing waits on this timer to catch what it throws, and an uncaught error ends the process */
   const refreshAfterBurst = () => {
-    refreshing ??= setTimeout(() => {
-      refreshing = undefined;
+    if (cancelRefresh || !database.isOpen || !runHistory.database.isOpen) return;
+    const run = () => {
+      cancelRefresh = undefined;
+      if (!database.isOpen || !runHistory.database.isOpen) return;
       try {
         // Either database: a tool resets the run history first, and may stop before the app's
         if (engine.admin.replacedElsewhere() !== undefined || runHistory.engine.admin.replacedElsewhere() !== undefined) {
@@ -115,8 +119,20 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
       // Whatever the answer, since each projection reads from its own cursor
       void projections.catchUp();
       if (changed) transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
-    }, ELSEWHERE_REFRESH_MS);
-    refreshing.unref?.();
+    };
+    if (clock) {
+      try {
+        cancelRefresh = clock.after(ELSEWHERE_REFRESH_MS, run);
+      } catch (error) {
+        // Late filesystem notification after host shutdown closed the clock
+        if (error instanceof Error && error.name === 'ClockClosedError') return;
+        throw error;
+      }
+    } else {
+      const handle = setTimeout(run, ELSEWHERE_REFRESH_MS);
+      handle.unref?.();
+      cancelRefresh = () => clearTimeout(handle);
+    }
   };
   for (const hearing of [engine, runHistory.engine]) {
     try {

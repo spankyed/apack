@@ -255,7 +255,7 @@ export interface MemoEntity {
     const ears = (await generate({ data: { entities: { Memo: { shape: "src/memo.ts#MemoEntity" }, Tag: {} } }, }))['src/__generated__/ears.ts'];
     expect(ears).toContain(`export type EntityName = ${['Memo', 'Tag', ...Object.values(SDK_ENTITIES)].map((name) => `'${name}'`).join(' | ')};`);
     expect(ears).toContain('defineEars<PackSchema>(boundEars)');
-    expect(ears).toMatch(/export const \{\n  query, create, upsert, write, transact, newId, getAttr,\n\}/);
+    expect(ears).toMatch(/export const \{\n  query, create, upsert, write, transact, newId, now, getAttr,\n\}/);
   });
 });
 

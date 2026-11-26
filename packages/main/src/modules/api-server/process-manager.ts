@@ -30,6 +30,7 @@ export class ProcessManager {
   private handlers: ProcessHandlers;
   private serverReady = false;
   private exited = false;
+  private powerState: 'active' | 'suspended' = 'active';
   private stopping?: Promise<void>;
   private lastStderr = '';
   private stderrBuffer = '';
@@ -47,6 +48,21 @@ export class ProcessManager {
     this.stderrBuffer = '';
     this.fatalErrors = [];
     this.attachHandlers();
+    if (this.powerState === 'suspended') {
+      try {
+        process.postMessage({ type: 'power', state: 'suspended' });
+      } catch { /* child exited before taking the message */ }
+    }
+  }
+
+  /** Tracks OS suspend/resume as level-triggered state and forwards changes to the running API process. */
+  setPowerState(state: 'active' | 'suspended'): void {
+    if (this.powerState === state) return;
+    this.powerState = state;
+    if (!this.process || !this.isRunning()) return;
+    try {
+      this.process.postMessage({ type: 'power', state });
+    } catch { /* child exited before taking the message */ }
   }
 
   private markReady(port: number): void {
