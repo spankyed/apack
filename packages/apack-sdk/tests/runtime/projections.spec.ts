@@ -2,9 +2,10 @@
 // the database says changed since each last read: what's derived commits with what caused it, a failure undoes both, a
 // write to anything else doesn't run them, and nothing but a first run, a new version or an unknowable answer derives
 // everything again, a chunk per unit like any backlog.
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { EARS, EarsEngine } from '@elmdb/ears';
-import { catchUpTestProjections, resetTestData, startTestRuntime, testPacks } from '../../src/testing/index.ts';
+import { _openTestDatabase, catchUpTestProjections, resetTestData, startTestRuntime, testPacks } from '../../src/testing/index.ts';
+import { _installProjections } from '../../src/runtime/projections.ts';
 import { boundEars, untypedCreate, untypedQuery, untypedWrite } from '../../src/ears/index.ts';
 import { SDK_ROW_RULES } from '../../src/types/sdk-entities.ts';
 
@@ -223,4 +224,19 @@ it('keeps catching up the others when one fails, and its cursor where it was', a
   applied.length = 0;
   await catchUpTestProjections();
   expect(applied.length, 'the one that failed still had it to apply').toBe(1);
+});
+
+it('stops catching up silently when the database is closed mid-pass', async () => {
+  const { database, engine: isolated } = _openTestDatabase({
+    rowRules: { Collection: { ...SDK_ROW_RULES.Collection, changeOrder: true } },
+  });
+  const runner = _installProjections(isolated);
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    database.close();
+    await expect(runner.catchUp()).resolves.toBeUndefined();
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    errors.mockRestore();
+  }
 });

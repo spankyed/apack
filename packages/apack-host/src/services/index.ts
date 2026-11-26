@@ -129,6 +129,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
         throw error;
       }
     } else {
+      // clock-boundary-ok: fallback timer when createHostRuntime is called without an injected clock
       const handle = setTimeout(run, ELSEWHERE_REFRESH_MS);
       handle.unref?.();
       cancelRefresh = () => clearTimeout(handle);

@@ -6,6 +6,7 @@ import { ClockController } from '@apackdev/clock';
 import { TestClock } from '@apackdev/clock/testing';
 import { defineEars, type UntypedSchema } from '@elmdb/ears';
 import { _createRunHistory } from '@apackdev/sdk/services';
+import { createRunHistory, RUN_HISTORY_RETENTION_MS } from '../../src/services/run-history.ts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabaseStore, openRunHistory } from '../../src/database/open.ts';
 import { removeTempDirs, tempDir } from './fixtures.ts';
@@ -156,6 +157,12 @@ describe('driving EARS with @apackdev/clock', () => {
       await testClock.advance(5_000);
       history.stopActive();
       expect(history.get(second.id)).toMatchObject({ status: 'stopped', completedAt: startWall + 7_500 });
+
+      // Retention pruning in `createRunHistory` uses `runs.now()` rather than bare `Date.now()`
+      testClock.setWall(startWall + 2_500 + RUN_HISTORY_RETENTION_MS + 1);
+      const reopened = createRunHistory(runs.engine);
+      expect(reopened.get(first.id)).toBeUndefined();
+      expect(reopened.get(second.id)).toBeDefined();
     } finally {
       runs.database.close();
       expect(testClock.waiting()).toBe(0);
