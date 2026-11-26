@@ -8,17 +8,18 @@ import { SOURCE_CONDITION } from './source-resolution.ts';
 
 /**
  * Packages a process must load once: pack runtimes, dependency runtimes, the app and tests share one
- * instance of each (the SDK's registries and bound engine). Every bundler external list, the host pack
- * loader's bridge, the pack test harness's bridge and bundle-package derive from this list. The
- * frontend shares only the SDK modules below (SDK_FE_MODULES). What a pack's frontend may leave to the
- * host is `sharedFeModules` below, which is those plus the shared deps and @apackdev/ui's exports.
+ * instance of each (the SDK's registries and bound engine, and `@apackdev/state`'s `Symbol` singletons
+ * such as `ANSWERED` and `given`). Every bundler external list, the host pack loader's bridge, the pack
+ * test harness's bridge and bundle-package derive from this list. The frontend shares only the SDK modules
+ * below (SDK_FE_MODULES). What a pack's frontend may leave to the host is `sharedFeModules` below, which
+ * is those plus the shared deps and @apackdev/ui's exports.
  *
  * **EARS is not on it**: a pack reaches EARS only through the SDK (`THROUGH_SDK` below, the `ears-imports`
  * pack rule), so sharing the SDK shares the EARS it loads. What the list guaranteed for EARS — one copy in
  * the app — is a fact about the app's install rather than a bundler's, and the install checks hold it
  * (`SINGLE_COPY_PACKAGES`, `scripts/lib/installed-dependencies.ts`).
  */
-export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk'] as const;
+export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk', '@apackdev/state'] as const;
 
 /**
  * Packages a pack reaches only through the SDK, each with the SDK entry that re-exports the whole of it. A pack depends

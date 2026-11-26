@@ -28,9 +28,11 @@ describe('APP_ONLY_EXPORTS', () => {
 
 describe('SHARED_INSTANCE_PACKAGES', () => {
   // A pack reaches EARS only through the SDK, so sharing the SDK shares the EARS it loads: EARS on the list would be a
-  // second route to it, which is what the `ears-imports` pack rule and the facade's rewrite take away
-  it('shares the SDK alone, and every package a pack reaches through it is reached through one of its entries', () => {
-    expect([...SHARED_INSTANCE_PACKAGES]).toEqual(['@apackdev/sdk']);
+  // second route to it, which is what the `ears-imports` pack rule and the facade's rewrite take away.
+  // `@apackdev/state` is bridged alongside the SDK so host and CJS pack runtimes share one ESM instance (including
+  // `ANSWERED` and `given` Symbol singletons).
+  it('shares the SDK and @apackdev/state, and every package a pack reaches through the SDK is reached through one of its entries', () => {
+    expect([...SHARED_INSTANCE_PACKAGES]).toEqual(['@apackdev/sdk', '@apackdev/state']);
     for (const [pkg, entry] of Object.entries(THROUGH_SDK)) {
       expect(sharedInstancePackage(pkg), pkg).toBeUndefined();
       expect(sharedInstancePackage(entry), entry).toBe('@apackdev/sdk');
