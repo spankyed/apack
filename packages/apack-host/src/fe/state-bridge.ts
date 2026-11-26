@@ -26,7 +26,7 @@ type StateEvent = { type: string; [key: string]: unknown };
 
 export interface StateSurfaceMeta {
   readonly id: string;
-  readonly chrome?: SurfaceChrome<any>;
+  readonly chrome?: SurfaceChrome<never>;
 }
 
 export type StateSurfaceSnapshot = Snapshot<undefined> & {

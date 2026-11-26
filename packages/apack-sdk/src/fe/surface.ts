@@ -77,7 +77,7 @@ export interface Surface {
   isPinned?: boolean;
   state: AnyStateMachine | AnyState;
   /** Declarative breadcrumbs and context menu for `@apackdev/state` surfaces (replaces XState `meta`). */
-  chrome?: SurfaceChrome<any>;
+  chrome?: SurfaceChrome<never>;
   icon?: Component;
   canvas?: Component | RouteComponents;
   panel?: Component;
