@@ -1969,6 +1969,58 @@ export const state = /*#__PURE__*/ forNet<PackNet>((name) => (name.includes('/')
 `;
   }
 
+  /**
+   * `@apackdev/state/vue` frontend binding (`#generated/state-fe`): `PackSurfaces` and
+   * `{ provide, useState } = vueBinding<PackSurfaces>(resolve)`.
+   *
+   * Frontend-only (imports `@apackdev/state/vue`, which pulls `@vue/runtime-core` and is rejected from backend
+   * bundles). Emitted only when the pack declares at least one surface. Type-only imports of each surface's
+   * `state` module keep runtime code out of the facade while filtering out unmigrated XState machines until they
+   * export a `@apackdev/state` `State`.
+   */
+  function generateStateFe(): string {
+    const surfaceFeatures = packFeatures(manifest).filter(f => f.surface);
+    if (!surfaceFeatures.length) return '';
+
+    const surfaceImports: string[] = [];
+    const surfaceEntries: string[] = [];
+    for (const feature of surfaceFeatures) {
+      const parsed = _parseModuleReference(feature.surface!.state, `features.${feature.id}.surface.state`, 'default');
+      const binding = `__surface_${toIdentifier(feature.id)}`;
+      const from = `'${toImportPath(root, parsed.source)}'`;
+      surfaceImports.push(parsed.exportName === 'default'
+        ? `import type ${binding} from ${from};`
+        : `import type { ${parsed.exportName} as ${binding} } from ${from};`);
+      surfaceEntries.push(`  '${feature.id}': typeof ${binding};`);
+    }
+
+    return `${HEADER}
+import type { AnyState } from '@apackdev/state';
+import { vueBinding } from '@apackdev/state/vue';
+${surfaceImports.join('\n')}
+
+interface __RawPackSurfaces {
+${surfaceEntries.join('\n')}
+}
+
+/**
+ * Every \`@apackdev/state\` top-level surface this pack declares, keyed by bare feature id (resolved to
+ * \`${manifest.id}/<id>\` at runtime). Surfaces that still export an XState machine are filtered out until migrated.
+ */
+export type PackSurfaces = {
+  [K in keyof __RawPackSurfaces as __RawPackSurfaces[K] extends AnyState ? K : never]: Extract<__RawPackSurfaces[K], AnyState>;
+};
+
+/**
+ * Vue binding for this pack's \`@apackdev/state\` surfaces and their started children.
+ * Bare surface names resolve to \`${manifest.id}/<name>\`; qualified \`<pack>/<feature>\` names pass through unchanged.
+ */
+export const { provide, useState } = /*#__PURE__*/ vueBinding<PackSurfaces>(
+  (name) => (name.includes('/') ? name : \`${manifest.id}/\${name}\`),
+);
+`;
+  }
+
   /** The events each system receives and sends, from its spec; type-only, so facades carry no machines or contexts */
   function generateSystemSpecs(): string {
     const systemFeatures = packFeatures(manifest).filter(f => f.system);
@@ -2649,6 +2701,7 @@ export function workerPath(name: WorkerName): string {
     ['src/__generated__/system-specs.ts', generateSystemSpecs()],
     ['src/__generated__/events.ts', generateEvents()],
     ['src/__generated__/state.ts', generateState()],
+    ['src/__generated__/state-fe.ts', generateStateFe()],
     ['src/__generated__/types.ts', generateTypes()],
     ['src/__generated__/services.ts', generateServices()],
     ['src/__generated__/runtime-services.ts', `${HEADER}

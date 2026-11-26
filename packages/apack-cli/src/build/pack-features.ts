@@ -163,7 +163,7 @@ function sourceFile(base: string): string | undefined {
  * meant to use the repository facade, which the case beside this rule's asserts. What sets these five apart is that
  * codegen derives them from the thing it is reading, or from the thing it is reading around.
  */
-export const GENERATED_BEHIND_A_CONTRACT = ['system-specs', 'events', 'fe', 'pack-entry', 'pack-entry-fe', 'state'];
+export const GENERATED_BEHIND_A_CONTRACT = ['system-specs', 'events', 'fe', 'pack-entry', 'pack-entry-fe', 'state', 'state-fe'];
 
 /**
  * `file:line: specifier` for each import a contract leaf makes that would put the machine back in front of codegen.
