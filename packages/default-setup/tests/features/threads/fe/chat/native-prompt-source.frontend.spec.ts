@@ -200,7 +200,7 @@ it('keeps an explicit replacement containing a former link inside code free of r
   try {
     bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: '# Heading\n\n' + token, cursor: 1 } })
     expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toHaveLength(1)
-    const replacement = '\`\`\`md\n' + token + '\n\`\`\`'
+    const replacement = '```md\n' + token + '\n```'
     expect(bridge.fillDraft({ mode: 'replace', text: replacement }, bridge.revision)).toBe(true)
     expect(text()).toBe(replacement)
     expect(claudePromptSourceReferences(editor, editor.state.doc.firstChild!)).toEqual([])
