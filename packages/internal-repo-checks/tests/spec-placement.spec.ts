@@ -171,8 +171,6 @@ const NOT_MIRRORED_YET: Record<string, string> = {
   'apack-cli/harness': "@apackdev/testing's harness: the scaffolded setup, a dependency's cached runtime, and "
     + 'isolatedDataDir. The CLI owns the commands that launch it (`apack pack test`, `init-tests`) and none of the '
     + 'harness itself, so a tests/commands/ name would say the wrong thing about all three',
-  'default-setup/spike-8': 'Phase 2 #8 cross-feature @apackdev/state prototype harness covering both code/commit '
-    + 'and brain (also read by scripts/spike-8-compile-cost.mts); to be retired once Wave 3-4 completes',
 };
 
 describe("a spec's directory names one under src/", () => {

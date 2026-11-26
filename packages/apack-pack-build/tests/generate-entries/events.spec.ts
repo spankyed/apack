@@ -90,10 +90,7 @@ describe('generated events', () => {
     expect(receives(await generate({ features: [withSurface(system('quiet'))] }), 'quiet')).toEqual([]);
   });
 
-  // These four replace the defences the phantom read needed: an entry annotated `: SystemEntry`, an entry whose
-  // spec lost its events, a spec whose import didn't resolve, and an entry with no default export. Codegen no
-  // longer reads the default export at all, so none of those is a failure any more — what can go wrong now is
-  // that the contract the manifest names isn't there, or isn't a type.
+  // These check that the contract the manifest names exists, is a type, and declares outgoing events.
   it('refuses a system contract the module does not declare, naming the type it looked for', async () => {
     const entry = 'src/features/typed/be/system.ts';
     write(entry, 'export default { spec: undefined as never, machine: undefined as never };\n');
@@ -227,7 +224,7 @@ describe('generated system sends', () => {
     expect(events).toContain("export type PackSystemEvents = {\n  'memos': IncomingEventsOf<__SystemContracts['memos']>;\n};");
     expect(events).toContain("export type QualifiedSystemEvents = Qualified<'demo-pack', PackSystemEvents> & Qualified<'base-pack', __dep_base_pack_PackSystemEvents> & ");
     expect(events).toContain("export type SendableSystemEvents = WithOwnNames<'demo-pack', QualifiedSystemEvents>;");
-    // The asks each system answers, by the same names: what types `ask` and `fromAsk`
+    // The asks each system answers, by the same names: what types `ask`
     expect(events).toContain("export type PackSystemAsks = {\n  'memos': ContractAsks<__SystemContracts['memos']>;\n};");
     expect(events).toContain("export type QualifiedSystemAsks = Qualified<'demo-pack', PackSystemAsks> & Qualified<'base-pack', __dep_base_pack_PackSystemAsks> & ");
     // No table of names: the sends derive every address from the pack id (@apackdev/sdk/ids)

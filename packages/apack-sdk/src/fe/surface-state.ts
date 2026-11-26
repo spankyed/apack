@@ -9,8 +9,8 @@
 // another pack's frontend may still be loading. The generated readers narrow that away for a surface in the calling
 // pack, which is spawned in the step that registers it — codegen knows which case it is, and a caller here doesn't.
 //
-// The actor comes from the shell's registry, the app's one list of running surfaces: a surface is spawned with its
-// ref as its XState `systemId`. Nothing here keeps its own.
+// The handle comes from the shell's registry, the app's one list of running surfaces: a surface is registered
+// under its ref in the frontend `@apackdev/state` system. Nothing here keeps its own.
 import { getCurrentScope, onScopeDispose, shallowReadonly, shallowRef, type Ref } from 'vue'
 import { boundFeHost } from '../runtime/fe-host.ts'
 import { surfaceActorIfRunning } from './actor-system.ts'

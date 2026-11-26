@@ -481,7 +481,7 @@ it('wires declared feature and group forms without inventing a surface or import
 
 
 it('generates routed and lazy panes, named state, custom icons and fallback predicates without evaluating them', async () => {
-  write('src/state.ts', 'throw new Error("Do not activate"); export const machine = {} as import("xstate").AnyStateMachine;');
+  write('src/state.ts', 'throw new Error("Do not activate"); export const machine = {} as import("@apackdev/state").AnyState;');
   write('src/predicate.ts', 'throw new Error("Do not activate"); export const visible = () => true;');
   for (const view of ['list', 'detail', 'icon', 'panel', 'chat']) write(`src/${view}.vue`, '<template><div /></template>');
   const files = await generate({ features: [{ id: 'notes', surface: { label: 'Notes', state: 'src/state.ts#machine',

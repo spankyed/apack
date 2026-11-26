@@ -8,5 +8,5 @@ test('pack loads and renders', async ({ app }) => {
 
 test('app reaches connected state', async ({ app }) => {
   const state = await app.getState();
-  expect(state).toEqual({ running: 'connected' });
+  expect(state).toBe('running.connected');
 });

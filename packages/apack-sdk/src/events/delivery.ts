@@ -5,9 +5,8 @@
  * the sender wrote it, which `outgoing-events.spec.ts` pins with a deliberate `surfaceId` collision. So the
  * address is kept *beside* the handler, and this is where.
  *
- * What a handler is handed is ours, not XState's: `defineHandlers` (`@apackdev/sdk/framework`) wraps a machine's
- * action record and adds the connection the message arrived on, and `defineSystem`'s `answers` sends each ask's
- * answer through `_replyTo` over the delivery the handler was entered in. Neither reads this scope later than entry.
+ * Handlers read the connection the message arrived on via `currentClient()` at entry, and `@apackdev/state`
+ * `answers` handlers reply via `_replyTo` over the delivery they were entered in. Neither reads this scope later than entry.
  *
  * What is left here is the plumbing that still has to be ambient: the bus opens a scope per delivery, and
  * `createSends` reads its `receiver` to stamp `Message.sender` on an ordinary send. That one cannot be a
@@ -42,9 +41,8 @@
  *    system's pair. That is right rather than missed: those are facts with nobody waiting on them, and
  *    `SEND_STATE` wants a broadcast and not an answer. An ask arriving that way is answered to nobody, which is
  *    what "nobody asked" is supposed to look like.
- * 3. **An XState completion — an `invoke`'s `onDone`/`onError`, a `fromCallback`'s `sendBack`, a delayed
- *    `raise`.** The brain turns every `TRIGGER_BRAIN_EVENT` into `raise(…, { delay: 0 })`, so every step
- *    runtime and every action's code runs a tick after the delivery that triggered it, unconditionally.
+ * 3. **An asynchronous state callback — a `loads` / `calls` completion, a `run` callback, or a delayed
+ *    event.** Any work triggered after a tick runs outside the original delivery scope.
  *
  * **What this costs: most backend sends carry no sender, and almost none of them wants one.** A census of the
  * send sites lived here and is gone, for two reasons worth keeping. It sized no decision — nothing was chosen

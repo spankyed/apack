@@ -244,8 +244,6 @@ export default defineConfig(({ command }) => ({
     include: [
       ...SHARED_ENTRIES.filter(module => module.startsWith('prosemirror-')),
       'monaco-editor',
-      'xstate',
-      '@xstate/vue',
       'lucide-vue-next',
       'reka-ui',
       '@vue-flow/core',

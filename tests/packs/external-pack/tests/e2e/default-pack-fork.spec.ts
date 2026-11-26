@@ -38,7 +38,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     await expect(observer.getByLabel('Full Name', { exact: true })).toHaveValue('Fork acceptance preferences');
   } finally { await observer.close(); }
   await app.navigate('host/packs');
-  const source = await appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+  const source = await appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
     .getSnapshot().context.appPackSources.find((source: any) => source.id === 'default-setup'));
   const opened = electronApp.waitForEvent('window');
   await appPage.evaluate(() => (window as any).electronAPI.surfaces.popout('host/packs', 'Packs'));
@@ -51,7 +51,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
   // The window's Packs surface holds `installing` from an install's start until it answers, complete or failed with
   // its error: started before the install is asked for, so neither end is missed
   const installOutcome = (page: typeof appPage) => page.evaluate(() => new Promise<string | null>(resolve => {
-    const packs = (window as any).applicationState.system.get('host/packs');
+    const packs = (window as any).applicationState.surface('host/packs');
     let started = false;
     const watching = packs.subscribe((snapshot: any) => {
       if (snapshot.context.installing) started = true;
@@ -67,7 +67,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
   }, { message: 'replacement frontend accepted in this window' }).toBe(true);
   try {
     await second.waitForLoadState('domcontentloaded');
-    await appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+    await appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
       .send({ type: 'UI.SELECT_PACK', packId: 'default-setup' }));
     await appPage.getByTestId('pack-replacement').locator('input').fill(archive);
     const beforeReplace = await runtime(appPage);
@@ -87,7 +87,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     await Promise.all([waitForReplacement(appPage, previous), waitForReplacement(second, previous)]);
     await expect.poll(() => label(appPage)).toBe('Fork Notes');
     await expect.poll(() => label(second)).toBe('Fork Notes');
-    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
       .getSnapshot().context.packs.find((pack: any) => pack.id === 'default-setup')?.updatesWith)).toBe('user');
     await app.navigate('host/settings');
     await appPage.getByRole('button', { name: 'Personal', exact: true }).click();
@@ -104,7 +104,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
       const needsFrontendRestore = await label(appPage) !== 'Notes';
       const beforeRestore = await runtime(appPage);
       const restored = installOutcome(appPage);
-      await appPage.evaluate(source => (window as any).applicationState.system.get('host/packs')
+      await appPage.evaluate(source => (window as any).applicationState.surface('host/packs')
         .send({ type: 'UI.RESTORE', packId: source.id, sourceRevision: source.sourceRevision }), source);
       expect(await restored, 'the app default is restored').toBeNull();
       if (needsFrontendRestore) await waitForReplacement(appPage, beforeRestore);
@@ -133,7 +133,7 @@ if (restarting) test('default lifecycle survives normal boot', async ({ app, app
     await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.getSnapshot()
       .context.surfaces.find((surface: any) => surface.id === 'default-setup/notes')?.label)).toBe(bootCheck === 'fork' ? 'Fork Notes' : 'Notes');
     await app.navigate('host/packs');
-    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
       .getSnapshot().context.packs.find((pack: any) => pack.id === 'default-setup')?.updatesWith)).toBe(bootCheck === 'fork' ? 'user' : 'app');
   }
   await app.navigate('host/settings');

@@ -308,7 +308,7 @@ const resolveSystemId = (name: string, registered: ReadonlyMap<string, PackSyste
 const resolveSurfaceId = (name: string): string =>
   resolveRegistered('surface', name, { packId, registered: [...packs().getSurfaceEventValidationMap().keys()] });
 
-/** One event loop turn, after zero-delay timers already queued (xstate's `raise(…, { delay: 0 })`) */
+/** One event loop turn, after zero-delay timers already queued */
 const macrotask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 type RunNodeSpawned = SurfaceEvent & { type: 'RUN_NODE_SPAWNED'; runNode: { id: string; label?: string; kind?: string; eventType?: string }; flowRunNodeId: string; eventRunNodeId?: string };
@@ -491,8 +491,7 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   /**
    * The one cause of "Sent: nothing" the failure message cannot otherwise show, appended when it applies.
    *
-   * The bus handles `OUTGOING` only in `clientSeen`; in `awaitingClient` the event has no transition, so XState
-   * discards it and nothing is logged, reported or recorded. Without this, a test whose system answered
+   * The bus handles `OUTGOING` only in `clientSeen`; in `awaitingClient` the event is held/discarded so
    * correctly fails with an empty `Sent:` list and no way to tell "my handler never ran" from "my handler ran
    * and nobody was listening".
    *

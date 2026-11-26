@@ -60,7 +60,7 @@ it("reaches its system and hears back over the harness's bus", async () => {
   shell.surface('memos').send({ type: 'MEMOS.ADD', text: 'added from the surface' });
   await app.settle();
 
-  expect(shell.surface('memos').getSnapshot().context.memos.map((m: { text: string }) => m.text)).toContain('added from the surface');
+  expect((shell.surface('memos').getSnapshot().context.memos as Array<{ text: string }>).map(m => m.text)).toContain('added from the surface');
 });
 
 it('refuses a second frontend host in one test, naming what to do', async () => {

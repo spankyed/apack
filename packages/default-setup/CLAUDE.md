@@ -43,13 +43,13 @@ src/
 
 Each feature lives in `src/features/<name>/` with this layout:
 
-- `be/system.ts` — XState backend system machine
+- `be/system.ts` — `@apackdev/state` backend system
 - `be/contract.ts` — the feature's backend leaf: its system's `Contract` (`context`, `incoming`, `internal`, `outgoing`), which `apack.json` names at `features.<id>.system.contract`. Its own module rather than the types barrel, since `#generated/types` star-exports that and one `Contract` per feature would collide there; codegen reads it as a declared type, without resolving the machine
 - `be/repository/` — EARS read/write layer: `xQueries`/`xCommands` objects declared in `apack.json` `features.<id>.repositories`, carried by the generated pack entry's registration and registered by the host with the app's engine; use them through `repository` from `#generated/repository`
 - `be/services/` — Service modules, each exporting the `<key>Service` object exposed to systems and actions (see Services)
 - `be/types.ts` — Shared types
 - `apack.json` `features.<id>.surface` — presentation, state and component targets; codegen assembles the frontend binding
-- `fe/state.ts` — XState frontend state machine
+- `fe/state.ts` — `@apackdev/state` frontend surface state
 - `fe/contract.ts` — the feature's frontend leaf: its surface's published state, the events its `Contract` opens an inbox to, and the `Contract` itself. It imports no machine, no other feature and nothing from `#generated/*` but `types` and `ears`, which is what lets codegen read the contract without resolving the machine (`check:specifiers`); `apack.json` names it at `features.<id>.surface.contract`
 - `fe/canvas/` — Main view components
 - `fe/references.ts` — which of the feature's things are linkable from an editor, and how (if applicable)

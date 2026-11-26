@@ -17,7 +17,7 @@ test('advanced settings JSON provides offline declared completion, descriptions 
   await app.waitForSurface('memos');
   await app.navigate('host/settings');
   await appPage.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'general' });
     settings.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
   });
@@ -149,7 +149,7 @@ test('content memos from apack.json: a markdown entry and a compiler module', as
 async function openMemoPreferences(page: import('@playwright/test').Page, app: AppDriver) {
   await app.navigate('host/settings');
   await page.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'features' });
     settings.send({ type: 'FEATURE.SELECT', featureId: 'e2e-fixture/memos' });
   });
@@ -171,7 +171,7 @@ test("the pack's feature settings are defaults in the app", async ({ appPage, ap
 test("a re-enabled pack's surface gets its startup data again", async ({ appPage, app }) => {
   await app.waitForSurface('memos');
   const surfaceIds = () => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.surfaces.map((p: { id: string }) => p.id) as string[]);
-  const toggle = () => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs').send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
+  const toggle = () => appPage.evaluate(() => (window as any).applicationState.surface('host/packs').send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
 
   // Disabled while active: its surface actor must stop, or re-enabling can't spawn it again
   await app.navigate('memos');
@@ -198,8 +198,8 @@ test('writes untyped and reads back through the SDK\'s services, on the app\'s e
   const text = `memo note ${Date.now()}`;
   // The memos system writes a note with untypedCreate (@apackdev/sdk/ears, bridged to the app's) and reads it through
   // services.repository
-  await appPage.evaluate((t) => (window as any).applicationState.system.get('e2e-fixture/memos').send({ type: 'MEMOS.ADD_NOTE', text: t }), text);
-  const noteFor = () => appPage.evaluate((t) => ((window as any).applicationState.system.get('e2e-fixture/memos').getSnapshot().context.notes as Array<{ text: string; note: { title: string } | null }>)
+  await appPage.evaluate((t) => (window as any).applicationState.surface('e2e-fixture/memos').send({ type: 'MEMOS.ADD_NOTE', text: t }), text);
+  const noteFor = () => appPage.evaluate((t) => ((window as any).applicationState.surface('e2e-fixture/memos').getSnapshot().context.notes as Array<{ text: string; note: { title: string } | null }>)
     .find((entry) => entry.text === t), text);
   await expect.poll(noteFor).toMatchObject({ text, note: { title: text } });
 });
@@ -265,7 +265,7 @@ test('same-named pack preferences stay independent through save, disable and res
   await selectFixture();
   await expect(fixture).toHaveValue('Morgan');
 
-  const toggle = () => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+  const toggle = () => appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
     .send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
   const runtime = await acceptedRuntime(appPage, 'e2e-fixture');
   await toggle();
@@ -312,7 +312,7 @@ test('external reference declarations feed the existing editor and picker with c
   await appPage.getByTestId('memo-add').click();
   await expect(appPage.getByTestId('memo-list').getByText('Reference fixture memo')).toBeVisible();
   const memoId = await appPage.evaluate(() => {
-    const actor = (window as any).applicationState.system.get('e2e-fixture/memos');
+    const actor = (window as any).applicationState.surface('e2e-fixture/memos');
     return actor.getSnapshot().context.memos.find((memo: any) => memo.text === 'Reference fixture memo').id as string;
   });
   // The preview is already mounted: a newly supplied external URI uses the generic live parser.
@@ -320,7 +320,7 @@ test('external reference declarations feed the existing editor and picker with c
   const pill = appPage.getByTestId('memo-preview').locator('.reference-pill');
   await expect(pill).toHaveText('Reference fixture memo');
   await pill.click();
-  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system.get('e2e-fixture/memos').getSnapshot().context.highlighted)).toBe(memoId);
+  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('e2e-fixture/memos').getSnapshot().context.highlighted)).toBe(memoId);
   await editor.click();
   await editor.pressSequentially('#memos:');
   const suggestion = appPage.locator('.reference-suggestion-popup');

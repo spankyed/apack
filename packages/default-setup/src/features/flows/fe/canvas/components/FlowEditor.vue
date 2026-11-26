@@ -257,10 +257,10 @@ function handleEdgeUpdateEnd(event: EdgeMouseEvent) {
   emit('edge-update-end', event)
 }
 
-// Validates drag-to-connect only (connect-on-click is disabled; click-to-connect uses XState).
+// Validates drag-to-connect only (connect-on-click is disabled; click-to-connect uses the surface state).
 // NOTE: Do NOT add a duplicate-edge check here. VueFlow calls isValidConnection for ALL edges
 // when the :edges prop changes (not just drag operations), causing edges to reject themselves
-// as duplicates. Duplicate prevention is handled in XState guards instead.
+// as duplicates. Duplicate prevention is handled in surface state handlers instead.
 function isValidConnection(
   connection: Connection,
   elements: { edges: GraphEdge[]; nodes: GraphNode[]; sourceNode: GraphNode; targetNode: GraphNode }

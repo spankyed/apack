@@ -13,7 +13,7 @@ import { PACKAGES_BUILT, installPublishedPackages } from '../src/published-packa
  * error in there is invisible: a type that fails to resolve becomes `any`, and a consumer sees no
  * error at all, just a member that silently stops being checked. That is the failure this catches.
  *
- * `skipLibCheck: false` alone would also check every third-party declaration (vue, ai, xstate and
+ * `skipLibCheck: false` alone would also check every third-party declaration (vue, ai and
  * their trees), whose errors are not ours to fix and would make this fail for unrelated reasons. So
  * the program is built with checking on and the diagnostics are then filtered to the files under
  * `node_modules/@apackdev/`, the same way `facade-typing.spec.ts` scopes a pack's own facades.

@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useState, useSurface } from '@apackdev/sdk/fe';
+import { useState } from '#generated/state-fe.ts';
 // Comes from the host app at runtime, not bundled into the pack
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';
-import { id, type MemosState } from '../state.ts';
 
-const actor: MemosState = useSurface();
-const { state: memos, send } = useState(actor);
+const { state: memos, send } = useState('memos');
 const draft = ref('');
 const referenceDraft = ref('');
 

@@ -44,7 +44,7 @@ test('an invalid settings row from apack db exec is refused, and the app carries
   expect(refused?.stderr).toContain('Nothing it wrote was kept');
 
   expect(await stored(), 'what was there stays').toBe(before);
-  expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
+  expect(await app.getState()).toBe('running.connected');
 });
 
 test('a tool killed right after committing is heard, with nothing committed in the app', async ({ app, appPage, electronApp }) => {
@@ -78,12 +78,12 @@ test('a reset from apack db starts the running app over, and it goes on working'
 
   await expect.poll(async () => (await apackDb(dataDir, 'query', nameCount('Claude Code commands'))).stdout.trim()).toBe('1');
   expect((await apackDb(dataDir, 'query', nameCount('Renamed before the reset'))).stdout.trim()).toBe('0');
-  expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
+  expect(await app.getState()).toBe('running.connected');
 
   await appPage.evaluate(() => {
     type Actor = { send(event: { type: 'CREATE_FOLDER'; name: string }): void };
-    (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } })
-      .applicationState?.system?.get('default-setup/library')?.send({ type: 'CREATE_FOLDER', name: 'Made after the reset' });
+    (window as { applicationState?: { surface(id: string): Actor | undefined } })
+      .applicationState?.surface('default-setup/library')?.send({ type: 'CREATE_FOLDER', name: 'Made after the reset' });
   });
   const folders = "return query(EARS.Entity.Collection).where('name', 'Made after the reset').count()";
   await expect.poll(async () => (await apackDb(dataDir, 'query', folders)).stdout.trim()).toBe('1');

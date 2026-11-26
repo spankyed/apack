@@ -33,13 +33,13 @@ describe('facade gate', () => {
     const { problems } = await gate('clean', {
       'src/search.ts': [
         "import type { EARS } from '@apackdev/sdk';",
-        "import type { AnyActorLogic } from 'xstate';",
+        "import type { Ref } from 'vue';",
         "import { z } from 'zod';",
         'export const Query = z.object({ text: z.string() });',
         'export const searchService = {',
         '  parse: (input: unknown) => Query.parse(input),',
         '  byId: (id: EARS.EntityId): EARS.EntityId => id,',
-        '  logic: (logic: AnyActorLogic): AnyActorLogic => logic,',
+        '  ref: (ref: Ref<string>): Ref<string> => ref,',
         '};',
       ].join('\n'),
       'src/__generated__/pack-types.ts': "import type { searchService } from '../search.ts';\nexport type Services = { search: typeof searchService };\n",
@@ -50,13 +50,13 @@ describe('facade gate', () => {
   // rollup-plugin-dts turns a namespace's type-only re-export into `declare const x: typeof Type`
   it('fails a facade that does not type-check: a type-only re-export through a namespace', async () => {
     const { problems, bundle } = await gate('namespace-reexport', {
-      'src/types.ts': "export type { AnyActorLogic } from 'xstate';\n",
+      'src/types.ts': "export type { Ref } from 'vue';\n",
       'src/search.ts': "import * as types from './types.ts';\nexport { types };\n",
       'src/__generated__/pack-types.ts': "import * as search from '../search.ts';\nexport type Services = { search: typeof search };\n",
     });
-    expect(bundle).toMatch(/declare const \w+: typeof AnyActorLogic;/);
+    expect(bundle).toMatch(/declare const \w+: typeof Ref;/);
     expect(problems).toEqual([
-      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:\d+:\d+ error TS2693: 'AnyActorLogic' only refers to a type, but is being used as a value here\. \(in types_AnyActorLogic; reached from: Services\)$/),
+      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:\d+:\d+ error TS2693: 'Ref' only refers to a type, but is being used as a value here\. \(in types_Ref; reached from: Services\)$/),
     ]);
   });
 
@@ -66,7 +66,7 @@ describe('facade gate', () => {
       'src/__generated__/pack-types.ts': "import type { browserService } from '../browser.ts';\nexport type Services = { browser: typeof browserService };\n",
     });
     expect(problems).toEqual([
-      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "playwright", which dependents don't have: facades may import only @apackdev\/\* packages, @apackdev\/sdk's peer dependencies \([^)]*\bxstate\b[^)]*\) and Node built-ins \(reached from: Services\)$/),
+      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "playwright", which dependents don't have: facades may import only @apackdev\/\* packages, @apackdev\/sdk's peer dependencies \([^)]*\bvue\b[^)]*\) and Node built-ins \(reached from: Services\)$/),
     ]);
   });
 

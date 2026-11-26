@@ -112,10 +112,8 @@ describe('what the broker owning the process removes', () => {
    * that the app does not ask for the kill anyway.
    *
    * **What it reaches is `onShutdown`**, which is what the harness and the API both run on the way out, and
-   * a `kill` there fails this case. What it does **not** reach is a machine's `exit` action: XState 5 runs no
-   * exit action on `actor.stop()` — measured, with a two-state machine — so such an action is dead code on
-   * this path rather than a hazard this case would catch. If a future XState runs them, this case does not
-   * change and the guard is somewhere else.
+   * a `kill` there fails this case. Stopping the system ends its running subscriptions without killing broker
+   * sessions, which live in the broker process.
    */
   it('ends no session when the systems stop, which is what an API restart does', async () => {
     const broker = recordingBroker({ pidBase: 4242 })

@@ -189,33 +189,9 @@ export function findPackWindowStorage(dirs: readonly string[] = PACK_SOURCE_DIRS
   return packRule('window-storage', dirs, root);
 }
 
-/**
- * `file:line: @xstate/vue` for each pack source reading a machine through the machine library's own Vue
- * bindings, which a component reads with `useState` from `@apackdev/sdk/fe` instead.
- */
-export function findPackMachineSelectors(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
-  return packRule('machine-selectors', dirs, root);
-}
-
 /** `file:line: ASK_ANSWERED:` for each answer to an ask a pack writes by hand rather than through its `answers` table */
 export function findHandWrittenAnswers(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
   return packRule('ask-answers', dirs, root);
-}
-
-/**
- * `file:line: xstate.done.actor` for each transition a pack's machine writes on the end of an actor it spawned by
- * hand, which it declares with `makes` from `@apackdev/sdk/fe` and takes as `made.<name>` instead.
- */
-export function findHandKeptAskEnds(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
-  return packRule('ask-ends', dirs, root);
-}
-
-/**
- * `file:line: '*'` for each wildcard transition, in a pack's machine that makes asks with `makes`, written without
- * the transition that settles them beside it.
- */
-export function findSwallowedAskEnds(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
-  return packRule('swallowed-ask-ends', dirs, root);
 }
 
 /**
@@ -529,29 +505,6 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
 export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
   const rule: Rule = (node) => (ts.isStringLiteralLike(node)
     && (node.text === 'node-pty' || node.text.startsWith('node-pty/')) ? [node.text] : undefined);
-  return findInFiles(filesUnder(dirs, root), root, rule).sort();
-}
-
-/** The app's own frontend code: what draws a window, and what a pack's components are built from */
-const APP_FRONTEND_DIRS = ['packages/renderer/src', 'packages/apack-host/src', 'packages/apack-ui/src', 'packages/apack-sdk/src'];
-
-/**
- * `file:line: @xstate/vue` for each of the app's own frontend modules that imports the machine library's Vue
- * binding.
- *
- * A component reads a machine with `useState` (`@apackdev/sdk/fe`), which follows it once for every component
- * reading it and hands over `{ at, data }`. The `machine-selectors` pack rule refuses the binding in a pack; this is
- * the same line for the code a pack runs inside, which no pack rule reads. An import only: the package is still
- * named where the app shares its copy with packs (the import map, the shared-dependency list).
- */
-export function findMachineLibraryVueImports(dirs: readonly string[] = APP_FRONTEND_DIRS, root = repoRoot): string[] {
-  const rule: Rule = (node) => {
-    if (!ts.isStringLiteralLike(node) || node.text !== '@xstate/vue') return undefined;
-    const parent = node.parent;
-    const imported = ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)
-      || (ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword);
-    return imported ? [node.text] : undefined;
-  };
   return findInFiles(filesUnder(dirs, root), root, rule).sort();
 }
 
@@ -1048,7 +1001,6 @@ const RULE_LIST = [
   backed('findRawTransport', 'raw-transport', findRawTransport, PACK_SOURCE_DIRS),
   backed('findPackBackendConsole', 'backend-console', findPackBackendConsole, PACK_SOURCE_DIRS),
   backed('findPackWindowStorage', 'window-storage', findPackWindowStorage, PACK_SOURCE_DIRS),
-  backed('findPackMachineSelectors', 'machine-selectors', findPackMachineSelectors, PACK_SOURCE_DIRS),
   backed('findHostImports', 'host-imports', findHostImports, PACK_CODE_DIRS),
   backed('findPackOwnAliases', 'pack-own-aliases', findPackOwnAliases, PACK_CODE_DIRS),
   backed('findExtensionlessOwnModules', 'own-modules', findExtensionlessOwnModules, PACK_CODE_DIRS),
@@ -1078,13 +1030,6 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API and the host" },
     find: findElmdbImports,
     rule: "Only @elmdb/ears/database loads elmdb: the host and the API open the database through it, and packs never load it",
-  },
-  {
-    id: 'findMachineLibraryVueImports',
-    over: APP_FRONTEND_DIRS,
-    repoOnly: { kind: 'covered', by: 'machine-selectors', note: "What is left here is the app's own frontend, which no pack rule reads" },
-    find: findMachineLibraryVueImports,
-    rule: "The app's own components read a machine with useState from @apackdev/sdk/fe, as a pack's do: @xstate/vue's useSelector is a subscription of its own per call, and hands a component the machine library's snapshot",
   },
   {
     id: 'findNodePtyImports',
@@ -1152,8 +1097,6 @@ const RULE_LIST = [
   },
   backed('findRepositoryCasts', 'repository-casts', findRepositoryCasts, packageSourceDirs()),
   backed('findHandWrittenAnswers', 'ask-answers', findHandWrittenAnswers, PACK_SOURCE_DIRS),
-  backed('findHandKeptAskEnds', 'ask-ends', findHandKeptAskEnds, PACK_SOURCE_DIRS),
-  backed('findSwallowedAskEnds', 'swallowed-ask-ends', findSwallowedAskEnds, PACK_SOURCE_DIRS),
   backed('findReservedEventKeys', 'reserved-event-keys', findReservedEventKeys, PACK_CODE_DIRS),
   backed('findCrossFeatureImports', 'cross-feature-imports', findCrossFeatureImports, PACK_SRC_ROOTS),
   backed('findContractLeafImports', 'contract-leaves', findContractLeafImports, PACK_SRC_ROOTS),

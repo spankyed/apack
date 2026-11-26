@@ -41,7 +41,7 @@ test('host preferences and shortcuts work with default-setup disabled', async ({
   await expect(appPage.getByText('Previous Surface', { exact: true }).locator('..')).toContainText('9');
   await appPage.getByRole('heading', { name: 'Keyboard Shortcuts', exact: true }).click();
   await expect(appPage.getByText('Settings saved', { exact: true })).toBeVisible();
-  await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings')
+  await appPage.evaluate(() => (window as any).applicationState.surface('host/settings')
     .send({ type: 'GENERAL_NAV.SELECT', item: 'json' }));
   await expect(appPage.getByRole('heading', { name: 'Settings JSON' })).toBeVisible();
   await expect(appPage.locator('.monaco-editor')).toBeVisible();
@@ -136,7 +136,7 @@ test('shortcut drafts follow another window and preserve the global flag', async
   try {
     await second.waitForLoadState('domcontentloaded');
     await second.evaluate(() => {
-      const actor = (window as any).applicationState.system.get('host/settings');
+      const actor = (window as any).applicationState.surface('host/settings');
       actor.send({ type: 'TAB.SELECT', tab: 'general' });
       actor.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
     });

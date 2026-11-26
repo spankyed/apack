@@ -1006,9 +1006,9 @@ export function createTest(options: CreateTestOptions = {}) {
         const win = window as any;
         if (win.__droppedSends) return;
         win.__droppedSends = [];
-        win.applicationState?.system?.inspect?.((inspection: any) => {
-          const event = inspection?.event;
-          if (inspection?.type !== '@xstate.event' || event?.type !== 'SYSTEM_ERROR') return;
+        win.applicationState?.onEvent?.((record: any) => {
+          const event = record?.event;
+          if (event?.type !== 'SYSTEM_ERROR') return;
           if (event.operation === 'broadcast') win.__droppedSends.push(String(event.message ?? ''));
         });
       });

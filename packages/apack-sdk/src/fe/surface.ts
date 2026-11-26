@@ -1,7 +1,6 @@
 import type { AnyState } from '@apackdev/state';
 import type { FeatureRef } from '../ids/refs.ts';
 import type { Component } from 'vue';
-import type { AnyStateMachine } from 'xstate';
 import type { SurfaceChrome } from './chrome.ts';
 import type { SurfaceHotkeyDefinition } from './hotkeys.ts';
 
@@ -43,7 +42,7 @@ export type SurfaceInbox<T extends SurfaceInboxAudiences> = T;
 /**
  * The state a surface's `Contract` publishes — the whole of its context unless the contract narrows it with
  * `Pick<>`. Generated code builds each pack's `PackSurfaceState` with it, and the typed readers in `#generated/fe`
- * hand a selector this rather than an XState snapshot.
+ * hand a selector this rather than a raw runtime snapshot.
  *
  * Reads are public where sends are declared by audience, and the asymmetry is deliberate: a send changes the
  * surface's behaviour, a read does not, and a dependent pack that could read nothing by default would have no way
@@ -75,8 +74,8 @@ export interface Surface {
   id: FeatureRef;
   label: string;
   isPinned?: boolean;
-  state: AnyStateMachine | AnyState;
-  /** Declarative breadcrumbs and context menu for `@apackdev/state` surfaces (replaces XState `meta`). */
+  state: AnyState;
+  /** Declarative breadcrumbs and context menu for `@apackdev/state` surfaces. */
   chrome?: SurfaceChrome<never>;
   icon?: Component;
   canvas?: Component | RouteComponents;

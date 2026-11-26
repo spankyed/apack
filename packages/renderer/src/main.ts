@@ -47,8 +47,6 @@ window.appVersion = __APP_VERSION__;
 console.log(`apack v${__APP_VERSION__}`);
 runWindowStorageMigrations(localStorage, __APP_VERSION__);
 
-// const { inspect } = createBrowserInspector();
-
 // The only frontend registered before the shell starts. Every *pack's* frontend — the one the app ships
 // among them — is loaded by the shell once the bus says which packs are running, through one path.
 fePacks.registerPackFE({ kind: 'native', declaration: hostDeclaration }, hostFrontend);

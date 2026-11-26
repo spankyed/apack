@@ -16,12 +16,12 @@ test('a late old result cannot replace current search results, including after c
     await app.navigate('default-setup/threads');
     await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
     await appPage.waitForFunction(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
       return !!context.threadMap['Thread-search-11'];
     });
     const stale = await appPage.evaluate(async () => {
       const win = window as unknown as PerformanceWindow;
-      const actor = win.applicationState.system.get('default-setup/threads');
+      const actor = win.applicationState.surface('default-setup/threads');
       win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'SEARCH_MESSAGES', query: 'quartzalpha' }] });
       await new Promise<void>((resolve, reject) => {
         const started = performance.now();
@@ -40,14 +40,14 @@ test('a late old result cannot replace current search results, including after c
     }), query);
     await dispatch('quartzbeta');
     await expect.poll(() => appPage.evaluate(() => {
-      const search = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.messageSearch;
+      const search = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context.messageSearch;
       return search.query === 'quartzbeta' && !search.searching && search.results.length === 20 && search.results.every(row => row.threadId === 'Thread-search-1');
     })).toBe(true);
     for (const cancelled of [false, true]) {
       if (cancelled) await dispatch('');
       const search = await appPage.evaluate(async stale => {
         const win = window as unknown as PerformanceWindow;
-        const actor = win.applicationState.system.get('default-setup/threads');
+        const actor = win.applicationState.surface('default-setup/threads');
         actor.send({ type: 'SEARCH.READ', query: 'quartzalpha', results: stale });
         await win.__performance.flushView();
         return actor.getSnapshot().context.messageSearch;

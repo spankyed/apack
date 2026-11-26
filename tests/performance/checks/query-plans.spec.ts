@@ -20,7 +20,7 @@ test('retains payload-free native stage evidence for the scenario query shapes',
     await app.navigate('default-setup/threads');
     await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
     await appPage.waitForFunction(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
       return !!context.threadMap['Thread-search-11'];
     });
     await app.waitForSurface('default-setup/database');
@@ -38,11 +38,11 @@ test('retains payload-free native stage evidence for the scenario query shapes',
       `,
     }] }));
     await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string } };
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string } };
       return context.queryResult?.marker;
     })).toBe('application-performance-query-plans');
     const result = await appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/database').getSnapshot().context as unknown as { queryResult?: unknown };
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/database').getSnapshot().context as unknown as { queryResult?: unknown };
       return context.queryResult;
     });
     const count = z.number().int().nonnegative();

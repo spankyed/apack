@@ -6,7 +6,6 @@
 
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyState } from '@apackdev/state';
-import type { AnyStateMachine } from 'xstate';
 import type { Component } from 'vue';
 import { EARS } from '@elmdb/ears';
 import type { EditorState } from '@tiptap/pm/state';

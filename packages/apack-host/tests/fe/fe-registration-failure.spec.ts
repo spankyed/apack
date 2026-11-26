@@ -1,10 +1,10 @@
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 import { describe, expect, it } from 'vitest';
 import type { PackFERegistration, SurfaceDefinition } from '@apackdev/sdk/fe';
 import type { StepDefinition } from '@apackdev/sdk/steps';
 
-const surface = (label: string) => ({ label, icon: {}, state: createMachine({}), canvas: {} } satisfies SurfaceDefinition);
+const surface = (label: string) => ({ label, icon: {}, state: state()({}), canvas: {} } satisfies SurfaceDefinition);
 const step = (type: string): StepDefinition => ({ type, kind: 'step', node: { label: type } });
 const registration = (id: string, r: Partial<PackFERegistration>) => ({ id, ...r }) as PackFERegistration;
 

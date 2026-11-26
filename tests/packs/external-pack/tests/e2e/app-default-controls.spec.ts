@@ -18,10 +18,10 @@ import { test, expect } from '@apackdev/testing';
  */
 async function ownershipBecomes(appPage: Page, expected: string): Promise<void> {
   await appPage.evaluate(([want, ms]) => new Promise<void>((resolve, reject) => {
-    const actor = (window as unknown as { applicationState: { system: { get(ref: string): {
+    const actor = (window as unknown as { applicationState: { surface(ref: string): {
       getSnapshot(): { context: { packs: { id: string; updatesWith?: string }[] } };
       subscribe(listener: () => void): { unsubscribe(): void };
-    } } } }).applicationState.system.get('host/packs');
+    } } }).applicationState.surface('host/packs');
     const reading = (): string | undefined =>
       actor.getSnapshot().context.packs.find((pack) => pack.id === 'default-setup')?.updatesWith;
     if (reading() === want) return resolve();
@@ -40,13 +40,12 @@ async function ownershipBecomes(appPage: Page, expected: string): Promise<void> 
 
 test('an app default can be disabled, removed and restored while host settings remain usable', async ({ app, appPage }) => {
   await app.navigate('host/packs');
-  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-    .get('host/packs').getSnapshot().context.appPackSources.find((source: any) => source.id === 'default-setup')?.sourceRevision)).toBeTruthy();
-  const source = await appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('host/packs').getSnapshot().context.appPackSources.find((source: any) => source.id === 'default-setup')?.sourceRevision)).toBeTruthy();
+  const source = await appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
     .getSnapshot().context.appPackSources.find((source: any) => source.id === 'default-setup'));
   let needsRestore = false;
   try {
-    await appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+    await appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
       .send({ type: 'UI.SELECT_PACK', packId: 'default-setup' }));
     await expect(appPage.getByTestId('pack-replacement')).toBeVisible();
     needsRestore = true;
@@ -71,12 +70,12 @@ test('an app default can be disabled, removed and restored while host settings r
     await appPage.getByTestId('pack-confirm-restore').click();
     await app.waitForSurface('default-setup/threads');
     await ownershipBecomes(appPage, 'app');
-    expect(await appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+    expect(await appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
       .getSnapshot().context.packs.find((pack: any) => pack.id === 'default-setup')?.enabled)).toBe(true);
     needsRestore = false;
   } finally {
     if (needsRestore) {
-      await appPage.evaluate(source => (window as any).applicationState.system.get('host/packs')
+      await appPage.evaluate(source => (window as any).applicationState.surface('host/packs')
         .send({ type: 'UI.RESTORE', packId: source.id, sourceRevision: source.sourceRevision }), source);
       await app.waitForSurface('default-setup/threads');
     }

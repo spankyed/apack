@@ -18,7 +18,7 @@ test('opens every surface, and every surface\'s settings, without a renderer err
 
   const settings = 'host/settings';
   await app.navigate(settings);
-  await appPage.evaluate((ref) => (window as any).applicationState.system.get(ref).send({ type: 'TAB.SELECT', tab: 'features' }), settings);
+  await appPage.evaluate((ref) => (window as any).applicationState.surface(ref).send({ type: 'TAB.SELECT', tab: 'features' }), settings);
   // Read the declared preferences rendered by Settings, rather than removed surface metadata.
   const choices = appPage.getByTestId('feature-settings-list').locator('button[data-active]');
   await expect.poll(() => choices.count()).toBeGreaterThan(5);
@@ -38,7 +38,7 @@ test('an open feature form follows its settings being reset', async ({ app, appP
   await app.waitForSurface('default-setup/code');
   await app.navigate('host/settings');
   await appPage.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'FEATURE.SELECT', featureId: 'default-setup/code' });
     settings.send({ type: 'TAB.SELECT', tab: 'features' });
   });

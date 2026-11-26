@@ -11,7 +11,7 @@ const setupFiles = [
   path.resolve(root, './src/vitest-git-config.ts'),
 ];
 
-// Specs that use XState, fake timers, vi.mock, global spies, or process/global mutations stay isolated.
+// Specs that use fake timers, vi.mock, global spies, or process/global mutations stay isolated.
 const ISOLATED = [
   'tests/application-window.spec.ts',
   'tests/engine/cdp-page.spec.ts',

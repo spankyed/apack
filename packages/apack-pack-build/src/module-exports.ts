@@ -32,7 +32,7 @@ export interface ModuleExports {
    * `file` declares (`apack.json`'s `features[].system.contract`) — its `outgoing`.
    *
    * A declared type, as the surface reader takes one. Reading a value's type instead is what made an annotation on
-   * the system's default export (`: SystemEntry` rather than `satisfies`) silently drop every outgoing event, and
+   * the system's default export silently drop every outgoing event, and
    * what left the reader unable to tell a broken install from a mistake, since a failed import reads as `any`.
    */
   outgoingEventTypesOf(file: string, name: string): string[];

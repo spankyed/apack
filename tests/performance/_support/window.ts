@@ -43,12 +43,12 @@ export interface PerformanceWindow {
     send(event: Record<string, unknown>): void;
     // The threads surface's context, which three scenarios read, plus the code surface's panel fields. A
     // surface addressed here answers with its own context; the optional half is what the others hold.
-    system: { get(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): {
+    surface(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): {
       context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number; messageContents: Record<string, { text?: string; sender?: string; responseTimestamp?: number }>; messageSearch: { query: string; searching: boolean; results: Array<{ messageId: string; threadId: string; timestamp: number }> }; panelTerminalId?: string | null; panelTerminalExpanded?: boolean };
       // A surface's children are private to it; a scenario reads one only to assert what the surface did,
       // never to drive it — the code surface routes `<child>.*` by prefix, which is how a send gets there.
       children?: Record<string, { getSnapshot(): { context: { terminals?: Array<{ id: string; cols?: number; rows?: number }> } } } | undefined>;
-    }; subscribe(listener: () => void): { unsubscribe(): void } } };
+    }; subscribe(listener: () => void): { unsubscribe(): void } };
   };
 }
 

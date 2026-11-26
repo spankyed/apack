@@ -6,7 +6,6 @@
  */
 
 import type { AnyState } from '@apackdev/state';
-import type { AnyStateMachine } from 'xstate';
 import type { RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 
 /** A versioned change: declared target/description with a checked executable function. */
@@ -59,8 +58,8 @@ export interface PackEARS {
   ranks?: Record<string, RankDeclaration>;
 }
 
-/** A feature backend system's executable logic: an XState machine or a `@apackdev/state` `State`. */
-export type PackSystemLogic = AnyStateMachine | AnyState;
+/** A feature backend system's executable logic: a `@apackdev/state` `State`. */
+export type PackSystemLogic = AnyState;
 
 /** A feature's backend system, which the app runs at the feature's ref, `<packId>/<featureId>` */
 export interface PackFeatureSystem {

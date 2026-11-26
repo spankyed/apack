@@ -12,25 +12,24 @@ interface Received { surface: string; type: string; data?: unknown; asked?: stri
 
 type RecordingWindow = {
   __received?: Received[];
-  applicationState: { system: { inspect(observer: (event: { type: string; actorRef: { id: string }; event: Received }) => void): void } };
+  applicationState: { onEvent(observer: (record: { to: string; event: Received }) => void): void };
 };
 
 /**
- * The id a built-in feature's system and surface run under. This spec reads the surfaces' actors by id, which pack
+ * The id a built-in feature's system and surface run under. This spec reads the surfaces by id, which pack
  * code can't, so it writes the ids rather than the names.
  */
 const builtIn = (feature: string) => `default-setup/${feature}`;
 
-/** Records every event the code and browser surface actors receive from here on */
+/** Records every event the code and browser surfaces receive from here on */
 async function recordSurfaceEvents(appPage: Page): Promise<void> {
   await appPage.evaluate((ids) => {
     const win = window as unknown as RecordingWindow;
     if (win.__received) return;
     win.__received = [];
-    win.applicationState.system.inspect((inspection) => {
-      const surface = inspection.actorRef?.id;
-      if (inspection.type === '@xstate.event' && (surface === ids.code || surface === ids.browser)) {
-        win.__received!.push({ ...(JSON.parse(JSON.stringify(inspection.event)) as Received), surface });
+    win.applicationState.onEvent(({ to, event }) => {
+      if (to === ids.code || to === ids.browser) {
+        win.__received!.push({ ...(JSON.parse(JSON.stringify(event)) as Received), surface: to });
       }
     });
   }, { code: builtIn('code'), browser: builtIn('browser') });
@@ -102,8 +101,8 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
     // The answer is no event of the surface's: it is the output of the ask its machine invoked, so what shows it
     // arrived is the surface holding the bookmark
     await expect.poll(() => appPage.evaluate((ref) => {
-      const surface = (window as unknown as { applicationState: { system: { get(id: string): { getSnapshot(): { context: { bookmarks: { url: string }[] } } } | undefined } } })
-        .applicationState.system.get(ref);
+      const surface = (window as unknown as { applicationState: { surface(id: string): { getSnapshot(): { context: { bookmarks: { url: string }[] } } } | undefined } })
+        .applicationState.surface(ref);
       return (surface?.getSnapshot().context.bookmarks ?? []).map((bookmark) => bookmark.url);
     }, builtIn('browser'))).toContain(url);
   } finally {

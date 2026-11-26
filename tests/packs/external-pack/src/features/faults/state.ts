@@ -1,3 +1,3 @@
-import { createMachine } from 'xstate';
+import { state } from '#generated/state.ts';
 
-export default createMachine({});
+export default state()({});

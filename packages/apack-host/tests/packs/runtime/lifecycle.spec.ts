@@ -1,5 +1,6 @@
 import { eventContractsFixture } from './build-fixture.ts';
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
+const emptyState = () => state()({});
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 import { writeInstalledPackFixture } from './build-fixture.ts';
 import { sealBuild } from './build-fixture.ts';
@@ -406,7 +407,7 @@ describe('FE pack deregistration', () => {
   it('unregisterPackFE removes extensions and returns removed surfaces', async () => {
     const { registerFixture, unregisterPackFE } = createNativeFrontendTestRegistry();
 
-    const testSurface = { label: 'Test', state: createMachine({}) } satisfies SurfaceDefinition;
+    const testSurface = { label: 'Test', state: emptyState() } satisfies SurfaceDefinition;
     registerFixture({ id: 'test-pack', features: { testSurface: { surface: testSurface } } });
 
     const removed = unregisterPackFE('test-pack');
@@ -421,7 +422,7 @@ describe('FE pack deregistration', () => {
   // A shipped pack's registration carries its id like any other, so it comes out the same way
   it('takes a shipped pack\'s frontend back out like any other pack\'s', async () => {
     const { registerFixture, unregisterPackFE, getRegisteredSurfaces } = createNativeFrontendTestRegistry();
-    registerFixture({ id: 'default-setup', features: { main: { surface: { label: 'Built-in', state: createMachine({}) } } } });
+    registerFixture({ id: 'default-setup', features: { main: { surface: { label: 'Built-in', state: emptyState() } } } });
     const shipped = getRegisteredSurfaces()[0];
     expect(shipped).toMatchObject({ label: 'Built-in', id: 'default-setup/main' });
 

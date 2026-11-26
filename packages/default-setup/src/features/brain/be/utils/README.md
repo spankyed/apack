@@ -7,7 +7,7 @@ How the brain runs flows. Files are relative to `features/brain/be/`.
 ```
 be/
 ├── system.ts               # The brain system: starts/stops the root flow, routes TRIGGER_BRAIN_EVENT, pause and inspect toggles
-├── flow-system.ts          # createFlowNodeSystem(): one XState machine per running flow (root or subflow), and the flow actor registry
+├── flow-system.ts          # createFlowNodeSystem(): one `@apackdev/state` machine per running flow (root or subflow), and the flow registry
 ├── step-system.ts          # createStepNodeSystem(): one machine per step run, which calls executeStep and stores the result
 ├── flow-completion.ts      # When a flow completes (isPersistentTriggerFlow, shouldCompleteFlow)
 ├── trigger-dedupe.ts       # Keeps one trigger node per track key when a flow machine is created, warning about the rest

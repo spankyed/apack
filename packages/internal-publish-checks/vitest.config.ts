@@ -11,7 +11,7 @@ export default defineConfig({
   resolve: { conditions },
   ssr: { resolve: { conditions } },
   test: {
-    // All fast specs here are pure (no XState, bindHost, vi.mock, or global/env mutations).
+    // All fast specs here are pure (no bindHost, vi.mock, or global/env mutations).
     isolate: false,
     // A worker exits when its vitest does, rather than running on orphaned
     setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts', '../apack-testing/src/vitest-git-config.ts'],

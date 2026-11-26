@@ -18,7 +18,7 @@ test('app launches without crashing', async ({ electronApp, appPage }) => {
 
 test('app reaches connected state', async ({ app }) => {
   const state = await app.getState();
-  expect(state).toEqual({ running: 'connected' });
+  expect(state).toBe('running.connected');
 });
 
 test('applicationState is accessible with surfaces loaded', async ({ app }) => {

@@ -5,7 +5,6 @@
 ```ts
 
 import { EARS } from '@elmdb/ears';
-import { PromiseActorLogic } from 'xstate';
 
 // @internal
 export const _answered: (asked: string, answer: unknown) => AskAnswered;
@@ -218,7 +217,6 @@ export function createSends(input?: SendBinding): {
         type: string;
         [key: string]: unknown;
     }, options?: AskOptions): Promise<UntypedAskOutcome>;
-    fromAsk(to: SystemTarget, type: string): PromiseActorLogic<UntypedAskOutcome, object | undefined>;
 };
 
 // @public
@@ -547,15 +545,11 @@ export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K 
 export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}> {
     ask: TypedAsk<A>;
     broadcast: TypedSendToSurface<P>;
-    fromAsk: TypedFromAsk<A>;
     sendToSurface: TypedSendToSurface<P>;
     sendToWindow: TypedSendToWindow<P>;
     // (undocumented)
     tell: TypedTell<S>;
 }
-
-// @public
-export type TypedFromAsk<A extends SystemAskMap> = <Id extends keyof A & string, K extends keyof A[Id] & string>(system: Id, type: K) => PromiseActorLogic<AskOutcome<A[Id][K]>, AskPayload<A[Id][K]>>;
 
 // @public
 export type TypedSendToSurface<M extends SurfaceEvents> = (<P extends keyof M & string>(surface: P, event: OneSend<IsUnion<P>, M[P]['type'], M[P]>) => void) & ((surface: FeatureRef, event: FeatureSettingsUpdated) => void);

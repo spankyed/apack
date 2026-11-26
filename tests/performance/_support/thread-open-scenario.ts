@@ -17,7 +17,7 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
     }
     // Every action switches threads, including the first action in a reused window.
     const firstThread = await appPage.evaluate(() =>
-      (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === 'Thread-performance-0' ? 1 : 0);
+      (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context.currentThread?.id === 'Thread-performance-0' ? 1 : 0);
     for (const entry of schedule) {
       const { mode } = entry;
       await run.begin(entry);
@@ -37,7 +37,7 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
         try {
           await win.__waitForPerformanceView({
             check: () => {
-              const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+              const context = win.applicationState.surface('default-setup/threads').getSnapshot().context;
               if (context.currentThread?.id !== target) return false;
               work.requestedMessages = context.chatLimit;
               work.observedMessages = context.chatMessageIds.length;

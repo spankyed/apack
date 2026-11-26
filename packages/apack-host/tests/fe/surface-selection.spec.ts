@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { getEligibleSurface, selectEntityDestination } from '../../src/fe/surface-selection.ts';
 import { createFePackRegistry } from '../../src/fe/pack-store.ts';
 import { createContributionCatalog } from '../../src/packs/catalog.ts';
@@ -32,7 +32,7 @@ it('ties native destination claims to the accepted frontend even when its machin
   contributions.setNative([declaration]);
   const catalog = { status: () => 'ready' as const, surfaces: contributions.surfaces, subscribe: contributions.onChanged };
   const registry = createFePackRegistry();
-  const registration = { id: 'native', features: { view: { surface: { label: 'View', state: createMachine({}) } } } };
+  const registration = { id: 'native', features: { view: { surface: { label: 'View', state: state()({}) } } } };
   registry.registerPackFE({ kind: 'native', declaration }, registration);
   expect(getEligibleSurface(catalog, registry.surfaceBindings(), 'native/view')).toBeDefined();
   contributions.setNative([{ ...declaration, entityDestinations: { Prompt: 'view' } }]);

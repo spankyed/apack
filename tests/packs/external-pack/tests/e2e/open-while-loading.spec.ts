@@ -11,7 +11,7 @@ const MEMOS = `${PACK_ID}/memos`;
 
 /** Enables or disables the pack as its switch in the Packs tab does */
 const togglePack = (page: Page) => page.evaluate((packId) => {
-  (window as any).applicationState.system.get('host/packs').send({ type: 'UI.TOGGLE_ENABLED', packId });
+  (window as any).applicationState.surface('host/packs').send({ type: 'UI.TOGGLE_ENABLED', packId });
 }, PACK_ID);
 const hasMemos = (page: Page) => page.evaluate((memos) =>
   (window as any).applicationState.getSnapshot().context.surfaces.some((surface: { id: string }) => surface.id === memos), MEMOS);
@@ -28,8 +28,8 @@ test("opens a pack's surface asked for while the pack's frontend loads, once it 
     const win = window as any;
     win.__openedWhileLoading = false;
     win.__memosEvents = [];
-    win.applicationState.system.inspect((inspection: { type: string; actorRef?: { id: string }; event: { type: string } }) => {
-      if (inspection.type === '@xstate.event' && inspection.actorRef?.id === memos) win.__memosEvents.push(inspection.event.type);
+    win.applicationState.onEvent(({ to, event }: { to: string; event: { type: string } }) => {
+      if (to === memos) win.__memosEvents.push(event.type);
     });
     const subscription = win.applicationState.subscribe((snapshot: { context: { packLoadRunning: boolean; surfaces: Array<{ id: string }> } }) => {
       if (win.__openedWhileLoading || !snapshot.context.packLoadRunning) return;

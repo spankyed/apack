@@ -1,7 +1,8 @@
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { PackFERegistration } from '@apackdev/sdk/fe';
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
+const emptyState = () => state()({});
 import { Extension } from '@tiptap/core';
 import { ManifestSchema, type PackManifest } from '@apackdev/pack-format';
 
@@ -26,7 +27,7 @@ function fixture() {
       dsl: { notes: { prefix: 'n', entry: 'src/schema.ts', targets: ['monaco'], globals: { foo: 'Foo' } } } } };
   expect(ManifestSchema.safeParse(manifest).success).toBe(true);
   const registration = { id: manifest.id, bindSettings,
-    features: { notes: { surface: { label: 'Notes', state: createMachine({}) }, designation: 'notes', default: true }, form: { settingsForm: component } },
+    features: { notes: { surface: { label: 'Notes', state: emptyState() }, designation: 'notes', default: true }, form: { settingsForm: component } },
     settingsForms: { preferences: component }, steps: [{ type: 'note', node: { label: 'Note' }, fe: { colorKey: 'blue', nodeConfig: { icon: component, category: 'data', connectionRules: { inputs: 1, outputs: 1 } }, components: { form: component }, layout: { hasInput: true, getHeight } } }, { type: 'trigger', kind: 'trigger', node: { label: 'Trigger' } }],
     artifacts: [{ type: 'text', fe: { icon: component, component } }], blocks: [{ type: 'note', kind: 'input', fe: { component } }],
     appExtensions: { toolbar: component }, textEditor: { tools: { extensions: { example: editorExtension },
@@ -131,7 +132,7 @@ it('refuses a native replacement before granting resources and retains the accep
   const component = { render: vi.fn() };
   const native = { id: 'native', features: { view: { description: 'Feature declaration fixture.', surface: { label: 'Native view', state: 'native/state', canvas: 'native/canvas' } } } };
   const registry = createNativeFrontendTestRegistry([native]);
-  const registration = { id: 'native', features: { view: { surface: { label: 'Native view', state: createMachine({}), canvas: component } } } };
+  const registration = { id: 'native', features: { view: { surface: { label: 'Native view', state: emptyState(), canvas: component } } } };
   const [accepted] = registry.registerFixture(registration);
   native.features.view.surface.label = 'Mutated caller';
   const bindSettings = vi.fn();

@@ -1,5 +1,5 @@
 // Loads a dependency's backend runtime (runtime/index.cjs) into the test process on the pack's own
-// shared-instance packages, xstate and zod, the way the app loads it on its own (@apackdev/host/packs/runtime, bridge.ts).
+// shared-instance packages (`@apackdev/sdk`, `@apackdev/state`) and `zod`, the way the app loads it on its own (@apackdev/host/packs/runtime, bridge.ts).
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import {

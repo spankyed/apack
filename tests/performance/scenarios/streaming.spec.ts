@@ -38,7 +38,7 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
         await app.waitForSurface('default-setup/code');
         await app.navigate('host/settings');
         await appPage.evaluate(() => {
-          const actor = (window as unknown as PerformanceWindow).applicationState.system.get('host/settings');
+          const actor = (window as unknown as PerformanceWindow).applicationState.surface('host/settings');
           actor.send({ type: 'TAB.SELECT', tab: 'general' });
           actor.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' });
         });
@@ -47,12 +47,12 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
           .filter({ has: inputs }).last().getByPlaceholder('Path override (auto-detected if empty)');
         await cli.fill(executable);
         await expect.poll(() => appPage.evaluate(() => {
-          const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { settings: { cliPaths?: Record<string, string> } };
+          const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/code').getSnapshot().context as unknown as { settings: { cliPaths?: Record<string, string> } };
           return context.settings.cliPaths?.['claude-code'];
         })).toBe(executable);
         await app.send('default-setup/code', { type: 'SET_BASE_DIRECTORY', path: directory });
         await expect.poll(() => appPage.evaluate(() => {
-          const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { baseDirectory?: string };
+          const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/code').getSnapshot().context as unknown as { baseDirectory?: string };
           return context.baseDirectory;
         })).toBe(directory);
         await run.importThreads(`Thread-stream-${run.schedule.length - 1}`);
@@ -63,7 +63,7 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
       const thread = entry.ordinal;
       await appPage.evaluate(thread => (window as unknown as PerformanceWindow).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: `Thread-stream-${thread}` }, { type: 'SET_MODE', mode: 'Claude Code' }] }), thread);
       await appPage.waitForFunction(thread => {
-        const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+        const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context;
         return context.currentThread?.id === `Thread-stream-${thread}` && context.chatMessageIds.length === 20
           && context.chatMessageIds.every(id => document.querySelector(`[data-message-id="${id}"]`));
       }, thread);
@@ -72,7 +72,7 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
       const result = await appPage.evaluate(async ({ mode, thread, expected, scriptedChunks }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
-        const context = () => win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+        const context = () => win.applicationState.surface('default-setup/threads').getSnapshot().context;
         const before = new Set(context().chatMessageIds);
         await recording.start(mode);
         const started = performance.now();

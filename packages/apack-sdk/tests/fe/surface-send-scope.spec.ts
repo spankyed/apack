@@ -1,8 +1,8 @@
 // A component's send says which surface made it.
 //
-// This is the one path that reaches a machine's actions from outside a delivery. The bus names the message it
-// routes to a system and the shell names the one it hands a surface, but a click goes straight to the actor — so
-// an action that then sent to a system stamped no `Message.sender`, and the system answering it with `reply` had
+// This is the one path that reaches a machine's handlers from outside a delivery. The bus names the message it
+// routes to a system and the shell names the one it hands a surface, but a click goes straight to the surface handle — so
+// a handler that then sent to a system stamped no `Message.sender`, and the system answering it with `reply` had
 // no address and threw. For the commonest kind of request in the app.
 //
 // What the scope is read for is `Message.sender` (`createSends` in `events/index.ts`); here it is read directly,
@@ -10,44 +10,69 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSSRApp, defineComponent, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
-import { assign, createActor, createMachine, type AnyActorRef } from 'xstate';
+import { state, system, type System } from '@apackdev/state';
 import { SurfaceScope, useSurface } from '../../src/fe/actor-system.ts';
+import type { HostShellSurfaceRef, HostShellSurfaceSnapshot } from '../../src/fe/shell.ts';
 import { _currentDelivery, type _Delivery } from '../../src/events/delivery.ts';
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts';
 
-/** What the delivery scope held each time the actor was sent to */
+/** What the delivery scope held each time the surface handle was sent to */
 let scopes: (_Delivery | undefined)[] = [];
 
-/** A surface actor that records the scope its send ran in, which is the whole subject */
+/** A surface handle that records the scope its send ran in, which is the whole subject */
 const recording = (id: string) => ({
   id,
+  sessionId: id,
+  getSnapshot: () => ({ status: 'active' as const, value: 'ready', context: {} }),
+  subscribe: () => ({ unsubscribe() {} }),
   send: () => { scopes.push(_currentDelivery()); },
-}) as unknown as AnyActorRef;
+}) as HostShellSurfaceRef;
 
 /**
- * A real actor, for the one case that is about what the Proxy passes through rather than what it wraps.
- *
- * The fakes above answer `id` and `send` and nothing else, so they cannot show that reading state still works
- * through the wrapper — which is the risk a Proxy introduces and the reason this file can claim the wrapper is
- * safe to hand a component.
+ * A real `@apackdev/state` instance wrapped as a `HostShellSurfaceRef`, for the cases about what the Proxy passes
+ * through rather than what it wraps.
  */
-const counter = createMachine({
-  id: 'counter',
-  context: { count: 0 },
-  on: { BUMP: { actions: assign({ count: ({ context }) => context.count + 1 }) } },
+const counter = state<{ data: { count: number } }, { type: 'BUMP' }>()({
+  data: { count: 0 },
+  on: { BUMP: (_event, { data }) => ({ data: { count: data.count + 1 } }) },
 });
 
-let live: AnyActorRef;
+function wrapCounter(id: string): { ref: HostShellSurfaceRef; sys: System } {
+  const sys = system({ side: 'window' });
+  const handle = sys.start(id, counter);
+  const toSnapshot = (): HostShellSurfaceSnapshot => {
+    const view = sys.read(handle);
+    return {
+      status: 'active',
+      value: 'ready',
+      context: view.data as unknown as Record<string, unknown>,
+    };
+  };
+  const ref: HostShellSurfaceRef = {
+    id,
+    sessionId: id,
+    getSnapshot: toSnapshot,
+    subscribe: (observer) => {
+      const stop = sys.subscribe(() => observer(toSnapshot()));
+      return { unsubscribe: stop };
+    },
+    send: (event) => sys.send(handle, event as { type: 'BUMP' }),
+  };
+  return { ref, sys };
+}
+
+let live: ReturnType<typeof wrapCounter>;
 
 beforeEach(() => {
   scopes = [];
-  live = createActor(counter, { id: 'memo-pack/counter' }).start();
-  const running: Record<string, AnyActorRef> = {
+  live = wrapCounter('memo-pack/counter');
+  const running: Record<string, HostShellSurfaceRef> = {
     'memo-pack/memos': recording('memo-pack/memos'),
     'default-setup/notes': recording('default-setup/notes'),
-    'memo-pack/counter': live,
+    'memo-pack/counter': live.ref,
   };
-  bindFeHost({ catalog: {} as never,
+  bindFeHost({
+    catalog: {} as never,
     application: { surface: (ref: string) => running[ref], subscribe: () => ({ unsubscribe() {} }) } as never,
     secrets: {} as never,
     settings: {} as never,
@@ -57,14 +82,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  live.stop();
+  live.sys.stop();
   unbindFeHost();
 });
 
 /** A component that does what a click handler does: send to its own surface */
 const Sends = defineComponent({
   setup: () => {
-    useSurface<AnyActorRef>().send({ type: 'FETCH' });
+    useSurface<HostShellSurfaceRef>().send({ type: 'FETCH' });
     return () => '';
   },
 });
@@ -101,20 +126,15 @@ describe("a component's send", () => {
 
   /**
    * Reading state through the wrapper still works, which is what makes it safe to hand a component.
-   *
-   * Only `send` is wrapped; everything else is passed through bound to the actor. `useSelector` is built on
-   * exactly these two — it calls `subscribe` and reads `getSnapshot` — so a Proxy that broke either would make
-   * every selector in every surface go stale, silently and everywhere. (`useSelector` itself is not exercised
-   * here: `@xstate/vue` is the renderer's dependency, not this package's.)
    */
-  it('passes getSnapshot and subscribe through to the actor', async () => {
+  it('passes getSnapshot and subscribe through to the handle', async () => {
     const seen: number[] = [];
     let readBefore: number | undefined;
     let readAfter: number | undefined;
 
     const Reads = defineComponent({
       setup: () => {
-        const surface = useSurface<AnyActorRef>();
+        const surface = useSurface<HostShellSurfaceRef>();
         surface.subscribe((snapshot) => { seen.push((snapshot.context as { count: number }).count); });
         readBefore = (surface.getSnapshot().context as { count: number }).count;
         surface.send({ type: 'BUMP' });
@@ -125,24 +145,20 @@ describe("a component's send", () => {
 
     await render(() => h(SurfaceScope, { surface: 'memo-pack/counter' }, () => h(Reads)));
 
-    expect(readBefore, 'the actor was read through the wrapper').toBe(0);
-    expect(readAfter, 'and the send it made reached the real actor').toBe(1);
-    expect(seen, 'and a subscriber was told, which is what a selector relies on').toContain(1);
+    expect(readBefore, 'the handle was read through the wrapper').toBe(0);
+    expect(readAfter, 'and the send it made reached the real state').toBe(1);
+    expect(seen, 'and a subscriber was told').toContain(1);
   });
 
   /**
-   * Its members keep their identity too, which is what stops this depending on a library's internals.
-   *
-   * `@xstate/vue` reads `getSnapshot` and `subscribe` once, so a fresh binding per read happens to work there —
-   * but a version that memoised on identity would make every selector in every surface stop updating, silently
-   * and visually only. Keeping the bindings removes the question rather than re-checking it on each bump.
+   * Its members keep their identity too, so readers that memoise on method identity stay stable.
    */
   it('hands back the same member each time it is read', async () => {
     let stable: boolean | undefined;
     let sendStable: boolean | undefined;
     const Reads = defineComponent({
       setup: () => {
-        const surface = useSurface<AnyActorRef>();
+        const surface = useSurface<HostShellSurfaceRef>();
         stable = surface.getSnapshot === surface.getSnapshot && surface.subscribe === surface.subscribe;
         sendStable = surface.send === surface.send;
         return () => '';
@@ -151,18 +167,18 @@ describe("a component's send", () => {
 
     await render(() => h(SurfaceScope, { surface: 'memo-pack/counter' }, () => h(Reads)));
 
-    expect(stable, 'a selector may hold on to either').toBe(true);
+    expect(stable, 'a reader may hold on to either').toBe(true);
     expect(sendStable, 'and the wrapped send is one function, not one per read').toBe(true);
   });
 
-  // The wrapper is per actor, so a component calling useSurface() twice compares equal either way
+  // The wrapper is per handle, so a component calling useSurface() twice compares equal either way
   it('hands back the same object each time', async () => {
     let first: unknown;
     let second: unknown;
     const Twice = defineComponent({
       setup: () => {
-        first = useSurface<AnyActorRef>();
-        second = useSurface<AnyActorRef>();
+        first = useSurface<HostShellSurfaceRef>();
+        second = useSurface<HostShellSurfaceRef>();
         return () => '';
       },
     });
