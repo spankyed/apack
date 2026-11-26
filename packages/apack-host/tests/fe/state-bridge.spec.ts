@@ -144,13 +144,16 @@ const notesChrome: SurfaceChrome<{ readonly at?: string; readonly data: { readon
   },
 };
 
+type BoardEvent = SurfaceLifecycleEvent | { type: 'SET_FILTER'; filter: string };
+
 const boardForNet = forNet<{ systems: {}; surfaces: {}; views: {} }>((name) => resolveName(name, 'other-pack'));
 function buildBoardState(hooks: { onExit?: () => void } = {}) {
-  return boardForNet<{ data: { startedCount: number } }, SurfaceLifecycleEvent, {}>()({
-    data: { startedCount: 0 },
+  return boardForNet<{ data: { startedCount: number; filter: string } }, BoardEvent, {}>()({
+    data: { startedCount: 0, filter: '' },
     run: ({ onExit }) => { onExit(() => hooks.onExit?.()); },
     on: {
       SURFACE_STARTED: (_ev, { data }) => ({ data: { startedCount: data.startedCount + 1 } }),
+      SET_FILTER: (ev) => ({ data: { filter: ev.filter } }),
     },
   });
 }
@@ -371,7 +374,7 @@ describe('frontend @apackdev/state shell bridge', () => {
     app.unmount();
   });
 
-  it('cleans up on pack unload and reload without colliding with remaining @apackdev/state surfaces', async () => {
+  it('stops one @apackdev/state surface on pack unload without restarting sibling surfaces or resetting their state', async () => {
     let notesExits = 0;
     let boardExits = 0;
     const makeNotesSurface = (): Surface => ({
@@ -392,25 +395,35 @@ describe('frontend @apackdev/state shell bridge', () => {
     expect(stateSystemOf(shell).read({ ref: NOTES_REF })).toBeDefined();
     expect(stateSystemOf(shell).read({ ref: OTHER_REF })).toBeDefined();
 
-    // Unload notes-pack: stops notes cleanly, restarts remaining board without errors
+    // Mutate sibling board's in-memory state before unloading notes-pack
+    shell.system.get(OTHER_REF)!.send({ type: 'SET_FILTER', filter: 'keep-me' });
+    await settle();
+    expect(shell.system.get(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
+
+    // Unload notes-pack: stops only notes via per-ref handle; sibling board stays running untouched
     shell.send({ type: 'PACK_SURFACES_UNLOADED', packId: PACK_ID });
     await settle();
     expect(notesExits).toBe(1);
     expect(stateSystemOf(shell).read({ ref: NOTES_REF })).toBeUndefined();
-    expect(stateSystemOf(shell).read({ ref: OTHER_REF })).toBeDefined();
-    expect(boardExits).toBe(1); // stopped and restarted cleanly
+    expect(boardExits).toBe(0);
+    expect(stateSystemOf(shell).read({ ref: OTHER_REF })).toMatchObject({
+      data: { startedCount: 1, filter: 'keep-me' },
+    });
+    expect(shell.system.get(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
 
-    // Reload notes-pack: starts fresh with no duplicate-ref collision
+    // Reload notes-pack: starts fresh with no duplicate-ref collision and still does not disturb board
     const reloaded = makeNotesSurface();
     fake.acceptSurface(reloaded);
     shell.send({ type: 'PACK_FRONTEND_LOADED', packId: PACK_ID, registrationId: 'reg-2', surfaces: [reloaded] });
     await settle();
     expect(stateSystemOf(shell).read({ ref: NOTES_REF })).toBeDefined();
     expect(shell.system.get(NOTES_REF)!.getSnapshot()).toMatchObject({ status: 'active', value: 'list' });
+    expect(boardExits).toBe(0);
+    expect(shell.system.get(OTHER_REF)!.getSnapshot().context).toEqual({ startedCount: 1, filter: 'keep-me' });
 
     // Stopping shell stops all remaining surfaces cleanly
     shell.stop();
     expect(notesExits).toBe(2);
-    expect(boardExits).toBe(2);
+    expect(boardExits).toBe(1);
   });
 });

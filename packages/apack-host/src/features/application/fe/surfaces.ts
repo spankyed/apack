@@ -44,7 +44,7 @@ export function spawnSurfaceActor(
     if (!stateBridge) {
       throw new Error(`Surface "${surface.id}" uses @apackdev/state, but no WindowStateBridge was provided to spawnSurfaceActor`);
     }
-    logic = stateBridge.createSurfaceActor(surface as Surface & { state: AnyState }, ownsAppLayout);
+    logic = stateBridge.createSurfaceActor(surface as Surface & { state: AnyState });
   } else {
     logic = surface.state;
   }

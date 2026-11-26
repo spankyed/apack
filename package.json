@@ -165,7 +165,7 @@
     "@apackdev/git": "https://github.com/spankyed/apack-git/releases/download/pkg-90e5881747d4adb4ac8690d1e23932b3df68d7b3/apackdev-git-0.1.0.tgz",
     "@apackdev/link": "https://github.com/spankyed/apack-link/releases/download/pkg-51a406fc27e9e7bd11ac1eb7ca6995e73f1eef55/apackdev-link-0.1.0.tgz",
     "@apackdev/orderings": "https://github.com/spankyed/apack-orderings/releases/download/pkg-65dda86e8e69679dd420ed32d8c3b5df171cbe2c/apackdev-orderings-0.1.0.tgz",
-    "@apackdev/state": "https://github.com/spankyed/apack-state/releases/download/pkg-80649081f8cc85b1a629fad0fde3716f92504024/apackdev-state-0.1.0.tgz",
+    "@apackdev/state": "https://github.com/spankyed/apack-state/releases/download/pkg-e893141a09fd55a60e6e68d0ac63a281ef6392c3/apackdev-state-0.1.0.tgz",
     "@apackdev/terminal": "https://github.com/spankyed/apack-terminal/releases/download/bin-cfc498ff12c91af8e19858a9fd69fd4303e7a69a/apackdev-terminal-0.1.0.tgz",
     "@apackdev/terminal-view": "https://github.com/spankyed/apack-terminal/releases/download/bin-cfc498ff12c91af8e19858a9fd69fd4303e7a69a/apackdev-terminal-view-0.1.0.tgz"
   },
