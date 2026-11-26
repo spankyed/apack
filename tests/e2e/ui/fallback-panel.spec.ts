@@ -7,10 +7,10 @@ test("inspect mode shows the brain's panel beside a surface that has none", asyn
   const panel = appPage.locator('[data-onboarding-id="inspection-panel"]');
   await expect(panel).toHaveCount(0);
 
-  await appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/brain').send({ type: 'TOGGLE_INSPECT' }));
+  await appPage.evaluate(() => (window as any).applicationState.surface('default-setup/brain').send({ type: 'TOGGLE_INSPECT' }));
 
   await expect(panel).toBeVisible();
 
-  await appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/brain').send({ type: 'TOGGLE_INSPECT' }));
+  await appPage.evaluate(() => (window as any).applicationState.surface('default-setup/brain').send({ type: 'TOGGLE_INSPECT' }));
   await expect(panel).toHaveCount(0);
 });

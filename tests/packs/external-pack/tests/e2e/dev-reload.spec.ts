@@ -22,7 +22,7 @@ test('a reloaded pack is left running', async ({ app, appPage, connection }) => 
     return !!current && current !== previous;
   }, { packId: PACK_ID, previous: previous.runtime })).toBe(true);
   const actor = await appPage.evaluate(packId =>
-    (window as any).applicationState.system.get(`${packId}/memos`).sessionId, PACK_ID);
+    (window as any).applicationState.surface(`${packId}/memos`).sessionId, PACK_ID);
   expect(actor).not.toBe(previous.actor);
 
   // Interacting with the accepted frontend also proves its cached canvas has rebound to the fresh actor.

@@ -1,9 +1,10 @@
 import { expect, it, vi } from 'vitest';
-import { setup } from 'xstate';
+import { state } from '@apackdev/state';
 import { PACK_SNAPSHOT_FORMAT, _declarationRevision, type PackManifest } from '@apackdev/pack-format';
 import { createPackRegistry } from '../../src/packs/registry.ts';
 
-const machine = setup({}).createMachine({});
+const emptyState = () => state()({});
+const machine = emptyState();
 const events = { system: { incoming: ['START'], outgoing: ['DONE'] }, surface: { receives: ['DONE', 'SHOW'] } };
 
 it('retains admitted endpoints across caller mutation and later validation-map refresh', () => {
@@ -15,7 +16,7 @@ it('retains admitted endpoints across caller mutation and later validation-map r
   registry.registerPack(registration);
   feature.system.receives.push('PRIVATE');
   feature.surface.receives.push('INJECTED');
-  feature.system.machine = setup({}).createMachine({});
+  feature.system.machine = emptyState();
   Reflect.deleteProperty(registration.features, 'shell');
   registry.registerPack({ id: 'peer' });
   expect(registry.getRegisteredPackSystemIds('native')).toEqual(['native/shell']);

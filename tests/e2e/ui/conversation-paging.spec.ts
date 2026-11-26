@@ -6,14 +6,14 @@ import { test, expect, type AppDriver } from '@apackdev/testing';
 import { richThreadFixture } from '../../_support/conversations.ts';
 interface PagingWindow {
   applicationState: {
-    system: { get(ref: string): { getSnapshot(): { context: {
+    surface(ref: string): { getSnapshot(): { context: {
       currentThread?: { id: string };
       threadMap: Record<string, unknown>;
       chatMessageIds: string[];
       chatLimit: number;
       messagePagination: unknown;
       focusMessage?: unknown;
-    } } } };
+    } } };
   };
 }
 
@@ -30,7 +30,7 @@ async function prepare(app: AppDriver, page: Page, name: string) {
     await app.navigate('default-setup/threads');
     await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
     await page.waitForFunction(id => {
-      const context = (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const context = (window as unknown as PagingWindow).applicationState.surface('default-setup/threads').getSnapshot().context;
       return !!context.threadMap[id];
     }, threads[1].id);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -39,7 +39,7 @@ async function prepare(app: AppDriver, page: Page, name: string) {
 
 async function open(app: AppDriver, page: Page, threadId: string, fixtureIndex = 0) {
   await app.sendEvent({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId }] });
-  await page.waitForFunction(id => (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === id, threadId);
+  await page.waitForFunction(id => (window as unknown as PagingWindow).applicationState.surface('default-setup/threads').getSnapshot().context.currentThread?.id === id, threadId);
   await expectRows(page, 50, 50, fixtureIndex);
   // A viewport baseline taken during the message's entrance translation is not a reading position.
   await page.evaluate(async () => {
@@ -99,7 +99,7 @@ test.afterEach(async ({ appPage }, info) => {
   await info.attach('paging-browser-trace', { path: trace, contentType: 'application/zip' });
   await info.attach('paging-window', { body: await appPage.screenshot(), contentType: 'image/png' });
   const state = await appPage.evaluate(() => {
-    const context = (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+    const context = (window as unknown as PagingWindow).applicationState.surface('default-setup/threads').getSnapshot().context;
     const row = document.querySelector('[data-message-id]');
     const container = row?.closest<HTMLElement>('.overflow-y-auto');
     return { thread: context.currentThread?.id, ids: context.chatMessageIds, limit: context.chatLimit,
@@ -144,7 +144,7 @@ test('cross-thread search focus survives paging for loaded and older targets', a
     const target = appPage.locator(`[data-message-id="${messageId}"]`);
     await expect(target).toHaveClass(/focused/);
     await expect(target).toBeInViewport({ ratio: 1 });
-    await appPage.waitForFunction(() => !((window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context).focusMessage);
+    await appPage.waitForFunction(() => !((window as unknown as PagingWindow).applicationState.surface('default-setup/threads').getSnapshot().context).focusMessage);
     await frames(appPage);
     // Exercise paging at the focused position without scrolling the target away ourselves.
     await target.evaluate(row => row.closest('.overflow-y-auto')!.dispatchEvent(new Event('scroll')));

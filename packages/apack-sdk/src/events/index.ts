@@ -10,7 +10,6 @@ import type { ApplicationHotkeys } from '../types/index.ts';
 import { eventTypes } from './event-types.ts';
 import { _currentDelivery, type _Delivery } from './delivery.ts';
 import { ASK_ANSWER_TYPES, ASK_CANCELLED, isAskAnswer, _unavailable, type AskProgressed, type ProgressPayload, type AskAnswered, type AskFailed, type AskFailure, type AskOutcome, type AskPayload, type NormalizeAsks, type SystemAskMap } from './ask.ts';
-import { fromPromise, type PromiseActorLogic } from 'xstate';
 import type { ContractIncoming, ContractOutgoing, SystemEvents } from '../framework/define-system.ts';
 
 export { eventTypes, type TypeOfEvent } from './event-types.ts';
@@ -347,7 +346,7 @@ export type IncomingEventsOf<C> = ContractIncoming<C>;
 /**
  * The tell-only events a system receives from outside itself, excluding its declared asks (`Contract['incoming']`
  * alone). `@apackdev/state` keeps tell events and asks disjoint on `Net['systems'][k]`, unlike `IncomingEventsOf<C>`
- * which unions ask events in for XState.
+ * which unions ask events in.
  */
 export type IncomingOnlyEventsOf<C> = [C] extends [never]
   ? never
@@ -607,20 +606,6 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
     ask(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: AskOptions): Promise<UntypedAskOutcome> {
       return askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), event, labels, options);
     },
-
-    /**
-     * An ask as actor logic, for a machine to invoke: its input is the ask's fields, its output how it ended
-     * (`onOutcome`, `@apackdev/sdk/helpers`, writes a transition per way). What the handler tells it before the answer
-     * reaches the invoking machine as `<ask>.progress` (`ProgressEventOf`). Stopping the invoking state stops the ask:
-     * the handler's `signal` aborts, and nothing more of it arrives.
-     */
-    fromAsk(to: SystemTarget, type: string): PromiseActorLogic<UntypedAskOutcome, object | undefined> {
-      return fromPromise<UntypedAskOutcome, object | undefined>(({ input, signal, self }) =>
-        askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), { ...input, type }, labels, {
-          signal,
-          heard: (update) => { self._parent?.send({ type: `${type}.progress`, update }); },
-        }));
-    },
   };
 }
 
@@ -842,7 +827,7 @@ export type SystemTarget = string | { role: string };
  * "is there anybody to answer?" is a question the type asks rather than one a global is probed for.
  *
  * **It is a send, not a resolve, so calling it twice sends twice — on purpose.** Nothing here is at-most-once
- * and nothing should be: there is no request id to answer against and an XState machine cannot await, so the
+ * and nothing should be: there is no request id to answer against and a fire-and-forget handler cannot await, so the
  * asker handles each answer as an event like any other. A handler that reports progress and then a result is
  * doing something ordinary, and refusing the second call would forbid it to protect against a mistake nobody
  * has made. What a double call cannot do is go somewhere unexpected: both answers carry the same address, so
@@ -941,8 +926,7 @@ export function _clientOf(delivery: _Delivery | undefined): string | undefined {
  * The connection the currently handled message arrived on, or `undefined` when no window sent it
  * (e.g. a flow, schedule, or another backend system).
  *
- * For `@apackdev/state` backend handlers, which read the active delivery scope directly rather than
- * receiving XState's `defineHandlers` `{ client }` parameter.
+ * For `@apackdev/state` backend handlers, which read the active delivery scope directly.
  */
 export function currentClient(): string | undefined {
   return _clientOf(_currentDelivery());
@@ -1035,25 +1019,17 @@ export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K 
   options?: AskOptions<ProgressPayload<A[Id][K]>>,
 ) => Promise<AskOutcome<A[Id][K]>>) & ((target: { role: string }, event: { type: string; [key: string]: unknown }, options?: AskOptions) => Promise<UntypedAskOutcome>);
 
-/** `fromAsk` typed against a system ask map: the actor's input is the ask's fields, its output how it ended */
-export type TypedFromAsk<A extends SystemAskMap> = <Id extends keyof A & string, K extends keyof A[Id] & string>(
-  system: Id,
-  type: K,
-) => PromiseActorLogic<AskOutcome<A[Id][K]>, AskPayload<A[Id][K]>>;
-
 /** A pack's typed sends */
 export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}> {
   /** Backend: over the bus, to every window showing that surface */
   broadcast: TypedSendToSurface<P>;
   /** Backend: to that surface on one connection — the window a handler is serving, handed to it as `client` */
   sendToWindow: TypedSendToWindow<P>;
-  /** Renderer: straight to this window's actor for that surface */
+  /** Renderer: straight to this window's surface handle */
   sendToSurface: TypedSendToSurface<P>;
   tell: TypedTell<S>;
   /** Asks a system, and answers with its answer or why it was not done */
   ask: TypedAsk<A>;
-  /** An ask as actor logic, for a machine to invoke */
-  fromAsk: TypedFromAsk<A>;
 }
 
 /**

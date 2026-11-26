@@ -16,10 +16,10 @@ rule below on figures rejects. The guard is this paragraph, where the next perso
 
 ## Overview
 
-apack is an Electron desktop app with an actor-based architecture. Both frontend and backend are built on XState state machines that communicate through typed events.
+apack is an Electron desktop app with a state-machine architecture. Both frontend and backend are built on `@apackdev/state` machines that communicate through typed events.
 
-- **Backend** (`packages/server/`) — Node.js server (`node:http` + `ws`) using tRPC: transport, process boot and the composition of the app runtime (`@apackdev/host`: XState actor systems, packs, services) over elmdb databases (`@elmdb/ears/database`)
-- **Frontend** (`packages/renderer/`) — Vue 3 + Tailwind CSS surface system, each surface is an XState actor with designated UI areas (canvas, panel)
+- **Backend** (`packages/server/`) — Node.js server using `@apackdev/link` + `muxTransport`: transport, process boot and the composition of the app runtime (`@apackdev/host`: `@apackdev/state` systems, packs, services) over elmdb databases (`@elmdb/ears/database`)
+- **Frontend** (`packages/renderer/`) — Vue 3 + Tailwind CSS surface system, each surface is a `@apackdev/state` machine with designated UI areas (canvas, panel)
 - **Electron main** (`packages/main/`) — Module-based process manager that spawns the API server and manages windows
 - **Preload** (`packages/preload/`) — IPC bridge exposing safe APIs to renderer
 - **Default Setup** (`packages/default-setup/`) — the pack the app ships, installed into the data dir at first boot and loaded from there like any other: features, steps, and content sources (actions, prompts, flows, notes, commands) that `apack pack build` compiles into `packages/default-setup/dist/` from `apack.json` `content.sources` (see `packages/default-setup/CLAUDE.md` and `docs/public-facing/content.md`)
@@ -514,7 +514,7 @@ nothing runs breaks unseen when the app moves under it. A spec earns a place the
 future change could break **and** needs the real process boundary (`app-integration/dev-reload.spec.ts` is the
 example); anything else is a driving script, kept out of `tests/e2e`. `npm run test:e2e` runs the suite alone.
 
-Playwright tests launch the full Electron app and interact via `window.applicationState` (the XState actor). Use to visually verify UI changes.
+Playwright tests launch the full Electron app and interact via `window.applicationState` (the app shell). Use to visually verify UI changes.
 
 ```bash
 npm run test:e2e                     # Run all E2E tests
@@ -538,7 +538,7 @@ For full fixture lifecycle, API reference, and ad-hoc testing pattern, see `test
 
 ### Event-driven actor system
 
-Every backend **system** and frontend **surface** is an XState state machine. They communicate via a central event bus:
+Every backend **system** and frontend **surface** is a `@apackdev/state` state machine. They communicate via a central event bus:
 
 - **Backend → Frontend**: `broadcast(name, event)`, in a system's actions or anywhere else; actions use `services.emitter.broadcast`. It goes over the bus, so it reaches **every** window showing that surface — a surface runs once per window. The renderer's `sendToSurface(name, event)` is the other half: straight to this window's actor. **A broadcast does three jobs and only one of them is an answer** — a notification nobody asked for, a view's data fetch, and a command's result — and which one an event is doing decides both its channel and its shape: a notification is never correlated, a fetch wants its answer in a slot keyed by what was asked, and a command's result is an ask's **answer** rather than a broadcast, correlated by the envelope's call. `packages/default-setup/CLAUDE.md` has the three with the worked examples; getting it wrong is where an answer taken for the wrong request comes from
 - **Frontend or backend → System**: `tell(systemId, event)`, typed with the events each system declares (own systems by feature id, a dependency's as `<dependency>/<feature>`; actions name every system `<pack>/<feature>`)
@@ -653,7 +653,7 @@ Custom entity-attribute-relation graph database (`@elmdb/ears`) on [elmdb](https
 
 ### Frontend surface system
 
-Each surface registers: `id`, `label`, `icon`, `state` (XState machine), `canvas` (required), `panel` (optional). Surfaces are spawned on demand by the application actor. A component reads a machine with `useState` (`@apackdev/sdk/fe`): `const { state, send } = useState(actor)`, where `state.data` is the machine's context, each field the machine's own value, and `state.at` is where it is as a path; the `machine-selectors` pack rule refuses `@xstate/vue` in a pack. Surface machines and views live in `packages/default-setup/src/features/<name>/fe/`. A component reads its feature's data with `useView` (`#generated/fe`, typed by the feature's `views`): a live read the backend runs again after every commit that changes its result, sent to that window alone; a surface drawn in several areas follows its views from its machine with `fromView` instead, and asks for what it starts from on `SURFACE_STARTED`, the one startup event that arrives in a delivery naming it. Presentation and binding targets are declared in `apack.json` `features.<id>.surface`: `generate-entries` assembles them into `src/__generated__/pack-entry-fe.ts`, which `apack pack build` bundles into the pack's `dist/runtime/fe.js`. **Every** pack's frontend is loaded from `pack://<id>/runtime/fe.js` by the shell, the one the app ships included; a dev server serves it from that source file instead (`virtual:dev-pack-frontends`), which is what makes a `.vue` edit patch the component.
+Each surface registers: `id`, `label`, `icon`, `state` (`@apackdev/state` machine), `canvas` (required), `panel` (optional). Surfaces are started by the application shell. A component reads a surface with `useState` (`#generated/state-fe`, backed by `@apackdev/state/vue`): `const { state, send } = useState('notes')`, where `state.data` is the surface's data and `state.at` is its state path. Surface states and views live in `packages/default-setup/src/features/<name>/fe/`. A component reads its feature's data with `useView` (`#generated/fe`, typed by the feature's `views`): a live read the backend runs again after every commit that changes its result, sent to that window alone; a surface drawn in several areas follows its views from its state with `follows` instead, and asks for what it starts from on `SURFACE_STARTED`, the one startup event that arrives in a delivery naming it. Presentation and binding targets are declared in `apack.json` `features.<id>.surface`: `generate-entries` assembles them into `src/__generated__/pack-entry-fe.ts`, which `apack pack build` bundles into the pack's `dist/runtime/fe.js`. **Every** pack's frontend is loaded from `pack://<id>/runtime/fe.js` by the shell, the one the app ships included; a dev server serves it from that source file instead (`virtual:dev-pack-frontends`), which is what makes a `.vue` edit patch the component.
 
 ### Key patterns
 
@@ -709,4 +709,4 @@ Rules for default-setup migrations (details in `packages/apack-host/src/migratio
 
 ## Tech stack
 
-XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), Ghostty's VT core in one place — the `apack-terminal` broker owns the pty and interprets it with `libghostty-vt` 1.0, and a window paints the rows it is sent with `@apackdev/terminal-view`, which has no core of its own (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).
+`@apackdev/state` (state machines everywhere), `@apackdev/link` + `muxTransport` (typed IPC/RPC transport), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), Ghostty's VT core in one place — the `apack-terminal` broker owns the pty and interprets it with `libghostty-vt` 1.0, and a window paints the rows it is sent with `@apackdev/terminal-view`, which has no core of its own (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).

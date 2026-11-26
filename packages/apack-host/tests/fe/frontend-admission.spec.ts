@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createMachine } from 'xstate';
+import { state as defineState } from '@apackdev/state';
 import { _nativePackDeclarationProblem } from '@apackdev/pack-format';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import type { PackFERegistration, SettingsPort } from '@apackdev/sdk/fe';
@@ -53,7 +53,7 @@ it('compares loaded declarations before granting settings and refuses installed 
 it('captures every metadata container while retaining machines, components and callbacks', () => {
   const component = { render: vi.fn() };
   const replacement = { render: vi.fn() };
-  const state = createMachine({});
+  const state = defineState()({});
   const isShown = vi.fn(() => true);
   const surface = { label: 'Items', state, icon: component, canvas: { list: component }, panel: component,
     hotkeys: [{ action: 'OPEN', global: true }], options: { headerClass: 'initial' },

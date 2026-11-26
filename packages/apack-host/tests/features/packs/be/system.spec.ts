@@ -7,8 +7,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { system as createStateSystem } from '@apackdev/state';
 import { defectGuard } from '@apackdev/state/testing';
-import { createActor, setup, type AnyEventObject } from 'xstate';
 import { HOST } from '../../../../src/refs.ts';
+
+type AnyEventObject = { type: string; [key: string]: unknown };
 import { _appDirOf, resolveAppEnvironment } from '@apackdev/sdk/env';
 import { startTestRuntime, resetTestData, takeSystemErrors } from '@apackdev/sdk/testing';
 import { readInstalledPacks, recordUserInstall, setPackEnabled } from '../../../../src/packs/installed.ts';
@@ -120,8 +121,9 @@ function runPacksSystem({ deferStops = false } = {}) {
       const ev = event as AnyEventObject;
       sent.push(ev);
       if (typeof ev.afterStop === 'function') {
-        if (deferStops) stops.push(ev.afterStop);
-        else ev.afterStop();
+        const afterStop = ev.afterStop as () => void;
+        if (deferStops) stops.push(afterStop);
+        else afterStop();
       }
     },
   });
@@ -430,9 +432,7 @@ describe('pack information without activation', () => {
     expect(() => readPackBuild(dir)).not.toThrow();
     setPackEnabled(PACK_ID, kind !== 'disabled');
     if (kind === 'activation-failed') {
-      const bus = createActor(setup({}).createMachine({})).start();
-      try { expect(activatePack(registry, PACK_ID, bus)).toBe(false); }
-      finally { bus.stop(); }
+      expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(false);
       expect(registry.loadProblem(PACK_ID)).toContain('Do not activate');
     }
     registry.refreshCatalog(resolveAppEnvironment().packsDir);
@@ -893,7 +893,7 @@ describe('app-source update offers and acceptance', () => {
       }
       system.send({ type: 'GET_INSTALLED_PACKS' });
       const last = emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop();
-      expect(last?.packs.find((pack: InstalledPackSummary) => pack.id === PACK_ID)?.appUpdate).toBeUndefined();
+      expect((last?.packs as InstalledPackSummary[] | undefined)?.find(pack => pack.id === PACK_ID)?.appUpdate).toBeUndefined();
     } finally { system.stop(); }
   });
 
@@ -906,11 +906,11 @@ describe('app-source update offers and acceptance', () => {
     const system = runPacksSystem();
     try {
       system.send({ type: 'GET_INSTALLED_PACKS' });
-      expect(emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs[0].appUpdate)
+      expect((emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs as InstalledPackSummary[] | undefined)?.[0]?.appUpdate)
         .toMatchObject({ version: '1.0.0', sourceRevision: source.sourceRevision });
       await installPackFromLocal(dir, undefined, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
       system.send({ type: 'GET_INSTALLED_PACKS' });
-      expect(emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs[0].appUpdate).toBeUndefined();
+      expect((emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs as InstalledPackSummary[] | undefined)?.[0]?.appUpdate).toBeUndefined();
       system.send({ type: 'UPDATE_APP_PACK', packId: PACK_ID, sourceRevision: source.sourceRevision });
       await vi.waitFor(() => expect(emitted(system.sent).map(event => event.type)).toContain('PACK_UPDATE_FAILED'));
       expect(emitted(system.sent).find(event => event.type === 'PACK_UPDATE_FAILED')?.error).toContain('user-managed');
@@ -931,10 +931,10 @@ describe('app-source update offers and acceptance', () => {
     const system = runPacksSystem();
     try {
       system.send({ type: 'GET_INSTALLED_PACKS' });
-      const pack = emitted(system.sent).find(event => event.type === 'PACKS_LIST')?.packs[0];
-      expect(pack.appUpdate).toBeUndefined();
-      expect(pack.availableVersion).toBeUndefined();
-      expect(pack.appSourceProblem).toContain('not built');
+      const pack = (emitted(system.sent).find(event => event.type === 'PACKS_LIST')?.packs as InstalledPackSummary[] | undefined)?.[0];
+      expect(pack?.appUpdate).toBeUndefined();
+      expect(pack?.availableVersion).toBeUndefined();
+      expect(pack?.appSourceProblem).toContain('not built');
       system.send({ type: 'UPDATE_PACK', packId: PACK_ID });
       expect(emitted(system.sent).find(event => event.type === 'PACK_UPDATE_FAILED')?.error).toContain('app-source');
       expect(fetch).not.toHaveBeenCalled();

@@ -121,12 +121,12 @@ test('what a program asks of the world outside its screen reaches the surface', 
   await appPage.evaluate((code) => {
     const win = window as unknown as DrivenWindow & {
       __asked?: string[];
-      applicationState: { system: { inspect(observer: (inspection: { type: string; actorRef: { id: string }; event: { type: string; data?: { text?: string } } }) => void): void } };
+      applicationState: { onEvent(observer: (record: { to: string; event: { type: string; data?: { text?: string } } }) => void): void };
     };
     win.__asked = [];
-    win.applicationState.system.inspect((inspection) => {
-      if (inspection.type === '@xstate.event' && inspection.actorRef?.id === code && inspection.event.type === 'terminal.CLIPBOARD') {
-        win.__asked!.push(inspection.event.data?.text ?? '');
+    win.applicationState.onEvent(({ to, event }) => {
+      if (to === code && event.type === 'terminal.CLIPBOARD') {
+        win.__asked!.push(event.data?.text ?? '');
       }
     });
   }, CODE);
@@ -242,8 +242,8 @@ test('a terminal on a target is drawn and typed at like any other', async ({ app
   // Named where a person names one: in the code feature's settings
   await app.navigate('host/settings');
   await appPage.evaluate((code) => {
-    const settings = (window as unknown as { applicationState: { system: { get(ref: string): { send(event: Record<string, unknown>): void } } } })
-      .applicationState.system.get('host/settings');
+    const settings = (window as unknown as { applicationState: { surface(ref: string): { send(event: Record<string, unknown>): void } } })
+      .applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'features' });
     settings.send({ type: 'FEATURE.SELECT', featureId: code });
   }, CODE);

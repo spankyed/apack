@@ -1,10 +1,7 @@
-// A contract used to be a value carrying phantom properties — `_incoming`/`_outgoing` on the object `defineSystem`
-// returned — which codegen read with `propertyType(spec, '_outgoing')`. That is why an entry declared
-// `const entry: SystemEntry = …` silently published no events: the annotation widened the value and took the
-// phantoms with it. Contracts are declared types now, read with `declaredTypeOf`, and there is no value to widen.
+// Contracts are declared types read with `declaredTypeOf`, never values carrying phantom properties.
 //
 // Nothing in the type system stops the pattern coming back, so these pin both halves of it: no `_`-prefixed member
-// on the spec, and no property read of one in the reader.
+// on `SystemContract`, and no property read of one in the reader.
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -15,17 +12,11 @@ const readSdk = (rel: string) => fs.readFileSync(path.join(SDK_SRC, rel), 'utf-8
 const readBuild = (rel: string) => fs.readFileSync(path.join(BUILD_SRC, rel), 'utf-8');
 
 describe('a contract is a type, not a value with phantoms', () => {
-  // Both, because `SystemSpec extends Handlers`: a phantom could come back on either and reach the spec
-  it.each(['SystemSpec', 'Handlers'])('%s declares no `_`-prefixed member', (name) => {
+  it('SystemContract declares no `_`-prefixed member', () => {
     const source = readSdk('framework/define-system.ts');
-    const body = new RegExp(`export interface ${name}<[\\s\\S]*?\\{([\\s\\S]*?)\\n\\}`).exec(source);
-    expect(body, `${name} should still be an interface in define-system.ts`).not.toBeNull();
+    const body = /export interface SystemContract\s*\{([\s\S]*?)\n\}/.exec(source);
+    expect(body, 'SystemContract should still be an interface in define-system.ts').not.toBeNull();
     expect([...body![1].matchAll(/^\s*(_\w+)\s*[?:]/gm)].map((m) => m[1])).toEqual([]);
-  });
-
-  it('SystemEntry carries the spec whole, rather than picking members off it', () => {
-    // `spec: Pick<SystemSpec<…>, '_incoming' | '_outgoing'>` was how the entry kept the phantoms in reach
-    expect(readSdk('framework/system-utils.ts')).not.toMatch(/spec:\s*Pick</);
   });
 
   // But `__entity`: the brand `EARS.EntityId<'T'>` declares (`@elmdb/ears`' `entities.ts`), a property of the id's

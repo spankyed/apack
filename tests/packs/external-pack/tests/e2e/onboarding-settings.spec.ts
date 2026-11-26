@@ -11,7 +11,7 @@ test('real onboarding writes app and feature preferences without a settings asse
   const openJson = async () => {
     await app.navigate('host/settings');
     await appPage.evaluate(() => {
-      const actor = (window as any).applicationState.system.get('host/settings');
+      const actor = (window as any).applicationState.surface('host/settings');
       actor.send({ type: 'TAB.SELECT', tab: 'general' });
       actor.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
     });
@@ -31,7 +31,7 @@ test('real onboarding writes app and feature preferences without a settings asse
   const lifecycle = async () => {
     await app.navigate('default-setup/database');
     await appPage.evaluate(() => {
-      const actor = (window as any).applicationState.system.get('default-setup/database');
+      const actor = (window as any).applicationState.surface('default-setup/database');
       actor.send({ type: 'BACK_TO_EXPLORER' });
       actor.send({ type: 'QUERY.UPDATE', code: `return {
         app: query('AppState').pickOne(['hasOnboarded']),
@@ -39,10 +39,9 @@ test('real onboarding writes app and feature preferences without a settings asse
       };` });
     });
     await appPage.getByRole('button', { name: 'Execute', exact: true }).click();
-    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-      .get('default-setup/database').getSnapshot().context.making.query)).toBe(false);
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('default-setup/database').getSnapshot().context.making.query)).toBe(false);
     const result = await appPage.evaluate(() => {
-      const context = (window as any).applicationState.system.get('default-setup/database').getSnapshot().context;
+      const context = (window as any).applicationState.surface('default-setup/database').getSnapshot().context;
       return { value: context.queryResult, error: context.error };
     });
     expect(result.error).toBeNull();

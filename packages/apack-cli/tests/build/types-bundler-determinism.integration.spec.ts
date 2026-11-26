@@ -42,11 +42,10 @@ const PACK: Record<string, string> = {
     "export type Contract = { incoming: { type: 'ADD_TAG' }; outgoing: OutgoingTagsEvents };",
   ].join('\n') + '\n',
   'src/system.ts': [
-    "import { setup } from 'xstate';",
-    "import { defineSystem } from '@apackdev/sdk/framework';",
+    "import { state } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './system.contract.ts';",
-    'export const tagsSpec = defineSystem<Contract>();',
-    'const entry = { spec: tagsSpec, machine: setup({ types: tagsSpec.types }).createMachine({ id: "tags" }) };',
+    'const entry = state<{}, IncomingOnlyEventsOf<Contract>>()({});',
     'export default entry;',
   ].join('\n'),
   // Inferred types that name SDK declarations: the declaration emit prints them from whichever copy resolved

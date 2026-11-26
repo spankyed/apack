@@ -2,7 +2,6 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createActor, createMachine } from 'xstate';
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { boundEars } from '@apackdev/sdk/ears';
@@ -54,7 +53,7 @@ async function startWatchedPack(signal: AbortSignal): Promise<WatchedPack & { cl
   vi.stubEnv('SHIPPED_PACKS_DIR', '');
   const environment = resolveAppEnvironment();
   const installed = path.join(environment.packsDir, 'watched-pack');
-  const backend = createActor(createMachine({})).start();
+  const backend = { send: () => {} } as never;
   const state = { reloads: 0, publications: 0 };
   let toolServer: ToolSocketServer | undefined;
   let watcher: TestPackBuildWatcher | undefined;
@@ -63,7 +62,6 @@ async function startWatchedPack(signal: AbortSignal): Promise<WatchedPack & { cl
   const close = async () => {
     await watcher?.close();
     if (registry.getPackRegistration('watched-pack')) registry.unregisterPack('watched-pack');
-    backend.stop();
     await toolServer?.close();
     errors.mockRestore();
     vi.unstubAllEnvs();

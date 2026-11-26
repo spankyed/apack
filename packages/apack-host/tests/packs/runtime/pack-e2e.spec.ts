@@ -58,27 +58,19 @@ function installTestPack() {
   // The pack's frontend, which the renderer loads from the installed pack
   fs.writeFileSync(path.join(TEST_PACK_DIR, 'runtime', 'fe.js'), 'export default { surfaces: [] };');
 
-  // A real runtime registration whose system machine requires xstate from the host
+  // A real runtime registration whose system state requires @apackdev/state from the host
   fs.writeFileSync(path.join(TEST_PACK_DIR, 'runtime', 'index.cjs'), (`
     'use strict';
-    const { setup } = require('xstate');
+    const { state } = require('@apackdev/state');
 
-    const helloMachine = setup({
-      types: {
-        events: {},
-      },
-    }).createMachine({
-      id: 'e2e-hello',
-      initial: 'idle',
+    const helloState = state()({
+      data: { pings: 0 },
+      at: 'idle',
       states: {
         idle: {
           on: {
-            CLIENT_CONNECTED: {
-              actions: () => {},
-            },
-            HELLO_PING: {
-              actions: () => {},
-            },
+            CLIENT_CONNECTED: () => {},
+            HELLO_PING: (_event, { data }) => ({ data: { pings: data.pings + 1 } }),
           },
         },
       },
@@ -88,8 +80,8 @@ function installTestPack() {
       registration: {
         id: '${TEST_PACK_ID}',
         features: {
-          // As apack pack build writes it: the machine's events and the manifest's incoming ones
-          hello: { system: { machine: helloMachine, receives: ['CLIENT_CONNECTED', 'HELLO_PING'] }, surface: { receives: [] } },
+          // As apack pack build writes it: the system's declared incoming events
+          hello: { system: { machine: helloState, receives: ['CLIENT_CONNECTED', 'HELLO_PING'] }, surface: { receives: [] } },
           dataOnly: { surface: { receives: [] } },
         },
       },
@@ -141,9 +133,7 @@ describe('E2E: pack loading pipeline', () => {
 
     const system = systemOf(testPack, 'hello');
     expect(system?.machine).toBeDefined();
-    expect(isState(system!.machine)).toBe(false);
-    if (isState(system!.machine)) throw new Error('expected XState machine');
-    expect(system!.machine.id).toBe('e2e-hello');
+    expect(isState(system!.machine)).toBe(true);
   });
 
   it('registers no system for a feature that has only a surface', () => {
@@ -158,15 +148,16 @@ describe('E2E: pack loading pipeline', () => {
     expect(getPacksWithClientLoadedFrontends(loaded)).toEqual([TEST_PACK_ID]);
   });
 
-  it('xstate machine from pack is functional (can create states)', () => {
+  it('@apackdev/state machine from pack is functional', () => {
     const testPack = packs.find(p => p.origin.id === TEST_PACK_ID)!;
     const machine = systemOf(testPack, 'hello')!.machine;
-    if (isState(machine)) throw new Error('expected XState machine');
+    expect(isState(machine)).toBe(true);
 
-    // Verify the machine has the expected structure
-    expect(machine.config.initial).toBe('idle');
-    expect(machine.config.states).toHaveProperty('idle');
-    expect(machine.config.states!.idle.on).toHaveProperty('CLIENT_CONNECTED');
-    expect(machine.config.states!.idle.on).toHaveProperty('HELLO_PING');
+    // Verify the state definition can run and handles its declared events
+    const def = machine.def as { at: string; states: Record<string, { on: Record<string, unknown> }> };
+    expect(def.at).toBe('idle');
+    expect(def.states).toHaveProperty('idle');
+    expect(def.states.idle.on).toHaveProperty('CLIENT_CONNECTED');
+    expect(def.states.idle.on).toHaveProperty('HELLO_PING');
   });
 });

@@ -205,8 +205,7 @@
     "@tiptap/vue-3": "^3.32.0",
     "ai": "^7.0.0",
     "elmdb": "0.1.0",
-    "vue": "^3.5.18",
-    "xstate": "^5.19.2"
+    "vue": "^3.5.18"
   },
   "peerDependenciesMeta": {
     "@tiptap/pm": {
@@ -222,7 +221,6 @@
     "ai": "^7.0.100",
     "vite": "^7.3.7",
     "vitest": "^4.1.12",
-    "xstate": "^5.19.2",
     "jsdom": "^26.1.0"
   },
   "publishConfig": {

@@ -1,7 +1,7 @@
 // Direct MessageChannelMain port brokering across Electron main, preload, and the API UtilityProcess:
-// an app window receives a direct transport on connect(), sees onClose() immediately when the API
-// UtilityProcess crashes (SIGKILL), automatically receives a fresh generation when main restarts it,
-// and cleanly re-acquires a fresh port after a soft page reload.
+// the renderer owns the window's single direct transport via backendPort.connect(), observes immediate
+// disconnect when the API UtilityProcess crashes (SIGKILL), automatically reconnects on a fresh generation
+// when main restarts it, and cleanly re-acquires a fresh port after a soft page reload.
 import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '@apackdev/testing';
 
@@ -20,65 +20,69 @@ async function apiPid(electronApp: ElectronApplication): Promise<number> {
   return pid;
 }
 
-interface PortProbeState {
-  generations: number[];
-  closedGenerations: number[];
+interface ShellProbeState {
+  events: string[];
 }
 
-async function attachPortProbe(page: Page): Promise<void> {
+async function attachShellProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const bridge = (window as unknown as {
-      electronAPI: {
-        backendPort: {
-          connect(onPort: (transport: { onClose(cb: () => void): void; close(): void }, info: { generation: number }) => void): () => void;
-        };
+    const appState = (window as unknown as {
+      applicationState: {
+        onEvent(listener: (record: { to: string; event: { type?: string } }) => void): { unsubscribe(): void };
       };
-    }).electronAPI;
-
-    const state: PortProbeState & { unsubscribe?: () => void } = {
-      generations: [],
-      closedGenerations: [],
-    };
-    state.unsubscribe = bridge.backendPort.connect((transport, info) => {
-      state.generations.push(info.generation);
-      transport.onClose(() => {
-        state.closedGenerations.push(info.generation);
-      });
+    }).applicationState;
+    const state: ShellProbeState = { events: [] };
+    appState.onEvent(({ event }) => {
+      if (event.type === 'BUS_CONNECTION_LOST' || event.type === 'BUS_SUBSCRIBED') {
+        state.events.push(event.type);
+      }
     });
-    (window as unknown as { __portBrokerProbe?: typeof state }).__portBrokerProbe = state;
+    (window as unknown as { __portBrokerShellProbe?: ShellProbeState }).__portBrokerShellProbe = state;
   });
 }
 
-async function readPortProbe(page: Page): Promise<PortProbeState> {
-  return page.evaluate(() => {
-    const state = (window as unknown as { __portBrokerProbe?: PortProbeState }).__portBrokerProbe;
-    return {
-      generations: [...(state?.generations ?? [])],
-      closedGenerations: [...(state?.closedGenerations ?? [])],
-    };
-  });
+async function readShellProbe(page: Page): Promise<string[]> {
+  return page.evaluate(() => [
+    ...((window as unknown as { __portBrokerShellProbe?: ShellProbeState }).__portBrokerShellProbe?.events ?? []),
+  ]);
 }
 
-test('brokers a direct MessagePort that closes on API crash, re-delivers on restart, and survives reload', async ({ appPage, electronApp }) => {
-  await attachPortProbe(appPage);
-  await expect.poll(async () => (await readPortProbe(appPage)).generations).toEqual([1]);
+test('brokers a direct MessagePort that closes on API crash, re-delivers on restart, and survives reload', async ({ app, appPage, electronApp }) => {
+  // The renderer transport owns the window's single backendPort subscriber
+  const duplicateError = await appPage.evaluate(() => {
+    const bridge = (window as unknown as {
+      electronAPI: { backendPort: { connect(onPort: () => void): () => void } };
+    }).electronAPI;
+    try {
+      bridge.backendPort.connect(() => {});
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  });
+  expect(duplicateError).toContain('already has an active subscriber');
+
+  // Verify live traffic flows over the brokered MessagePort before crashing the API process
+  expect((await app.ask('host/settings', { type: 'GET_SETTINGS' })).type).toBe('ASK_ANSWERED');
+  await attachShellProbe(appPage);
 
   // Killing the API UtilityProcess notifies the window immediately and main re-brokers a fresh generation on restart
   const firstPid = await apiPid(electronApp);
   process.kill(firstPid, 'SIGKILL');
 
-  await expect.poll(async () => (await readPortProbe(appPage)).closedGenerations).toEqual([1]);
-  await expect.poll(async () => (await readPortProbe(appPage)).generations).toEqual([1, 2]);
-  expect(await apiPid(electronApp)).not.toBe(firstPid);
+  await expect.poll(() => readShellProbe(appPage)).toEqual(['BUS_CONNECTION_LOST', 'BUS_SUBSCRIBED']);
+  await expect.poll(() => apiPid(electronApp)).not.toBe(firstPid);
+  await expect.poll(async () => (await app.getState())).toBe('running.connected');
+  expect((await app.ask('host/settings', { type: 'GET_SETTINGS' })).type).toBe('ASK_ANSWERED');
 
   // Soft-reloading the document triggers pagehide cleanup and lets the new document acquire a fresh port
   await appPage.reload({ waitUntil: 'domcontentloaded' });
-  await attachPortProbe(appPage);
-  await expect.poll(async () => (await readPortProbe(appPage)).generations).toEqual([2]);
-
-  // Unsubscribing closes the active transport cleanly
-  await appPage.evaluate(() => {
-    (window as unknown as { __portBrokerProbe?: { unsubscribe?: () => void } }).__portBrokerProbe?.unsubscribe?.();
-  });
-  await expect.poll(async () => (await readPortProbe(appPage)).closedGenerations).toEqual([2]);
+  await expect.poll(async () => appPage.evaluate(() => {
+    const snap = (window as unknown as {
+      applicationState?: { getSnapshot(): { value: unknown; context: { busSubscribed?: boolean } } };
+    }).applicationState?.getSnapshot();
+    const state = String(snap?.value ?? '');
+    return (state === 'running.connected' || state.startsWith('onboarding')) && snap?.context?.busSubscribed === true;
+  })).toBe(true);
+  expect((await app.ask('host/settings', { type: 'GET_SETTINGS' })).type).toBe('ASK_ANSWERED');
 });

@@ -18,7 +18,7 @@ afterAll(() => {
  * The published packages a pack installs, the SDK's EARS with them. Their declarations are ours, so `any`
  * in any of them is a leak and is walked wherever it's reached — including from another one's types,
  * since @apackdev/sdk's surface is largely @elmdb/ears' types. Everything else under node_modules
- * (vue, zod, ai, xstate) is a library's own business and is not walked.
+ * (vue, zod, ai) is a library's own business and is not walked.
  */
 const PACK_FACING_PACKAGES = ['@elmdb/ears', '@apackdev/sdk', '@apackdev/ui'];
 /**
@@ -139,7 +139,7 @@ function exportsWithAny(packageName: string, packageDir: string, firstPartyRoots
  * branches, type parameter constraints or defaults, a few levels deep) contains `any` fails.
  *
  * `@apackdev/sdk` is checked, and walked into with `@elmdb/ears`, whose types its surface is largely made of;
- * a third-party library's own types (xstate AnyActorRef, vue Component,
+ * a third-party library's own types (vue Component,
  * zod schemas) are the library's business and aren't walked. Standard library types (Array, Promise,
  * Record) are, through the type arguments we pass them. An entry in `APP_ONLY_EXPORTS` is skipped: only
  * the app's composition root loads it, never a pack.

@@ -31,10 +31,10 @@ it('rebuilds external contracts and recovers a retargeted missing input without 
       } },
     }, files: {
       'src/contract.ts': "export type { Contract } from 'outside';",
-      'src/surface.ts': "import { createMachine } from 'xstate'; export default createMachine({ id: 'view' });",
-      'src/system.ts': `import { setup } from 'xstate'; import { defineSystem } from '@apackdev/sdk/framework';
-import type { Contract } from './contract.ts'; const spec = defineSystem<Contract>();
-export default { spec, machine: setup({ types: spec.types }).createMachine({ id: 'view' }) };`,
+      'src/surface.ts': "import { state } from '@apackdev/state'; export default state()({});",
+      'src/system.ts': `import { state } from '@apackdev/state'; import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';
+import type { Contract } from './contract.ts';
+export default state<{}, IncomingOnlyEventsOf<Contract>>()({});`,
     } });
     const configPath = path.join(root, 'tsconfig.json');
     const config = JSON.parse(tsconfig);

@@ -197,7 +197,7 @@ describe('recordCall and settleCall', () => {
     expect(twice.recorded, 'already settled').toBeUndefined();
   });
 
-  // Immutable, because these compose with an XState `assign` that replaces context rather than mutating it
+  // Immutable, because state transitions replace data rather than mutating it in place
   it('leaves the record it was given untouched', () => {
     const pending = recordCall({}, 'c-1', 'first');
 

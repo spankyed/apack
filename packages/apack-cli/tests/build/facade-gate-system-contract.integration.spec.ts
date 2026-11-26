@@ -10,7 +10,7 @@ import { bundlePackTypes } from '../../src/build/types-bundler';
 /**
  * A system's events reach its dependents' facade from the contract `apack.json` names — a declared type — and not
  * from the type inferred for its entry value. So how the entry is declared can't change what the facade publishes:
- * an annotation (`const entry: SystemEntry = …`), which erased the events back when codegen read that value's type,
+ * an annotation (`const entry: AnyState = …`), which erased the events back when codegen read that value's type,
  * publishes the same events as an entry with no annotation at all.
  */
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
@@ -31,13 +31,12 @@ const CONTRACT = [
 ].join('\n');
 
 function systemSource(declaration: 'bare' | 'annotation'): string {
-  const machine = "{ spec: tagsSpec, machine: setup({ types: tagsSpec.types }).createMachine({ id: 'tags' }) }";
+  const machine = 'state<{}, IncomingOnlyEventsOf<Contract>>()({})';
   return [
-    "import { setup } from 'xstate';",
-    "import { defineSystem, type SystemEntry } from '@apackdev/sdk/framework';",
+    "import { state, type AnyState } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './contract';",
-    'export const tagsSpec = defineSystem<Contract>();',
-    declaration === 'bare' ? `const entry = ${machine};` : `const entry: SystemEntry = ${machine};`,
+    declaration === 'bare' ? `const entry = ${machine};` : `const entry: AnyState = ${machine};`,
     'export default entry;',
   ].join('\n');
 }

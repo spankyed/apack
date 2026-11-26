@@ -51,8 +51,8 @@ async function consumer() {
   const modules = path.join(root, 'node_modules');
   fs.mkdirSync(path.join(modules, '@apackdev'), { recursive: true });
   fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@apackdev/sdk'), path.join(modules, '@apackdev', 'sdk'), 'dir');
+  fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@apackdev/state'), path.join(modules, '@apackdev', 'state'), 'dir');
   fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@elmdb'), path.join(modules, '@elmdb'), 'dir');
-  fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/xstate'), path.join(modules, 'xstate'), 'dir');
   const library = path.join(modules, 'external-events');
   fs.mkdirSync(library);
   fs.writeFileSync(path.join(library, 'package.json'), JSON.stringify({ name: 'external-events', version: '1.0.0',
@@ -66,12 +66,12 @@ async function consumer() {
   const pack = preparePack(root, manifest.id, {
     'apack.json': JSON.stringify(manifest),
     'package.json': JSON.stringify({ ...JSON.parse(packageJson(manifest.id)), dependencies: {
-      'external-events': '1.0.0', '@apackdev/sdk': '0.1.0', '@elmdb/ears': '0.1.0', xstate: '^5.19.2' } }),
+      'external-events': '1.0.0', '@apackdev/sdk': '0.1.0', '@apackdev/state': '0.1.0', '@elmdb/ears': '0.1.0' } }),
     'tsconfig.json': tsconfig, 'src/contract.ts': "export type { Contract } from 'external-events';",
-    'src/surface.ts': "import { createMachine } from 'xstate'; export default createMachine({ id: 'view' });",
-    'src/system.ts': `import { setup } from 'xstate'; import { defineSystem } from '@apackdev/sdk/framework';
-import type { Contract } from './contract.ts'; const spec = defineSystem<Contract>();
-export default { spec, machine: setup({ types: spec.types }).createMachine({ id: 'view' }) };`,
+    'src/surface.ts': "import { state } from '@apackdev/state'; export default state()({});",
+    'src/system.ts': `import { state } from '@apackdev/state'; import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';
+import type { Contract } from './contract.ts';
+export default state<{}, IncomingOnlyEventsOf<Contract>>()({});`,
   }, modules);
   const first = await callCli(pack, 'generate-entries');
   expect(first.code, first.output).toBe(0);

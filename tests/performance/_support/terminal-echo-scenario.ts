@@ -46,7 +46,7 @@ export async function terminalEchoScenario({ app, appPage, electronApp }: Parame
       // A terminal running `cat` and gone quiet, outside the measured interval
       const terminalId = await appPage.evaluate(async ({ command }) => {
         const win = window as unknown as PerformanceWindow;
-        const code = () => win.applicationState.system.get('default-setup/code');
+        const code = () => win.applicationState.surface('default-setup/code');
         const before = code().getSnapshot().context.panelTerminalId ?? null;
         win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/code', events: [{ type: 'terminal.CREATE' }] });
         let terminalId: string | null = null;

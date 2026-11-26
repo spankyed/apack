@@ -27,7 +27,7 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
  * `tests/acceptance/packaged-authoring/test-packaged-authoring.sh` type-checks a pack that depends on it from packed tarballs outside
  * this monorepo — where that file's path is under neither prefix its tolerated-error list forgives, so an
  * unresolved peer fails the step. These are required peers (nothing in `peerDependenciesMeta`), which is why npm
- * installs them for a pack that never names one; `xstate` would travel the identical route if a contract derived
+ * installs them for a pack that never names one; `@apackdev/state` would travel the identical route if a contract derived
  * its state from a machine, which is what `contract-leaves` is there to stop.
  */
 function allowedPackages(packDir: string): { allows: (name: string) => boolean; description: string } {

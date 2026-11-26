@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing';
 
 interface TestWindow {
   applicationState: {
-    system: { get(id: string): { getSnapshot(): { context: { notes?: Array<{ id: string; title: string }> } } } | undefined };
+    surface(id: string): { getSnapshot(): { context: { notes?: Array<{ id: string; title: string }> } } } | undefined;
   };
 }
 
@@ -25,8 +25,7 @@ test('a reference in a stored thread message opens its note in another feature',
     await app.navigate('default-setup/notes');
     await app.send('default-setup/notes', { type: 'CREATE_NOTE', title, content: body });
     await expect.poll(async () => {
-      noteId = await appPage.evaluate(title => (window as unknown as TestWindow).applicationState.system
-        .get('default-setup/notes')?.getSnapshot().context.notes?.find(note => note.title === title)?.id, title);
+      noteId = await appPage.evaluate(title => (window as unknown as TestWindow).applicationState.surface('default-setup/notes')?.getSnapshot().context.notes?.find(note => note.title === title)?.id, title);
       return noteId;
     }).toBeTruthy();
 

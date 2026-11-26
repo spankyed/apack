@@ -10,13 +10,13 @@ test('installed pack help remains navigable without its runtime', async ({ app, 
   });
   try {
     await app.navigate('host/settings');
-    await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'HELP.OPEN', target: { packId: 'e2e-fixture', articleId: 'github-sign-in' } }));
+    await appPage.evaluate(() => (window as any).applicationState.surface('host/settings').send({ type: 'HELP.OPEN', target: { packId: 'e2e-fixture', articleId: 'github-sign-in' } }));
     await expect(appPage.getByTestId('help-article-title')).toHaveText('Fixture guide');
     await appPage.getByRole('link', { name: 'Next guide' }).click();
     await expect(appPage.getByTestId('help-article-title')).toHaveText('Next fixture guide');
     await appPage.getByRole('button', { name: 'Back', exact: true }).click();
     await expect(appPage.getByTestId('help-article-title')).toHaveText('Fixture guide');
-    const toggle = () => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs').send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
+    const toggle = () => appPage.evaluate(() => (window as any).applicationState.surface('host/packs').send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
     const surfaceIds = () => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.surfaces.map((surface: { id: string }) => surface.id) as string[]);
     await toggle();
     try {

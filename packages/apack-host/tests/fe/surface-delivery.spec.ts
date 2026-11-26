@@ -15,21 +15,25 @@
 // asked half cannot be called without an answerable address. Which one a case uses is therefore part of what
 // it asserts, not an implementation detail of the fixture.
 import { describe, expect, it } from 'vitest';
-import { createActor, setup } from 'xstate';
+import { state, system } from '@apackdev/state';
 import { _currentDelivery, _runDelivery, type _Delivery } from '@apackdev/sdk/events';
 import { notifySurfaceActor, sendToSurfaceActor } from '../../src/fe/surface-delivery.ts';
 
-/** An actor that records what was being handled each time it is given an event */
+/** A handle that records what was being handled each time it is given an event */
 function recording() {
   const seen: Array<(Omit<_Delivery, 'event'> & { event?: unknown }) | undefined> = [];
-  const actor = createActor(setup({}).createMachine({
-    // What was being handled, and whether the event the actor handles is the one that delivery delivered
-    on: { PING: { actions: ({ event }) => {
-      const delivery = _currentDelivery();
-      seen.push(delivery && { ...delivery, event: delivery.event === event ? 'this one' : delivery.event });
-    } } },
-  })).start();
-  return { seen, actor };
+  const sys = system({ side: 'window' });
+  const handle = sys.start('pack/receiver', state<{ data: Record<string, never> }, { type: 'PING' }>()({
+    data: {},
+    // What was being handled, and whether the event the handler sees is the one that delivery delivered
+    on: {
+      PING: (event) => {
+        const delivery = _currentDelivery();
+        seen.push(delivery && { ...delivery, event: delivery.event === event ? 'this one' : delivery.event });
+      },
+    },
+  }));
+  return { seen, actor: { send: (event: { type: string }) => sys.send(handle, event as { type: 'PING' }) } };
 }
 
 /** A message being handled when the send is made, with somebody waiting on an answer to it */

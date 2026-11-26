@@ -57,7 +57,7 @@ describe('a build that fails', () => {
       id: 'incomplete-output', name: 'Incomplete output', features: { view: {
         description: 'Output verification.', surface: { label: 'View', state: 'src/view.ts' },
       } },
-    }, files: { 'src/view.ts': "import { createMachine } from 'xstate'; export default createMachine({});" } });
+    }, files: { 'src/view.ts': "import { state } from '@apackdev/state'; export default state()({});" } });
     vi.spyOn(frontend, 'bundlePackFE').mockImplementation(async options => {
       fs.writeFileSync(path.join(options.outputDir, 'fe.js'), 'export {};');
       options.recordOutput!(path.join(options.outputDir, 'required.css'), 'EXPECTED');

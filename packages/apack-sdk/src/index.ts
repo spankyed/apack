@@ -1,5 +1,5 @@
 // Framework
-export { defineSystem, type HostLifecycleEvents, type SystemSpec, type SystemEvents } from './framework/index.ts';
+export { type HostLifecycleEvents, type SystemEvents } from './framework/index.ts';
 
 // Helpers
 export { safeEvents } from './helpers/index.ts';

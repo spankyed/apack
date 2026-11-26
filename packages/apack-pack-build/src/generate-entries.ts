@@ -1080,7 +1080,7 @@ ${items.join('\n')}
     const features = packFeatures(manifest);
     const systemFeatures = features.filter(f => f.system);
     // Every system's events are read, a system without a surface's too: an entry that lost them (annotated
-    // `: SystemEntry`) would give the facade types nothing but `{ type: string }`
+    // a widened annotation on the default export would give the facade types nothing but `{ type: string }`
     for (const feature of systemFeatures) sentEventTypes(feature);
 
     const systemImports = systemFeatures
@@ -1528,7 +1528,7 @@ export const getDataDirPath = (name: string): string => _packDataDir('${manifest
   function viewsFe(): { imports: string; code: string } | undefined {
     const views = viewEntries();
     if (views.length === 0) return undefined;
-    const imports = `import { untypedFromView, untypedUseView, type UseViewOptions, type ViewState, type ViewUpdate } from '@apackdev/sdk/fe';
+    const imports = `import { untypedUseView, type UseViewOptions, type ViewState } from '@apackdev/sdk/fe';
 import type { ViewArgs, ViewResult } from '@apackdev/sdk/framework';
 import type { MaybeRefOrGetter } from 'vue';
 import type { PackViews } from './state.ts';`;
@@ -1557,21 +1557,6 @@ export function useView<Feature extends ViewFeatureName, View extends keyof Pack
   ...args: ViewArgsParameter<PackViews[Feature][View]>
 ): ViewState<ViewResult<PackViews[Feature][View]>> {
   return untypedUseView(ref(feature), view, ...args) as ViewState<ViewResult<PackViews[Feature][View]>>;
-}
-
-/**
- * One of this pack's views, followed by a surface machine: actor logic to spawn with the view's arguments as its
- * input, which sends the machine \`read(update, args)\` for the view's result and each changed result after it until
- * it is stopped. For a surface drawn in more than one area, where no one component holds the view for all of them.
- *
- * \`untypedFromView\` from \`@apackdev/sdk/fe\` is the escape hatch, for a view named by data or another pack's.
- */
-export function fromView<Feature extends ViewFeatureName, View extends keyof PackViews[Feature] & string, TEvent extends { type: string }>(
-  feature: Feature,
-  view: View,
-  read: (update: ViewUpdate<ViewResult<PackViews[Feature][View]>>, args: ViewArgs<PackViews[Feature][View]>) => TEvent,
-): ReturnType<typeof untypedFromView<ViewResult<PackViews[Feature][View]>, ViewArgs<PackViews[Feature][View]>, TEvent>> {
-  return untypedFromView(ref(feature), view, read);
 }
 `;
     return { imports, code };
@@ -1670,7 +1655,7 @@ function ownSurface(name: SurfaceName): string {
 /**
  * A value from the state a surface publishes, followed until the calling scope is disposed — so it runs in a
  * component's setup or an effect scope, never inside a \`computed\`. The selector takes that surface's published
- * state, not an XState snapshot.
+ * state, not a raw runtime snapshot.
  *
  * This pack's own surfaces are spawned in the step that registers them, so one of those is always running and the
  * value is never \`undefined\`. A dependency's frontend may still be loading, so reading one of its surfaces gives
@@ -1807,7 +1792,7 @@ export type QualifiedSystemAsks = ${qualifiedAsks};
 /** The systems this pack's code asks: \`QualifiedSystemAsks\`, with its own named by feature id instead of ref */
 export type SendableSystemAsks = WithOwnNames<${pack}, QualifiedSystemAsks>;
 
-export const { broadcast, sendToWindow, sendToSurface, tell, ask, fromAsk } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('${manifest.id}');
+export const { broadcast, sendToWindow, sendToSurface, tell, ask } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('${manifest.id}');
 `;
   }
 
@@ -1976,8 +1961,7 @@ export const state = /*#__PURE__*/ forNet<PackNet>((name) => (name.includes('/')
    *
    * Frontend-only (imports `@apackdev/state/vue`, which pulls `@vue/runtime-core` and is rejected from backend
    * bundles). Emitted only when the pack declares at least one surface. Type-only imports of each surface's
-   * `state` module keep runtime code out of the facade while filtering out unmigrated XState machines until they
-   * export a `@apackdev/state` `State`.
+   * `state` module keep runtime code out of the facade.
    */
   function generateStateFe(): string {
     const surfaceFeatures = packFeatures(manifest).filter(f => f.surface);
@@ -2006,7 +1990,7 @@ ${surfaceEntries.join('\n')}
 
 /**
  * Every \`@apackdev/state\` top-level surface this pack declares, keyed by bare feature id (resolved to
- * \`${manifest.id}/<id>\` at runtime). Surfaces that still export an XState machine are filtered out until migrated.
+ * \`${manifest.id}/<id>\` at runtime).
  */
 export type PackSurfaces = {
   [K in keyof __RawPackSurfaces as __RawPackSurfaces[K] extends AnyState ? K : never]: Extract<__RawPackSurfaces[K], AnyState>;

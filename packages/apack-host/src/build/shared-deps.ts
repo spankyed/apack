@@ -113,8 +113,6 @@ export interface SharedDep {
 
 export const SHARED_DEPS: Record<string, SharedDep> = {
   'vue':                  { globalKey: 'vue',              target: 'fe' },
-  'xstate':               { globalKey: 'xstate',           target: 'both' },
-  '@xstate/vue':          { globalKey: 'xstateVue',        target: 'fe' },
   '@apackdev/state':      { globalKey: 'apackState',       target: 'both' },
   '@apackdev/state/vue':  { globalKey: 'apackStateVue',    target: 'fe' },
   'zod':                  {                                target: 'be' },

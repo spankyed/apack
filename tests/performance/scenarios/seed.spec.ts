@@ -19,30 +19,30 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
     // Finish the real flow before cloning the profile before preparing the chat that each measured boot restores.
     await appPage.getByText("Let's go", { exact: true }).click();
     await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context;
       return Object.entries(context.messageContents).find(([, message]) => message.text?.includes('No existing sessions found.'))?.[0];
     })).toBeTruthy();
     await appPage.evaluate(() => {
       const win = window as unknown as PerformanceWindow;
-      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const context = win.applicationState.surface('default-setup/threads').getSnapshot().context;
       const messageId = Object.entries(context.messageContents).find(([, message]) => message.text?.includes('No existing sessions found.'))?.[0];
       if (!messageId) throw Error('Missing onboarding project prompt');
       win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId, response: 'skip' }] });
     });
     await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context;
       return Object.values(context.messageContents).some(message => message.text?.startsWith("You're all setup!"));
     })).toBe(true);
     await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
     await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
       return Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length;
     })).toBe(fixture.data.threads.length);
     await appPage.evaluate(() => (window as unknown as PerformanceWindow).applicationState.send({
       type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: 'Thread-search-11' }],
     }));
     await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/threads').getSnapshot().context;
       return context.currentThread?.id === 'Thread-search-11' && context.chatMessageIds.length === 50;
     })).toBe(true);
     writeFileSync(process.env.APACK_PERFORMANCE_SEED_REPORT, JSON.stringify(fixture.identity, null, 2));

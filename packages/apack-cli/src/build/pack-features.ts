@@ -183,22 +183,15 @@ export const GENERATED_BEHIND_A_CONTRACT = ['system-specs', 'events', 'fe', 'pac
  *
  * The cycle is one of two reasons, and the other is cost, recorded at `generate-entries.ts:433`: the contracts are
  * in codegen's TypeScript program and the machines are not, so an import that puts one back in reach parses and
- * binds every machine and its whole closure, XState and Vue included, for nothing.
+ * binds every machine and its whole closure, `@apackdev/state` and Vue included, for nothing.
  *
- * **Two harms, and which one a contract gets depends on where the machine's type resolves from.** Measured
- * 2026-09-27 on the external-pack fixture, five mutations, each from a cold tree (`rm -rf src/__generated__`):
+ * **Two harms, and which one a contract gets depends on where the machine's type resolves from.**
  *
- * - A contract's `state` or `context` from the machine, and an `incoming` as `Extract<>` over the machine's event
- *   union, **build with exit 0** and a byte-identical `src/__generated__/events.ts` — nothing reads those
- *   positions. So does a surface `inbox` naming a plain union the machine module happens to declare.
- *   What moves is the published facade: `dist/types/pack-types.d.ts` grew by 41 lines, gaining `import * as xstate
- *   from 'xstate'` and the machine's whole declaration, every action name included, where a contract of its own
- *   contributes one interface — and a dependent's facade inlines its dependencies' verbatim, so it travels a hop
- *   further. Not a *disallowed* import: `apack-cli`'s `build/facade-gate.ts` allows `xstate` and `zod`, which
- *   every dependent has. The harm is size and coupling.
+ * - A contract's `state` or `context` derived from the machine module leaks the machine's full declaration into
+ *   the published facade (`dist/types/pack-types.d.ts`) — and a dependent's facade inlines its dependencies'
+ *   verbatim, so it travels a hop further. The harm is size and coupling.
  * - A read position — the surface's `inbox`, the system's `outgoing` — resolving *through the machine's own type
- *   parameters* **refuses, every time**. `EventFromLogic<typeof theMachine>` passes through
- *   `defineSystem<Contract>()` and so back through the contract, which collapses it to `any`, and codegen refuses
+ *   parameters* closes a cycle back through `#generated/events`, which collapses it to `any`, and codegen refuses
  *   an `any` there. It never comes right: the throw means the generated module it needed is never written, so the
  *   next run starts from the same tree.
  *
@@ -206,8 +199,8 @@ export const GENERATED_BEHIND_A_CONTRACT = ['system-specs', 'events', 'fe', 'pac
  * the other ships the machine to every dependent, and nothing else tells the author either.
  *
  * Not a *disallowed* import, though, and that is worth knowing before deriving it again: `apack-cli`'s
- * `build/facade-gate.ts` allows a facade to import `@apackdev/*`, Node built-ins and `@apackdev/sdk`'s peers, `xstate`
- * and `zod` among them, because every dependent has them. The leak is size and coupling, not resolution.
+ * `build/facade-gate.ts` allows a facade to import `@apackdev/*`, Node built-ins and `@apackdev/sdk`'s peers,
+ * because every dependent has them. The leak is size and coupling, not resolution.
  *
  * **Codegen's own refusal is not a second guard for this.** `checkResolved`
  * (`apack-sdk/src/build/module-exports.ts`) refuses a type that collapsed to `any` in the four positions a reader

@@ -82,8 +82,7 @@
     "ajv": "^8.20.0",
     "minimatch": "^11.0.5",
     "semver": "^7.8.5",
-    "tar": "^7.5.22",
-    "xstate": "^5.19.2"
+    "tar": "^7.5.22"
   },
   "devDependencies": {
     "@apackdev/clock": "0.1.0",

@@ -1,12 +1,8 @@
 // A restore that fails must not take the terminal system with it, which is L1.
 //
-// `restoreTerminalsActor` was invoked with `onDone` and nothing else. XState leaves a machine in the state
-// whose invoked actor rejected, and the terminals are asked about only once it has left `initializing` — so
-// one rejection meant every later `terminal.CREATE_TERMINAL` and `terminal.REFRESH_LIST` for the rest of the
-// session waited for a restore that never ended, and the surface showed an empty list. In silence: nothing reported it and nothing recovered.
-//
 // Restoring is best-effort — what it restores is a convenience, and the previous run's processes are gone
-// either way — so the failure is reported and the system goes on doing its job.
+// either way — so a restore failure must be reported while the terminal system transitions to `ready`
+// and goes on serving `terminal.CREATE_TERMINAL` and `terminal.REFRESH_LIST`.
 //
 // **What this case covers is the failure that can happen**, an open that fails, which `restoreAll` already
 // survives per terminal. The `onError` branch that was added beside it has no firing case, and the source

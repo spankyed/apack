@@ -11,7 +11,7 @@ interface LibraryShown { items: ShownItem[]; expandedFolderIds: string[]; expand
 export async function libraryDocuments(appPage: Page): Promise<string[]> {
   return appPage.evaluate(() => {
     type Actor = { getSnapshot(): { context: LibraryShown }; send(event: { type: 'EXPAND_FOLDER'; folderId: string }): void };
-    const actor = (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } }).applicationState?.system?.get('default-setup/library');
+    const actor = (window as { applicationState?: { surface(id: string): Actor | undefined } }).applicationState?.surface('default-setup/library');
     if (!actor) return [];
     const { items, expandedFolderIds, expandedFolderChildren } = actor.getSnapshot().context;
     const shown = [...items, ...Object.values(expandedFolderChildren).flat()];

@@ -14,7 +14,7 @@ const setupFiles = [
 // Pure subdirectories opted into `isolate: false`; every other tree (bus, features, fe, packs, services, etc.)
 // defaults to `isolate: true`.
 const PURE_DIRS = ['broker', 'build', 'database', 'diagnostics', 'logs'] as const;
-// Specs in the opted-in trees (or top-level `tests/*.spec.ts`) that use XState, bindHost, vi.mock,
+// Specs in the opted-in trees (or top-level `tests/*.spec.ts`) that use bindHost, vi.mock,
 // fake timers, global spies, or globalThis writes stay isolated.
 const PURE_TREE_ISOLATED = [
   'tests/build/compiler-inputs/compiler-file-reads.spec.ts',
@@ -25,7 +25,6 @@ const PURE_TREE_ISOLATED = [
   'tests/build/source-resolution.spec.ts',
   'tests/build/subpath-imports.spec.ts',
   'tests/database/open-elmdb.spec.ts',
-  'tests/diagnostics/actors.spec.ts',
   'tests/diagnostics/process-statistics.spec.ts',
   'tests/diagnostics/profiles.spec.ts',
   'tests/events.spec.ts',

@@ -420,19 +420,6 @@ const RULE_LIST = [
     },
   },
   {
-    key: 'machine-selectors',
-    rule: 'A component reads a machine with useState from @apackdev/sdk/fe, which mirrors it once for every '
-      + 'component that reads it and writes only what changed. A useSelector from @xstate/vue is a subscription of '
-      + 'its own that runs its selector on every snapshot, and it hands a component the machine library the pack '
-      + 'runs on rather than the state it reads',
-    check(view, place) {
-      // Source only. A pack's test may drive an actor however it likes: it renders no surface a user sees.
-      if (place.packRelative.startsWith('tests/')) return [];
-      return view.specifiers.filter(({ text }) => text === '@xstate/vue')
-        .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
-    },
-  },
-  {
     key: 'repository-casts',
     rule: "Read repositories through their owner's exports — a pack through `repository` from "
       + "#generated/repository, which types its own and its dependencies' — never through a cast of the engine's "
@@ -447,53 +434,14 @@ const RULE_LIST = [
   },
   {
     key: 'ask-answers',
-    rule: "A system answers its declared asks with its `answers` table (defineSystem's `answers`), whose handler "
-      + 'returns the answer and throws the refusal: an `ASK_ANSWERED` or `ASK_FAILED` written by hand is an answer '
-      + 'a failure path can forget and a wrong ask can take. An asker takes the answer as a value (`ask`, `fromAsk`), '
-      + 'so its machine has no transition for one either. A spec driving an asking machine builds its answers '
+    rule: "A system answers its declared asks with its `@apackdev/state` `answers` handlers, which "
+      + 'return the answer and throw a refusal: an `ASK_ANSWERED` or `ASK_FAILED` written by hand is an answer '
+      + 'a failure path can forget and a wrong ask can take. An asker takes the answer as a value (`ask`, `calls`), '
+      + 'so its state has no transition for one either. A spec driving an asking system builds its answers '
       + 'with askAnswered and askFailed from @apackdev/sdk/testing',
     check(view, place) {
       if (place.packRelative.startsWith('tests/')) return [];
       return view.visit(handWrittenAnswer);
-    },
-  },
-  {
-    key: 'ask-ends',
-    rule: 'A machine declares the asks it makes with makes from @apackdev/sdk/fe, and how one ended reaches it as '
-      + "`made.<name>`. A transition on `xstate.done.actor.<id>` is that bookkeeping kept by hand: an id to spawn "
-      + 'under, a child to stop in every such transition, and a record of which are under way that a component then '
-      + 'reads by importing the id. An actor that is not an ask is invoked, and its end taken with `onDone`',
-    check(view, place) {
-      if (place.packRelative.startsWith('tests/')) return [];
-      return view.visit((node) => {
-        const text = ts.isStringLiteralLike(node) ? node.text : ts.isTemplateExpression(node) ? node.head.text : undefined;
-        return text?.startsWith('xstate.done.actor') ? ['xstate.done.actor'] : undefined;
-      });
-    },
-  },
-  {
-    key: 'swallowed-ask-ends',
-    rule: "A machine that makes asks (makes, @apackdev/sdk/fe) writes `[made.done]: { actions: made.settle() }` beside "
-      + "every `'*'` transition it has. A state's wildcard is tried before its parent's transitions, so one written "
-      + "without it takes the end of every ask made while the machine is in that state: the ask is never let go, and "
-      + '`making` says it is under way for good',
-    check(view, place) {
-      if (place.packRelative.startsWith('tests/')) return [];
-      const makesAsks = view.visit((node) => {
-        const imported = importedFrom(node);
-        return imported?.module === '@apackdev/sdk/fe' && imported.names.includes('makes') ? ['makes'] : undefined;
-      }).length > 0;
-      if (!makesAsks) return [];
-      return view.visit((node) => {
-        if (!ts.isObjectLiteralExpression(node)) return undefined;
-        const named = (name: ts.PropertyName | undefined): string | undefined =>
-          name && (ts.isStringLiteralLike(name) || ts.isIdentifier(name)) ? name.text : undefined;
-        if (!node.properties.some((property) => named(property.name) === '*')) return undefined;
-        // `[made.done]`, whatever the declared asks are called
-        const settles = node.properties.some((property) => property.name && ts.isComputedPropertyName(property.name)
-          && ts.isPropertyAccessExpression(property.name.expression) && property.name.expression.name.text === 'done');
-        return settles ? undefined : ["'*'"];
-      });
     },
   },
   {

@@ -41,7 +41,7 @@ export async function terminalReplayScenario({ app, appPage, electronApp }: Para
     // One terminal carrying a large history, built before anything is measured
     await appPage.evaluate(async fill => {
       const win = window as unknown as PerformanceWindow;
-      const code = () => win.applicationState.system.get('default-setup/code');
+      const code = () => win.applicationState.surface('default-setup/code');
       win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/code', events: [{ type: 'terminal.CREATE' }] });
       let id: string | null = null;
       for (let i = 0; i < 200 && !id; i++) {

@@ -16,7 +16,7 @@ test('pack pane and form failures leave other panes and host settings usable', a
 
   await app.navigate('host/settings');
   await appPage.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'features' });
     settings.send({ type: 'FEATURE.SELECT', featureId: 'e2e-fixture/faults' });
   });
@@ -25,7 +25,7 @@ test('pack pane and form failures leave other panes and host settings usable', a
   await expect(appPage.getByRole('heading', { name: 'Fault fixture', exact: true })).toBeVisible();
   await expect(appPage.getByTitle('Reset to defaults')).toBeEnabled();
   await appPage.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'general' });
     settings.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
   });
@@ -36,7 +36,7 @@ test('pack pane and form failures leave other panes and host settings usable', a
   });
   expect(defaults).toEqual({ message: 'Still here' });
   await appPage.evaluate(() => {
-    (window as any).applicationState.system.get('host/settings').send({ type: 'GENERAL_NAV.SELECT', item: 'personal' });
+    (window as any).applicationState.surface('host/settings').send({ type: 'GENERAL_NAV.SELECT', item: 'personal' });
   });
   await expect(appPage.getByLabel('Full Name', { exact: true })).toBeVisible();
 });

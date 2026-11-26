@@ -17,8 +17,8 @@ test('Settings Help searches bundled articles and opens feature help', async ({ 
   await reader.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(reader.getByRole('textbox', { name: 'Search help' })).toHaveValue(BODY_ONLY_TERM);
   await app.navigate('host/settings');
-  await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'FEATURE.SELECT', featureId: 'default-setup/code' }));
-  await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'TAB.SELECT', tab: 'features' }));
+  await appPage.evaluate(() => (window as any).applicationState.surface('host/settings').send({ type: 'FEATURE.SELECT', featureId: 'default-setup/code' }));
+  await appPage.evaluate(() => (window as any).applicationState.surface('host/settings').send({ type: 'TAB.SELECT', tab: 'features' }));
   await appPage.getByTestId('feature-help').click();
   await expect(reader.getByRole('combobox', { name: 'Filter help by feature' })).toHaveValue('default-setup/code');
 });
@@ -26,7 +26,7 @@ test('Settings Help searches bundled articles and opens feature help', async ({ 
 test('unavailable help targets explain the problem and return to the index', async ({ app, appPage }) => {
   await app.navigate('host/settings');
   await appPage.getByRole('button', { name: 'Help', exact: true }).click();
-  await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'HELP.OPEN', target: { packId: 'missing-pack', articleId: 'missing' } }));
+  await appPage.evaluate(() => (window as any).applicationState.surface('host/settings').send({ type: 'HELP.OPEN', target: { packId: 'missing-pack', articleId: 'missing' } }));
   await expect(appPage.getByRole('heading', { name: 'Article unavailable' })).toBeVisible();
   await appPage.getByRole('button', { name: 'Browse all help' }).click();
   await expect(appPage.getByRole('heading', { name: 'How can we help?' })).toBeVisible();

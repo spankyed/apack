@@ -55,8 +55,8 @@ import { contentRuntime } from '../src/__generated__/content-runtime';
 import { registration } from '../src/__generated__/pack-entry';
 await setupPackTests({ contentRuntime, registration });`);
   write(root, 'tests/memos-surface.ts', `
-import { setup } from 'xstate';
-export default setup({}).createMachine({});`);
+import { state } from '@apackdev/state';
+export default state()({});`);
   write(root, 'tests/memos-system.ts', `
 import { state } from '@apackdev/state';
 import { untypedBroadcast } from '@apackdev/sdk/events';

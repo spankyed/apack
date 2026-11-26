@@ -194,6 +194,8 @@ export interface ShellRuntime extends HostShell {
   surface(ref: string): HostShellSurfaceRef | undefined;
   /** Reads the entity-opening child state (for diagnostics and tests). */
   entityOpening(): Value<EntityOpeningShape> | undefined;
+  /** Observes events delivered to the shell and its running surfaces (for diagnostics, E2E and drive). */
+  onEvent(listener: (record: { to: string; event: SurfaceEvent }) => void): { unsubscribe(): void };
 }
 
 interface ShellRuntimeBridge {
@@ -1139,7 +1141,15 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
 
   const cleanups: Array<() => void> = [];
   const shellSubscribers = new Set<{ next?: (snapshot: ShellSnapshot) => void; error?: (error: unknown) => void }>();
+  const eventListeners = new Set<(record: { to: string; event: SurfaceEvent }) => void>();
   const runningSurfaces = new Map<string, RunningSurface>();
+
+  const emitObservedEvent = (to: string, event: SurfaceEvent): void => {
+    if (eventListeners.size === 0) return;
+    for (const listener of Array.from(eventListeners)) {
+      try { listener({ to, event }); } catch {}
+    }
+  };
   const effects: Array<() => void> = [];
 
   let surfaceSeq = 0;
@@ -1222,6 +1232,7 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
 
   const sendToShell = (event: ShellEvent): void => {
     if (!shellHandle || stopped) return;
+    emitObservedEvent(HOST.application, event as SurfaceEvent);
     sys.send(shellHandle, event);
   };
 
@@ -1288,6 +1299,12 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
     return next;
   };
 
+  const pendingStops = new Map<string, () => void>();
+
+  const flushPendingStop = (id: string): void => {
+    pendingStops.get(id)?.();
+  };
+
   const stopSurface = (id: string): void => {
     const entry = runningSurfaces.get(id);
     if (!entry) return;
@@ -1295,8 +1312,18 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
     entry.stopped = true;
     entry.lastSnapshot = { ...finalSnap, status: 'stopped' };
     runningSurfaces.delete(id);
-    if (!stopped) sys.stop(entry.handle);
     notifyShellSubscribers();
+    if (!stopped) {
+      // Stop the state handle after Vue's microtask flush unmounts components reading this surface's mirror,
+      // so sync watchers / post-effects in an unmounting surface never observe an undefined mirror snapshot.
+      const runStop = () => {
+        if (pendingStops.get(id) !== runStop) return;
+        pendingStops.delete(id);
+        if (!stopped) sys.stop(entry.handle);
+      };
+      pendingStops.set(id, runStop);
+      void Promise.resolve().then(() => Promise.resolve().then(runStop));
+    }
   };
 
   const startSurface = (surface: Surface, ownsAppLayout: boolean): void => {
@@ -1305,6 +1332,7 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
       throw new Error(`Surface "${surface.id}" must be an @apackdev/state State definition`);
     }
     if (runningSurfaces.has(surface.id)) stopSurface(surface.id);
+    flushPendingStop(surface.id);
 
     const handle = sys.start(surface.id, surface.state as State<any, any, any, never>);
     const listeners = new Set<(snapshot: HostShellSurfaceSnapshot) => void>();
@@ -1333,6 +1361,7 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
         },
         send: (event: SurfaceEvent) => {
           if (entry.stopped || stopped) return;
+          emitObservedEvent(surface.id, event);
           sys.port.tell(surface.id, stripCallKey(event));
           drainEffects();
         },
@@ -1536,6 +1565,7 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
         entry.lastSnapshot = { ...snap, status: 'stopped' };
       }
       runningSurfaces.clear();
+      pendingStops.clear();
       for (const cleanup of cleanups.splice(0).reverse()) cleanup();
       sys.stop();
     },
@@ -1562,6 +1592,11 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
     entityOpening(): Value<EntityOpeningShape> | undefined {
       if (!shellHandle || stopped) return undefined;
       return sys.read(sys.child(shellHandle, 'entityOpening'));
+    },
+
+    onEvent(listener: (record: { to: string; event: SurfaceEvent }) => void) {
+      eventListeners.add(listener);
+      return { unsubscribe: () => { eventListeners.delete(listener); } };
     },
   };
 

@@ -1,7 +1,7 @@
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // What bus.send accepts: each registered system's incoming events, kept current by registration itself.
 import { describe, expect, it } from 'vitest';
-import { setup } from 'xstate';
+import { state } from '@apackdev/state';
 import { SYSTEM_EVENT_TYPES } from '@apackdev/sdk/framework';
 import type { PackFeature } from '@apackdev/sdk/framework';
 import { hostRegistration } from '../../src/features/registration.ts';
@@ -13,7 +13,7 @@ const receives = (...types: string[]) => new Set([...types, ...SURFACE_EVENT_TYP
 
 const { getEventValidationMap, registerPack, unregisterPack } = createNativePackTestRegistry();
 
-const machine = setup({}).createMachine({});
+const machine = state()({});
 
 /** A feature with a surface that receives `types` */
 const surface = (types: string[] = []): PackFeature => ({ surface: { receives: types } });

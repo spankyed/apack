@@ -198,7 +198,7 @@ watch(() => flowsMachine.value.data.showDeleteFlowDialog, (show) => {
   }
 })
 
-// Multi-select state (local only, separate from XState selectedFlowId)
+// Multi-select state (local only, separate from surface state selectedFlowId)
 const multiSelectedFlowIds = ref<Set<string>>(new Set())
 const shiftAnchorFlowId = ref<string | null>(null)
 
@@ -534,7 +534,7 @@ async function handleLayout(direction?: LayoutDirection) {
 }
 
 async function handleNodesInitialized() {
-  // Layout is calculated BEFORE render in XState actions (loadFlowData, addCreatedFlow)
+  // Layout is calculated BEFORE render in state handlers (loadFlowData, addCreatedFlow)
   // This handler only needs to center the view
   await nextTick()
   fitView()

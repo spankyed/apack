@@ -54,7 +54,7 @@ export async function terminalOutputScenario({ app, appPage, electronApp }: Para
       // Opening is not the measured action; this trial's terminal exists before the recording starts
       const terminalId = await appPage.evaluate(async () => {
         const win = window as unknown as PerformanceWindow;
-        const code = () => win.applicationState.system.get('default-setup/code');
+        const code = () => win.applicationState.surface('default-setup/code');
         const before = code().getSnapshot().context.panelTerminalId ?? null;
         win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/code', events: [{ type: 'terminal.CREATE' }] });
         for (let i = 0; i < 200; i++) {
@@ -69,7 +69,7 @@ export async function terminalOutputScenario({ app, appPage, electronApp }: Para
       const result = await appPage.evaluate(async ({ mode, fixtureId, terminalId, command, corpusBytes }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
-        const code = () => win.applicationState.system.get('default-setup/code');
+        const code = () => win.applicationState.surface('default-setup/code');
         const alive = (id: string) => !!code().getSnapshot().children?.terminal?.getSnapshot()
           .context.terminals?.find(t => t.id === id);
         await recording.start(mode);

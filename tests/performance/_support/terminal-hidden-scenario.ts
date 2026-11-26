@@ -41,7 +41,7 @@ export async function terminalHiddenScenario({ app, appPage, electronApp }: Para
       const result = await appPage.evaluate(async ({ mode, fixtureId }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
-        const code = () => win.applicationState.system.get('default-setup/code');
+        const code = () => win.applicationState.surface('default-setup/code');
         const living = () => code().getSnapshot().children?.terminal?.getSnapshot().context.terminals?.length ?? 0;
         await recording.start(mode);
 

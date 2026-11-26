@@ -137,7 +137,7 @@ export interface SeenEvent {
   /**
    * Who sent it, where the sender said — a feature's ref, or a participant's claimed name.
    *
-   * Only the connection supplies this: the in-page bridge reads the renderer's xstate inspector, which sees an
+   * Only the connection supplies this: the in-page bridge reads the shell's event stream, which sees an
    * event rather than an envelope, so a bridged event has none. It matters for the one case the bridge cannot
    * see at all — a message addressed to `host/drive`, which never reaches the renderer. Without it `/events`
    * tells an agent that something arrived for it and not who asked, which is enough to notice a question and
@@ -226,7 +226,7 @@ const attempt = async (what: string, run: () => Promise<unknown>): Promise<Engin
  * Wraps an agent's expression so a result that cannot cross the process boundary is described instead.
  *
  * `page.evaluate` can only return a structured-cloneable value, which is why the fixture's `getState`
- * returns `snapshot.value` and never the snapshot: an XState snapshot carries actor references and
+ * returns `snapshot.value` and never the snapshot: a live snapshot carries non-serializable references and
  * functions. Without this, asking for one gets an opaque Playwright failure. Attempting the clone in the
  * page keeps `/eval` total — every expression gets an answer — and leaves `JSON.stringify` in the body
  * as the way to ask for more.
@@ -452,11 +452,10 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
         // The function is absent, or threw before answering: the same event nobody is listening for
       }
     };
-    win.applicationState?.system?.inspect?.((inspection) => {
-      if (inspection?.type !== '@xstate.event') return;
-      const event = inspection.event;
+    win.applicationState?.onEvent?.((record) => {
+      const event = record?.event;
       if (!event || typeof event.type !== 'string') return;
-      const to = inspection.actorRef?.id;
+      const to = record.to;
       let copy;
       try {
         copy = JSON.parse(JSON.stringify(event));
@@ -509,7 +508,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
 
       await page.exposeFunction(BRIDGE_FUNCTION, (payload) => {
         const seen = payload as SeenEvent;
-        // The bridge reads the renderer's xstate inspector, which sees an event and not an envelope — so the
+        // The bridge reads the shell's event observer, which sees an event and not an envelope — so the
         // call comes off the delivered event, where the window's delivery door put it. Read here rather than
         // at the match, so `nextReply` has one field to compare whichever channel woke it
         const answering = seen.answering ?? _callOf(seen.event);

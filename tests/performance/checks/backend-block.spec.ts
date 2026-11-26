@@ -31,13 +31,13 @@ test('attributes an injected CPU block to the backend process', async ({ app, ap
       } finally { action.end(); }
     });
     await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string }; error?: string };
+      const context = (window as unknown as PerformanceWindow).applicationState.surface('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string }; error?: string };
       return context.queryResult?.marker;
     })).toBe('performance-backend-block');
   } finally {
     const reply = await appPage.evaluate(() => {
       const win = window as unknown as PerformanceWindow;
-      const context = win.applicationState.system.get('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string; pid?: number; cpuMicros?: number } };
+      const context = win.applicationState.surface('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string; pid?: number; cpuMicros?: number } };
       return context.queryResult;
     });
     const reports = await appPage.evaluate(() => (window as unknown as PerformanceWindow).__performance.stop());

@@ -4,13 +4,8 @@
 
 ```ts
 
-import { AnyActorLogic } from 'xstate';
-import type { AnyActorRef } from 'xstate';
-import { AnyEventObject } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyState } from '@apackdev/state';
-import type { AnyStateMachine } from 'xstate';
-import { CallbackActorLogic } from 'xstate';
 import type { Component } from 'vue';
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
@@ -19,22 +14,14 @@ import { DefineComponent } from 'vue';
 import { EARS as EARS_2 } from '@elmdb/ears';
 import type { Editor } from '@tiptap/vue-3';
 import type { EditorState } from '@tiptap/pm/state';
-import { enqueueActions } from 'xstate';
 import { entityTypeOf } from '@elmdb/ears';
-import type { EventFrom } from 'xstate';
-import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
-import { InputFrom } from 'xstate';
-import { MachineContext } from 'xstate';
 import { MaybeRefOrGetter } from 'vue';
-import { OutputFrom } from 'xstate';
-import { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
 import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
-import type { SnapshotFrom } from 'xstate';
 import type { System } from '@apackdev/state';
 import { VNode } from 'vue';
 
@@ -199,12 +186,6 @@ export function createHotkeyProcessor<const TMap extends Record<string, string>,
 
 // @public (undocumented)
 export function createNavHistory<T>(initial: T): NavHistory<T>;
-
-// @public
-export interface EachMade<TLogic extends AnyActorLogic> {
-    readonly kind: 'each';
-    readonly logic: TLogic;
-}
 
 // @public
 export function entityIs<E extends string>(input: {
@@ -621,55 +602,6 @@ export interface KeyboardShortcut {
 export function loadTabGroups(storage: SurfaceStorage, name: string): TabGroup[];
 
 // @public
-export interface MachineState<TActor extends AnyActorRef> {
-    readonly at: string;
-    readonly data: SnapshotFrom<TActor> extends {
-        context: infer Context;
-    } ? Read<Context> : never;
-}
-
-// @public
-export type MadeEvent<TMakes> = TMakes extends Makes<infer M> ? EndedOf<M> | {
-    type: `xstate.done.actor.made.${string}`;
-    actorId: string;
-    output: unknown;
-} : never;
-
-// @public
-export interface Makes<M extends Declarations> {
-    readonly actors: {
-        readonly [N in keyof M & string as `made.${N}`]: LogicOf<M[N]>;
-    };
-    readonly done: 'xstate.done.actor.made.*';
-    drop(enqueue: MakesEnqueue, context: {
-        making: MakingFrom<M>;
-    }, name: keyof M & string, key?: string): void;
-    make<N extends OneNames<M>>(enqueue: MakesEnqueue, name: N, input: InputFrom<LogicOf<M[N]>>): void;
-    make<N extends EachNames<M>>(enqueue: MakesEnqueue, name: N, key: string, input: InputFrom<LogicOf<M[N]>>): void;
-    readonly names: readonly (keyof M & string)[];
-    none(): MakingFrom<M>;
-    settle<TContext extends MachineContext, TExpressionEvent extends EventObject, TEvent extends EventObject>(): ReturnType<typeof enqueueActions<TContext, TExpressionEvent, ParameterizedObject['params'] | undefined, TEvent, never, never, never, never, never>>;
-}
-
-// @public
-export function makes<const M extends Declarations>(declare: (the: typeof helpers) => M): Makes<M>;
-
-// @public
-export interface MakesEnqueue {
-    assign: (...given: never[]) => unknown;
-    spawnChild: (...given: never[]) => unknown;
-    stopChild: (...given: never[]) => unknown;
-}
-
-// @public
-export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingFrom<M> : never;
-
-// @public
-export type MakingOf<Kinds extends Readonly<Record<string, 'one' | 'each'>>> = {
-    readonly [N in keyof Kinds]: Kinds[N] extends 'each' ? Readonly<Record<string, true>> : boolean;
-};
-
-// @public
 export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
 
 // @public (undocumented)
@@ -682,12 +614,6 @@ export interface NavHistory<T> {
 
 // @public
 export function onDslDeclarationsChanged(listener: () => void): () => void;
-
-// @public
-export interface OneMade<TLogic extends AnyActorLogic> {
-    readonly kind: 'one';
-    readonly logic: TLogic;
-}
 
 // @public
 export function onHostDispose(listener: () => void): () => void;
@@ -747,11 +673,6 @@ export function processHotkeys<const T extends Record<string, string>, H = unkno
 
 // @public (undocumented)
 export function pushNavHistory<T>(history: NavHistory<T>, entry: T): NavHistory<T>;
-
-// @public
-export type Read<T> = T extends Whole ? T : T extends (...given: never[]) => unknown ? T : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, ReadInside<Held>> : T extends ReadonlySet<infer Item> ? ReadonlySet<Item> : T extends object ? {
-    readonly [K in keyof T]: ReadHeld<T[K]>;
-} : T;
 
 // @public
 export interface ReadonlyFeSettingsHandle<T> {
@@ -954,7 +875,7 @@ export interface Surface {
     // (undocumented)
     panel?: Component;
     // (undocumented)
-    state: AnyStateMachine | AnyState;
+    state: AnyState;
 }
 
 // @public
@@ -1150,9 +1071,6 @@ export type TrailClickEvent<TInfo = unknown> = {
 };
 
 // @public
-export function untypedFromView<Result, Args, TEvent extends EventObject>(ref: string, view: string, read: (update: ViewUpdate<Result>, args: Args) => TEvent): CallbackActorLogic<AnyEventObject, Args>;
-
-// @public
 export function untypedOpenSurface(ref: string, event?: SurfaceEvent | SurfaceEvent[]): void;
 
 // @public
@@ -1169,12 +1087,6 @@ export function useBlockDeclarations(): ComputedRef<readonly BlockCatalogEntry[]
 
 // @public (undocumented)
 export function useDslDeclarations(): ComputedRef<readonly DslCatalogEntry[]>;
-
-// @public
-export interface UsedState<TActor extends AnyActorRef, TState = MachineState<TActor>> {
-    send(event: EventFrom<TActor>): void;
-    readonly state: ComputedRef<TState>;
-}
 
 // @public (undocumented)
 export function useFeatureSettings<T = unknown>(feature: FeatureRef): Readonly<Ref<T | undefined>>;
@@ -1197,15 +1109,6 @@ export function useSettingsStatus(): Readonly<Ref<ReturnType<SettingsPort['statu
 
 // @public
 export function useShell(): Shell;
-
-// @public
-export function useState<TActor extends AnyActorRef>(): UsedState<TActor>;
-
-// @public
-export function useState<TActor extends AnyActorRef>(actor: MaybeRefOrGetter<TActor>): UsedState<TActor>;
-
-// @public
-export function useState<TActor extends AnyActorRef>(actor: MaybeRefOrGetter<TActor | undefined>): UsedState<TActor, MachineState<TActor> | undefined>;
 
 // @public
 export function useStepDeclarations(): ComputedRef<readonly StepCatalogEntry[]>;
