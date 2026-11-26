@@ -335,3 +335,94 @@ describe('generated #generated/state compiles', () => {
     expect(typecheck(files, ['src/__generated__/pack-types.ts'])).toEqual([]);
   });
 });
+
+describe('generated #generated/state-fe compiles', () => {
+  it('binds @apackdev/state surfaces (default & named exports, children) while filtering out unmigrated XState surfaces', async () => {
+    write('src/features/notes/fe/state.ts', [
+      "import { given, state } from '@apackdev/state';",
+      "import type { Each } from '@apackdev/state';",
+      'const detail = state<{ data: { title: string } }, { type: "RENAME"; title: string }>()({',
+      '  data: { title: given },',
+      '  on: { RENAME: (ev) => ({ data: { title: ev.title } }) },',
+      '});',
+      'const card = state<{ data: { label: string } }, { type: "PING" }>()({',
+      '  data: { label: given },',
+      '  on: { PING: () => {} },',
+      '});',
+      'const notesSurface = state<{',
+      '  data: { selected: string; cardIds: Record<string, string> };',
+      '  starts: { detail: typeof detail; card: Each<typeof card> };',
+      '}, { type: "SELECT"; id: string }>()({',
+      '  data: { selected: "a", cardIds: {} },',
+      '  starts: (start) => ({',
+      '    detail: start(detail, { given: (data) => ({ title: data.selected }) }),',
+      '    card: start(card, { each: "cardIds", given: (_key, data) => ({ label: data.selected }) }),',
+      '  }),',
+      '  on: { SELECT: (ev) => ({ data: { selected: ev.id } }) },',
+      '});',
+      'export default notesSurface;',
+    ].join('\n'));
+    write('src/features/board/fe/state.ts', [
+      "import { state } from '@apackdev/state';",
+      'export const boardState = state<{ data: { count: number } }, { type: "INC" }>()({',
+      '  data: { count: 0 },',
+      '  on: { INC: (_ev, { data }) => ({ data: { count: data.count + 1 } }) },',
+      '});',
+    ].join('\n'));
+    write('src/features/legacy/fe/state.ts', [
+      'const legacyXStateMachine = { id: "legacy", transition: () => ({}) };',
+      'export default legacyXStateMachine;',
+    ].join('\n'));
+
+    const files = await generatePackFiles(manifest({
+      features: [
+        { id: 'notes', description: 'Notes.', surface: { label: 'Notes', state: 'src/features/notes/fe/state.ts' } },
+        { id: 'board', description: 'Board.', surface: { label: 'Board', state: 'src/features/board/fe/state.ts#boardState' } },
+        { id: 'legacy', description: 'Legacy.', surface: { label: 'Legacy', state: 'src/features/legacy/fe/state.ts' } },
+      ],
+    }), { packRoot: root });
+
+    const stateFe = files['src/__generated__/state-fe.ts'];
+    expect(stateFe).toBeDefined();
+    expect(stateFe).toContain("import { vueBinding } from '@apackdev/state/vue';");
+    expect(stateFe).toContain("import type __surface_notes from '../features/notes/fe/state.ts';");
+    expect(stateFe).toContain("import type { boardState as __surface_board } from '../features/board/fe/state.ts';");
+    expect(stateFe).toContain("import type __surface_legacy from '../features/legacy/fe/state.ts';");
+    expect(stateFe).toContain("name.includes('/') ? name : `demo-pack/${name}`");
+
+    write('src/probe-fe.ts', [
+      "import { provide, useState, type PackSurfaces } from './__generated__/state-fe.ts';",
+      'const notes = useState("notes");',
+      'const selected: string = notes.state.value.data.selected;',
+      'notes.send({ type: "SELECT", id: "b" });',
+      'const detail = useState(() => notes.child("detail"));',
+      'const detailTitle: string | undefined = detail.state.value?.data.title;',
+      'detail.send({ type: "RENAME", title: "next" });',
+      'const card = useState(() => notes.child("card", "k1"));',
+      'const cardLabel: string | undefined = card.state.value?.data.label;',
+      'card.send({ type: "PING" });',
+      'const board = useState("board");',
+      'const count: number = board.state.value.data.count;',
+      'board.send({ type: "INC" });',
+      '// @ts-expect-error unmigrated XState surface is excluded from PackSurfaces',
+      'useState("legacy");',
+      '// @ts-expect-error bare feature ids only, not qualified own refs',
+      'useState("demo-pack/notes");',
+      '// @ts-expect-error unknown surface name rejected',
+      'useState("missing");',
+      '// @ts-expect-error wrong event payload rejected',
+      'notes.send({ type: "SELECT", id: 123 });',
+      '// @ts-expect-error keyed child requires key argument',
+      'notes.child("card");',
+      'void [provide, selected, detailTitle, cardLabel, count];',
+      'export type { PackSurfaces };',
+    ].join('\n'));
+
+    expect(typecheck(files, ['src/probe-fe.ts', 'src/__generated__/state-fe.ts'], true)).toEqual([]);
+  });
+
+  it('omits state-fe.ts when a pack declares no surfaces', async () => {
+    const files = await generatePackFiles(manifest({ features: [system('notes')] }), { packRoot: root });
+    expect(files['src/__generated__/state-fe.ts']).toBeUndefined();
+  });
+});

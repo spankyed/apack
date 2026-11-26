@@ -44,6 +44,7 @@ export function typecheck(files: Record<string, string>, names: string[], noUnus
     '@apackdev/state': fromSdk('@apackdev/state'),
     '@elmdb/ears': fromSdk('@elmdb/ears'),
     vue: fromSdk('vue'),
+    '@vue/runtime-core': fromSdk('@vue/runtime-core'),
   };
   for (const [name, target] of Object.entries(links)) {
     const link = path.join(root, 'node_modules', name);
