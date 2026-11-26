@@ -72,19 +72,35 @@ export function repositoryOf(name) {
 }
 
 /**
- * Removes stale nested workspace `packages/<ws>/node_modules/<pkg>` copies/symlinks for `packageNames` before
- * reinstalling after an override switch (`deps:local` <-> `deps:pin` / `deps:released`), so npm hoists a single copy
- * into root `node_modules` instead of leaving stale workspace links behind.
+ * Removes stale nested workspace `packages/<ws>/node_modules/<pkg>` copies/symlinks and stale root `node_modules/<pkg>`
+ * symlinks for `packageNames` before reinstalling after an override switch (`deps:local` <-> `deps:pin` /
+ * `deps:released`), so npm hoists a single clean copy into root `node_modules` instead of leaving stale links behind.
  *
  * @param {string} root
  * @param {readonly string[]} packageNames
  * @returns {string[]} paths removed, relative to `root`
  */
 export function pruneNestedOverrides(root, packageNames) {
-  const packagesDir = path.join(root, 'packages');
-  if (!existsSync(packagesDir)) return [];
   /** @type {string[]} */
   const removed = [];
+  const rootNodeModules = path.join(root, 'node_modules');
+  if (existsSync(rootNodeModules)) {
+    for (const name of packageNames) {
+      const segments = name.split('/');
+      const target = path.join(rootNodeModules, ...segments);
+      let isLink = false;
+      try {
+        isLink = lstatSync(target).isSymbolicLink();
+      } catch {
+        isLink = false;
+      }
+      if (!isLink) continue;
+      rmSync(target, { recursive: true, force: true });
+      removed.push(path.relative(root, target).split(path.sep).join('/'));
+    }
+  }
+  const packagesDir = path.join(root, 'packages');
+  if (!existsSync(packagesDir)) return removed;
   for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const nodeModules = path.join(packagesDir, entry.name, 'node_modules');
@@ -117,13 +133,13 @@ export function pruneNestedOverrides(root, packageNames) {
 }
 
 /**
- * Returns any package in `packageNames` missing from root `node_modules` after install (for example, when a `file:`
- * override was not hoisted or points at a missing directory).
+ * Returns any package in `packageNames` missing a readable `package.json` in root `node_modules` after install (for
+ * example, when a `file:` override was not hoisted, points at a missing directory, or left an empty folder).
  *
  * @param {string} root
  * @param {readonly string[]} packageNames
  * @returns {string[]}
  */
 export function missingHoistedOverrides(root, packageNames) {
-  return packageNames.filter((name) => !existsSync(path.join(root, 'node_modules', ...name.split('/'))));
+  return packageNames.filter((name) => !existsSync(path.join(root, 'node_modules', ...name.split('/'), 'package.json')));
 }
