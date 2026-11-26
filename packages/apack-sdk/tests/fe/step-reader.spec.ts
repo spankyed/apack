@@ -89,7 +89,7 @@ it('reacts to independent publications and releases both subscriptions with its 
   const f = fixture(); const scope = effectScope(); const labels: string[] = [];
   scope.run(() => {
     const entries = useStepDeclarations();
-    watchEffect(() => { entries.value; labels.push(getStepBinding('memo') ? 'ready' : 'unavailable'); });
+    watchEffect(() => { void entries.value; labels.push(getStepBinding('memo') ? 'ready' : 'unavailable'); });
   });
   f.bindings.delete('memo'); for (const listener of f.bindingListeners) listener(); await nextTick();
   f.bindings.set('memo', f.accepted); for (const listener of f.bindingListeners) listener(); await nextTick();

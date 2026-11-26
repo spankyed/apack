@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    "rootDir": ".",
     // Its own, not tsconfig.json's inherited one: typecheck:server runs three tsc passes over this package
     // and one shared .tsbuildinfo would have them overwrite each other, so none of them stays warm
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/server-scripts.tsbuildinfo"

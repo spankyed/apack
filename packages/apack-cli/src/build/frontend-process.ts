@@ -86,7 +86,7 @@ export async function startPackFrontend(root: string, compiler: CompilerInstalla
       signal.removeEventListener('abort', aborted);
       child.removeListener('message', response);
       child.removeListener('close', exited);
-      error !== undefined ? reject(error) : resolve(current);
+      if (error !== undefined) reject(error); else resolve(current);
     };
     const aborted = () => finish(false, signal.reason);
     const exited = () => finish(false);

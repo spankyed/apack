@@ -36,7 +36,7 @@ const threadsActor: ThreadsState = useSurface()
 // ─── Block component resolution ─────────────────────────────────────
 const declarations = useBlockDeclarations()
 const getBlockComponent = (type: string) => {
-  declarations.value
+  void declarations.value
   return getBlockBinding(type)?.binding.fe?.component
 }
 

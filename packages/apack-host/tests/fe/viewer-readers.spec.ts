@@ -78,7 +78,7 @@ it('reacts to binding-only readiness, replacement and catalog-only disablement, 
   const subscribe = vi.spyOn(f.registry, 'onChanged');
   scope.run(() => {
     const artifacts = useArtifactDeclarations(); const blocks = useBlockDeclarations();
-    watchEffect(() => { artifacts.value; blocks.value;
+    watchEffect(() => { void artifacts.value; void blocks.value;
       seen.push([getArtifactBinding('card')?.binding.fe?.component, getBlockBinding('answer')?.binding.fe?.component]); });
   });
   f.admit(); await nextTick();
