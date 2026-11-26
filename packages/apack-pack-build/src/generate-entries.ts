@@ -480,6 +480,16 @@ export async function generatePackFiles(
   /** The dependencies whose facade publishes `PackSurfaceState`, by the same rule applied to their manifests */
   const depsWithSurfaces = depIds.filter((depId) => publishesSurfaceState(depSnapshots.get(depId)!.manifest, depId));
 
+  /**
+   * Whether a pack publishes `PackViews` — it has at least one feature declaring `views`. Three outputs turn on this
+   * one fact and must agree: whether `state.ts` emits `PackViews`, whether `pack-types.ts` re-exports it, and whether
+   * a dependent imports it.
+   */
+  const publishesViews = (forManifest: PackManifest) => packFeatures(forManifest).some((f) => Boolean(f.views));
+
+  /** The dependencies whose facade publishes `PackViews`, by the same rule applied to their manifests */
+  const depsWithViews = depIds.filter((depId) => publishesViews(depSnapshots.get(depId)!.manifest));
+
 
   /**
    * The repository names the pack's direct dependencies declare, with the pack declaring each. A name
@@ -1511,8 +1521,8 @@ export const getDataDirPath = (name: string): string => _packDataDir('${manifest
   // because these reach the frontend SDK.
   /**
    * `useView`, typed by the views this pack's features declare: a feature's name and a view's, with its arguments
-   * and its result read off the declaration. Type-only imports of the views' modules, so no backend code reaches
-   * the frontend's bundle.
+   * and its result read off `PackViews` (declared in Vue-free `state.ts` so `pack-types.ts` can publish it without
+   * dragging Vue into backend or facade bundles).
    */
   function viewsFe(): { imports: string; code: string } | undefined {
     const views = viewEntries();
@@ -1520,12 +1530,9 @@ export const getDataDirPath = (name: string): string => _packDataDir('${manifest
     const imports = `import { untypedFromView, untypedUseView, type UseViewOptions, type ViewState, type ViewUpdate } from '@apackdev/sdk/fe';
 import type { ViewArgs, ViewResult } from '@apackdev/sdk/framework';
 import type { MaybeRefOrGetter } from 'vue';
-${views.map(({ featureId, source, exportName }) => `import type { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n')}`;
+import type { PackViews } from './state.ts';`;
     const code = `
-/** Feature id → the views it declares (apack.json \`features.<id>.views\`) */
-export type PackViews = {
-${views.map(({ featureId }) => `  '${featureId}': typeof ${viewsBinding(featureId)};`).join('\n')}
-};
+export type { PackViews };
 
 /** A feature of this pack that declares views */
 export type ViewFeatureName = keyof PackViews & string;
@@ -1803,6 +1810,165 @@ export const { broadcast, sendToWindow, sendToSurface, tell, ask, fromAsk } = /*
 `;
   }
 
+  /**
+   * `@apackdev/state` network binding (`#generated/state`): flat concrete `PackNet` and `state = forNet<PackNet>(resolve)`.
+   *
+   * Backend- and frontend-safe (zero Vue imports). Also owns `PackViews` so `pack-types.ts` can publish views to
+   * dependent packs without dragging Vue into backend or facade bundles.
+   */
+  function generateState(): string {
+    const features = packFeatures(manifest);
+    const systemFeatures = features.filter(f => f.system);
+    const surfaceFeatures = features.filter(f => f.surface);
+    const views = viewEntries();
+    const systemContracts = contractsOf(systemFeatures, 'system');
+    const surfaceContracts = contractsOf(surfaceFeatures, 'surface');
+
+    // Collect dependency features from each dependency's snapshot manifest so PackNet carries flat concrete keys
+    // rather than mapped-type intersections over Qualified<...>.
+    const depSystems: Array<{ depId: string; featureId: string; asksAlias: string }> = [];
+    const depSurfaces: Array<{ depId: string; featureId: string }> = [];
+    const depViews: Array<{ depId: string; featureId: string }> = [];
+    const depsNeedingSystemEvents = new Set<string>();
+    const depsNeedingSurfaceEvents = new Set<string>();
+
+    for (const depId of depIds) {
+      const depFeatures = packFeatures(depSnapshots.get(depId)!.manifest);
+      for (const f of depFeatures) {
+        if (f.system) {
+          depsNeedingSystemEvents.add(depId);
+          depSystems.push({ depId, featureId: f.id, asksAlias: depAlias(depId, `asks_${toIdentifier(f.id)}`) });
+        }
+        if (f.surface) {
+          depsNeedingSurfaceEvents.add(depId);
+          depSurfaces.push({ depId, featureId: f.id });
+        }
+        if (f.views) {
+          depViews.push({ depId, featureId: f.id });
+        }
+      }
+    }
+
+    const depSysIds = [...depsNeedingSystemEvents];
+    const depSurfIds = [...depsNeedingSurfaceEvents];
+    const depSystemEventImports = depSysIds.length ? depTypeImports('PackSystemEvents', depSysIds) : { imports: [], aliases: [] };
+    const depSystemAskImports = depSysIds.length ? depTypeImports('PackSystemAsks', depSysIds) : { imports: [], aliases: [] };
+    const depSurfaceEventImports = depSurfIds.length ? depTypeImports('PackSurfaceEvents', depSurfIds) : { imports: [], aliases: [] };
+    const depViewImports = depsWithViews.length ? depTypeImports('PackViews', depsWithViews) : { imports: [], aliases: [] };
+
+    const ownSystemAskAliases = systemFeatures
+      .filter(f => systemContracts.has(f.id))
+      .map(f => `type __sys_asks_${toIdentifier(f.id)} = NormalizeAsks<ContractAsks<__SystemContracts['${f.id}']>>;`);
+
+    const depSystemAskAliases = depSystems.map(({ depId, featureId, asksAlias }) =>
+      `type ${asksAlias} = NormalizeAsks<__Entry<${depAlias(depId, 'PackSystemAsks')}, '${featureId}', {}>>;`);
+
+    const usesEntry = depSystems.length > 0 || depSurfaces.length > 0 || depViews.length > 0;
+    const usesSystemContracts = systemContracts.size > 0 || surfaceFeatures.some(f => f.system);
+    const usesIncomingOnly = systemContracts.size > 0;
+    const usesContractAsks = systemContracts.size > 0;
+    const usesNormalizeAsks = systemContracts.size > 0 || depSystems.length > 0;
+    const usesOutgoing = surfaceFeatures.some(f => f.system);
+    const usesSurfaceInbox = surfaceContracts.size > 0;
+    const usesNetViews = views.length > 0 || depViews.length > 0;
+
+    const sdkEventTypes = [
+      ...(usesContractAsks ? ['ContractAsks'] : []),
+      'HostSurfaceEvents',
+      'HostSystemAsksOf',
+      'HostSystemEvents',
+      ...(usesIncomingOnly ? ['IncomingOnlyEventsOf'] : []),
+      ...(usesNormalizeAsks ? ['NormalizeAsks'] : []),
+      ...(usesOutgoing ? ['OutgoingEventsOf'] : []),
+      ...(usesSurfaceInbox ? ['SurfaceInboxOf'] : []),
+    ];
+
+    const hostSystemKeys = Object.keys(HOST_SYSTEM_EVENT_TYPES);
+    const hostSurfaceKeys = Object.keys(HOST_SURFACE_EVENT_TYPES);
+
+    const ownSystemEntries = systemFeatures.map((f) => {
+      if (!systemContracts.has(f.id)) return `    '${f.id}': { events: never; asks: {} };`;
+      return `    '${f.id}': { events: IncomingOnlyEventsOf<__SystemContracts['${f.id}']>; asks: __sys_asks_${toIdentifier(f.id)} };`;
+    });
+    const depSystemEntries = depSystems.map(({ depId, featureId, asksAlias }) =>
+      `    '${depId}/${featureId}': { events: Exclude<__Entry<${depAlias(depId, 'PackSystemEvents')}, '${featureId}', never>, { type: keyof ${asksAlias} & string }>; asks: ${asksAlias} };`);
+    const hostSystemEntries = hostSystemKeys.map((key) =>
+      `    '${key}': { events: HostSystemEvents['${key}']; asks: HostSystemAsksOf<'${key}'> };`);
+
+    const ownSurfaceEntries = surfaceFeatures.map((f) => {
+      const parts: string[] = [];
+      if (f.system) parts.push(`OutgoingEventsOf<__SystemContracts['${f.id}']>`);
+      if (surfaceContracts.has(f.id)) parts.push(`SurfaceInboxOf<__surface_contract_${toIdentifier(f.id)}>`);
+      return `    '${f.id}': { events: ${parts.length > 0 ? parts.join(' | ') : 'never'} };`;
+    });
+    const depSurfaceEntries = depSurfaces.map(({ depId, featureId }) =>
+      `    '${depId}/${featureId}': { events: __Entry<${depAlias(depId, 'PackSurfaceEvents')}, '${featureId}', never> };`);
+    const hostSurfaceEntries = hostSurfaceKeys.map((key) =>
+      `    '${key}': { events: HostSurfaceEvents['${key}'] };`);
+
+    const ownViewEntries = views.map(({ featureId }) =>
+      `    '${featureId}': NetViews<PackViews['${featureId}']>;`);
+    const depViewEntries = depViews.map(({ depId, featureId }) =>
+      `    '${depId}/${featureId}': NetViews<__Entry<${depAlias(depId, 'PackViews')}, '${featureId}', {}>>;`);
+
+    const allSystemEntries = [...ownSystemEntries, ...depSystemEntries, ...hostSystemEntries];
+    const allSurfaceEntries = [...ownSurfaceEntries, ...depSurfaceEntries, ...hostSurfaceEntries];
+    const allViewEntries = [...ownViewEntries, ...depViewEntries];
+
+    const imports = [
+      "import { forNet } from '@apackdev/state';",
+      `import type { ${sdkEventTypes.join(', ')} } from '@apackdev/sdk/events';`,
+      ...(usesNetViews ? ["import type { NetViews } from '@apackdev/sdk/framework';"] : []),
+      ...(usesSystemContracts ? ["import type { SystemContracts as __SystemContracts } from './system-specs.ts';"] : []),
+      ...[...surfaceContracts].map(([id, contract]) =>
+        `import type { ${contract.exportName} as __surface_contract_${toIdentifier(id)} } from '${toImportPath(root, contract.source)}';`),
+      ...views.map(({ featureId, source, exportName }) =>
+        `import type { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`),
+      ...depSystemEventImports.imports,
+      ...depSystemAskImports.imports,
+      ...depSurfaceEventImports.imports,
+      ...depViewImports.imports,
+    ];
+
+    const helpers = [
+      ...(usesEntry ? ['type __Entry<M, K extends string, Fallback> = K extends keyof M ? M[K] : Fallback;'] : []),
+      ...ownSystemAskAliases,
+      ...depSystemAskAliases,
+    ];
+
+    const packViewsBlock = views.length > 0
+      ? `\n/** Feature id → the views it declares (apack.json \`features.<id>.views\`). */\nexport type PackViews = {\n${views.map(({ featureId }) => `  '${featureId}': typeof ${viewsBinding(featureId)};`).join('\n')}\n};\n`
+      : '';
+
+    const viewsBlock = allViewEntries.length > 0
+      ? `  views: {\n${allViewEntries.join('\n')}\n  };`
+      : '  views: {};';
+
+    return `${HEADER}
+${imports.join('\n')}
+${helpers.length > 0 ? `\n${helpers.join('\n')}\n` : ''}${packViewsBlock}
+/**
+ * The network this pack's \`@apackdev/state\` machines address: own features by bare id (resolved to
+ * \`${manifest.id}/<id>\` at runtime), dependency and host features by qualified \`<packId>/<featureId>\` ref.
+ */
+export interface PackNet {
+  systems: {
+${allSystemEntries.join('\n')}
+  };
+  surfaces: {
+${allSurfaceEntries.join('\n')}
+  };
+${viewsBlock}
+}
+
+/**
+ * Define a \`@apackdev/state\` machine bound to this pack's \`PackNet\`.
+ * Bare names resolve to \`${manifest.id}/<name>\`; qualified \`<pack>/<feature>\` names pass through unchanged.
+ */
+export const state = /*#__PURE__*/ forNet<PackNet>((name) => (name.includes('/') ? name : \`${manifest.id}/\${name}\`));
+`;
+  }
+
   /** The events each system receives and sends, from its spec; type-only, so facades carry no machines or contexts */
   function generateSystemSpecs(): string {
     const systemFeatures = packFeatures(manifest).filter(f => f.system);
@@ -2016,13 +2182,14 @@ export const contentRuntime: ContentRuntime = {
 
   /** The facade types dependents import, bundled into dist/types/pack-types.d.ts by \`apack pack build\` */
   function generatePackTypes(): string {
-    // `fe.ts` is generated only for a pack with surfaces, and `PackSurfaceState` lives there: a pack with none has no
-    // surface state to publish, and naming the module anyway leaves the facade bundle unable to resolve it.
+    // `fe.ts` is generated only for a pack with surfaces, and `PackSurfaceState` lives there; `PackViews` lives in
+    // `state.ts` only for a pack with views. Naming either unconditionally leaves the facade bundle unable to resolve it.
     const hasSurfaces = publishesSurfaceState(manifest, manifest.id);
+    const hasViews = publishesViews(manifest);
     return `${HEADER}
 export type { PackShapes as PackEntityShapes, PackStepNodes } from './ears.ts';
 export type { PackSurfaceEvents, PackSystemAsks, PackSystemEvents } from './events.ts';
-${hasSurfaces ? "export type { PackSurfaceState } from './fe.ts';\n" : ''}export type { Services } from './services.ts';
+${hasSurfaces ? "export type { PackSurfaceState } from './fe.ts';\n" : ''}${hasViews ? "export type { PackViews } from './state.ts';\n" : ''}export type { Services } from './services.ts';
 export type { Repositories } from './repository.ts';
 export type { PackFeatureSettings, PackGroupSettings } from './settings.ts';
 `;
@@ -2481,6 +2648,7 @@ export function workerPath(name: WorkerName): string {
     ['src/__generated__/fe.ts', generateFe()],
     ['src/__generated__/system-specs.ts', generateSystemSpecs()],
     ['src/__generated__/events.ts', generateEvents()],
+    ['src/__generated__/state.ts', generateState()],
     ['src/__generated__/types.ts', generateTypes()],
     ['src/__generated__/services.ts', generateServices()],
     ['src/__generated__/runtime-services.ts', `${HEADER}

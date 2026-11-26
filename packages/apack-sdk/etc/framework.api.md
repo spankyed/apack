@@ -6,10 +6,13 @@
 
 import type { ActionArgs } from 'xstate';
 import type { AnyActorRef } from 'xstate';
+import type { AnyState } from '@apackdev/state';
 import type { AnyStateMachine } from 'xstate';
+import type { AsksOf } from '@apackdev/state';
 import { EARS as EARS_2 } from '@elmdb/ears';
 import type { EmbedDeclaration } from '@elmdb/ears';
 import type { EventObject } from 'xstate';
+import type { EventsOf } from '@apackdev/state';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
@@ -465,6 +468,61 @@ export interface HelpTarget {
 export const _HOST_SERVICE_NAMES: readonly ["logger", "emitter", "repository", "settings", "onboarding", "appData", "runHistory", "inference", "secrets", "filesystem", "terminal"];
 
 // @public
+export type HostLifecycleEvents =
+/**
+* Publish what you hold now — the one event that asks for data, and the only one most systems handle.
+*
+* It follows every fact below, so a system does not wire "send my startup data" once per cause and a new
+* cause costs it nothing. Handle a fact as well only for what publishing cannot fix: work held over rows
+* that are gone, state that tracks whether a client is attached.
+*/
+    {
+    type: 'SEND_STATE';
+}
+/** A client connected. Most systems need only the `SEND_STATE` that follows it */
+| {
+    type: 'CLIENT_CONNECTED';
+}
+/**
+* A pack was activated, reloaded or torn down while the app runs, or its content was imported: what it
+* registers (its slash commands) and the content it applied may differ. Sent once the change is complete.
+*/
+| {
+    type: 'PACK_CHANGED';
+    packId: string;
+}
+/**
+* The feature's settings changed: `settings` as they now apply, and `changes` to what they list, when the store
+* tells them. The feature's surface gets it too (`FeatureSettingsUpdated`).
+*/
+| {
+    type: 'FEATURE_SETTINGS_UPDATED';
+    settings: unknown;
+    changes?: ArrayChanges | null;
+}
+/**
+* Every row the app holds was replaced — reset, or a backup imported — and the new world is built.
+*
+* Handling it is optional: the bus also asks every system for its startup data, so a surface's view is
+* refreshed either way. Declare it only for what re-reading cannot fix, such as work held over rows that
+* are now gone.
+*/
+| {
+    type: 'DATA_REPLACED';
+}
+/**
+* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
+* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
+*
+* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
+* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
+* this arrives.
+*/
+| {
+    type: 'DATA_CHANGED_ELSEWHERE';
+};
+
+// @public
 export const LIFECYCLE_HOOK_NAMES: readonly ["onInit", "onShutdown"];
 
 // @public
@@ -532,6 +590,17 @@ export interface NativePackDeclaration extends PackDataDeclarations, FrontendDec
     steps?: Record<string, StepEntry>;
     version?: string;
 }
+
+// @public
+export type NetView<Read> = {
+    args: [ViewArgs<Read>] extends [undefined] ? {} : ViewArgs<Read> extends object ? ViewArgs<Read> : {};
+    result: ViewResult<Read>;
+};
+
+// @public
+export type NetViews<V> = [V] extends [never] ? {} : {
+    [K in keyof V & string]: NetView<V[K]>;
+};
 
 // @public
 export function onPackCatalogChanged(listener: () => void): () => void;
@@ -1232,6 +1301,11 @@ export function _shortCodeTypes(rules: ReadonlyArray<readonly [string, Partial<R
 // @public
 export const SPECIALTY_CONTENT_KEYS: readonly string[];
 
+// @public
+export type StateMatchesContract<T, C extends SystemContract> = [
+T
+] extends [AnyState] ? [IncomingOnlyEventsOf<C>, Exclude<EventsOf<T>, HostLifecycleEvents>] extends [EventsOf<T>, IncomingOnlyEventsOf<C>] ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>] ? true : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature' : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature' : 'this system\'s default export is not a @apackdev/state State';
+
 // @internal
 export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build' | 'trigger'>>): {
     trigger?: {
@@ -1488,59 +1562,7 @@ export interface SystemEntry {
 }
 
 // @public
-export type SystemEvents =
-/**
-* Publish what you hold now — the one event that asks for data, and the only one most systems handle.
-*
-* It follows every fact below, so a system does not wire "send my startup data" once per cause and a new
-* cause costs it nothing. Handle a fact as well only for what publishing cannot fix: work held over rows
-* that are gone, state that tracks whether a client is attached.
-*/
-    {
-    type: 'SEND_STATE';
-}
-/** A client connected. Most systems need only the `SEND_STATE` that follows it */
-| {
-    type: 'CLIENT_CONNECTED';
-}
-/**
-* A pack was activated, reloaded or torn down while the app runs, or its content was imported: what it
-* registers (its slash commands) and the content it applied may differ. Sent once the change is complete.
-*/
-| {
-    type: 'PACK_CHANGED';
-    packId: string;
-}
-/**
-* The feature's settings changed: `settings` as they now apply, and `changes` to what they list, when the store
-* tells them. The feature's surface gets it too (`FeatureSettingsUpdated`).
-*/
-| {
-    type: 'FEATURE_SETTINGS_UPDATED';
-    settings: unknown;
-    changes?: ArrayChanges | null;
-}
-/**
-* Every row the app holds was replaced — reset, or a backup imported — and the new world is built.
-*
-* Handling it is optional: the bus also asks every system for its startup data, so a surface's view is
-* refreshed either way. Declare it only for what re-reading cannot fix, such as work held over rows that
-* are now gone.
-*/
-| {
-    type: 'DATA_REPLACED';
-}
-/**
-* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
-* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
-*
-* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
-* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
-* this arrives.
-*/
-| {
-    type: 'DATA_CHANGED_ELSEWHERE';
-}
+export type SystemEvents = HostLifecycleEvents
 /**
 * How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
 * no machine handles one: every system may ask, so every system receives them

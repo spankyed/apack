@@ -8,6 +8,7 @@ import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS 
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import * as _apackdev_sdk_ears from '@apackdev/sdk/ears';
+import * as _elmdb_ears from '@apackdev/sdk/ears';
 import { ShortCode } from '@apackdev/sdk/ears';
 import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToWindow, TypedTell } from '@apackdev/sdk/events';
 import { HotkeysMap, MakingOf, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
@@ -2136,6 +2137,14 @@ interface DocumentItem {
     filePath?: string;
 }
 
+/** The library's `document` view: a document as stored, `null` once it's gone, or that it is a file on disk */
+type DocumentView = {
+    onDisk: true;
+} | {
+    onDisk: false;
+    document: DocumentDTO | null;
+};
+
 type DocumentsListener = () => void;
 
 declare namespace EARS {
@@ -2695,6 +2704,14 @@ interface FolderItem {
     isSymlinked?: boolean;
     isBroken?: boolean;
 }
+
+/** The library's `folder` view: a folder's contents as stored, or that they are on disk and fetched instead */
+type FolderView = {
+    onDisk: true;
+} | {
+    onDisk: false;
+    contents: FolderContents;
+};
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
 declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "detached-head", "no-remote", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text", "moved-since", "nothing-to-undo", "no-longer-kept", "no-upstream", "stale-hunk", "output-too-large"];
@@ -4383,6 +4400,17 @@ type PackSystemEvents = {
     'brain': IncomingEventsOf<SystemContracts['brain']>;
     'database': IncomingEventsOf<SystemContracts['database']>;
     'logs': IncomingEventsOf<SystemContracts['logs']>;
+};
+
+/** Feature id → the views it declares (apack.json `features.<id>.views`). */
+type PackViews = {
+    'threads': typeof threadViews;
+    'notes': typeof noteViews;
+    'library': typeof libraryViews;
+    'flows': typeof flowViews;
+    'actions': typeof actionViews;
+    'prompts': typeof promptViews;
+    'database': typeof databaseViews;
 };
 
 type PanelType = 'actions' | 'commit' | 'explorer' | 'pr' | 'prompts' | 'search';
@@ -6692,6 +6720,21 @@ declare const actionQueries: {
     };
 };
 
+declare const actionViews: {
+    /** The first `limit` actions in `categories` (every category when it's empty), or all of them without a limit */
+    readonly list: ({ limit, categories }: {
+        limit: number | null;
+        categories: readonly string[];
+    }) => {
+        actions: _apackdev_sdk.ActionEntity[];
+        totalCount: number;
+    };
+    /** One action, or `null` for one that doesn't exist or is in the trash */
+    readonly byId: ({ id }: {
+        id: EARS.EntityId;
+    }) => _apackdev_sdk.ActionEntity | null;
+};
+
 /** Add several messages to a thread at once (a bulk import), moving its queued messages after them once */
 declare function addMessagesToThread(params: {
     threadId: EARS.EntityId;
@@ -7107,6 +7150,11 @@ declare function createThread(options: ThreadCreateData): {
     status: string;
 };
 
+declare const databaseViews: {
+    /** The names the data holds */
+    readonly schema: () => DatabaseSchemaInfo;
+};
+
 declare const featureServices: {
     chat: {
         sendBlockMessage: typeof sendBlockMessage;
@@ -7235,6 +7283,15 @@ declare function findOrCreateByType(threadId: EARS.EntityId, artifactType: Artif
     created: boolean;
 };
 
+declare const flowViews: {
+    /** Every flow, newest first, and which one the brain runs */
+    readonly list: () => FlowsList;
+    /** A flow's nodes and edges, or `null` once it's gone */
+    readonly graph: ({ flowId }: {
+        flowId: EARS.EntityId;
+    }) => FlowExtendedData | null;
+};
+
 declare const flowsCommands: {
     readonly createFlow: (flow?: Partial<FlowEntity>) => FlowEntity;
     readonly createEdge: (sourceId: _apackdev_sdk.EARS.EntityId, targetId: _apackdev_sdk.EARS.EntityId, options?: {
@@ -7344,6 +7401,19 @@ declare const libraryQueries: {
     readonly getAllDocuments: () => DocumentDTO[];
 };
 
+declare const libraryViews: {
+    /** Every document and folder by name: what the reference picker offers and the panel counts */
+    readonly index: () => LibraryIndex;
+    /** A folder's contents as the library stores them, or that they are on disk */
+    readonly folder: ({ folderId }: {
+        folderId: string | null;
+    }) => FolderView;
+    /** A document as the library stores it, `null` once it's gone, or that it is a file on disk */
+    readonly document: ({ id }: {
+        id: string;
+    }) => DocumentView;
+};
+
 /** List all Codex sessions across all date directories. */
 declare function listAll(opts?: {
     limit?: number;
@@ -7420,6 +7490,28 @@ declare const noteQueries: {
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
 };
 
+declare const noteViews: {
+    /** Every note as the tree shows it */
+    readonly tree: () => NoteSummary[];
+    /** One note with its text, or `null` for one that doesn't exist or is in the trash */
+    readonly note: ({ id }: {
+        id: EARS.EntityId;
+    }) => NoteDTO | null;
+    /** What the welcome page lists: the `limit` notes seen last, and the favourites */
+    readonly recent: ({ limit }: {
+        limit: number;
+    }) => {
+        recent: RecentNote[];
+        favorites: RecentNote[];
+    };
+    /** The notes whose title holds `text` */
+    readonly search: ({ text }: {
+        text: string;
+    }) => NoteSummary[];
+    /** The notes in the trash */
+    readonly trash: () => NoteSummary[];
+};
+
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
 
@@ -7446,6 +7538,21 @@ declare const promptQueries: {
         prompts: PromptEntity[];
         totalCount: number;
     };
+};
+
+declare const promptViews: {
+    /** The first `limit` prompts in `categories` (every category when it's empty), or all of them without a limit */
+    readonly list: ({ limit, categories }: {
+        limit: number | null;
+        categories: readonly string[];
+    }) => {
+        prompts: _apackdev_sdk.PromptEntity[];
+        totalCount: number;
+    };
+    /** One prompt, or `null` for one that doesn't exist or is in the trash */
+    readonly byId: ({ id }: {
+        id: EARS.EntityId;
+    }) => _apackdev_sdk.PromptEntity | null;
 };
 
 /**
@@ -7707,6 +7814,82 @@ declare const threadQueries: {
     readonly findArtifactByType: typeof findArtifactByThreadAndType;
 };
 
+declare const threadViews: {
+    /** The threads the list and the board show: every one not archived, newest first */
+    readonly list: () => {
+        entityType: EARS.Entity.Thread;
+        topic: string;
+        instructions: string;
+        sideTopics?: string[] | undefined;
+        timestamp: number;
+        lastMessageTimestamp?: number | undefined;
+        lastVisitedTimestamp?: number | undefined;
+        status: string;
+        tags?: string[] | undefined;
+        forcedMode?: string | undefined;
+        pinned?: boolean | undefined;
+        archived?: boolean | undefined;
+        chatState?: string | undefined;
+        context?: ThreadContext | undefined;
+        id: _elmdb_ears.EARS.EntityId;
+        createdAt: number;
+        updatedAt?: number | undefined;
+        trashedAt?: number | undefined;
+        shortCode: _elmdb_ears.ShortCode<"THR">;
+        linkedThreads?: ThreadLinkItem[] | undefined;
+        messages?: Partial<MessageEntity>[] | undefined;
+        parentId?: string | undefined;
+    }[];
+    /** The archived threads, in the order the recent threads are sorted */
+    readonly archived: ({ sortOrder }: {
+        sortOrder: RecentThreadsSortOrder;
+    }) => Partial<ThreadShape & {
+        shortCode: _elmdb_ears.ShortCode<"THR">;
+    }>[];
+    /** The threads the chat's sidebar lists: at most `limit`, in `sortOrder` */
+    readonly recent: ({ limit, sortOrder }: {
+        limit: number;
+        sortOrder: RecentThreadsSortOrder;
+    }) => Partial<ThreadShape & {
+        shortCode: _elmdb_ears.ShortCode<"THR">;
+    }>[];
+    /** A thread as its detail page shows it, `null` once it is gone */
+    readonly detail: ({ id }: {
+        id: string;
+    }) => ThreadDetailView | null;
+    /** A thread as the chat shows it, with the ids of its last `limit` messages and its queued ones; `null` once gone */
+    readonly chat: ({ threadId, limit }: {
+        threadId: string;
+        limit: number;
+    }) => ChatPage | null;
+    /**
+     * The full details of one block's tool entries, by entry id — what a hover reveals.
+     *
+     * Apart from the message's view because the collapsed row shows a summary and `details.output` is the
+     * whole tool result: a window asks for these only once the block is open, so neither a streaming turn nor
+     * a thread of finished ones reads every tool's output to draw its rows.
+     */
+    readonly entryDetails: ({ blockId }: {
+        blockId: string;
+    }) => Record<string, {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    } | undefined>;
+    /** One message, whole; `null` once it is gone */
+    readonly message: ({ id }: {
+        id: string;
+    }) => MessageEntity | null;
+    /** The messages the panel's search box matches, most relevant first and newer before older, each with its thread */
+    readonly messageSearch: ({ query }: {
+        query: string;
+    }) => MessageSearchResult[];
+    /** An open tab's thread: its label, whether it is pinned, and its artifacts; `null` once it is gone */
+    readonly tab: ({ threadId }: {
+        threadId: string;
+    }) => ThreadTabView | null;
+};
+
 /**
  * Remove a named listener by its ID.
  * No-op if the ID doesn't exist.
@@ -7799,5 +7982,5 @@ declare function visitThread(threadId: EARS.EntityId, options?: {
     restore?: boolean;
 }): void;
 
-export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemAsks, PackSystemEvents, Repositories, Services };
+export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemAsks, PackSystemEvents, PackViews, Repositories, Services };
 ```

@@ -163,6 +163,9 @@
     "@elmdb/ears": "https://github.com/spankyed/elmdb/releases/download/pkg-9aafb09b2a9870d882c584ca99634d6fbf5b1b01/elmdb-ears-0.1.0.tgz",
     "@apackdev/clock": "https://github.com/spankyed/apack-clock/releases/download/pkg-84a3b2b11d9a045d8bad4c4713e0c4abc6387c9f/apackdev-clock-0.1.0.tgz",
     "@apackdev/git": "https://github.com/spankyed/apack-git/releases/download/pkg-90e5881747d4adb4ac8690d1e23932b3df68d7b3/apackdev-git-0.1.0.tgz",
+    "@apackdev/link": "https://github.com/spankyed/apack-link/releases/download/pkg-51a406fc27e9e7bd11ac1eb7ca6995e73f1eef55/apackdev-link-0.1.0.tgz",
+    "@apackdev/orderings": "https://github.com/spankyed/apack-orderings/releases/download/pkg-65dda86e8e69679dd420ed32d8c3b5df171cbe2c/apackdev-orderings-0.1.0.tgz",
+    "@apackdev/state": "https://github.com/spankyed/apack-state/releases/download/pkg-b51ece63d7b3e8e5495fa2963bc3a6f28f436bde/apackdev-state-0.1.0.tgz",
     "@apackdev/terminal": "https://github.com/spankyed/apack-terminal/releases/download/bin-cfc498ff12c91af8e19858a9fd69fd4303e7a69a/apackdev-terminal-0.1.0.tgz",
     "@apackdev/terminal-view": "https://github.com/spankyed/apack-terminal/releases/download/bin-cfc498ff12c91af8e19858a9fd69fd4303e7a69a/apackdev-terminal-view-0.1.0.tgz"
   },

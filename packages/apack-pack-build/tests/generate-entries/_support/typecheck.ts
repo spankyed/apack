@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import ts from 'typescript';
 import { root, write } from './pack.ts';
@@ -31,14 +30,25 @@ export function typecheck(files: Record<string, string>, names: string[], noUnus
   for (const [file, content] of Object.entries(files)) if (content) write(file, content);
   write('package.json', JSON.stringify({ type: 'module' }));
   const sdk = path.resolve(import.meta.dirname, '../../../../apack-sdk');
-  const fromSdk = (name: string) => path.dirname(createRequire(path.join(sdk, 'package.json')).resolve(`${name}/package.json`));
-  // The generated facades import the engine too, which a pack installs with the SDK. `zod` is
+  const fromSdk = (name: string) => {
+    for (let dir = sdk; ; dir = path.dirname(dir)) {
+      const candidate = path.join(dir, 'node_modules', ...name.split('/'));
+      if (fs.existsSync(path.join(candidate, 'package.json'))) return candidate;
+      if (path.dirname(dir) === dir) throw new Error(`Could not locate ${name} from ${sdk}`);
+    }
+  };
+  // The generated facades import the engine and state primitive too, which a pack installs with the SDK. `zod` is
   // intentionally omitted so any generated import of `zod` fails typecheck with TS2307.
-  const links = { '@apackdev/sdk': sdk, '@elmdb/ears': fromSdk('@elmdb/ears'), vue: fromSdk('vue') };
+  const links = {
+    '@apackdev/sdk': sdk,
+    '@apackdev/state': fromSdk('@apackdev/state'),
+    '@elmdb/ears': fromSdk('@elmdb/ears'),
+    vue: fromSdk('vue'),
+  };
   for (const [name, target] of Object.entries(links)) {
     const link = path.join(root, 'node_modules', name);
     fs.mkdirSync(path.dirname(link), { recursive: true });
-    fs.symlinkSync(target, link, 'dir');
+    if (!fs.existsSync(link)) fs.symlinkSync(target, link, 'dir');
   }
   const options: ts.CompilerOptions = {
     target: ts.ScriptTarget.ES2022,

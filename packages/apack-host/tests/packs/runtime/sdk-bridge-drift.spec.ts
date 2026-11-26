@@ -111,6 +111,8 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // The app's log files: Electron main and the API append to them; a pack logs through createLogger, which
   // reaches the same files as a log event, redacted and capped like everything else the app writes
   ['@apackdev/host/logs', "the app's log files, appended to by main and the API"],
+  // Host window-to-API transport multiplexer: composed by the API and preload; packs never require it
+  ['@apackdev/host/transport/mux', 'host window-to-API transport multiplexer, used by the API and preload'],
   // Metadata: tooling reads it, code never requires it.
   ['@apackdev/sdk/package.json', 'package metadata, not code'],
 ]);

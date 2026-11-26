@@ -1,13 +1,19 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
+import type { AnyState, AsksOf, EventsOf } from '@apackdev/state';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
+import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type IncomingOnlyEventsOf, type NormalizeAsks, type RefuseOf } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
 
-/** The events every system accepts: the app sends them, so no system declares them */
-export type SystemEvents =
+/**
+ * The host-pushed lifecycle events a backend system may opt into handling.
+ *
+ * Unlike `SystemEvents`, this excludes the XState ask wire plumbing (`AskAnswered`, `AskFailed`, `AskProgressed`,
+ * `ASK_CANCELLED`), which `@apackdev/state` replaces with `answers`, `loads`, and `calls`.
+ */
+export type HostLifecycleEvents =
   /**
    * Publish what you hold now — the one event that asks for data, and the only one most systems handle.
    *
@@ -44,7 +50,11 @@ export type SystemEvents =
    * re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
    * this arrives.
    */
-  | { type: 'DATA_CHANGED_ELSEWHERE' }
+  | { type: 'DATA_CHANGED_ELSEWHERE' };
+
+/** The events every system accepts: the app sends them, so no system declares them */
+export type SystemEvents =
+  | HostLifecycleEvents
   /**
    * How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
    * no machine handles one: every system may ask, so every system receives them
@@ -421,3 +431,23 @@ export type MachineMatchesContract<Entry, C extends SystemContract> =
       ? true
       : 'this system\'s defineSystem<…> declares a contract that is not the one apack.json names for its feature'
     : 'this system\'s default export has no `spec` from defineSystem<…>';
+
+/**
+ * Whether a `@apackdev/state` backend system matches the contract `apack.json` names for its feature: `true`,
+ * or a sentence saying how they differ.
+ *
+ * `State<S, E, A, G>` carries its type parameters covariantly on a phantom field, so every check below is
+ * bidirectional and tuple-wrapped (so `never` cannot collapse a distributive conditional):
+ * - Events: the state must accept every tell-only event in `C['incoming']`, and every event it accepts beyond
+ *   `C['incoming']` must be an opt-in `HostLifecycleEvents` member (private self-sent `C['internal']` belongs in
+ *   `Shape['internal']`, never in `E`).
+ * - Asks: the state's asks must match `NormalizeAsks<ContractAsks<C>>` in both directions.
+ */
+export type StateMatchesContract<T, C extends SystemContract> =
+  [T] extends [AnyState]
+    ? [IncomingOnlyEventsOf<C>, Exclude<EventsOf<T>, HostLifecycleEvents>] extends [EventsOf<T>, IncomingOnlyEventsOf<C>]
+      ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>]
+        ? true
+        : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature'
+      : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature'
+    : 'this system\'s default export is not a @apackdev/state State';

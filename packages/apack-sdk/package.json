@@ -200,6 +200,7 @@
     }
   },
   "peerDependencies": {
+    "@apackdev/state": "0.1.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/vue-3": "^3.32.0",
     "ai": "^7.0.0",
@@ -216,6 +217,7 @@
     }
   },
   "devDependencies": {
+    "@apackdev/state": "0.1.0",
     "@microsoft/api-extractor": "^7.59.1",
     "ai": "^7.0.100",
     "vite": "^7.3.7",

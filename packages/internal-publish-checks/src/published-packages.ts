@@ -59,12 +59,12 @@ export const CONSUMER_MATRIX = (Object.keys(TSC_VERSIONS) as TscVersion[])
 export const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @app/internal-publish-checks, which builds them)');
 
 /**
- * elmdb's packages the SDK brings, which no registry has: the tarball of each that this repository's root `overrides`
- * name, elmdb's release's, standing in for the registry through npm's `overrides`, as
- * `test-packaged-authoring-author.sh` does. A consumer names neither: they arrive as the SDK's. While the root points
- * them at a local checkout (`npm run deps:local`), each is packed from it.
+ * Packages from our other repositories that the SDK brings (elmdb's two and `@apackdev/state`), which no registry
+ * holds: the tarball of each that this repository's root `overrides` name stands in for the registry through npm's
+ * `overrides`, as `test-packaged-authoring-author.sh` does. A consumer names none of them: they arrive as the SDK's.
+ * While the root points them at a local checkout (`npm run deps:local`), each is packed from it.
  */
-const ELMDB_PACKAGES = ['@elmdb/ears', 'elmdb'];
+const EXTERNAL_SDK_PACKAGES = ['@elmdb/ears', 'elmdb', '@apackdev/state'];
 const rootOverrides = (): Record<string, string> =>
   (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as { overrides: Record<string, string> }).overrides;
 
@@ -122,7 +122,7 @@ export function installPublishedPackages(): string {
         ...Object.fromEntries(Object.values(PACKED_PACKAGES).flatMap((dir) => optionalPeers(dir))),
         ...Object.fromEntries(Object.entries(PACKED_PACKAGES).map(([name, dir]) => [`@apackdev/${name}`, packed(dir)])),
       },
-      overrides: Object.fromEntries(ELMDB_PACKAGES.map((name) => {
+      overrides: Object.fromEntries(EXTERNAL_SDK_PACKAGES.map((name) => {
         const spec = rootOverrides()[name]!;
         return [name, spec.startsWith('file:') ? packed(path.resolve(REPO_ROOT, spec.slice('file:'.length))) : spec];
       })),

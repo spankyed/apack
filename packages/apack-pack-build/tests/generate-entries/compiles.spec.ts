@@ -185,8 +185,13 @@ describe('generated views compile', () => {
     }] }), { packRoot: root });
     expect(files['src/__generated__/pack-entry.ts']).toContain("import { noteViews as __views_notes } from '../features/notes/be/views.ts';");
     expect(files['src/__generated__/pack-entry.ts']).toContain('      views: __views_notes');
-    expect(files['src/__generated__/fe.ts'], 'the frontend names the views module for its types alone')
+    expect(files['src/__generated__/state.ts'], 'state.ts names the views module for its types alone and carries no Vue')
       .toContain("import type { noteViews as __views_notes } from '../features/notes/be/views.ts';");
+    expect(files['src/__generated__/state.ts']).not.toMatch(/\bvue\b/i);
+    expect(files['src/__generated__/fe.ts'], 'fe.ts re-exports PackViews from state.ts without value-importing the views module')
+      .toContain("import type { PackViews } from './state.ts';");
+    expect(files['src/__generated__/fe.ts']).not.toContain('../features/notes/be/views.ts');
+    expect(files['src/__generated__/pack-types.ts']).toContain("export type { PackViews } from './state.ts';");
     write('src/probe.ts', [
       "import { useView } from './__generated__/fe.ts';",
       "const all: string[] | undefined = useView('notes', 'all').data;",
@@ -211,5 +216,122 @@ describe('generated views compile', () => {
     write('src/features/notes/be/views.ts', 'export function noteViews() { return {}; }\n');
     await expect(generatePackFiles(manifest({ features: [{ ...system('notes'), views: 'src/features/notes/be/views.ts#noteViews' }] }), { packRoot: root }))
       .rejects.toThrow('Feature "notes": views: "noteViews" in src/features/notes/be/views.ts must export the object defineViews returns');
+  });
+});
+
+describe('generated #generated/state compiles', () => {
+  it('binds PackNet with bare own refs, qualified dependency/host refs, normalized asks, and Vue-free PackViews', async () => {
+    write('src/features/notes/be/contract.ts', [
+      'export type Contract = {',
+      "  incoming: { type: 'NOTE_PING'; id: string };",
+      '  asks: {',
+      '    GET_NOTE: { args: { id: string }; answer: { title: string }; refuses: { "not-found": {} } };',
+      '    EMPTY_TRASH: {};',
+      '  };',
+      "  internal: { type: 'INTERNAL_ONLY' };",
+      "  outgoing: { type: 'NOTE_SAVED'; id: string };",
+      '};',
+    ].join('\n'));
+    write('src/features/notes/be/system.ts', [
+      "import { defineSystem } from '@apackdev/sdk/framework';",
+      "import type { Contract } from './contract.ts';",
+      'export default { spec: defineSystem<Contract>(), machine: undefined as never };',
+    ].join('\n'));
+    write('src/features/notes/be/views.ts', [
+      "import { defineViews } from '@apackdev/sdk/framework';",
+      'export const noteViews = defineViews({',
+      "  all: () => ['a'],",
+      '  byId: ({ id }: { id: string }) => ({ id, title: "t" }),',
+      '});',
+    ].join('\n'));
+    const depViewsFacade = `${facade({
+      PackSystemEvents: "{ 'memos': { type: 'MEMO_PING'; n: number } | { type: 'GET_MEMO'; id: string } }",
+      PackSystemAsks: "{ 'memos': { GET_MEMO: { args: { id: string }; answer: { text: string } }; PING_MEMO: {} } }",
+      PackSurfaceEvents: "{ 'memos': { type: 'MEMO_OPENED'; id: string } }",
+    })['pack-types']}\nexport type PackSurfaceState = { 'memos': never };\nexport type PackViews = { 'memos': { list: () => string[]; one: (args: { id: string }) => string } };`;
+    const dep = dependency(
+      {
+        features: [{
+          id: 'memos',
+          description: 'Memos.',
+          system: { entry: 'x' },
+          surface: { label: 'Memos', state: 'y' },
+          views: 'z#memoViews',
+        }],
+      },
+      { 'pack-types': depViewsFacade },
+    );
+    const files = await generatePackFiles(
+      manifest({
+        features: [{
+          ...withSurface(system('notes'), "{ type: 'NOTE_FOCUS'; id: string }"),
+          views: 'src/features/notes/be/views.ts#noteViews',
+        }],
+      }),
+      { packRoot: root, depSnapshots: new Map([['base-pack', dep]]) },
+    );
+
+    expect(files['src/__generated__/state.ts']).not.toMatch(/\bvue\b/i);
+    expect(files['src/__generated__/pack-types.ts']).toContain("export type { PackViews } from './state.ts';");
+
+    write('src/probe.ts', [
+      "import type { Net } from '@apackdev/state';",
+      "import { state, type PackNet } from './__generated__/state.ts';",
+      'type _CheckNet<T extends Net> = T;',
+      'type _PackNetExtendsNet = _CheckNet<PackNet>;',
+      'const machine = state<{ data: { id: string } }, { type: "RUN" }>()({',
+      '  data: { id: "1" },',
+      '  follows: (follow) => ({',
+      '    allNotes: follow("notes", "all", { updated: () => {} }),',
+      '    oneNote: follow("notes", "byId", { from: ["id"], args: ({ id }) => ({ id }), updated: () => {} }),',
+      '    depList: follow("base-pack/memos", "list", { updated: () => {} }),',
+      '    depOne: follow("base-pack/memos", "one", { from: ["id"], args: ({ id }) => ({ id }), updated: () => {} }),',
+      '  }),',
+      '  loads: (load) => ({',
+      '    note: load("notes", "GET_NOTE", { from: ["id"], args: ({ id }) => ({ id }), done: () => {} }),',
+      '    trash: load("notes", "EMPTY_TRASH", { done: () => {} }),',
+      '    depMemo: load("base-pack/memos", "GET_MEMO", { from: ["id"], args: ({ id }) => ({ id }), done: () => {} }),',
+      '    depPing: load("base-pack/memos", "PING_MEMO", { done: () => {} }),',
+      '    // @ts-expect-error wrong ask args rejected',
+      '    badArgs: load("notes", "GET_NOTE", { from: ["id"], args: () => ({ id: 123 }), done: () => {} }),',
+      '  }),',
+      '  on: {',
+      '    RUN: (_ev, { tell, broadcast }) => {',
+      '      tell("notes", { type: "NOTE_PING", id: "1" });',
+      '      tell("base-pack/memos", { type: "MEMO_PING", n: 1 });',
+      '      tell("host/bus", { type: "PACK_CHANGED", packId: "demo-pack" });',
+      '      broadcast("notes", { type: "NOTE_SAVED", id: "1" });',
+      '      broadcast("notes", { type: "NOTE_FOCUS", id: "1" });',
+      '      broadcast("base-pack/memos", { type: "MEMO_OPENED", id: "1" });',
+      '      broadcast("host/settings", { type: "CLI_TEST_RESULT", provider: "codex", success: true });',
+      '      // @ts-expect-error asks are disjoint from tell events on own systems',
+      '      tell("notes", { type: "GET_NOTE", id: "1" });',
+      '      // @ts-expect-error internal events are never in PackNet',
+      '      tell("notes", { type: "INTERNAL_ONLY" });',
+      '      // @ts-expect-error asks are stripped from dependency PackSystemEvents',
+      '      tell("base-pack/memos", { type: "GET_MEMO", id: "1" });',
+      '      // @ts-expect-error own systems use bare feature ids, not qualified refs',
+      '      tell("demo-pack/notes", { type: "NOTE_PING", id: "1" });',
+      '    },',
+      '  },',
+      '});',
+      'const resolvedOwn: string | undefined = machine.resolve?.("notes");',
+      'void resolvedOwn;',
+      'export type { _PackNetExtendsNet };',
+    ].join('\n'));
+    expect(typecheck(files, ['src/probe.ts', 'src/__generated__/state.ts'], true)).toEqual([]);
+  });
+
+  it('omits PackViews from pack-types.ts and state.ts when no feature declares views', async () => {
+    const dep = dependency({ features: [system('memos')] }, facade());
+    const files = await generatePackFiles(manifest({ features: [system('notes')] }), {
+      packRoot: root,
+      depSnapshots: new Map([['base-pack', dep]]),
+    });
+    expect(files['src/__generated__/pack-types.ts']).not.toContain('PackViews');
+    expect(files['src/__generated__/state.ts']).not.toContain('PackViews');
+    expect(files['src/__generated__/state.ts']).toContain('views: {};');
+    expect(typecheck(files, ['src/__generated__/state.ts'], true)).toEqual([]);
+    expect(typecheck(files, ['src/__generated__/pack-types.ts'])).toEqual([]);
   });
 });

@@ -60,8 +60,8 @@ describe('sharedInstanceExports', () => {
 describe('getSharedBeDeps', () => {
   it('names the packages a pack backend gets from the host, and no frontend-only one', () => {
     const be = getSharedBeDeps();
-    // `both` and `be` entries: the app's xstate (one interpreter) and zod (one set of schema classes)
-    expect(be.sort()).toEqual(['xstate', 'zod']);
+    // `both` and `be` entries: @apackdev/state, xstate, and zod
+    expect(be.sort()).toEqual(['@apackdev/state', 'xstate', 'zod']);
     for (const name of be) expect(SHARED_DEPS[name].target, name).not.toBe('fe');
     for (const [name, dep] of Object.entries(SHARED_DEPS)) {
       if (dep.target === 'fe') expect(be, name).not.toContain(name);
@@ -70,7 +70,7 @@ describe('getSharedBeDeps', () => {
 
   it("doesn't list subpaths: the bridge resolves them from the host as they come", () => {
     // A pack bundle leaves `zod` external, and a dependency inside it may require `zod/v4`
-    expect(getSharedBeDeps().some((name) => name.includes('/'))).toBe(false);
+    expect(getSharedBeDeps().some((name) => packageName(name) !== name)).toBe(false);
   });
 
   it('shares nothing with the frontend list that the frontend gets under another key', () => {
@@ -139,6 +139,8 @@ describe('sharedFeModules', () => {
 
     expect(modules['vue']).toBe('vue');
     expect(modules['@xstate/vue']).toBe('@xstate/vue');
+    expect(modules['@apackdev/state']).toBe('@apackdev/state');
+    expect(modules['@apackdev/state/vue']).toBe('@apackdev/state/vue');
     expect(modules['@apackdev/sdk/fe']).toBe('@apackdev/sdk/fe');
     expect(modules['@apackdev/ui/design/button']).toBe('@apackdev/ui/design/button');
   });

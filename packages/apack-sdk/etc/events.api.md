@@ -312,6 +312,9 @@ export type HostSurfaceEvents = {
 export type HostSystemAsks = {};
 
 // @public
+export type HostSystemAsksOf<K extends string> = K extends keyof HostSystemAsks ? NormalizeAsks<HostSystemAsks[K]> : {};
+
+// @public
 export type HostSystemEvents = {
     'host/bus': {
         type: 'PACK_CHANGED';
@@ -324,6 +327,13 @@ export type HostSystemEvents = {
 
 // @public
 export type IncomingEventsOf<C> = ContractIncoming<C>;
+
+// @public
+export type IncomingOnlyEventsOf<C> = [C] extends [never] ? never : C extends {
+    incoming: infer Events;
+} ? Extract<Events, {
+    type: string;
+}> : never;
 
 // @public
 export const isAskAnswer: (event: {
@@ -353,6 +363,29 @@ export interface Message {
 
 // @public
 export const newCall: () => string;
+
+// @public
+export type NormalizeAsk<D> = {
+    args: D extends {
+        args: infer P extends object;
+    } ? P : {};
+    answer: D extends {
+        answer: infer A;
+    } ? A : void;
+} & (D extends {
+    refuses: infer R extends string | Record<string, object>;
+} ? {
+    refuses: R;
+} : {}) & (D extends {
+    progress: infer P;
+} ? {
+    progress: P;
+} : {});
+
+// @public
+export type NormalizeAsks<M> = [M] extends [never] ? {} : {
+    [K in keyof M & string]: NormalizeAsk<M[K]>;
+};
 
 // @public
 export function onConnected(callback: () => void): () => void;

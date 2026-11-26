@@ -19,7 +19,9 @@
   "dependencies": {
     "@apackdev/clock": "0.1.0",
     "@apackdev/host": "*",
+    "@apackdev/link": "0.1.0",
     "@apackdev/sdk": "*",
+    "@apackdev/state": "0.1.0",
     "@apackdev/ui": "*",
     "@guolao/vue-monaco-editor": "^1.5.5",
     "@statelyai/inspect": "^0.7.2",
