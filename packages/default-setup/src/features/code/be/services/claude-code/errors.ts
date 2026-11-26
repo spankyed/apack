@@ -42,7 +42,7 @@ export class ClaudeExitError extends ClaudeCodeError {
   }
 }
 
-/** A `type:'result'` line arrived with an error subtype. */
+/** A native result has an error subtype or is_error=true, including subtype=success refusals. */
 export class ClaudeResultError extends ClaudeCodeError {
   readonly code = 'RESULT_ERROR'
   constructor(
@@ -59,6 +59,14 @@ export class ClaudeAbortError extends ClaudeCodeError {
   readonly code = 'ABORTED'
   constructor(reason?: unknown) {
     super('Claude Code operation was aborted', reason)
+  }
+}
+
+/** A one-shot command could not receive its stdin payload. */
+export class ClaudeInputError extends ClaudeCodeError {
+  readonly code = 'INPUT_FAILED'
+  constructor(cause?: unknown) {
+    super('Failed to write input to Claude Code', cause)
   }
 }
 

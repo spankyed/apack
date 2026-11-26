@@ -1,15 +1,19 @@
+import { disposeClaudeTerminalHistory } from './threads/be/claude-terminal-sync.ts';
+import { clearClaudeUiViews } from './threads/be/claude-ui.ts';
+import { startClaudeTerminalViews } from './threads/be/system.ts';
+import { killAllHandles } from './code/be/services/claude-code/handle-store.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
 import { startTerminalSizing } from './code/be/features/terminal.ts';
 import { startStoppingWindowReads } from './code/be/services/window-reads.ts';
-import { endAllTurns as endClaudeTurns } from './code/be/services/claude-code/handle-store.ts';
 import { stopCodex } from './code/be/services/codex/index.ts';
 
 /** What the pack's backend follows for as long as it runs */
 let stopTerminalSizing: (() => void) | undefined;
 let stopStoppingWindowReads: (() => void) | undefined;
+let stopClaudeTerminalViews: (() => void) | undefined;
 
 /**
  * The pack's backend started.
@@ -28,6 +32,7 @@ export const onInit = () => {
   stopTerminalSizing = startTerminalSizing();
   // A blame or a history a window asked for is stopped when the window goes
   stopStoppingWindowReads = startStoppingWindowReads();
+  stopClaudeTerminalViews = startClaudeTerminalViews();
   const folded = services.repository.chatCommands.foldStrandedMessageText();
   if (folded > 0) services.logger.info('folded the text of messages a turn left unfinished', { messages: folded });
 };
@@ -38,25 +43,41 @@ export const onInit = () => {
  * leave unfinished are marked stopped in the run history, as a kill marks them
  */
 export const onShutdown = () => {
-  services.runHistory.stopActive();
+  const failures: unknown[] = [];
+  const dispose = (cleanup: () => void) => {
+    try { cleanup(); } catch (error) { failures.push(error); }
+  };
+  // A runtime can lose service admission before shutdown (for example during Restore Pack). Its
+  // rejected history write must remain visible without skipping process-local cleanup.
+  dispose(() => services.runHistory.stopActive());
   // **Nothing here ends a terminal, and nothing in this process may.** A session outlives the API on
   // purpose: restarting it must not take a user's shells down, which is the whole of the lifetime rule.
   // What ends them is the app's own hold on the broker closing — a descriptor closes on process death
   // however the process died — and, with no owner holding it, the broker's own rule that the last client
   // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
+  // What does end here is this process's own follow of the windows, which is not a session.
+  const stopSizing = stopTerminalSizing;
+  stopTerminalSizing = undefined;
+  if (stopSizing) dispose(stopSizing);
+  const stopReads = stopStoppingWindowReads;
+  stopStoppingWindowReads = undefined;
+  if (stopReads) dispose(stopReads);
   //
   // **An agent's processes are the opposite case, and are ended.** A terminal is the user's and is held by the
   // broker, outside this process; a `claude` turn and the Codex app server are this pack's own children, held
   // only by its modules. The pack stopping is not always the process ending: a reload replaces those modules in
-  // a process that goes on, where a child they started would run on with nothing left to end it.
-  endClaudeTurns();
-  stopCodex();
-  stopTerminalSizing?.();
-  stopTerminalSizing = undefined;
-  stopStoppingWindowReads?.();
-  stopStoppingWindowReads = undefined;
-  clearAllSchedules();
-  removeAllAdHocListeners();
-  clearFlowActorRegistry();
+  // a process that goes on, where a child they started would run on with nothing left to end it, and the views
+  // a handle fed would have nobody to reach. Stopping the app server ends every Codex turn with it.
+  const stopClaudeViews = stopClaudeTerminalViews;
+  stopClaudeTerminalViews = undefined;
+  if (stopClaudeViews) dispose(stopClaudeViews);
+  dispose(disposeClaudeTerminalHistory);
+  dispose(clearClaudeUiViews);
+  dispose(killAllHandles);
+  dispose(stopCodex);
+  dispose(clearAllSchedules);
+  dispose(removeAllAdHocListeners);
+  dispose(clearFlowActorRegistry);
+  if (failures.length) throw new AggregateError(failures, 'Default pack shutdown cleanup failed');
 };

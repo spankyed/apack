@@ -1,0 +1,161 @@
+export const CLAUDE_BUSY_DRAFT_MESSAGE = 'Claude is busy. Your draft was kept.'
+export const CLAUDE_STALE_DRAFT_MESSAGE = 'The Claude session changed. Your draft was kept.'
+
+/** Native task ids and terminal owners are independent of apack thread ids. */
+export interface ClaudeNativeTerminalTask {
+  kind?: 'workflow' | 'shell' | 'mcp' | 'managed'
+  nativeTaskType?: import('./native-managed-task.ts').ClaudeNativeManagedTaskType
+  mcp?: import('./native-mcp-task.ts').ClaudeNativeMcpTaskInfo
+  settled?: boolean
+  canPause?: boolean
+  canResume?: boolean
+  canStop?: boolean
+  id: string
+  name: string
+  status: string
+  statusText?: string
+}
+export type ClaudeNativeTerminalView = { kind: 'main'; revision: number } | { kind: 'agent'; revision: number; registryId: string; taskId?: string }
+
+/** One observed Agent selection in one native process. A mount cannot change targets. */
+export interface ClaudeNativeAgentUiTarget {
+  ownerId: string
+  sessionId: string
+  revision: number
+  taskId: string
+}
+
+export type ClaudeNativeAgentViewSource = Pick<ClaudeNativeAgentUiTarget, 'taskId' | 'revision'>
+
+export function matchesClaudeAgentView(view: ClaudeNativeTerminalView | undefined, source: ClaudeNativeAgentViewSource): boolean {
+  return view?.kind === 'agent' && (view.taskId ?? view.registryId) === source.taskId && view.revision === source.revision
+}
+
+export interface ClaudeNativePauseScope {
+  ownerId: string
+  sessionId: string
+  turnId?: string
+  mcp?: { id: string; revision: string }
+}
+
+export interface ClaudeNativeFocusProjection {
+  sessionId: string
+  viewRevision: number
+  producerId: string
+  active: boolean
+  hidden: string[]
+}
+
+/** The viewport and measured cell used by the owning broker session. */
+export interface ClaudeNativeTerminalSize {
+  columns: number
+  rows: number
+  cell?: {width: number; height: number}
+}
+
+/** The broker-issued drawing address; independent of Claude session IDs and process IDs. */
+export interface ClaudeNativeTerminalSession {
+  id: string
+  target: string | null
+}
+
+export interface ClaudeNativePromptQueue {
+  revision: string
+  count: number
+  items: { id: string; text: string; editable: boolean; cancellable: boolean }[]
+}
+
+export interface ClaudeNativeTerminalState {
+  /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
+  terminalSession?: ClaudeNativeTerminalSession
+  /** View/parent transition: ordinary terminal input waits; cancellation remains available. */
+  inputBlocked?: boolean
+
+  /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
+  handoffPending?: boolean
+
+  /** Available after the native dialog store has been observed; retained through owned shutdown. */
+  messageRetirements?: import('./native-notice.ts').ClaudeNativeMessageRetirements
+  mcpUrl?: import('./native-mcp-url.ts').ClaudeNativeMcpUrl
+  mcpForm?: import('./native-mcp-form.ts').ClaudeNativeMcpForm
+  notice?: import('./native-notice.ts').ClaudeNativeNotice
+  /** Original native selected view, independent of the app thread. Undefined until observed. */
+  view?: ClaudeNativeTerminalView
+  ownerId: string
+  sessionId: string
+  cwd: string
+  status: 'starting' | 'live' | 'exited' | 'error'
+  /** Process attached to the PTY; may be a configured launcher. */
+  pid?: number
+  /** Authenticated native executable beneath that launcher. */
+  nativePid?: number
+  exitCode?: number
+  continuation?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
+  preview?: { turnId: string; output: string }
+  /** Waiting main-conversation prompts observed in the original CLI. */
+  promptQueue?: ClaudeNativePromptQueue
+  busy: boolean
+  /** Original turn currently eligible for a composer Pause. */
+  activeTurnId?: string
+  /** Original turn accepted cancellation and is still settling. */
+  endingTurnId?: string
+  /** Native pending-work counts, independent of prompt submission readiness. */
+  activity?: { pendingAgents: number; pendingWorkflows: number }
+  /** Read-only active goal indicator from the current original Claude session. */
+  goalActive?: boolean
+  focus?: ClaudeNativeFocusProjection
+  lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }
+  session?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeSessionMetadata
+  billing?: import('./native-billing.ts').ClaudeBillingObservation
+  mainStatus?: string
+  tasks: ClaudeNativeTerminalTask[]
+  problem?: string
+  startupPolicyProblem?: string
+}
+
+export interface ClaudeNativeTaskDetails {
+  mcp?: import('./native-mcp-task.ts').ClaudeNativeMcpTaskInfo
+  shell?: { command: string; commandTruncated: boolean; cwd?: string; output: string; totalBytes: number; truncated: boolean }
+  handback?: import('./native-handback.ts').ClaudeAgentHandback
+  workflow?: { settled: boolean; canPause: boolean; canResume: boolean; canStop: boolean; name?: string; runId?: string; agentCount: number; phaseCount: number; progress: { type: 'workflow_phase' | 'workflow_agent' | 'workflow_log'; index?: number; phaseIndex?: number; tokens?: number; toolCalls?: number; title?: string; kind?: string; label?: string; state?: string; phaseTitle?: string; agentId?: string; model?: string; error?: string; resultPreview?: string; message?: string; cached?: boolean; skipped?: boolean; controlToken?: string }[]; logs: string[]; output?: string; outputUnavailable: boolean; truncated: boolean }
+  taskId: string
+  name: string
+  teammateName?: string
+  ancestors?: { taskId: string; name: string }[]
+  status: string
+  canInput: boolean
+  canFocusInput?: boolean
+  externalPane?: true
+  canAttach?: true
+  canMessage: boolean
+  metadata?: {
+    prompt?: string
+    promptTruncated: boolean
+    model?: string
+    effort?: string
+    elapsedMs?: number
+    tokenCount?: number
+    toolUseCount?: number
+    error?: string
+    errorTruncated: boolean
+  }
+  messages: (
+    | { uuid: string; role: 'user' | 'assistant'; text: string; renderText?: string; apiMessageId?: string; origin?: { kind: string; name?: string; asUser?: boolean; server?: string } }
+    | { uuid: string; role: 'system'; text: string; compaction: 'boundary' | 'summary' }
+  )[]
+  truncated: boolean
+}
+
+export interface ClaudeNativeTaskInputReceipt { messageId: string; mode: 'queued' | 'resumed' }
+
+export interface ClaudeNativeAgentInputReview { text: string; removed: number }
+
+export interface ClaudeNativeAgentCommandConfirmation {
+  id: string
+  title: string
+  confirmLabel: string
+  commandName?: string
+}
+
+export interface ClaudeNativeWorkflowWorkerTarget { agentId: string; token: string }
+export interface ClaudeNativeWorkflowWorkerReceipt { agentId: string; operation: 'skip_worker' | 'retry_worker'; accepted: true }

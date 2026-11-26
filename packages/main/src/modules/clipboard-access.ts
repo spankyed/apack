@@ -14,14 +14,24 @@ export function clipboardTextProblem(text: unknown): string | undefined {
   return undefined;
 }
 
+let pendingWrite: Promise<boolean> = Promise.resolve(true);
+
 /**
  * Writes `text` to the system clipboard, answering whether it was written. Every window showing the code surface asks
  * for the same write, so a text the clipboard already holds is not written again: the second ask finds it there.
  */
-export function writeClipboardText(text: unknown): boolean {
-  if (clipboardTextProblem(text) !== undefined) return false;
-  if (clipboard.readText() !== text) clipboard.writeText(text as string);
-  return true;
+export function writeClipboardText(text: unknown): Promise<boolean> {
+  if (clipboardTextProblem(text) !== undefined) return Promise.resolve(false);
+  // Windows may ask concurrently. Read after the preceding write settles so duplicates see its result.
+  pendingWrite = pendingWrite.then(async () => {
+    try {
+      if (await clipboard.readText() !== text) await clipboard.writeText(text as string);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  return pendingWrite;
 }
 
 /** Answers the window's `clipboard:write-text` request with `writeClipboardText` */

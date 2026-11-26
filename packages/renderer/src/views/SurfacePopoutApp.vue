@@ -14,8 +14,29 @@
           @crumb-click="(target: string, info?: any) => send({ type: 'TRAIL_CLICK', target, info })"
           @menu-action="handleMenuAction"
         />
-        <div class="min-h-0 flex-1 overflow-y-auto">
-          <SurfacePane :surface="shell.data.activeSurface" area="canvas" :target="shell.data.targetView" />
+        <div ref="content" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div
+            v-show="!canShowChat || canvasShare > 0"
+            class="min-h-0 overflow-y-auto"
+            :style="{ flex: canShowChat ? `${canvasShare} 1 0%` : '1 1 0%' }"
+          >
+            <SurfacePane :surface="shell.data.activeSurface" area="canvas" :target="shell.data.targetView" />
+          </div>
+          <PanelResizer
+            v-if="canShowChat"
+            orientation="vertical"
+            :collapsed="canvasShare === 0"
+            @resize="handleCanvasResize"
+            @click="canvasShare = canvasShare === 0 ? 35 : 0"
+          />
+          <ChatArea
+            v-if="canShowChat"
+            data-onboarding-id="chat-area"
+            class="relative"
+            :style="{ flex: `${100 - canvasShare} 1 0%`, height: 'auto', minHeight: 'auto', maxHeight: '100%' }"
+          >
+            <SurfacePane :surface="shell.data.activeSurface" area="chat" />
+          </ChatArea>
         </div>
       </div>
 
@@ -42,6 +63,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { PanelRight } from 'lucide-vue-next'
 import { applicationState } from '@/main'
+import ChatArea from '@/views/layout/ChatArea.vue'
 import InspectionPanel from '@/views/layout/InspectionPanel.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import PopoutTitlebar from '@/views/layout/PopoutTitlebar.vue'
@@ -58,6 +80,17 @@ onMounted(() => registerGlobalToast(toast.value))
 onUnmounted(() => registerGlobalToast(null))
 
 const { state: shell } = useState(applicationState)
+
+const content = ref<HTMLElement>()
+// Each popout keeps its own split; resizing it must not move the main window's canvas.
+const canvasShare = ref(35)
+const canShowChat = computed(() => !!shell.value.data.activeSurface.chat)
+const handleCanvasResize = (delta: number) => {
+  const height = content.value?.clientHeight
+  if (!height) return
+  const maximum = Math.max(0, (height - 180) / height * 100)
+  canvasShare.value = Math.max(0, Math.min(maximum, canvasShare.value + delta / height * 100))
+}
 
 const canShowPanel = computed(() => !!shell.value.data.activeSurface.panel)
 const isPanelOpen = computed(() => shell.value.data.panelSizes.inspectionWidth > 0)

@@ -23,7 +23,8 @@ export const meta: ActionMeta = {
   input: {
     threadId: { type: 'string', description: 'Thread ID', required: true },
     sessionId: { type: 'string', description: 'CLI session ID', required: false },
-    costUsd: { type: 'number', description: 'Total cost in USD', required: false },
+    costUsd: { type: 'number', description: 'Turn cost in USD', required: false },
+    sessionCostUsd: { type: 'number', description: 'Native cumulative session cost in USD', required: false },
     durationMs: { type: 'number', description: 'Turn duration in ms', required: false },
     toolCallCount: { type: 'number', description: 'Number of tool calls', required: false },
     mutatedFileCount: { type: 'number', description: 'Files mutated', required: false },
@@ -40,6 +41,8 @@ export async function action(
 ) {
   const {
     threadId,
+    sessionId,
+    sessionCostUsd,
     costUsd,
     durationMs,
     hadErrors,
@@ -48,6 +51,7 @@ export async function action(
   } = params as {
     threadId: string;
     sessionId?: string;
+    sessionCostUsd?: number;
     costUsd?: number;
     durationMs?: number;
     toolCallCount?: number;
@@ -70,7 +74,9 @@ export async function action(
 
   updateClaudeState(services, threadId as EntityId, (prev) => ({
     turns: (prev.turns ?? 0) + 1,
-    totalCostUsd: (prev.totalCostUsd ?? 0) + (costUsd ?? 0),
+    totalCostUsd: sessionCostUsd !== undefined
+      ? Math.max(prev.totalCostUsd ?? 0, prev.sessionId === sessionId ? sessionCostUsd : 0)
+      : (prev.totalCostUsd ?? 0) + (costUsd ?? 0),
     toolCallCount: (prev.toolCallCount ?? 0) + (toolCallCount ?? 0),
     lastTurnAt: Date.now(),
   }));

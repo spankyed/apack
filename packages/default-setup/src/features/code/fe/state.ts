@@ -29,7 +29,7 @@ import { searchState } from './features/search/state.ts';
 import { commitState } from './features/commit/state.ts';
 import { pullRequestState } from './features/pull-request/state.ts';
 import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
-import { terminalPool, viewSettingsOf } from './utils/terminal-pool.ts';
+import { terminalPool, viewSettingsOf } from '#extensions/terminal/pool.ts';
 import { actionsState } from './features/actions/state.ts';
 import { promptsState } from './features/prompts/state.ts';
 import { githubState } from './features/github/state.ts';
@@ -63,7 +63,10 @@ export function isEditableDiff(file: OpenFile | { isDiff?: boolean; isPrDiff?: b
 export type { TabGroupColor, TabGroup };
 
 /** The asks the surface makes of the code system: what it starts from, one at a time, the one made last being the one heard */
-const made = makes(({ one }) => ({ codeStart: one(fromAsk('code', 'GET_CODE_START')) }));
+const made = makes(({ one }) => ({
+  codeStart: one(fromAsk('code', 'GET_CODE_START')),
+  claudeProfileSetup: one(fromAsk('code', 'PREPARE_CLAUDE_PROFILE_SETUP')),
+}));
 
 /** The surface's state as its machine holds it: what it publishes, and which of its asks are under way */
 type MachineContext = CodeContext & { making: Making<typeof made> };
@@ -78,6 +81,7 @@ export type Event =
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   // Generic update event for child actors to update parent state
   | CodeInboxEvent
+  | {type: 'DISMISS_CLAUDE_PROFILE_SETUP_ERROR'}
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
   // An open diff read again, from the child that asked for it
   | { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
@@ -917,6 +921,25 @@ const codeState = setup({
       })
       enqueue(assign(() => removeTabLogic(context, self, path)))
     }),
+    retireClaudeProfileSetup: enqueueActions(({ context, enqueue }) => {
+      made.drop(enqueue, context, 'claudeProfileSetup');
+    }),
+    prepareClaudeProfileSetup: enqueueActions(({ context, enqueue }) => {
+      if (context.making.claudeProfileSetup) return;
+      enqueue.assign({ claudeProfileSetupError: undefined });
+      made.make(enqueue, 'claudeProfileSetup', {});
+    }),
+    openClaudeProfileSetup: enqueueActions(({ event, self, enqueue }) => {
+      const { outcome } = typeOf('made.claudeProfileSetup', event);
+      if (!outcome.ok) {
+        enqueue.assign({ claudeProfileSetupError: outcome.failure.message });
+        return;
+      }
+      const { cwd, command } = outcome.value;
+      enqueue(() => codeChild(self, 'terminal')?.send({
+        type: 'terminal.CREATE', target: 'tab', title: 'Claude profile setup', cwd, command,
+      }));
+    }),
     openTerminal: enqueueActions(({ enqueue, context, self }) => {
       const terminals: TerminalInfo[] = codeChild(self, 'terminal')?.getSnapshot()?.context?.terminals || []
       const tabbedIds = getTabbedTerminalIds(context.openFiles)
@@ -1436,6 +1459,7 @@ const codeState = setup({
         // What the surface starts from, asked as the shell starts it, in a delivery naming the surface
         SURFACE_STARTED: {
           actions: [
+            'retireClaudeProfileSetup',
             // Which window this is, as the shell starts the surface: a popout writes no layout (M5)
             assign(({ event }) => ({ ownsAppLayout: event.ownsAppLayout !== false })),
             'askForStart',
@@ -1443,7 +1467,7 @@ const codeState = setup({
         },
         // The directory moved, in every window: ask again for what the surface starts from
         BASE_DIRECTORY_CHANGED: {
-          actions: 'askForStart',
+          actions: ['retireClaudeProfileSetup', 'askForStart'],
         },
         // The start, handed to every feature, each of which asks for what its panel shows. The saved settings reach
         // the terminals at start, as they do when they change. A start that could not be read changes nothing
@@ -1550,6 +1574,9 @@ const codeState = setup({
         HOTKEY_PRESSED: {
           actions: ['handleHotkey']
         },
+        OPEN_CLAUDE_PROFILE_SETUP: {actions: 'prepareClaudeProfileSetup'},
+        DISMISS_CLAUDE_PROFILE_SETUP_ERROR: {actions: assign({claudeProfileSetupError: undefined})},
+        'made.claudeProfileSetup': {actions: 'openClaudeProfileSetup'},
         OPEN_TERMINAL: {
           actions: 'openTerminal'
         },

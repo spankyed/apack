@@ -1,30 +1,51 @@
 <template>
-  <div class="flex flex-col w-full">
+  <div class="flex flex-col w-full" :style="promptThemeStyle">
     <form
       @submit.prevent="handleSubmit"
       @keydown.shift.tab.prevent="cyclePhase"
       @keydown.ctrl.tab.prevent="cycleMode"
-      class="@container pb-4 max-w-[80%] mx-auto w-full flex-shrink-0 overflow-visible"
+      data-composer-form
+      class="@container mx-auto w-full max-w-4xl flex-shrink-0 overflow-visible px-5 pb-4 pt-3"
     >
       <div
         ref="inputCardRef"
-        class="relative flex flex-col border rounded-lg bg-neutral-800 overflow-visible"
-        :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
+        class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
+        :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - var(--composer-navigation-height, 0px) - max(var(--composer-notice-history-reserve, 0px), var(--composer-history-reserve, var(--composer-workspace-history-reserve, var(--composer-default-history-reserve)))))' }"
+        :class="[$style.input, { 'opacity-50': disabled, [$style.inputBackgroundNotes]: nativeBackgrounded, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
+        @focusin="nativeFieldFocused = isNativeField($event.target)"
+        @focusout="nativeFieldFocused = isNativeField($event.relatedTarget)"
         @paste.capture="handlePaste"
         @dragenter="onDragEnter"
         @dragleave="onDragLeave"
         @dragover.prevent
         @drop.prevent="onDrop">
+        <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" :initial-focus-revision="nativePaneFocusRevision" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="reportNativePaneFocus" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
+        <StatusLine :reconnect="() => emit('native-ui-reconnect')" ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :native-permission-mode="nativePermissionMode" :native-goal-active="nativeGoalActive" :cwd="statusLineCwd" :native-ui="nativeUi" :attachment-scope="nativePrompt?.attachmentId ? nativePrompt.mountId + ':' + nativePrompt.attachmentId : undefined" :native-focus="nativeFocus"
+          @tools-expanded="nativeToolsExpanded = $event; emit('native-tools-expanded', $event)" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
+
+        <NativeComposerPlacements v-if="nativeUi?.composer?.length" :frames="nativeUi.composer" location="status" @height="nativeActivityHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+
+        <NativeUiNotices v-if="nativeUi?.notices" :notices="nativeUi.notices" @operate="emit('native-ui-notice', $event)" />
+
+        <div v-if="unappliedQueueEdit" class="flex shrink-0 items-start gap-3 border-b border-white/10 px-5 py-2 text-xs">
+          <details class="min-w-0 flex-1 text-neutral-300">
+            <summary class="cursor-pointer rounded py-1.5 font-medium focus-visible:outline focus-visible:outline-2">Recovered queued prompt</summary>
+            <p v-if="unappliedQueueEdit.text" class="max-h-24 overflow-y-auto whitespace-pre-wrap break-words">{{ unappliedQueueEdit.text }}</p>
+            <p v-if="unappliedQueueEdit.images?.length" class="text-neutral-400">{{ unappliedQueueEdit.images.length }} image{{ unappliedQueueEdit.images.length === 1 ? '' : 's' }}</p>
+          </details>
+          <button type="button" class="shrink-0 rounded-md border border-white/10 px-2 py-1.5 text-neutral-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2"
+            @click="restoreQueuedPrompt">Return to draft</button>
+        </div>
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
-          class="flex items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin">
+          class="flex shrink-0 items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin" :class="$style.attachments">
           <ImageThumbnail v-for="(img, index) in pendingImages" :key="'i-'+index"
-            :src="img.dataUrl" :name="img.name" class="group" @click="$emit('open-lightbox', img.dataUrl)">
-            <button type="button" @click="removeImage(index)"
-              class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neutral-900/80 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors opacity-0 group-hover:opacity-100">
+            :src="img.dataUrl" :name="img.name" :compact="!!nativeSubmit" class="group" @click="$emit('open-lightbox', img.dataUrl)">
+            <button type="button" :aria-label="`Remove ${img.name}`" @click="removeImage(index)"
+              class="absolute top-0.5 right-0.5 h-5 w-5 rounded-md bg-neutral-950/85 text-neutral-200 flex items-center justify-center hover:bg-neutral-700 focus-visible:ring-2 focus-visible:ring-blue-400">
               <X :size="10" />
             </button>
           </ImageThumbnail>
@@ -32,15 +53,56 @@
             :file="file" removable @remove="removeFile(index)" class="flex-shrink-0" />
         </div>
 
+        <p v-if="nativeDecisionPending" role="status" class="px-5 pt-3 text-xs text-neutral-400">Choose how to continue above. Your draft is kept here.</p>
+        <p v-if="nativeSendWaiting && !submitting && !nativeDecisionPending && !nativePauseRequested && !disabled && (hasTextContent || hasAttachments)" role="status" class="px-5 pt-3 text-xs text-neutral-400">Claude is busy. You can keep editing.</p>
+        <p v-if="disabled && disabledReason" role="status" class="px-5 pt-3 text-xs text-neutral-400">{{ disabledReason }}</p>
+
+        <div v-if="nativePauseRequested" class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/10 px-5 py-2 text-xs">
+          <p role="status" class="text-neutral-300">Pause requested. Claude is still working.</p>
+          <button type="button" class="rounded text-neutral-200 underline underline-offset-2 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            @click="emit('native-session-controls')">Session controls</button>
+        </div>
+
+        <section v-if="nativePromptQueue" class="border-b border-white/10 px-5 py-2 text-xs" aria-label="Claude prompt queue">
+          <div class="flex min-w-0 items-baseline gap-2">
+            <button v-if="nativePromptQueue.count > 1" type="button" :aria-expanded="queueExpanded"
+              class="shrink-0 rounded font-medium text-neutral-300 hover:text-white focus-visible:outline focus-visible:outline-2"
+              @click="queueExpanded = !queueExpanded">{{ nativePromptQueue.count }} queued <span aria-hidden="true">{{ queueExpanded ? '▴' : '▾' }}</span></button>
+            <span v-else class="shrink-0 font-medium text-neutral-300">1 queued</span>
+            <span v-if="!queueExpanded || nativePromptQueue.count === 1" class="min-w-0 flex-1 truncate text-neutral-400">{{ nativePromptQueue.items[0]?.text }}</span>
+            <button v-if="nativePromptQueue.count === 1 && nativePromptQueue.items[0]?.editable && nativeQueueSendAvailable"
+              type="button" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'edit', id:nativePromptQueue.items[0].id})">Edit</button>
+            <button v-if="nativePromptQueue.count === 1 && nativePromptQueue.items[0]?.cancellable && nativeQueueSendAvailable"
+              type="button" aria-label="Cancel queued prompt" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'cancel', id:nativePromptQueue.items[0].id})">Cancel</button>
+            <button v-if="nativeQueueSendAvailable" type="button" class="ml-auto shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision)">Send now</button>
+          </div>
+          <ul v-if="queueExpanded && nativePromptQueue.count > 1" class="mt-1 max-h-24 space-y-0.5 overflow-y-auto">
+            <li v-for="item in nativePromptQueue.items" :key="item.id" class="flex min-w-0 items-center gap-2">
+              <span class="min-w-0 flex-1 truncate text-neutral-400">{{ item.text }}</span>
+              <button v-if="item.editable && nativeQueueSendAvailable" :aria-label="`Edit queued prompt: ${item.text}`" type="button"
+                class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+                :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'edit', id:item.id})">Edit</button>
+              <button v-if="item.cancellable && nativeQueueSendAvailable" :aria-label="`Cancel queued prompt: ${item.text}`" type="button"
+                class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+                :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'cancel', id:item.id})">Cancel</button>
+            </li>
+          </ul>
+        </section>
+        <p v-if="nativeQueueOperation?.status === 'error'" role="alert" class="px-5 py-1 text-xs text-amber-200">{{ nativeQueueOperation.problem }}</p>
+
         <!-- Editor container -->
-        <div class="relative w-full min-h-12" :class="{ 'pointer-events-none': isDraggingFile }">
+        <div ref="editorAreaRef" class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
+            :key="currentThread?.id"
             ref="tiptapRef"
             mode="input"
             variant="chat"
-            :placeholder="disabled ? 'API keys required to use chat' : 'Message Agent'"
+            :placeholder="disabled ? disabledReason ?? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
-            editor-class="w-full px-1.5 pr-2 py-2 rounded-lg min-h-12 focus:outline-none"
+            editor-class="composer-document composer-list-markers w-full min-h-[88px] rounded-xl px-5 py-4 pr-10 text-sm leading-6 focus:outline-none"
             @submit="handleSubmit"
             @update:model-value="onContentUpdate"
             :in-history-mode="historyIndex !== -1"
@@ -48,9 +110,11 @@
             @history-prev="onHistoryPrev"
             @history-next="onHistoryNext"
             @clear-input="onClearInput"
-            @pause="emit('pause')"
+            @pause="pauseWork"
             @open-revert-menu="openRevertMenu"
           />
+          <p v-if="queuedNotice && isBusy && !composerProblem" class="px-3 text-xs text-neutral-400" :class="{ 'sr-only': nativePromptQueue }" role="status">Sent to Claude’s queue.</p>
+          <p v-if="composerProblem && !nativeDraftTooLong" class="px-3 text-xs text-neutral-500" role="status">{{ composerProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
             :anchor-el="inputCardRef"
@@ -62,141 +126,172 @@
           />
         </div>
 
-        <!-- Buttons row -->
-        <div class="relative flex items-center justify-between px-3 pb-2 text-neutral-500">
-          <!-- Left side buttons -->
-          <div class="flex items-center min-w-0">
-            <!-- Collapsed: ... dropdown menu (narrow) -->
-            <DropdownMenuRoot>
-              <DropdownMenuTrigger as-child>
-                <button
-                  type="button"
-                  class="p-2 transition-colors text-neutral-500 @lg:hidden"
-                  :class="disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-neutral-200'"
-                  aria-label="More actions"
-                  :disabled="disabled"
-                >
-                  <EllipsisVertical :size="20" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuContent
-                  align="start"
-                  :side-offset="8"
-                  class="min-w-[160px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl py-1 z-50"
-                >
-                  <DropdownMenuItem
-                    v-for="btn in leftButtons"
-                    :key="btn.action"
-                    @select="handleButtonClick(btn.action)"
-                    class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
-                    :class="btn.class"
-                  >
-                    <component :is="btn.icon" :size="16" />
-                    <span>{{ btn.label }}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenuPortal>
-            </DropdownMenuRoot>
+        <NativePromptCompletions ref="nativeCompletionMenu" :anchor-el="inputCardRef" :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || nativeDecisionPending || submitting" :can-focus="id => promptEditor?.canFocusCompletion(id) ?? false" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
-            <!-- Expanded: full action buttons (wide) -->
-            <template v-for="btn in leftButtons" :key="btn.action">
+        <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
+          <NativeComposerPlacements class="min-w-0 flex-1" :frames="nativeUi.composer" location="hint" @height="nativeHintHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+          <NativeComposerPlacements class="ml-auto min-w-0" :frames="nativeUi.composer" location="mode" @height="nativeModeHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+        </div>
+
+        <!-- Keep the background explanation and actions visible while the draft scrolls. -->
+        <div class="sticky bottom-0 z-10 shrink-0 bg-[#202022]">
+          <p v-if="unconfirmedSend" class="px-4 pt-2 text-xs leading-relaxed text-amber-200" role="status">{{ unconfirmedSend }}</p>
+          <p v-if="nativeDraftTooLong" role="status" class="px-4 pt-2 text-xs leading-relaxed text-amber-200">{{ nativePromptProblem }}</p>
+          <p v-if="nativeBackgrounded" role="status" data-background-note-hint class="px-4 pt-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
+          <div data-composer-toolbar class="flex shrink-0 items-center justify-between gap-3 px-3 pb-3 pt-2 text-neutral-500">
+            <!-- Left side buttons -->
+            <div class="flex items-center min-w-0">
+              <!-- Collapsed: ... dropdown menu (narrow) -->
+              <DropdownMenuRoot>
+                <DropdownMenuTrigger as-child>
+                  <button
+                    type="button"
+                    class="p-2 transition-colors text-neutral-500 @lg:hidden"
+                    :class="disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-neutral-200'"
+                    aria-label="More actions"
+                    :disabled="disabled"
+                  >
+                    <EllipsisVertical :size="20" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent
+                    align="start"
+                    :side-offset="8"
+                    class="min-w-[160px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl py-1 z-50"
+                  >
+                    <DropdownMenuItem
+                      v-for="btn in leftButtons"
+                      :key="btn.action"
+                      @select="handleButtonClick(btn.action)"
+                      :disabled="(btn.action === 'native-model' || btn.action === 'native-memory' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending) || (btn.action === 'native-themes' && nativeDecisionPending)"
+                      class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
+                      :class="btn.class"
+                    >
+                      <component :is="btn.icon" :size="16" />
+                      <span>{{ btn.label }}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenuRoot>
+
+              <!-- Expanded: full action buttons (wide) -->
+              <template v-for="btn in leftButtons" :key="btn.action">
+                <button
+                  v-if="btn.action !== 'quick-message' && btn.action !== 'voice-input'"
+                  type="button"
+                  class="hidden @lg:block p-2 transition-colors text-neutral-500"
+                  :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
+                  :aria-label="btn.label"
+                  :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-memory' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending)) || (btn.action === 'native-themes' && nativeDecisionPending)"
+                  :title="btn.label"
+                  @click="handleButtonClick(btn.action)"
+                >
+                  <component :is="btn.icon" :size="20" />
+                </button>
+              </template>
+
+              <!-- Quick Prompts Popover (wide) -->
+              <QuickPromptsPopup
+                v-model:open="popoverOpen"
+                :prompts="quickPrompts || []"
+                :insert-on-number-key="quickPromptNumberKeyInserts ?? true"
+                :disabled="disabled"
+                :virtual-reference="virtualRef"
+
+                @update="(prompts) => emit('update-quick-prompts', prompts)"
+              />
+
+              <!-- Mic button (wide) -->
               <button
-                v-if="btn.action !== 'quick-message' && btn.action !== 'voice-input'"
+                v-if="speechSupported"
                 type="button"
                 class="hidden @lg:block p-2 transition-colors text-neutral-500"
-                :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
-                :aria-label="btn.label"
+                :class="[disabled ? 'cursor-not-allowed opacity-50' : (!isListening && 'hover:text-neutral-200'), isListening && 'text-red-400 animate-pulse']"
+                :aria-label="isListening ? 'Stop listening' : 'Voice input'"
                 :disabled="disabled"
-                :title="btn.label"
-                @click="handleButtonClick(btn.action)"
+                @click="handleButtonClick('voice-input')"
               >
-                <component :is="btn.icon" :size="20" />
+                <component :is="isListening ? MicOff : Mic" :size="20" />
               </button>
-            </template>
 
-            <!-- Quick Prompts Popover (wide) -->
-            <QuickPromptsPopup
-              v-model:open="popoverOpen"
-              :prompts="quickPrompts || []"
-              :insert-on-number-key="quickPromptNumberKeyInserts ?? true"
-              :disabled="disabled"
-              :virtual-reference="virtualRef"
-
-              @update="(prompts) => emit('update-quick-prompts', prompts)"
-            />
-
-            <!-- Mic button (wide) -->
-            <button
-              v-if="speechSupported"
-              type="button"
-              class="hidden @lg:block p-2 transition-colors text-neutral-500"
-              :class="[disabled ? 'cursor-not-allowed opacity-50' : (!isListening && 'hover:text-neutral-200'), isListening && 'text-red-400 animate-pulse']"
-              :aria-label="isListening ? 'Stop listening' : 'Voice input'"
-              :disabled="disabled"
-              @click="handleButtonClick('voice-input')"
-            >
-              <component :is="isListening ? MicOff : Mic" :size="20" />
-            </button>
-
-            <!-- Mode/Phase Selector -->
-            <div class="min-w-0 overflow-hidden">
-              <ModePhaseSelector
-                :modes="modes"
-                :current-mode="currentMode"
-                :current-phase="currentPhase"
-                :default-mode="defaultMode"
-                :forced-mode="currentThread?.forcedMode"
-                :disabled="disabled"
-                @mode-change="handleModeChange"
-                @phase-change="handlePhaseChange"
-                @set-default-mode="emit('set-default-mode', $event)"
-                @set-default-phase="emit('set-default-phase', $event)"
-              />
+              <!-- Mode/Phase Selector -->
+              <div class="min-w-0 overflow-hidden">
+                <ModePhaseSelector
+                  :modes="modes"
+                  :current-mode="currentMode"
+                  :current-phase="currentPhase"
+                  :default-mode="defaultMode"
+                  :forced-mode="currentThread?.forcedMode"
+                  :disabled="disabled"
+                  @mode-change="handleModeChange"
+                  @phase-change="handlePhaseChange"
+                  @set-default-mode="emit('set-default-mode', $event)"
+                  @set-default-phase="emit('set-default-phase', $event)"
+                />
+              </div>
             </div>
-          </div>
 
-          <!-- Right side buttons -->
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- Pause button (only while busy) -->
-            <Button
-              v-if="isBusy"
-              title="Pause agent work"
-              type="button"
-              variant="secondary"
-              class="px-2 @lg:px-4"
-              @click.stop="emit('pause')"
-            >
-              <span class="hidden @lg:inline">Pause</span>
-              <PauseIcon :size="22" />
-            </Button>
-            <Button
-              type="submit"
-              :disabled="(!hasTextContent && !hasAttachments) || disabled"
-              class="px-2 @lg:px-4"
-            >
-              <span class="hidden @lg:inline">Send</span>
-              <CornerDownLeft class="-rotate-45" :size="16" />
-            </Button>
+            <!-- Right side buttons -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <Button
+                v-if="isBusy && !nativePauseRequested && nativePause !== null"
+                title="Pause agent work"
+                type="button"
+                variant="secondary"
+                class="px-2 @lg:px-4"
+                @click.stop="pauseWork"
+              >
+                <span class="hidden @lg:inline">Pause</span>
+                <PauseIcon :size="22" />
+              </Button>
+              <Button
+                type="submit"
+                aria-label="Send"
+                :disabled="nativeBackgrounded || nativeDecisionPending || nativeSendWaiting || nativeDraftTooLong || submitting || (!hasTextContent && !hasAttachments) || disabled"
+                class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
+              >
+                <span class="hidden @lg:inline">Send</span>
+                <CornerDownLeft class="-rotate-45" :size="16" />
+              </Button>
 
+            </div>
           </div>
         </div>
 
-        <StatusLine :anchor="inputCardRef" :status-line="statusLine" @click="emit('statusline-click')" />
       </div>
     </form>
+    <ClaudeChannelSettings v-if="channelsOpen" :key="currentThread?.id" :channels="savedChannels" :locked="!!nativeSubmit || !!isBusy" @close="channelsOpen=false" @save="channels => { emit('channels-change', channels); channelsOpen=false }" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, X } from 'lucide-vue-next'
+import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
+import { ClaudeSendUnconfirmedError, type ClaudeComposerSubmitResult } from './native-submit.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE } from '#features/code/common/native-prompt-limits.ts'
+import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
+import { bindClaudeWindowDraft, trackClaudeWindowSubmittedDraft } from './native-window-draft.ts'
+import { ref, shallowRef, shallowReactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, BookOpen, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
+import NativePanePanel from './NativePanePanel.vue'
 import StatusLine from './StatusLine.vue'
+import NativeComposerPlacements from './NativeComposerPlacements.vue'
+import NativeUiNotices from './NativeUiNotices.vue'
+import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
+import NativePromptCompletions from './NativePromptCompletions.vue'
+import { referenceSuggestionKey } from '../../../../extensions/tiptap/reference-suggestion.ts'
+import { claudePromptThemeStyle } from './native-ui-paint.ts'
+import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
+import { copyClaudeUiText } from './native-ui-clipboard.ts'
+import { claudePromptSourceReferences } from './native-prompt-source.ts'
+import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
 import { DOUBLE_ESC_MS } from '@apackdev/ui/components/tiptap/composables/createEditorKeyboard'
 import { useAttachments } from './composables/useAttachments.ts'
+import { isEmptyClaudePromptParagraph } from './native-prompt-document.ts'
 import { imagePaste } from '#extensions/tiptap/image-paste.ts'
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
 import {
@@ -211,20 +306,15 @@ import PauseIcon from './pause-svg.vue'
 import ModePhaseSelector from './ModePhaseSelector.vue'
 import type { Component } from 'vue'
 import Button from '@apackdev/ui/design/button'
+import './composer-list-markers.css'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusIndicator from './status-indicator.vue'
-import type { AgentThreadData, AgentMode, MessageReferences, QuickPrompt } from '#generated/types.ts'
+import type { ClaudeUiMountState, AgentThreadData, AgentMode, MessageReferences, ContextReference, QuickPrompt } from '#generated/types.ts'
 import { commandSuggestionKey } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
 import { matchesHotkey, useSurfaceStorage, type HotkeyEvent, type HotkeysMap } from '@apackdev/sdk/fe'
 import QuickPromptsPopup from './QuickPromptsPopup.vue'
 import RevertHistoryPopup from './RevertHistoryPopup.vue'
 
-interface ContextReference {
-  refType: 'thread' | 'document' | 'note'
-  refId: string
-  shortCode: string
-  label: string
-}
 
 const props = defineProps<{
   currentThread: AgentThreadData | null
@@ -237,28 +327,55 @@ const props = defineProps<{
   quickPromptNumberKeyInserts?: boolean
   quickPromptCursor?: { x: number; y: number } | null
   disabled?: boolean
+  disabledReason?: string
+  nativeDecisionPending?: boolean
+  nativeMemoryAvailable?: boolean
+  nativeSendWaiting?: boolean
+  nativePromptQueue?: import('#features/code/common/native-terminal.ts').ClaudeNativePromptQueue
+  nativeQueueSendAvailable?: boolean
+  nativeQueueOperation?: import('../../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot['queueOperation']
+  nativeQueueDraft?: import('../../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot['queueDraft']
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillReferences?: MessageReferences
   /** Whether the current thread is in the user-marked "busy" chat state. Controls Pause button visibility. */
   isBusy?: boolean
+  nativePauseRequested?: boolean
+  nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope | null
   /** Max duration (in minutes) for a single voice-input session. */
   recordingLimitMinutes?: number
-  /** Optional status text shown at the bottom-right corner of the input card. */
+  /** CWD label shown in the attached session strip. */
   statusLine?: string
+  /** Actual output from the native main-session status helper. */
+  nativeStatus?: string
+  nativePermissionMode?: import('#features/code/be/services/claude-code/types.ts').PermissionMode
+  nativeGoalActive?: boolean
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
+  nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; attachmentId?: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
+  nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
+  nativeBackground?: boolean
+  nativeBackgrounded?: boolean
+  nativeSubmit?: (text: string, references: MessageReferences) => Promise<ClaudeComposerSubmitResult>
+  nativeUi?: ClaudeUiMountState
 }>()
 
 // Define emits including new button actions
+const savedChannels=computed(()=>{const state=props.currentThread?.context?.claudeCode;const raw=state?.channelSelection ?? (state?.nativeLaunch as import('#features/code/common/native-launch.ts').ClaudeNativeLaunch|undefined)?.channels;return Array.isArray(raw)?raw.filter((value):value is string=>typeof value==='string'):[]})
+const channelsOpen=ref(false)
 const emit = defineEmits<{
+  (e: 'native-ui-reconnect'): void
+  (e: 'channels-change', channels: string[]): void
+  (e: 'native-tools-expanded', expanded: boolean): void
   (e: 'send-message', message: string, references?: MessageReferences): void
   (e: 'send-command', command: string, text: string, references?: MessageReferences): void
   (e: 'quick-message'): void
   (e: 'attach-file'): void
   (e: 'voice-input'): void
-  (e: 'pause'): void
+  (e: 'pause', nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope): void
+  (e: 'native-memory'): void
+  (e: 'native-session-controls'): void
   (e: 'mode-change', mode: string): void
   (e: 'phase-change', phase: string): void
   (e: 'set-default-mode', mode: string): void
@@ -269,6 +386,18 @@ const emit = defineEmits<{
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'summarize-from-here', messageId: string): void
+  (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
+  (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
+  (e: 'native-queue-action', revision: string, action?: {kind: 'edit' | 'cancel'; id: string}): void
+  (e: 'native-queue-edit-applied', itemId: string): void
+  (e: 'native-agents-gesture', request: { mountId: string; revision: number }): void
+  (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
+  (e: 'native-ui-notice', event: import('#generated/types.ts').ClaudeUiNoticeEvent): void
+  (e: 'native-ui-scroll', event: import('#generated/types.ts').ClaudeUiScrollEvent): void
+  (e: 'native-ui-pane', event: import('#generated/types.ts').ClaudeUiPaneEvent): void
+  (e: 'native-ui-focus', event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent): void
+  (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
+  (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'statusline-click'): void
 }>()
 
@@ -282,6 +411,227 @@ interface ActionButton {
 
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
+const editorAreaRef = ref<HTMLElement | null>(null)
+function focusComposer() {
+  tiptapRef.value?.editor?.commands.focus()
+  void nextTick(() => {
+    const card = inputCardRef.value
+    if (card) card.scrollTop = Math.max(0, card.scrollHeight - card.clientHeight)
+  })
+}
+const nativeActivityHeight = ref(0), nativeHintHeight = ref(0), nativeModeHeight = ref(0)
+const nativeComposerHeight = computed(() => nativeActivityHeight.value + Math.max(nativeHintHeight.value, nativeModeHeight.value))
+const nativeToolsExpanded = ref(false), nativeFieldFocused = ref(false)
+const nativeToolsRequiredHeight = ref(0), inputFormPadding = ref(0)
+watch(inputCardRef, (card, _previous, cleanup) => {
+  if (!card) return
+  let frame: number | undefined
+  const measure = () => {
+    frame = undefined
+    nativeToolsRequiredHeight.value = Math.ceil(card.scrollHeight + card.offsetHeight - card.clientHeight)
+    const form = card.closest('form')
+    if (form) {
+      const paint = getComputedStyle(form)
+      inputFormPadding.value = (parseFloat(paint.paddingTop) || 0) + (parseFloat(paint.paddingBottom) || 0)
+    }
+  }
+  const schedule = () => { if (frame === undefined) frame = requestAnimationFrame(measure) }
+  const observer = new ResizeObserver(schedule)
+  const observe = () => { observer.disconnect(); observer.observe(card); for (const child of Array.from(card.children)) observer.observe(child); schedule() }
+  const mutations = new MutationObserver(observe)
+  mutations.observe(card, { childList: true }); observe()
+  cleanup(() => { observer.disconnect(); mutations.disconnect(); if (frame !== undefined) cancelAnimationFrame(frame) })
+}, { flush: 'post' })
+function isNativeField(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.matches('textarea[data-native-focus-id], select[data-native-focus-id]') && !target.closest('[data-native-client]')
+}
+const nativeHistoryReserve = computed(() => {
+  const expanded = 'var(--composer-workspace-history-reserve, clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem))'
+  if (nativeToolsExpanded.value) {
+    const preferred = nativeFieldFocused.value ? `var(--composer-field-history-reserve, ${expanded})` : expanded
+    // Focused fields still need room for the draft, native hint and Send toolbar.
+    return nativeToolsRequiredHeight.value ? `min(${preferred}, max(calc(2rem + ${inputFormPadding.value}px), calc(var(--composer-available-height) - ${nativeToolsRequiredHeight.value}px)))` : preferred
+  }
+  return nativeComposerHeight.value ? `max(var(--composer-min-history-reserve, 2rem), calc(var(--composer-workspace-history-reserve, var(--composer-default-history-reserve)) - ${nativeComposerHeight.value}px))` : undefined
+})
+const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
+function handleComposerNativeHotkey(event: KeyboardEvent) {
+  const editor = tiptapRef.value?.editor
+  if (props.disabled || !editor?.isEmpty || hasAttachments.value || !(event.target instanceof Node) || !editor.view.dom.contains(event.target)) return
+  if (props.nativeBackground && props.nativePrompt && event.key === 'ArrowLeft' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && !editor.view.composing && !submitting.value) {
+    event.preventDefault(); event.stopPropagation(); void pressNativeAgentsGesture(); return
+  }
+  statusLineRef.value?.pressComposerHotkey(event)
+}
+async function pressNativeAgentsGesture() {
+  const editor = tiptapRef.value?.editor, bridge = promptEditor, mountId = props.nativePrompt?.mountId
+  if (!editor || !bridge || !mountId) return
+  const revision = bridge.revision, epoch = composerEpoch.value
+  try {
+    if (!await bridge.settle() || promptEditor !== bridge || bridge.revision !== revision || props.nativePrompt?.mountId !== mountId || epoch !== composerEpoch.value || props.disabled || submitting.value || !props.nativeBackground || editor.isDestroyed || !editor.isEmpty || hasAttachments.value || editor.view.composing) return
+    emit('native-agents-gesture', { mountId, revision })
+  } catch (error) { if (epoch === composerEpoch.value) submissionProblem.value = error instanceof Error ? error.message : 'Claude agents could not be opened' }
+}
+const nativePromptProblem = ref<string>()
+const nativeDraftTooLong = computed(() => nativePromptProblem.value === CLAUDE_UI_TEXT_LIMIT_MESSAGE)
+const hostPopupActive = ref(false)
+// Keep the person's pane size when panes close/reopen or the plugin changes its request.
+const paneRowsPreference = ref<number>()
+const paneFocusGrant = ref<string | null>(null)
+// Closing the final Pane unmounts the panel, but the native composer still owns its focus sequence.
+let nativePaneFocusRevision = 0
+function reportNativePaneFocus(event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent) {
+  nativePaneFocusRevision = event.revision
+  emit('native-ui-focus', event)
+}
+watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
+  if (!id || !document.hasFocus()) return
+  const editor = tiptapRef.value?.editor
+  const allowed = !!editor && editor.isFocused && !editor.view.composing && !editor.state.doc.textContent.trim() && !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
+  paneFocusGrant.value = allowed ? id : null
+  emit('native-ui-pane', { kind: 'focus', id: paneFocusGrant.value })
+})
+
+const nativeCompletionMenu = ref<InstanceType<typeof NativePromptCompletions> | null>(null)
+const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
+const composerDraftOwner = computed(() => JSON.stringify([props.currentThread?.id ?? null, props.currentThread?.context?.claudeCode?.sessionId ?? null]))
+const unconfirmedSends = shallowReactive(new Map<string, string>())
+const unconfirmedSend = computed(() => unconfirmedSends.get(composerDraftOwner.value))
+const submittingThreads = shallowReactive(new Set<string | undefined>())
+const submitting = computed(() => submittingThreads.has(props.currentThread?.id))
+const submissionProblem = ref<string>()
+const nativeCopyRequired = 'Choose Use native interface, then return to the conversation and send /copy.'
+const isNativeCopyCommand = (text: string) => /^\/copy(?:[ \t]+[^\r\n]*)?$/.test(text)
+const queuedNotice = ref(false)
+const queueExpanded = ref(false)
+watch(() => props.nativePromptQueue?.count, count => { if (count === undefined || count <= 1) queueExpanded.value = false })
+const appliedQueueEdit = ref<string>()
+const unappliedQueueEdit = computed(() => {
+  const restored = props.nativeQueueDraft
+  return restored?.id !== appliedQueueEdit.value ? restored : undefined
+})
+const queueActionPending = computed(() => props.nativeQueueOperation?.status === 'pending' || !!unappliedQueueEdit.value)
+function restoreQueuedPrompt() {
+  const restored = unappliedQueueEdit.value, editor = tiptapRef.value?.editor
+  if (!restored || !editor || !promptEditor || submitting.value || props.disabled || props.nativeDecisionPending) return
+  if (editor.isDestroyed || editor.view.composing) return
+  if (restored.text && !promptEditor.restoreQueuedText(restored.text)) return
+  if (restored.images?.length) restoreQueuedImages(restored.images)
+  appliedQueueEdit.value = restored.id
+  emit('native-queue-edit-applied', restored.id)
+  editor.view.focus()
+}
+watch([unappliedQueueEdit, () => tiptapRef.value?.editor, submitting], () => {
+  if (unappliedQueueEdit.value?.automatic) restoreQueuedPrompt()
+}, {flush:'post'})
+watch(() => props.isBusy, busy => { if (!busy) queuedNotice.value = false })
+const rejectedNativeDraft = shallowRef<{ doc: ProseMirrorNode; sessionId: string; sessionChanged: boolean }>()
+const composerProblem = computed(() => {
+  const rejected = rejectedNativeDraft.value
+  // A session change and its Send rejection may reach the composer in either order.
+  if (rejected && (rejected.sessionChanged || rejected.sessionId !== props.currentThread?.context?.claudeCode?.sessionId)) {
+    return CLAUDE_STALE_DRAFT_MESSAGE
+  }
+  if (submissionProblem.value === CLAUDE_BUSY_DRAFT_MESSAGE && !props.isBusy && !props.nativeSendWaiting) {
+    return hasTextContent.value || hasAttachments.value ? 'Your draft was kept. Send it when you’re ready.' : nativePromptProblem.value
+  }
+  if (submissionProblem.value === nativeCopyRequired && props.nativeSubmit) return nativePromptProblem.value
+  return submissionProblem.value || nativePromptProblem.value
+})
+watch([() => tiptapRef.value?.editor, () => props.currentThread?.id], () => { rejectedNativeDraft.value = undefined }, { flush: 'sync' })
+let pendingNativeCommand: { revision: number; accept(): void } | undefined
+watch(() => props.nativeUi?.agentInput, state => {
+  if (state?.status !== 'command_done' && state?.status !== 'error') return
+  const pending = pendingNativeCommand
+  if (!pending || pending.revision !== state.revision) return
+  pendingNativeCommand = undefined
+  if (state.status === 'command_done' && state.decision === 'confirm') pending.accept()
+})
+const composerEpoch = ref(0)
+watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch.value++; submissionProblem.value = undefined; queuedNotice.value = false }, { flush: 'sync' })
+onUnmounted(() => { composerEpoch.value++ })
+const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
+// The editor is recreated on conversation switch, so undo and composition also
+// belong to the originating conversation. Only committed draft state is restored.
+watch([() => tiptapRef.value?.editor, () => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId], ([editor, threadId, sessionId], _previous, cleanup) => {
+  if (editor) {
+    cleanup(bindClaudeWindowDraft(editor, composerDraftOwner.value, { persistent: !!threadId && !!sessionId }))
+  }
+}, { flush: 'post' })
+let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
+watch(() => props.nativeDecisionPending, pending => { if (pending) { promptEditor?.dismissSuggestion(); promptEditor?.dismissCompletions() } })
+watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => props.nativePrompt?.attachmentId], ([editor, mountId]) => {
+  promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
+  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, ownsMenuFocus: element => nativeCompletionMenu.value?.ownsFocus(element) === true, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
+    if (props.nativeDecisionPending) { nativeCompletions.value = []; setEditorCompletionOffer(editor, undefined); return }
+    nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
+    const owner = promptEditor
+    setEditorCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
+  } }, { viewport: editorAreaRef.value, canSuggest: () => !props.disabled && !props.nativeDecisionPending && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
+}, { flush: 'post' })
+const composerComposing = ref(false)
+watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
+  composerComposing.value = false
+  if (!editor) { hostPopupActive.value = false; return }
+  const editorDom = editor.view.dom
+  const startComposition = () => { composerComposing.value = true }
+  const endComposition = () => { composerComposing.value = false }
+  editorDom.addEventListener('compositionstart', startComposition)
+  editorDom.addEventListener('compositionend', endComposition)
+  editorDom.addEventListener('blur', endComposition)
+  const update = () => {
+    const command = commandSuggestionKey.getState(editor.state)
+    hostPopupActive.value = !!(command?.active && !command.selectedCommand) || referenceSuggestionKey.getState(editor.state)?.active === true
+  }
+  update(); editor.on('transaction', update)
+  onCleanup(() => {
+    editor.off('transaction', update)
+    editorDom.removeEventListener('compositionstart', startComposition)
+    editorDom.removeEventListener('compositionend', endComposition)
+    editorDom.removeEventListener('blur', endComposition)
+  })
+}, { flush: 'post' })
+const pageSelection = useClaudeUiSelection()
+function promptHostAvailable(expiresAt: number) {
+  return Date.now() < expiresAt && !!promptEditor && !props.disabled && !submitting.value && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
+}
+let handledSuggestion: string | undefined
+watch([() => props.nativePrompt?.hostRequest, () => props.isBusy], ([request, busy]) => {
+  if (request?.kind !== 'suggest' || request.requestId === handledSuggestion) return
+  const available = promptHostAvailable(request.expiresAt) && promptEditor?.revision === request.revision
+  // The native predictor can finish just before the terminal owner publishes its idle state.
+  if (available && busy) return
+  handledSuggestion = request.requestId
+  const shown = available && (promptEditor?.showSuggestion(request.text, request.revision) ?? false)
+  emit('native-prompt-host-response', { requestId: request.requestId, kind: 'suggest', shown })
+})
+watch(() => props.nativePrompt?.hostRequest, request => {
+  if (!request || request.kind === 'suggest') return
+  if (request.kind === 'selection') {
+    const owner = promptEditor, epoch = composerEpoch.value, mountId = props.nativePrompt?.mountId, attachment = props.nativePrompt?.attachmentId
+    void replyClaudeUiSelection(request.replyUrl, pageSelection, request.expiresAt, () => composerEpoch.value === epoch && !!owner && promptEditor === owner && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
+      .then(submitted => emit('native-prompt-host-response', { requestId: request.requestId, kind: 'selection', submitted }))
+    return
+  }
+  if (request.kind === 'copy') {
+    const owner = promptEditor, attachment = props.nativePrompt?.attachmentId
+    void copyClaudeUiText(request.text, request.expiresAt, () => !!owner && promptEditor === owner && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
+      .then(copied => emit('native-prompt-host-response', { requestId: request.requestId, kind: 'copy', copied }))
+    return
+  }
+  const available = promptHostAvailable(request.expiresAt)
+  if (request.kind === 'read') {
+    const box = available ? promptEditor?.readDraft() : undefined
+    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) })
+  } else {
+    const result = (available ? promptEditor?.fillHostDraft(request.input, request.revision) : undefined) ?? { filled: false }
+    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'fill', ...result })
+  }
+})
+watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })
+watch(() => props.nativePrompt?.completions, reply => { if (reply) promptEditor?.receiveCompletions(reply) })
+onUnmounted(() => promptEditor?.dispose())
+
 
 const messageContent = ref('')
 const hasTextContent = ref(false)
@@ -318,10 +668,10 @@ watch(popoverOpen, (isOpen) => {
 // Prefill the input when the parent sets prefillText (e.g., on revert).
 watch(() => props.prefillText, (text) => {
   if (text && tiptapRef.value?.editor) {
-    tiptapRef.value.editor.commands.setContent(text)
+    tiptapRef.value.editor.chain().setMeta('claude-prompt-by', 'app').setContent(text).run()
     tiptapRef.value.editor.commands.focus('end')
   }
-})
+}, { flush: 'post' })
 
 // Prefill attachments when the parent sets prefillReferences (e.g., on revert).
 watch(() => props.prefillReferences, (refs) => {
@@ -360,9 +710,36 @@ const commandHighlight = computed(() => {
 
 const {
   pendingImages, pendingFiles, hasAttachments,
-  handlePaste, handleFileDrop, addImageFromUrl, removeImage, openFilePicker, removeFile,
-  collectAttachments, clearAll, restoreFromReferences,
-} = useAttachments()
+  handlePaste, handleFileDrop, addImageFromUrl, removeImage, restoreQueuedImages, openFilePicker, removeFile,
+  captureAttachments, restoreFromReferences,
+} = useAttachments(() => props.currentThread?.id)
+function canPresentIdleComposerNotice() {
+  const editor = tiptapRef.value?.editor
+  return !!editor && !hasTextContent.value && editor.isEmpty && !composerComposing.value && !hasAttachments.value && !hostPopupActive.value && !submitting.value
+}
+function captureHistoryPrefillTarget(): () => boolean {
+  const editor = tiptapRef.value?.editor
+  const doc = editor?.state.doc
+  const epoch = composerEpoch.value
+  return () => !!editor && !editor.isDestroyed && tiptapRef.value?.editor === editor
+    && composerEpoch.value === epoch && editor.state.doc === doc && canPresentIdleComposerNotice()
+}
+defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks'), canPresentIdleComposerNotice, captureHistoryPrefillTarget })
+watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {
+  if (values.some(Boolean)) paneFocusGrant.value = null
+})
+watch(() => props.nativeUi?.panes?.roster.shown_id, (id, previous) => {
+  if (!id && previous && document.hasFocus() && document.activeElement?.closest('[data-native-pane-panel]')) {
+    void nextTick(() => tiptapRef.value?.editor?.commands.focus())
+  }
+})
+watch(() => props.nativeUi?.panes?.roster.focused_id, id => {
+  if (!id && !props.nativeUi?.panes?.roster.focus_requested_id) paneFocusGrant.value = null
+})
+watch([() => props.disabled, () => props.isBusy, submitting, hasAttachments, hostPopupActive, () => nativeCompletions.value.length], ([disabled, busy, sending, attachments, popup, completions]) => {
+  if (disabled || busy || sending || attachments || popup || completions) promptEditor?.dismissSuggestion()
+})
+
 
 const { isDragging: isDraggingFile, onDragEnter, onDragLeave, onDrop } = useExternalFileDrag({
   onDrop: handleFileDrop,
@@ -373,7 +750,9 @@ watch(tiptapRef, (ref) => {
 }, { immediate: true })
 
 const onContentUpdate = (md: string) => {
+  if (rejectedNativeDraft.value && !tiptapRef.value?.editor?.state.doc.eq(rejectedNativeDraft.value.doc)) rejectedNativeDraft.value = undefined
   messageContent.value = md
+  if (submissionProblem.value === nativeCopyRequired && !isNativeCopyCommand(md.trim())) submissionProblem.value = undefined
   hasTextContent.value = !!tiptapRef.value?.editor?.state.doc.textContent.trim()
   if (!navigatingHistory.value) {
     historyIndex.value = -1
@@ -391,7 +770,7 @@ function onClearInput() {
   const md = messageContent.value
   if (!md.trim()) return
   lastClearedContent.value = md
-  editor.commands.clearContent(true)
+  editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
 }
 
 function onHistoryPrev() {
@@ -406,7 +785,7 @@ function onHistoryPrev() {
   }
 
   navigatingHistory.value = true
-  editor.commands.setContent(sentHistory.value[historyIndex.value])
+  editor.chain().setMeta('claude-prompt-by', 'app').setContent(sentHistory.value[historyIndex.value]).run()
   navigatingHistory.value = false
 }
 
@@ -417,7 +796,7 @@ function onHistoryNext() {
   if (historyIndex.value === -1) {
     if (lastClearedContent.value) {
       navigatingHistory.value = true
-      editor.commands.setContent(lastClearedContent.value)
+      editor.chain().setMeta('claude-prompt-by', 'app').setContent(lastClearedContent.value).run()
       lastClearedContent.value = null
       navigatingHistory.value = false
     }
@@ -427,12 +806,12 @@ function onHistoryNext() {
   if (historyIndex.value < sentHistory.value.length - 1) {
     historyIndex.value++
     navigatingHistory.value = true
-    editor.commands.setContent(sentHistory.value[historyIndex.value])
+    editor.chain().setMeta('claude-prompt-by', 'app').setContent(sentHistory.value[historyIndex.value]).run()
     navigatingHistory.value = false
   } else {
     historyIndex.value = -1
     navigatingHistory.value = true
-    editor.commands.clearContent(true)
+    editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
     navigatingHistory.value = false
   }
 }
@@ -443,7 +822,7 @@ const { isSupported: speechSupported, isListening, toggle: toggleSpeech, start: 
     if (!editor) return
     const trimmed = transcript.trim()
     if (!trimmed) return
-    editor.commands.insertContent(trimmed + '. ')
+    editor.chain().setMeta('claude-prompt-by', 'person').insertContent(trimmed + '. ').run()
   },
   maxDurationMs: () => {
     const mins = props.recordingLimitMinutes
@@ -477,9 +856,13 @@ const handleVoiceKeyup = (e: KeyboardEvent) => {
 // Global ESC handling (works regardless of which element has focus):
 //   1. pause available (streaming) → single ESC pauses
 //   2. empty input, double-ESC → open revert menu
+function pauseWork() {
+  if (!props.nativePauseRequested && props.nativePause !== null) emit('pause', props.nativePause)
+}
+
 let lastGlobalEscTime = 0
 const handleGlobalEsc = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return
+  if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return
   // Skip if focus is inside the ProseMirror editor — the editor's own handler covers that case
   if ((e.target as HTMLElement)?.closest?.('.ProseMirror')) return
   // Skip if the revert menu is already open
@@ -488,7 +871,7 @@ const handleGlobalEsc = (e: KeyboardEvent) => {
   // Single ESC pauses when streaming
   if (props.isBusy) {
     lastGlobalEscTime = 0
-    emit('pause')
+    pauseWork()
     return
   }
 
@@ -532,6 +915,16 @@ const leftButtons = computed<ActionButton[]>(() => {
       action: 'quick-message'
     },
   ]
+  if (props.nativeSubmit && props.nativePrompt && !props.nativeBackgrounded) buttons.push(
+    { icon: Settings2, label: 'Claude settings', action: 'native-settings' },
+    { icon: Settings2, label: 'Claude themes', action: 'native-themes' },
+    { icon: Cpu, label: 'Choose Claude model', action: 'native-model' },
+    { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
+    { icon: Plug, label: 'Claude MCP servers', action: 'native-mcp' },
+  )
+  if (props.nativeMemoryAvailable) buttons.push({ icon: BookOpen, label: 'Claude memory', action: 'native-memory' })
+  if (props.nativeBackground && props.nativeSubmit && props.nativePrompt) buttons.push({ icon: ListTodo, label: 'Run session in background', action: 'native-background' })
+  if(props.currentMode === 'Claude Code' && props.currentThread?.id) buttons.push({icon:Plug,label:'Claude channels',action:'claude-channels'})
   // Note: In expanded view, 'quick-message' is rendered via QuickPromptsPopup instead
   if (speechSupported.value) {
     buttons.push({
@@ -550,13 +943,28 @@ const visibleModes = computed(() => props.modes.filter(m => !m.hidden))
 
 // Reset to first visible mode when switching from forced-mode thread, and focus editor
 watch(() => props.currentThread?.id, () => {
+  messageContent.value = ''
+  hasTextContent.value = false
+  historyIndex.value = -1
+  lastClearedContent.value = null
   if (props.currentMode && !props.currentThread?.forcedMode && !visibleModes.value.some(m => m.name === props.currentMode)) {
     emit('mode-change', visibleModes.value[0].name)
   }
-  nextTick(() => tiptapRef.value?.editor?.commands.focus('end'))
+  void nextTick(() => {
+    const editor = tiptapRef.value?.editor
+    if (editor && !editor.isDestroyed) editor.commands.focus()
+  })
 })
 
 const handleButtonClick = (action: string) => {
+  if(action === 'claude-channels'){channelsOpen.value=true;return}
+  if (action === 'native-model') { void openNativePanel('/model'); return }
+  if (action === 'native-themes') { void openNativePanel('/theme'); return }
+  if (action === 'native-background') { if (props.nativeBackground) void openNativePanel('/background'); return }
+  if (action === 'native-settings') { void openNativePanel('/config'); return }
+  if (action === 'native-memory') { if (!submitting.value && !props.nativeDecisionPending) emit('native-memory'); return }
+  if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
+  if (action === 'native-mcp') { void openNativePanel('/mcp'); return }
   if (props.disabled) return
   if (action === 'attach-file') {
     openFilePicker()
@@ -620,6 +1028,7 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   if (!editor) return []
   const refs: ContextReference[] = []
   editor.state.doc.descendants((node) => {
+    if (node.type.name === 'claudePromptSource') refs.push(...claudePromptSourceReferences(editor, node))
     if (node.type.name === 'reference') {
       refs.push({
         refType: node.attrs.refType,
@@ -632,35 +1041,125 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   return refs
 }
 
+async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp' | '/theme' | '/background') {
+  const label = command === '/background' ? 'background session review' : command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
+  const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
+  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || submitting.value || !editor || !bridge || !submit) return
+  const epoch = composerEpoch.value, revision = bridge.revision
+  const threadId = props.currentThread?.id
+  submittingThreads.add(threadId); submissionProblem.value = undefined
+  try {
+    if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge
+      || epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
+    const result = await submit(command, {})
+    if (result && 'review' in result) throw new Error(`Claude requested input review before opening ${label}. Use ${command} to review it.`)
+  } catch (error) {
+    if (epoch === composerEpoch.value) submissionProblem.value = error instanceof Error ? error.message : `Claude ${label} could not be opened`
+  } finally { submittingThreads.delete(threadId) }
+}
+
+watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch.value++ })
+
 const handleSubmit = async () => {
-  if (props.disabled) return
+  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || props.nativeSendWaiting || nativeDraftTooLong.value || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
-  const md = ((editor.storage as any).markdown.getMarkdown() as string)
-    .replace(/(\n&nbsp;)+$/, '')  // strip trailing empty-line placeholders from EmptyLinePreserver
-    .trim()
-  const textContent = editor.state.doc.textContent.trim()
-  if (textContent || hasAttachments.value) {
+  const epoch = composerEpoch.value, bridge = promptEditor
+  const threadId = props.currentThread?.id
+  let nativeSubmission: { doc: ProseMirrorNode; sessionId: string } | undefined
+  let submittedDraft: ReturnType<typeof trackClaudeWindowSubmittedDraft> | undefined
+  if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
+  const draftOwner = composerDraftOwner.value
+  submittingThreads.add(threadId)
+  submissionProblem.value = undefined
+  queuedNotice.value = false
+  rejectedNativeDraft.value = undefined
+  try {
+    if (bridge) {
+      const revision = bridge.revision
+      if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge) {
+        if (epoch === composerEpoch.value && !nativePromptProblem.value) submissionProblem.value = 'Claude input changed while preparing this message. Send again.'
+        return
+      }
+    }
+    if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
+    const doc = editor.state.doc
+    if (!doc.textContent.trim() && !hasAttachments.value) return
+    const serialized = isEmptyClaudePromptParagraph(doc) ? '' : (editor.storage as any).markdown.getMarkdown() as string
+    const md = doc.childCount === 1 && doc.firstChild?.type.name === 'claudePromptSource'
+      ? serialized : serialized.replace(/(\n&nbsp;)+$/, '').trim()
     const entityId = props.currentThread?.id || 'chat-attachments'
-    const attachmentRefs = await collectAttachments(entityId)
+    const attachments = captureAttachments()
     const contextRefs = collectContextReferences(editor)
+    const cmdState = commandSuggestionKey.getState(editor.state)
+    const appCommand = cmdState?.active && cmdState.selectedCommand
+    // Claude's /copy requires its interactive UI, including when the previous reply is plain text.
+    if (!appCommand && !props.nativeSubmit && props.currentMode === 'Claude Code'
+      && props.currentThread?.context?.claudeCode?.sessionId && !hasAttachments.value && contextRefs.length === 0
+      && isNativeCopyCommand(md)) {
+      submissionProblem.value = nativeCopyRequired
+      return
+    }
+    if (props.nativeSubmit && !appCommand) submittedDraft = trackClaudeWindowSubmittedDraft(draftOwner, editor)
+    const attachmentRefs = await attachments.collect(entityId)
+    if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const references: MessageReferences = {
       ...attachmentRefs,
       ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
     }
 
-    // Check if this is a command submission
-    const cmdState = commandSuggestionKey.getState(editor.state)
-    if (cmdState?.active && cmdState.selectedCommand) {
-      const commandName = cmdState.selectedCommand.name
+    // Explicitly selected app commands stay on the app command route under either owner.
+    if (appCommand) {
+      const commandName = appCommand.name
       const prefix = `/${commandName} `
       const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
       emit('send-command', commandName, bodyText.trim(), references)
-
-      // Deactivate the command suggestion
-      const { tr } = editor.state
-      tr.setMeta(commandSuggestionKey, { deactivate: true })
-      editor.view.dispatch(tr)
+      if (editor.state.doc === doc) {
+        const { tr } = editor.state
+        tr.setMeta(commandSuggestionKey, { deactivate: true })
+        editor.view.dispatch(tr)
+      }
+    } else if (props.nativeSubmit) {
+      if (props.nativeSendWaiting) throw new Error(CLAUDE_BUSY_DRAFT_MESSAGE)
+      const sessionId = props.currentThread?.context?.claudeCode?.sessionId
+      if (sessionId) nativeSubmission = { doc, sessionId }
+      unconfirmedSends.delete(draftOwner)
+      const result = await props.nativeSubmit(md, references)
+      if (result && 'queued' in result) {
+        // The receipt owns the submitted document and attachment identities,
+        // even when the originating composer is now hidden.
+        attachments.clear()
+        sentHistory.value.push(md)
+        saveHistory(sentHistory.value)
+        if (epoch === composerEpoch.value) {
+          queuedNotice.value = props.isBusy && result.queued
+          historyIndex.value = -1
+          lastClearedContent.value = null
+        }
+        await submittedDraft?.accept()
+        return
+      }
+      if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+      if (result && 'review' in result) {
+        if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').setContent(result.review.text).run(); submissionProblem.value = `Removed ${result.review.removed} invisible characters. Review and send again.` }
+        return
+      }
+      if (result && 'returnedDraft' in result) {
+        if (editor.state.doc === doc) {
+          editor.chain().setMeta('claude-prompt-by', 'app').setContent({
+            type: 'doc', content: [{ type: 'claudePromptSource', content: [{ type: 'text', text: result.returnedDraft }] }],
+          }).setTextSelection(result.returnedDraft.length + 1).run()
+        }
+        return
+      }
+      if (result && 'commandPending' in result) {
+        pendingNativeCommand = { revision: result.revision, accept() {
+          if (epoch !== composerEpoch.value || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+          sentHistory.value.push(md); saveHistory(sentHistory.value)
+          if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run(); messageContent.value = ''; hasTextContent.value = false; attachments.clear() }
+        } }
+        return
+      }
     } else {
       emit('send-message', md, references)
     }
@@ -669,28 +1168,78 @@ const handleSubmit = async () => {
     saveHistory(sentHistory.value)
     historyIndex.value = -1
     lastClearedContent.value = null
-    editor.commands.clearContent(true)
-    messageContent.value = ''
-    hasTextContent.value = false
-    clearAll()
+    if (editor.state.doc === doc) {
+      editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
+      messageContent.value = ''
+      hasTextContent.value = false
+    }
+    attachments.clear()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Message could not be sent'
+    if (error instanceof ClaudeSendUnconfirmedError) {
+      unconfirmedSends.set(draftOwner, message)
+      return
+    }
+    if (nativeSubmission && threadId === props.currentThread?.id && tiptapRef.value?.editor === editor
+      && !editor.isDestroyed && editor.state.doc.eq(nativeSubmission.doc)) {
+      rejectedNativeDraft.value = { ...nativeSubmission, sessionChanged: message === CLAUDE_STALE_DRAFT_MESSAGE }
+    }
+    if (epoch === composerEpoch.value) submissionProblem.value = message
+  } finally {
+    submittedDraft?.dispose()
+    submittingThreads.delete(threadId)
   }
 }
+
 </script>
 
 <style lang="scss" module>
+.input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
+.input :global(.tiptap-wrapper .ProseMirror) { padding: 0; }
+/* The draft area owns scrolling so the caret stays above the fixed composer controls. */
+.input :global(.composer-document .ProseMirror) { max-height: none; overflow: visible; }
 .input {
-  border-color: rgb(60 60 60);
+  --composer-default-history-reserve: clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 12px 40px -20px rgba(0, 0, 0, 0.6);
+  &:focus-within { border-color: rgba(147, 180, 240, 0.32); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.inputCommandActive {
+/* Background notes share the pane with the live session card and its transcript. */
+.inputBackgroundNotes {
+  --composer-default-history-reserve: min(4rem, calc(var(--composer-available-height) * 0.4));
+}
+.inputBackgroundNotes :global([data-testid="composer-session-strip"]) { padding-block: 4px; }
+.inputBackgroundNotes :global([data-testid="composer-editor-area"]),
+.inputBackgroundNotes :global(.composer-document) { min-height: 40px; }
+.inputBackgroundNotes :global(.composer-document) { padding-block: 8px; }
+.inputBackgroundNotes :global(.ProseMirror) { min-height: 24px; }
+.inputBackgroundNotes :global([data-background-note-hint]) { padding-top: 4px; line-height: 1rem; }
+.inputBackgroundNotes :global([data-composer-toolbar]) { padding-block: 4px; }
+@media (max-height: 700px) {
+  :global([data-composer-form]) { padding-top: 4px; padding-bottom: 4px; }
+  .input :global([data-composer-toolbar]) { padding-top: 4px; padding-bottom: 4px; }
+  .attachments { padding-top: 6px; }
+  .input { --composer-default-history-reserve: 2rem; --composer-field-history-reserve: 2rem; }
+  .inputBackgroundNotes { --composer-default-history-reserve: min(4rem, calc(var(--composer-available-height) * 0.4)); }
+  /* A rich draft must leave the conversation's task controls reachable. */
+  .input:has(:global(.composer-document) :is(h1, h2, h3, pre, ul, ol, blockquote)):not(:has(:global(.native-strip--open))) {
+    --composer-default-history-reserve: 6rem;
+    --composer-min-history-reserve: 6rem;
+  }
+  .input :global([data-testid="composer-editor-area"]), .input :global(.composer-document) { min-height: 40px; }
+  .input :global(.composer-document) { padding-top: 8px; padding-bottom: 8px; }
+  .input :global(.ProseMirror) { min-height: 24px; }
+}
+.inputCommandActive, .inputCommandActive:focus-within {
   border-color: rgba(180, 180, 255, 0.45);
   box-shadow: 0 0 0 1px rgba(180, 180, 255, 0.1), 0 0 12px -2px rgba(180, 180, 255, 0.15);
 }
-.inputDropActive {
+.inputDropActive, .inputDropActive:focus-within {
   border-color: rgba(100, 180, 255, 0.6);
   box-shadow: 0 0 0 1px rgba(100, 180, 255, 0.15), 0 0 12px -2px rgba(100, 180, 255, 0.2);
 }
-.inputRecording {
+.inputRecording, .inputRecording:focus-within {
   border-color: rgba(239, 68, 68, 0.6);
   box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15), 0 0 12px -2px rgba(239, 68, 68, 0.2);
 }

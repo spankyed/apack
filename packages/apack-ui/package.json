@@ -104,6 +104,16 @@
       "types": "./dist/components/node-styles.d.ts",
       "default": "./dist/components/node-styles.js"
     },
+    "./components/tiptap/CommandSuggestionPopup": {
+      "@apackdev/source": "./src/components/tiptap/CommandSuggestionPopup.ts",
+      "types": "./dist/components/tiptap/CommandSuggestionPopup.d.ts",
+      "default": "./dist/components/tiptap/CommandSuggestionPopup.js"
+    },
+    "./components/tiptap/CompletionRows": {
+      "@apackdev/source": "./src/components/tiptap/CompletionRows.ts",
+      "types": "./dist/components/tiptap/CompletionRows.d.ts",
+      "default": "./dist/components/tiptap/CompletionRows.js"
+    },
     "./components/tiptap/ConversationViewer": {
       "@apackdev/source": "./src/components/tiptap/ConversationViewer.ts",
       "types": "./dist/components/tiptap/ConversationViewer.d.ts",
@@ -409,6 +419,7 @@
   },
   "dependencies": {
     "@guolao/vue-monaco-editor": "^1.5.5",
+    "@mdit/plugin-tex": "1.0.2",
     "@tiptap/extension-blockquote": "^3.32.0",
     "@tiptap/extension-code": "^3.32.0",
     "@tiptap/extension-code-block-lowlight": "^3.32.0",
@@ -427,6 +438,7 @@
     "@tiptap/extension-task-item": "^3.32.0",
     "@tiptap/extension-task-list": "^3.32.0",
     "highlight.js": "^11.11.1",
+    "katex": "0.19.1",
     "lowlight": "^3.3.0",
     "prosemirror-markdown": "^1.13.9",
     "tiptap-markdown": "^0.9.0"

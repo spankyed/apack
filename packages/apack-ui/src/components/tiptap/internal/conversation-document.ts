@@ -1,14 +1,17 @@
 import type { Editor } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { conversationMessageNodeName } from '../extensions.ts'
+import { withTranscriptMath } from './transcript-math.ts'
 
 export interface ConversationMessage {
   id: string
   text: string
+  renderMath?: boolean
 }
 
 interface ParsedMessage {
   text: string
+  renderMath: boolean
   node: ProseMirrorNode
 }
 
@@ -17,7 +20,9 @@ function parseMarkdown(editor: Editor, message: ConversationMessage) {
   let failure: { error: unknown } | undefined
   const transaction = editor.captureTransaction(() => {
     try {
-      if (!editor.commands.setContent(message.text, { emitUpdate: false })) throw new Error(`Message content was refused: ${message.id}`)
+      const accepted = withTranscriptMath(editor, message.renderMath === true,
+        () => editor.commands.setContent(message.text, { emitUpdate: false }))
+      if (!accepted) throw new Error(`Message content was refused: ${message.id}`)
     } catch (error) { failure = { error } }
   })
   if (failure) throw failure.error
@@ -33,11 +38,11 @@ export function createConversationDocument(editor: Editor) {
   return (messages: readonly ConversationMessage[]) => {
     const next = new Map<string, ParsedMessage>()
     const nodes = messages.map(message => {
-      const { id, text } = message
+      const { id, text, renderMath = false } = message
       if (next.has(id)) throw new Error(`Duplicate conversation message: ${id}`)
       const cached = previous.get(id)
-      const entry = cached?.text === text ? cached
-        : { text, node: messageNode.createChecked({ id }, parseMarkdown(editor, message)) }
+      const entry = cached?.text === text && cached.renderMath === renderMath ? cached
+        : { text, renderMath, node: messageNode.createChecked({ id }, parseMarkdown(editor, message)) }
       next.set(id, entry)
       return entry.node
     })

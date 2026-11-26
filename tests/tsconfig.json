@@ -4,6 +4,7 @@
     "tsBuildInfoFile": "../node_modules/.cache/tsbuildinfo/tests.tsbuildinfo",
     "module": "esnext",
     "moduleResolution": "bundler",
+    "allowJs": true,
     "noEmit": true
   },
   "include": ["_support/**/*.ts", "e2e/**/*.ts", "performance/**/*.ts", "acceptance/**/*.ts", "../playwright.config.ts"]

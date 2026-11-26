@@ -8,10 +8,12 @@ export const CommandViewerDecoration = Extension.create({
   name: 'commandViewerDecoration',
   addProseMirrorPlugins() {
     if (this.editor.isEditable) return []
+    const thisEditor = this.editor
     return [
       new Plugin({
         props: {
           decorations(state) {
+            if (thisEditor.isEditable) return DecorationSet.empty
             const decorations: Decoration[] = []
             const decorate = (document: ProseMirrorNode, start: number) => {
               const match = document.textContent.match(/^\/[\w-]+/)

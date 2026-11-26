@@ -48,10 +48,10 @@ export const clipboard = {
   written: [] as string[],
   /** What the clipboard holds now: what a write put there, or what a test set as if a person copied it */
   current: '',
-  readText(): string {
+  async readText(): Promise<string> {
     return clipboard.current;
   },
-  writeText(text: string): void {
+  async writeText(text: string): Promise<void> {
     clipboard.written.push(text);
     clipboard.current = text;
   },

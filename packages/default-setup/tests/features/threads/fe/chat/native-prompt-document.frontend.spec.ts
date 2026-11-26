@@ -1,0 +1,1379 @@
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
+import { claudePromptThemeStyle, claudeUiColor } from '#features/threads/fe/chat/native-ui-paint.ts'
+import { Editor, Node } from '@tiptap/core'
+import { createClaudePromptDecorations, drawClaudePromptDecorations } from '#features/threads/fe/chat/native-prompt-decorations.ts'
+import { bindClaudePromptEditor } from '#features/threads/fe/chat/native-prompt-editor.ts'
+import StarterKit from '@tiptap/starter-kit'
+import { Markdown } from 'tiptap-markdown'
+import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
+import { AllSelection } from '@tiptap/pm/state'
+import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument } from '#features/threads/fe/chat/native-prompt-document.ts'
+
+let editor: Editor
+beforeEach(() => { editor = new Editor({ extensions: [StarterKit, Markdown] }) })
+afterEach(() => editor.destroy())
+const serialize = (doc: import('@tiptap/pm/model').Node): string => (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
+
+it('maps UTF-16 caret positions through Markdown marks, lists, code and paragraph separators', () => {
+  for (const content of ['**hello** world', '- first\n- second', 'before `code` after', 'first\n\nsecond', 'emoji 😀 next']) {
+    editor.commands.setContent(content)
+    const doc = editor.state.doc
+    let checked = 0
+    doc.descendants((node, pos) => {
+      if (!node.isText) return
+      for (let index = 1; index < node.nodeSize; index++) {
+        const snapshot = captureClaudePromptDocument(doc, pos + index, serialize)
+        expect(snapshot, content).toBeDefined()
+        expect(findClaudePromptPosition(doc, snapshot!.cursor, serialize)).toBe(pos + index)
+        checked++
+      }
+    })
+    expect(checked).toBeGreaterThan(0)
+  }
+})
+
+it('round-trips a caret inside a plain URL serialized as a Markdown autolink', () => {
+  const url = 'https://example.test/docs'
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'Review ' },
+    { type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }] },
+    { type: 'text', text: ' today' },
+  ] }] })
+  const doc = editor.state.doc
+  const text = 'Review <' + url + '> today'
+  expect(serialize(doc)).toBe(text)
+  for (let offset = 1; offset <= url.length; offset++) {
+    const position = 8 + offset
+    const cursor = 8 + offset
+    expect(captureClaudePromptDocument(doc, position, serialize)).toMatchObject({ text, cursor })
+    expect(findClaudePromptPosition(doc, cursor, serialize)).toBe(position)
+  }
+})
+
+it('keeps the destination, caret and URL decoration through a native structural rewrite', () => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const url = 'https://example.test/docs'
+  const text = '## Release notes\n\nReview <' + url + '> today'
+  const start = text.indexOf(url)
+  const cursor = start + 10
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+    text, cursor, decorations: [{ start: start + 8, end: start + 15, color: 'red' }],
+  } })
+  try {
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(bridge.readDraft()).toMatchObject({ text, cursor })
+    expect(editor.view.dom.querySelector('a')?.getAttribute('href')).toBe(url)
+    expect(editor.view.dom.querySelector('a .claude-prompt-decoration')?.textContent).toBe(url.slice(8, 15))
+  } finally { bridge.dispose() }
+})
+
+it.each([false, true])('keeps the native caret inside an autolink when a heading normalizes (paint=%s)', paint => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const url = 'https://example.test/docs'
+  const tail = 'Review <' + url + '> today'
+  const text = 'Release notes\n=============\n\n' + tail
+  const canonical = '# Release notes\n\n' + tail
+  const start = text.indexOf(url)
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+    text, cursor: start + 10, ...(paint && { decorations: [
+      { start: start + 8, end: start + 15, color: 'red' },
+      { start: start + 17, end: start + 17, virtualText: 'hint' },
+    ] }),
+  } })
+  try {
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(bridge.readDraft()).toMatchObject({ text: canonical, cursor: canonical.indexOf(url) + 10 })
+    expect(editor.view.dom.querySelector('h1')?.textContent).toBe('Release notes')
+    const link = editor.view.dom.querySelector('a')
+    expect(link?.getAttribute('href')).toBe(url)
+    const decoration = link?.querySelector('.claude-prompt-decoration')
+    const hint = link?.querySelector('.claude-prompt-virtual')
+    expect(decoration?.textContent).toBe(paint ? url.slice(8, 15) : undefined)
+    expect(hint?.textContent).toBe(paint ? 'hint' : undefined)
+    if (paint) expect(hint?.previousSibling?.textContent?.endsWith(url.slice(15, 17))).toBe(true)
+  } finally { bridge.dispose() }
+})
+
+it('keeps the native caret at the start of an autolink when a heading normalizes', () => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const url = 'https://example.test/docs'
+  const tail = 'Review <' + url + '> today'
+  const text = 'Release notes\n=============\n\n' + tail
+  const canonical = '# Release notes\n\n' + tail
+  const start = text.indexOf(url)
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor: start, decorations: [{ start, end: start + 5, color: 'red' }],
+    } })
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(bridge.readDraft()).toMatchObject({ text: canonical, cursor: canonical.indexOf(url) })
+    expect(editor.view.dom.querySelector('a')?.getAttribute('href')).toBe(url)
+    expect(editor.view.dom.querySelector('a .claude-prompt-decoration')?.textContent).toBe(url.slice(0, 5))
+  } finally { bridge.dispose() }
+})
+
+it.each([
+  ['bold', 'Review  ', 'release notes', '**Review**  release notes'],
+  ['italic', 'Review     ', 'notes', '*Review*     notes'],
+  ['bold', '  ', 'release notes', '  release notes'],
+])('round-trips caret offsets around whitespace included in a %s mark', (type, marked, rest, markdown) => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: marked, marks: [{ type }] },
+    { type: 'text', text: rest },
+  ] }] })
+  const doc = editor.state.doc
+  expect(serialize(doc)).toBe(markdown)
+  for (let position = 1; position < doc.content.size; position++) {
+    const snapshot = captureClaudePromptDocument(doc, position, serialize)
+    expect(snapshot?.text).toBe(markdown)
+    expect(findClaudePromptPosition(doc, snapshot!.cursor, serialize)).toBe(position)
+  }
+})
+
+it('applies native paint before marked trailing space and moves the caret into that space', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'Review  ', marks: [{ type: 'bold' }] },
+    { type: 'text', text: 'release notes' },
+  ] }] })
+  const original = editor.state.doc
+  const text = '**Review**  release notes'
+  const cursor = '**Review** '.length
+  const problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  try {
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor, decorations: [{ start: 2, end: 8, color: 'red' }],
+    } })
+    expect(problem).toHaveBeenLastCalledWith(undefined)
+    expect(editor.state.doc).toBe(original)
+    expect(editor.state.selection.head).toBe(8)
+    expect(bridge.readDraft()).toMatchObject({ text, cursor })
+    expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+  } finally { bridge.dispose() }
+})
+
+it('rewrites ordinary text while preserving marks and refusing unrepresentable Markdown changes', () => {
+  editor.commands.setContent('**hello** world')
+  const snapshot = captureClaudePromptDocument(editor.state.doc, 3, serialize)!
+  const result = rewriteClaudePromptDocument(snapshot, { text: '**HELLO** world', cursor: 5 }, serialize)
+  expect(result).toBeDefined()
+  expect(serialize(result!.doc)).toBe('**HELLO** world')
+  expect(result!.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe('bold')
+  expect(rewriteClaudePromptDocument(snapshot, { text: '**hello** **world**', cursor: 15 }, serialize)).toBeUndefined()
+  expect(editor.state.doc).toBe(snapshot.doc)
+})
+
+it('keeps reference atoms intact and refuses a rewrite through an atom', () => {
+  editor.destroy()
+  const reference = Node.create({ name: 'reference', group: 'inline', inline: true, atom: true,
+    addAttributes: () => ({ id: { default: 'ref-id' }, label: { default: 'Note' } }),
+    renderHTML: () => ['span', 'Note'],
+    addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('[Note](ref:ref-id)') } } }),
+  })
+  editor = new Editor({ extensions: [StarterKit, Markdown, reference], content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello ' }, { type: 'reference' }, { type: 'text', text: ' after' }] }] } })
+  const snapshot = captureClaudePromptDocument(editor.state.doc, 3, serialize)!
+  const changed = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.replace('hello', 'HELLO'), cursor: 3 }, serialize)!
+  expect(changed.doc.firstChild?.child(1)).toBe(snapshot.doc.firstChild?.child(1))
+  expect(rewriteClaudePromptDocument(snapshot, { text: 'gone', cursor: 4 }, serialize)).toBeUndefined()
+})
+
+
+it('adopts app drafts, routes person edits and applies only the latest owned native rewrite', () => {
+  editor.commands.setContent('seed')
+  const send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'app', text: 'seed', cursor: 4 }))
+  editor.view.dom.dispatchEvent(new Event('beforeinput', { bubbles: true }))
+  editor.commands.insertContent('x')
+  const request = send.mock.lastCall![0]
+  expect(request).toMatchObject({ by: 'person', text: 'seedx', cursor: 5 })
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: 'SEEDX', cursor: 5 } })
+  expect(serialize(editor.state.doc)).toBe('SEEDX')
+  expect(send).toHaveBeenCalledTimes(2)
+  editor.commands.insertContent('a')
+  const old = send.mock.lastCall![0]
+  editor.commands.insertContent('b')
+  const latest = send.mock.lastCall![0]
+  bridge.receive({ revision: old.revision, status: 'applied', frame: { text: 'old', cursor: 3 } })
+  expect(serialize(editor.state.doc)).toBe('SEEDXab')
+  bridge.receive({ revision: latest.revision, status: 'applied', frame: { text: 'SEEDXAB', cursor: 7 } })
+  expect(serialize(editor.state.doc)).toBe('SEEDXAB')
+  bridge.dispose(); editor.commands.insertContent('c')
+  expect(send).toHaveBeenCalledTimes(4)
+})
+
+it('ignores retired replies and preserves the draft on unrepresentable native changes', () => {
+  editor.commands.setContent('safe')
+  const send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: '**safe**', cursor: 1 } })
+  expect(serialize(editor.state.doc)).toBe('safe')
+  expect(problem).toHaveBeenLastCalledWith(expect.stringContaining('cannot be represented'))
+  bridge.dispose()
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: 'BAD', cursor: 3 } })
+  expect(serialize(editor.state.doc)).toBe('safe')
+})
+
+
+it('marks history adoption as app-owned even inside a keyboard event task', () => {
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+  editor.chain().setMeta('claude-prompt-by', 'app').setContent('history').run()
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'app', text: 'history' }))
+  bridge.dispose()
+})
+
+
+it('can detach and settle after the editor has already been destroyed', async () => {
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  const waiting = bridge.settle()
+  editor.destroy()
+  await expect(waiting).resolves.toBe(false)
+  expect(() => bridge.dispose()).not.toThrow()
+})
+
+
+it('forwards typed key metadata only for person-originated edits', () => {
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', shiftKey: true, bubbles: true }))
+  editor.commands.insertContent('X')
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'person', key: { key: 'x', shift: true } }))
+  editor.chain().setMeta('claude-prompt-by', 'app').setContent('history').run()
+  expect(send.mock.lastCall![0]).not.toHaveProperty('key')
+  bridge.dispose()
+})
+
+
+it('continues the mounted view revision after the editor is rebound', () => {
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn(), 12)
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 13 }))
+  bridge.dispose()
+})
+
+
+it('renders native styling without changing serialized text, and clears it on new edits or detach', () => {
+  editor.commands.setContent('hello world')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: 'hello world', cursor: 11, decorations: [{ start: 0, end: 5, bold: true, italic: true, underline: true, color: 'success' }] } })
+  const span = editor.view.dom.querySelector('.claude-prompt-decoration')! as HTMLElement
+  expect(span.textContent).toBe('hello')
+  expect(span.style.fontWeight).toBe('600')
+  expect(span.style.fontStyle).toBe('italic')
+  expect(serialize(editor.state.doc)).toBe('hello world')
+  editor.commands.insertContent('!')
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  const request = send.mock.lastCall![0]
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor, decorations: [{ start: 0, end: 5, bold: true }] } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).not.toBeNull()
+  bridge.dispose()
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+})
+
+it('projects decoration ranges around Markdown syntax onto visible text', () => {
+  editor.commands.setContent('**hello**')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: '**hello**', cursor: 7, decorations: [{ start: 0, end: 9, italic: true }] } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('hello')
+  expect(serialize(editor.state.doc)).toBe('**hello**')
+  bridge.dispose()
+})
+
+it('draws virtual text as inert text outside the draft and refuses arbitrary color CSS', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: 'seed', cursor: 4, decorations: [
+    { start: 0, end: 0, virtualText: '<script>hint</script>' },
+    { start: 0, end: 4, bold: true, color: 'red;position:fixed', backgroundColor: 'url(https://example.com/)' },
+  ] } })
+  const hint = editor.view.dom.querySelector('.claude-prompt-virtual')! as HTMLElement
+  expect(hint.textContent).toBe('<script>hint</script>')
+  expect(hint.contentEditable).toBe('false')
+  expect(editor.view.dom.querySelector('script')).toBeNull()
+  expect(serialize(editor.state.doc)).toBe('seed')
+  expect(editor.state.doc.textContent).toBe('seed')
+  const span = editor.view.dom.querySelector('.claude-prompt-decoration')! as HTMLElement
+  expect(span.style.color).toBe('')
+  expect(span.style.backgroundColor).toBe('')
+  bridge.dispose()
+})
+
+
+it('settles a failed dispatch instead of leaving Send pending', async () => {
+  const problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, () => { throw new Error('Dispatch closed') }, problem)
+  await expect(bridge.settle()).resolves.toBe(false)
+  expect(problem).toHaveBeenLastCalledWith('Dispatch closed')
+  bridge.dispose()
+})
+
+
+it('reads the live UTF-16 draft and fills insert/append/replace without focusing the editor', () => {
+  editor.commands.setContent('Draft🙂'); editor.commands.setTextSelection(6)
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const elsewhere = document.createElement('button'); document.body.append(elsewhere); elsewhere.focus()
+  expect(bridge.readDraft()).toEqual({ text: 'Draft🙂', cursor: 5 })
+  expect(bridge.fillDraft({ mode: 'insert', text: ' native' }, bridge.revision)).toBe(true)
+  expect(bridge.readDraft()).toEqual({ text: 'Draft native🙂', cursor: 12 })
+  expect(document.activeElement).toBe(elsewhere)
+  expect(send.mock.calls.at(-1)?.[0].by).toBe('app')
+  expect(bridge.fillDraft({ mode: 'append', text: '\n\nNext paragraph' }, bridge.revision)).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('Draft native🙂\n\nNext paragraph')
+  expect(bridge.fillDraft({ mode: 'replace', text: '**New**\n\n- item' }, bridge.revision)).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('**New**\n\n- item')
+  expect(editor.state.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe('bold')
+  elsewhere.remove(); bridge.dispose()
+})
+
+it('refuses expired draft revisions, IME and disposed fills while preserving newer text', () => {
+  editor.commands.setContent('original')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn()), old = bridge.revision
+  editor.commands.insertContent('newer')
+  const draft = serialize(editor.state.doc)
+  expect(bridge.fillDraft({ mode: 'replace', text: 'stale' }, old)).toBe(false)
+  const composing = vi.spyOn(editor.view, 'composing', 'get').mockReturnValue(true)
+  expect(bridge.readDraft()).toBeUndefined()
+  expect(bridge.fillDraft({ mode: 'replace', text: 'IME' }, bridge.revision)).toBe(false)
+  composing.mockRestore(); bridge.dispose()
+  expect(bridge.readDraft()).toBeUndefined()
+  expect(bridge.fillDraft({ mode: 'replace', text: 'closed' }, bridge.revision)).toBe(false)
+  expect(serialize(editor.state.doc)).toBe(draft)
+})
+
+it('paints inserted fill decorations at their new offset without adding decorated text to the draft', () => {
+  editor.commands.setContent('prefix'); editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  expect(bridge.fillDraft({ mode: 'append', text: ' native', decorations: [{ start: 1, end: 7, bold: true }] }, bridge.revision)).toBe(true)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('native')
+  expect(serialize(editor.state.doc)).toBe('prefix native')
+  bridge.dispose()
+})
+
+
+it('leaves the current draft unchanged if its Markdown parser refuses a structural fill', () => {
+  editor.commands.setContent('Keep this draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
+  const parsing = vi.spyOn(parser, 'parse').mockImplementationOnce(() => { throw Error('custom parser refused') })
+  try {
+    expect(bridge.fillDraft({ mode: 'replace', text: '**native**' }, bridge.revision)).toBe(false)
+    expect(serialize(editor.state.doc)).toBe('Keep this draft')
+  } finally { parsing.mockRestore(); bridge.dispose() }
+})
+
+
+it('keeps fill paint through its app acknowledgement and replaces it on the next actual edit answer', () => {
+  editor.commands.setContent('draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  expect(bridge.fillDraft({ mode: 'append', text: ' native', decorations: [{ start: 1, end: 7, italic: true }] }, bridge.revision)).toBe(true)
+  const frame = bridge.readDraft()!
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('native')
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')?.style.fontStyle).toBe('italic')
+  expect(serialize(editor.state.doc)).toBe('draft native')
+  editor.commands.insertContent(' next')
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: bridge.readDraft()! })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  expect(serialize(editor.state.doc)).toBe('draft native next')
+  bridge.dispose()
+})
+
+it('allows explicit native paint to override a fill acknowledgement and ignores old acknowledgements', () => {
+  editor.commands.setContent('draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  bridge.fillDraft({ mode: 'replace', text: 'first', decorations: [{ start: 0, end: 5, italic: true }] }, bridge.revision)
+  const old = { revision: bridge.revision, status: 'applied' as const, frame: bridge.readDraft()! }
+  bridge.fillDraft({ mode: 'replace', text: 'second', decorations: [{ start: 0, end: 6, bold: true }] }, bridge.revision)
+  bridge.receive(old)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('second')
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { ...bridge.readDraft()!, decorations: [] } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  bridge.dispose()
+})
+
+
+it('keeps ghost text out of the draft and accepts Tab as a person edit with its original key', () => {
+  editor.commands.clearContent()
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const revision = bridge.revision
+  expect(bridge.showSuggestion('Native ghost', revision)).toBe(true)
+  expect(bridge.readDraft()).toEqual({ text: '', cursor: 0 })
+  expect(serialize(editor.state.doc)).toBe('')
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')?.textContent).toBe('Native ghost')
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')?.getAttribute('aria-hidden')).toBe('true')
+  expect(send).toHaveBeenCalledTimes(1)
+  bridge.receive({ revision, status: 'applied', frame: { text: '', cursor: 0 } })
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')).not.toBeNull()
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+  editor.view.dom.dispatchEvent(tab)
+  expect(tab.defaultPrevented).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('Native ghost')
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')).toBeNull()
+  expect(send.mock.calls.at(-1)?.[0]).toMatchObject({ by: 'person', key: { key: 'tab' }, text: 'Native ghost' })
+  bridge.dispose()
+})
+
+it('accepts Right Arrow but leaves modified keys, IME and competing UI to their owners', () => {
+  editor.commands.clearContent()
+  let eligible = true
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn(), 0, undefined, { canSuggest: () => eligible })
+  expect(bridge.showSuggestion('**Rich** ghost', bridge.revision)).toBe(true)
+  const key = (init: KeyboardEventInit) => { const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, ...init }); editor.view.dom.dispatchEvent(event); return event }
+  for (const modifier of [{ shiftKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { isComposing: true }]) expect(key(modifier).defaultPrevented).toBe(false)
+  eligible = false; expect(key({}).defaultPrevented).toBe(false)
+  expect(serialize(editor.state.doc)).toBe('')
+  eligible = true; expect(key({ key: 'ArrowRight' }).defaultPrevented).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('**Rich** ghost')
+  expect(editor.state.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe('bold')
+  bridge.dispose()
+})
+
+it('rejects stale/nonempty suggestions and clears ghost text on typing, composition, blur and dispose', () => {
+  editor.commands.clearContent()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  expect(bridge.showSuggestion('stale', bridge.revision - 1)).toBe(false)
+  expect(bridge.showSuggestion('  ', bridge.revision)).toBe(false)
+  expect(bridge.showSuggestion('ghost', bridge.revision)).toBe(true)
+  editor.commands.insertContent('typed')
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')).toBeNull()
+  expect(serialize(editor.state.doc)).toBe('typed')
+  expect(bridge.showSuggestion('overwrite', bridge.revision)).toBe(false)
+  editor.commands.clearContent(); bridge.showSuggestion('compose', bridge.revision)
+  editor.view.dom.dispatchEvent(new CompositionEvent('compositionstart'))
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')).toBeNull()
+  editor.view.dom.dispatchEvent(new CompositionEvent('compositionend'))
+  expect(bridge.showSuggestion('blur', bridge.revision)).toBe(true); window.dispatchEvent(new Event('blur'))
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')).toBeNull()
+  bridge.showSuggestion('dispose', bridge.revision); bridge.dispose()
+  expect(editor.view.dom.querySelector('.claude-prompt-suggestion')).toBeNull()
+  expect(editor.view.dom.hasAttribute('data-native-suggestion')).toBe(false)
+  expect(bridge.showSuggestion('closed', bridge.revision)).toBe(false)
+})
+
+
+it('maps the app serializer empty-paragraph entity to a native empty box and permits its first suggestion', () => {
+  editor.commands.clearContent()
+  const serializer = (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer
+  const original = serializer.serialize.bind(serializer)
+  const spelling = vi.spyOn(serializer, 'serialize').mockImplementation(doc => doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size ? '&nbsp;' : original(doc))
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ text: '', cursor: 0 }))
+    expect(bridge.readDraft()).toEqual({ text: '', cursor: 0 })
+    expect(bridge.showSuggestion('First native suggestion', bridge.revision)).toBe(true)
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(bridge.readDraft()?.text).toBe('First native suggestion')
+    editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '&nbsp;' }] }] })
+    expect(bridge.readDraft()?.text).toBe(original(editor.state.doc))
+    expect(bridge.readDraft()?.text).not.toBe('')
+  } finally { bridge.dispose(); spelling.mockRestore() }
+})
+
+it('preserves select-all replacement when native acknowledges unchanged text and cursor', () => {
+  editor.commands.setContent('/cc-reset')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 })
+  const selected = editor.state.selection, request = send.mock.lastCall![0]
+  expect(selected.empty).toBe(false)
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+  expect(editor.state.selection.eq(selected)).toBe(true)
+  editor.commands.insertContent('/model haiku')
+  expect(serialize(editor.state.doc)).toBe('/model haiku')
+  bridge.dispose()
+})
+it('honors an actual native cursor change while a range was selected', () => {
+  editor.commands.setContent('draft')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 })
+  const request = send.mock.lastCall![0]
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: 0 } })
+  expect(editor.state.selection.empty).toBe(true)
+  expect(editor.state.selection.head).toBe(findClaudePromptPosition(editor.state.doc, 0, serialize))
+  bridge.dispose()
+})
+
+
+it.each(['**safe**', '# Heading\n\nBody', '* first\n* second', 'before\n\n```ts\nconst x = 1\n```'])('applies a native structural Markdown rewrite: %s', text => {
+  editor.commands.setContent('seed')
+  const send = vi.fn(), problem = vi.fn(), bridge = bindClaudePromptEditor(editor, send, problem)
+  bridge.receive({ revision: send.mock.lastCall![0].revision, status: 'applied', frame: { text, cursor: text.includes('```') ? text.indexOf('const x = 1') + 11 : text.length } })
+  const expected = text.startsWith('* first') ? '- first\n- second' : text
+  expect(serialize(editor.state.doc)).toBe(expected)
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  if (expected !== text) expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'app', text: expected }))
+  expect(editor.state.doc.toJSON()).not.toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+  bridge.dispose()
+})
+it('refuses a structural reply during composition without replacing the composing draft', async () => {
+  editor.commands.setContent('composing')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  Object.defineProperty(editor.view, 'composing', { configurable: true, value: true })
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: '**changed**', cursor: 5 } })
+  expect(serialize(editor.state.doc)).toBe('composing')
+  expect(await bridge.settle()).toBe(false)
+  bridge.dispose()
+})
+it('retains unchanged reference attributes when native Markdown adds surrounding block structure', () => {
+  editor.destroy()
+  const reference = Node.create({ name: 'reference', group: 'inline', inline: true, atom: true,
+    addAttributes: () => ({ id: { default: 'ref-id' }, label: { default: 'Note' }, retained: { default: 'parsed' } }),
+    parseHTML: () => [{ tag: 'a[href="ref:ref-id"]' }], renderHTML: () => ['a', { href: 'ref:ref-id' }, 'Note'],
+    addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('[Note](ref:ref-id)') } } }),
+  })
+  editor = new Editor({ extensions: [StarterKit, Markdown, reference], content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello ' }, { type: 'reference', attrs: { retained: 'original' } }, { type: 'text', text: ' after' }] }] } })
+  const original = editor.state.doc.firstChild!.child(1), send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const text = '# Heading\n\nhello [Note](ref:ref-id) after'
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length } })
+  expect(serialize(editor.state.doc)).toBe(text)
+  let retained: unknown
+  editor.state.doc.descendants(node => { if (node.type.name === 'reference') retained = node.attrs })
+  expect(retained).toEqual(original.attrs)
+  bridge.dispose()
+})
+
+it('maps native content decorations through structural normalization and retains them through canonical adoption', () => {
+  editor.commands.setContent('safe')
+  const send = vi.fn(), problem = vi.fn(), bridge = bindClaudePromptEditor(editor, send, problem)
+  const text = '__Title__\n\n*   first\n*   second', canonical = '**Title**\n\n- first\n- second'
+  const first = text.indexOf('first'), second = text.indexOf('second')
+  const parsed = rewriteClaudePromptDocument(captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)!, { text, cursor: text.length }, serialize, value => { const template = document.createElement('template'); template.innerHTML = (editor.storage as unknown as { markdown: { parser: { parse(value: string): string } } }).markdown.parser.parse(value); return PromptDOMParser.fromSchema(editor.schema).parse(template.content) }, [first, first + 5, second, second + 6])!
+  expect(parsed.sourcePositions).toBeDefined()
+  expect(findClaudePromptPosition(parsed.doc, canonical.indexOf('first'), serialize)).toBeTypeOf('number')
+  expect(parsed.sourcePositions?.get(first)).toBe(findClaudePromptPosition(parsed.doc, canonical.indexOf('first'), serialize))
+  expect(parsed.sourcePositions?.get(second)).toBe(findClaudePromptPosition(parsed.doc, canonical.indexOf('second'), serialize))
+  expect(drawClaudePromptDecorations(parsed.doc, [{ start: first, end: first + 5, color: 'red' }, { start: second, end: second + 6, underline: true }], serialize, parsed.sourcePositions).find()).toHaveLength(2)
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: first, end: first + 5, color: 'red' }, { start: second, end: second + 6, underline: true }] } })
+  expect(serialize(editor.state.doc)).toBe(canonical)
+  expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['first', 'second'])
+  const request = send.mock.lastCall![0]
+  expect(request).toEqual(expect.objectContaining({ by: 'app', text: canonical, cursor: canonical.length }))
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+  expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['first', 'second'])
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  editor.commands.insertContent(' person')
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  bridge.dispose()
+})
+
+it('normalizes decorated native fills and preserves their paint through app acknowledgement', () => {
+  editor.commands.setContent('safe')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const text = '*   first\n*   second', start = text.indexOf('second')
+  expect(bridge.fillDraft({ mode: 'replace', text, decorations: [{ start, end: start + 6, bold: true }] }, bridge.revision)).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('- first\n- second')
+  const request = send.mock.lastCall![0]
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('second')
+  expect(serialize(editor.state.doc)).toBe('- first\n- second')
+  bridge.dispose()
+})
+
+it.each([
+  {text:'*   first\n*   second',start:0,end:7,canonical:'- first\n- second',paint:'fir'},
+  {text:'__Title__\n\n*   first',start:1,end:8,canonical:'**Title**\n\n- first',paint:'Title'},
+  {text:'__😀 Title__\n\n*   first',start:1,end:11,canonical:'**😀 Title**\n\n- first',paint:'😀 Title'},
+  {text:'*   same\n*   same',start:10,end:17,canonical:'- same\n- same',paint:'same'},
+])('maps source syntax decoration boundaries without rejecting a valid native rewrite: $text', async ({text,start,end,canonical,paint}) => {
+  editor.commands.setContent('safe')
+  const send=vi.fn(),problem=vi.fn(),bridge = bindClaudePromptEditor(editor, send, problem)
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start, end, color: 'red' }] } })
+  expect(serialize(editor.state.doc)).toBe(canonical)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe(paint)
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({by:'app',text:canonical}))
+  const ack=send.mock.lastCall![0];bridge.receive({revision:ack.revision,status:'applied',frame:{text:ack.text,cursor:ack.cursor}})
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe(paint)
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  bridge.dispose()
+})
+
+it.each([
+  { kind: 'unordered', prefix: '*   ', marker: () => '- ' },
+  { kind: 'ordered', prefix: '1.   ', marker: (index: number) => `${String(index + 1).padStart(4)}. ` },
+])('preserves exact decoration boundaries through a long $kind list rewrite', ({ prefix, marker }) => {
+  editor.commands.setContent('seed')
+  const send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  const items = Array.from({ length: 2000 }, (_, index) => `Review release item ${Math.floor(index / 2) + 1}`)
+  const text = items.map(item => prefix + item).join('\n')
+  const canonical = items.map((item, index) => marker(index) + item).join('\n')
+  const last = text.lastIndexOf('\n') + 1
+  const end = prefix.length + 'Review'.length
+  bridge.receive({
+    revision: bridge.revision,
+    status: 'applied',
+    frame: { text, cursor: text.length, decorations: [
+      { start: 0, end, color: 'red' },
+      { start: last + 1, end: last + end, underline: true },
+    ] },
+  })
+  const draft = bridge.readDraft()
+  expect(draft?.text === canonical).toBe(true)
+  expect(draft?.cursor).toBe(canonical.length)
+  expect(send.mock.lastCall?.[0]?.by).toBe('app')
+  expect(send.mock.lastCall?.[0]?.text === canonical).toBe(true)
+  const rows = editor.view.dom.querySelectorAll('li')
+  expect(rows[0]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+  expect(rows[1]?.querySelector('.claude-prompt-decoration')).toBeNull()
+  expect(rows[rows.length - 2]?.querySelector('.claude-prompt-decoration')).toBeNull()
+  expect(rows[rows.length - 1]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  bridge.dispose()
+})
+
+it('preserves list paint when the same native rewrite also normalizes a heading', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const items = Array.from({ length: 1100 }, (_, index) => `Review item ${Math.floor(index / 2) + 1}`)
+    const text = '# Release #\n\n' + items.map(item => '1.   ' + item).join('\n')
+    const start = text.lastIndexOf('\n') + 1
+    bridge.receive({
+      revision: bridge.revision, status: 'applied',
+      frame: { text, cursor: text.length, decorations: [
+        { start: 2, end: 9, bold: true },
+        { start, end: start + '1.   Review'.length, underline: true },
+      ] },
+    })
+    const rows = editor.view.dom.querySelectorAll('li')
+    expect(editor.view.dom.querySelector('h1 .claude-prompt-decoration')?.textContent).toBe('Release')
+    expect(rows).toHaveLength(items.length)
+    expect(rows[rows.length - 2]?.querySelector('.claude-prompt-decoration')).toBeNull()
+    expect(rows[rows.length - 1]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+    expect(bridge.readDraft()?.cursor).toBe(bridge.readDraft()?.text.length)
+  } finally { bridge.dispose() }
+})
+
+it('keeps native paint on the addressed rows of a long quoted ordered list', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const items = Array.from({ length: 1100 }, (_, index) => `Review item ${Math.floor(index / 2) + 1}`)
+    const prefix = '> 1.   '
+    const text = items.map(item => prefix + item).join('\n')
+    const last = text.lastIndexOf('\n') + 1
+    bridge.receive({
+      revision: bridge.revision,
+      status: 'applied',
+      frame: { text, cursor: text.length, decorations: [
+        { start: 0, end: prefix.length + 6, color: 'red' },
+        { start: last + 2, end: last + prefix.length + 6, underline: true },
+      ] },
+    })
+    const rows = editor.view.dom.querySelectorAll('blockquote li')
+    expect(rows).toHaveLength(items.length)
+    expect(rows[0]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+    expect(rows[1]?.querySelector('.claude-prompt-decoration')).toBeNull()
+    expect(rows[rows.length - 2]?.querySelector('.claude-prompt-decoration')).toBeNull()
+    expect(rows[rows.length - 1]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+    const draft = bridge.readDraft()!
+    const canonical = items.map((item, index) => '> ' + String(index + 1).padStart(4) + '. ' + item).join('\n')
+    expect(draft.text === canonical).toBe(true)
+    expect(draft.cursor).toBe(canonical.length)
+  } finally { bridge.dispose() }
+})
+
+it('reports the actual host-fill text change, excluding no-ops and stale fills', () => {
+  editor.commands.setContent('initial draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const previous = bridge.revision
+    expect(bridge.fillHostDraft({ mode: 'append', text: ' with context' }, previous)).toEqual({
+      filled: true, change: { text: 'initial draft with context', cursor: 26 },
+    })
+    expect(bridge.fillHostDraft({ mode: 'replace', text: 'stale' }, previous)).toEqual({ filled: false })
+    expect(bridge.fillHostDraft({ mode: 'replace', text: 'initial draft with context' }, bridge.revision)).toEqual({ filled: true })
+  } finally { bridge.dispose() }
+})
+
+it('keeps inward decoration projection around canonical structural Markdown delimiters', () => {
+  editor.commands.setContent('safe')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn()), text = '**styled**'
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: 0, end: text.length, underline: true }] } })
+  expect(serialize(editor.state.doc)).toBe(text)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('styled')
+  bridge.dispose()
+})
+
+it('keeps native theme roles live in existing paint without changing the draft, selection or submitting another edit', () => {
+ editor.commands.setContent('keep this draft');editor.commands.setTextSelection({from:2,to:6});
+ const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn());
+ const doc=editor.state.doc,selection=editor.state.selection;
+ const runs=[{start:0,end:4,color:'#abcdef',_apackThemeColor:'warning'}];
+ editor.view.dispatch(editor.state.tr.setMeta('theme-fixture',true));
+ const drawn=drawClaudePromptDecorations(editor.state.doc,runs,serialize);
+ expect((drawn.find()[0] as any).type.attrs.style).toContain('var(--claude-native-prompt-warning,');
+ const count=send.mock.calls.length;
+ for (const [key,value] of Object.entries(claudePromptThemeStyle({text:'#123456',warning:'#abcdef'}))) editor.view.dom.style.setProperty(key,String(value));
+ expect(editor.view.dom.style.getPropertyValue('--claude-native-prompt-warning')).toBe(claudeUiColor('#abcdef'));
+ for (const [key,value] of Object.entries(claudePromptThemeStyle({text:'#123456',warning:'#010203'}))) editor.view.dom.style.setProperty(key,String(value));
+ expect(editor.view.dom.style.getPropertyValue('--claude-native-prompt-warning')).toBe(claudeUiColor('#010203'));
+ expect(editor.state.doc).toBe(doc);expect(editor.state.selection.eq(selection)).toBe(true);expect(send).toHaveBeenCalledTimes(count);
+ bridge.dispose();
+})
+
+it('attributes browser-delayed keyboard selection to the person and preserves its native key', async () => {
+  editor.commands.setContent('hello world')
+  document.body.append(editor.view.dom)
+  const scroll = editor.view.props.handleScrollToSelection
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    editor.view.focus()
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 2)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(send.mock.lastCall![0]).toMatchObject({ by: 'person', cursor: 2, key: { key: 'home' } })
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(3)
+    const selected = editor.state.selection, request = send.mock.lastCall![0]
+    bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+    expect(editor.state.selection.eq(selected)).toBe(true)
+    expect(bridge.fillDraft({ mode: 'replace', text: 'native fill' }, bridge.revision)).toBe(true)
+    expect(send.mock.lastCall![0].by).toBe('app')
+    expect(send.mock.lastCall![0].key).toBeUndefined()
+  } finally { bridge.dispose(); editor.view.setProps({ handleScrollToSelection: scroll }) }
+})
+
+
+it('keeps a delayed selection and its key scoped to the currently focused editor', async () => {
+  const other = new Editor({ extensions: [StarterKit, Markdown] })
+  editor.commands.setContent('parent draft'); other.commands.setContent('worker draft')
+  document.body.append(editor.view.dom, other.view.dom)
+  const firstScroll = editor.view.props.handleScrollToSelection
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  other.view.setProps({ handleScrollToSelection: () => true })
+  const firstSend = vi.fn(), otherSend = vi.fn()
+  const firstBridge = bindClaudePromptEditor(editor, firstSend, vi.fn()), otherBridge = bindClaudePromptEditor(other, otherSend, vi.fn())
+  try {
+    editor.view.focus()
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const count = firstSend.mock.calls.length
+    other.view.focus()
+    const text = other.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 3)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(otherSend.mock.lastCall![0]).toMatchObject({ by: 'person', text: 'worker draft', cursor: 3 })
+    expect(otherSend.mock.lastCall![0].key).toBeUndefined()
+    expect(firstSend).toHaveBeenCalledTimes(count)
+    expect(firstBridge.readDraft()?.text).toBe('parent draft')
+    expect(otherBridge.readDraft()?.text).toBe('worker draft')
+  } finally { firstBridge.dispose(); otherBridge.dispose(); editor.view.setProps({ handleScrollToSelection: firstScroll }); other.destroy() }
+})
+
+
+it('keeps emoji intact when native structural paint lands inside a UTF-16 surrogate pair', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const text = '*   A😀B'
+    const emoji = text.indexOf('😀')
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor: text.length,
+      decorations: [
+        { start: emoji + 1, end: emoji + 1, virtualText: 'hint' },
+        { start: emoji + 1, end: text.length, italic: true },
+        { start: emoji, end: emoji + 2, bold: true },
+      ],
+    } })
+    expect(serialize(editor.state.doc)).toBe('- A😀B')
+    expect(editor.view.dom.querySelector('.claude-prompt-virtual')).toBeNull()
+    expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['😀', 'B'])
+    expect(editor.view.dom.textContent).toBe('A😀B')
+  } finally { bridge.dispose() }
+})
+
+it.each([
+  ['👩‍💻', 2],
+  ['e\u0301', 1],
+  ['🇨🇦', 2],
+] as const)('keeps the displayed grapheme %s intact across native list normalization', (grapheme, split) => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const text = '*   A' + grapheme + 'B'
+    const start = text.indexOf(grapheme)
+    bridge.receive({ revision: bridge.revision, status: 'applied', frame: {
+      text, cursor: text.length,
+      decorations: [
+        { start: start + split, end: start + split, virtualText: 'hint at invalid boundary' },
+        { start: start + split, end: text.length, italic: true },
+        { start: 4, end: start + split, underline: true },
+        { start, end: start + grapheme.length, bold: true },
+      ],
+    } })
+    expect(serialize(editor.state.doc)).toBe('- A' + grapheme + 'B')
+    expect(editor.view.dom.querySelector('.claude-prompt-virtual')).toBeNull()
+    expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['A', grapheme, 'B'])
+    expect(editor.view.dom.textContent).toBe('A' + grapheme + 'B')
+  } finally { bridge.dispose() }
+})
+
+it('does not treat an editor mark boundary as a grapheme boundary for native paint', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+    { type: 'text', text: 'e', marks: [{ type: 'bold' }] },
+    { type: 'text', text: '\u0301B' },
+  ] }] })
+  const drawn = drawClaudePromptDecorations(editor.state.doc, [
+    { start: 1, end: 1, virtualText: 'hint at a mark edge' },
+    { start: 1, end: 3, italic: true },
+  ], serialize, new Map([[1, 2], [3, 4]]))
+  const [decoration] = drawn.find()
+  expect(drawn.find()).toHaveLength(1)
+  expect([decoration!.from, decoration!.to]).toEqual([3, 4])
+  expect(editor.state.doc.textContent).toBe('e\u0301B')
+})
+
+it('maps decoration boundaries inside noncanonical code fences without changing code or caret', () => {
+  editor.commands.setContent('safe')
+  const send=vi.fn(),problem=vi.fn(),bridge=bindClaudePromptEditor(editor,send,problem)
+  const text='~~~ts\nconst ready = true\n~~~\n\n*   Context',canonical='```ts\nconst ready = true\n```\n\n- Context'
+  const cursor=text.indexOf('ready')+5,end=text.indexOf('~~~',3)+2
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor,decorations:[{start:1,end,underline:true,color:'red'}]}})
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  expect(serialize(editor.state.doc)).toBe(canonical)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('const ready = true')
+  expect(captureClaudePromptDocument(editor.state.doc,editor.state.selection.head,serialize)?.cursor).toBe(canonical.indexOf('ready')+5)
+  bridge.dispose()
+})
+
+it('adopts a keyboard selection before the editor restores its earlier range on focus', () => {
+  editor.commands.setContent('keep this draft');
+  const dom = editor.view.dom;
+  document.body.append(dom);
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn());
+  const selection = document.getSelection()!;
+  try {
+    dom.focus();
+    const text = dom.querySelector('p')!.firstChild!;
+    dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+    // Chromium moves the DOM selection before delivering its deferred selectionchange.
+    selection.setBaseAndExtent(text, 1, text, 5);
+    dom.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+    expect(editor.state.selection.toJSON()).toMatchObject({ anchor: 2, head: 6 });
+  } finally {
+    bridge.dispose();
+    dom.remove();
+  }
+});
+
+it('keeps a newer browser caret when a native acknowledgement arrives before selectionchange', () => {
+  editor.commands.setContent('worker draft')
+  document.body.append(editor.view.dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    const request = send.mock.lastCall![0]
+    expect(request.cursor).toBe('worker draft'.length)
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    const text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 3, text, 3)
+    // The browser has moved; ProseMirror has not received its delayed selectionchange yet.
+    expect(editor.state.selection.head).toBe('worker draft'.length + 1)
+    bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+    expect(bridge.readDraft()).toEqual({ text: 'worker draft', cursor: 3 })
+    expect(document.getSelection()!.focusOffset).toBe(3)
+  } finally { bridge.dispose() }
+})
+
+
+it('settles an unchanged native acknowledgement without redrawing the editor selection', async () => {
+  editor.commands.setContent('worker draft')
+  editor.commands.setTextSelection({ from: 3, to: 6 })
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const transaction = vi.fn()
+  editor.on('transaction', transaction)
+  try {
+    const request = send.mock.lastCall![0], before = editor.state.selection
+    const result = bridge.settle()
+    bridge.receive({ revision: request.revision, status: 'applied',
+      frame: { text: request.text, cursor: request.cursor, decorations: [] } })
+    expect(await result).toBe(true)
+    expect(editor.state.selection).toBe(before)
+    expect(transaction).not.toHaveBeenCalled()
+  } finally {
+    editor.off('transaction', transaction)
+    bridge.dispose()
+  }
+})
+
+
+it('does not adopt a pending browser selection because an unrelated native reply arrived', () => {
+  editor.commands.setContent('worker draft')
+  document.body.append(editor.view.dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    const request = send.mock.lastCall![0], text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 3, text, 3)
+    bridge.receive({ revision: request.revision - 1, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+    expect(editor.state.selection.head).toBe('worker draft'.length + 1)
+    expect(send).toHaveBeenCalledOnce()
+    expect(document.getSelection()!.focusOffset).toBe(3)
+  } finally { bridge.dispose() }
+})
+
+
+it.each(['b', 'i'])('formats the visible browser selection before deferred selectionchange (%s)', key => {
+  editor.commands.setContent('Review changes.')
+  document.body.append(editor.view.dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 2)
+    expect(editor.state.selection.empty).toBe(true)
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'Key'+key.toUpperCase(), ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(editor.state.doc.firstChild!.firstChild!.text).toBe('Re')
+    expect(editor.state.doc.firstChild!.firstChild!.marks.map(mark => mark.type.name)).toEqual([key === 'b' ? 'bold' : 'italic'])
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(3)
+  } finally { bridge.dispose() }
+})
+
+it('applies explicit native font resets over rich formatting without altering the draft or selection', () => {
+  editor.commands.setContent('***Review notes***')
+  editor.commands.setTextSelection(3)
+  const doc=editor.state.doc,selection=editor.state.selection,text=serialize(doc)
+  const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn()),before=send.mock.calls.length
+  const cursor=captureClaudePromptDocument(doc,selection.head,serialize)!.cursor
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor,decorations:[{start:3,end:15,bold:false,italic:false,dimColor:false}]}})
+  const paint=editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')
+  expect(paint?.textContent).toBe('Review notes')
+  expect(paint?.style.fontWeight).toBe('normal')
+  expect(paint?.style.fontStyle).toBe('normal')
+  expect(paint?.style.opacity).toBe('1')
+  expect(editor.state.doc.eq(doc)).toBe(true)
+  expect(editor.state.selection.eq(selection)).toBe(true)
+  expect(editor.state.doc.firstChild?.firstChild?.marks.map(mark=>mark.type.name)).toEqual(expect.arrayContaining(['bold','italic']))
+  expect(send).toHaveBeenCalledTimes(before)
+  bridge.dispose()
+})
+
+it('retains rich formatting when native decoration font properties are absent', () => {
+  editor.commands.setContent('***Review notes***')
+  const text=serialize(editor.state.doc),drawn=drawClaudePromptDecorations(editor.state.doc,[{start:3,end:15,color:'red'}],serialize)
+  const attrs=(drawn.find()[0] as any).type.attrs
+  expect(attrs.style).not.toMatch(/font-weight|font-style|opacity/)
+  expect(serialize(editor.state.doc)).toBe(text)
+  expect(editor.state.doc.firstChild?.firstChild?.marks.map(mark=>mark.type.name)).toEqual(expect.arrayContaining(['bold','italic']))
+})
+
+it('resets native lines inside a rich strike mark without losing adjacent strike or draft data', () => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  editor.commands.setTextSelection(3)
+  const doc=editor.state.doc,selection=editor.state.selection,text=serialize(doc)
+  const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn()),before=send.mock.calls.length
+  const cursor=captureClaudePromptDocument(doc,selection.head,serialize)!.cursor
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor,decorations:[{start:2,end:14,underline:false,strikethrough:false}]}})
+  const paint=editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')
+  expect(paint?.textContent).toBe('Review notes')
+  expect(paint?.style.textDecorationLine).toBe('none')
+  const inherited=editor.view.dom.querySelector<HTMLElement>('.claude-prompt-line-inherit')
+  expect(inherited?.textContent).toBe(' and rollout')
+  expect(inherited?.style.textDecorationLine).toBe('line-through')
+  expect(editor.state.doc.eq(doc)).toBe(true);expect(editor.state.selection.eq(selection)).toBe(true)
+  expect(editor.view.dom.querySelector('s')?.textContent).toBe('Review notes and rollout')
+  expect(send).toHaveBeenCalledTimes(before)
+  bridge.dispose()
+})
+
+it.each([
+  [true,false,'underline'],[false,true,'line-through'],[true,true,'underline line-through'],[false,false,'none'],
+] as const)('keeps native underline %s and strike %s independent over rich strike', (underline,strikethrough,line) => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  const drawn=drawClaudePromptDecorations(editor.state.doc,[{start:2,end:14,underline,strikethrough}],serialize)
+  const native=drawn.find().find(item=>(item as any).type.attrs.class.includes('claude-prompt-decoration'))!
+  const inherited=drawn.find().find(item=>(item as any).type.attrs.class.includes('claude-prompt-line-inherit'))!
+  expect((native as any).type.attrs.style).toContain('text-decoration-line:'+line)
+  expect((inherited as any).type.attrs.style).toBe('text-decoration-line:line-through')
+})
+
+it('recomputes inherited line paint when native schema maintenance changes marks', () => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  const {key,plugin}=createClaudePromptDecorations();editor.registerPlugin(plugin)
+  const original=editor.state.tr.setMeta(key,drawClaudePromptDecorations(editor.state.doc,[{start:2,end:14,strikethrough:false}],serialize))
+  editor.view.dispatch(original)
+  expect(editor.view.dom.querySelector('.claude-prompt-line-inherit')?.textContent).toBe(' and rollout')
+  const normalization=editor.state.tr.removeMark(1,editor.state.doc.content.size-1,editor.schema.marks.strike).setMeta('appendedTransaction',original)
+  editor.view.dispatch(normalization)
+  expect(editor.view.dom.querySelector('.claude-prompt-line-inherit')).toBeNull()
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')?.style.textDecorationLine).toBe('none')
+  expect(editor.view.dom.textContent).toBe('Review notes and rollout')
+  editor.unregisterPlugin(key)
+})
+
+it('retires temporary line spans on a person edit while keeping the rich mark', () => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  const {key,plugin}=createClaudePromptDecorations();editor.registerPlugin(plugin)
+  editor.view.dispatch(editor.state.tr.setMeta(key,drawClaudePromptDecorations(editor.state.doc,[{start:2,end:14,strikethrough:false}],serialize)))
+  expect(editor.view.dom.querySelector('.claude-prompt-line-paint')).not.toBeNull()
+  editor.commands.setTextSelection(3)
+  expect(editor.view.dom.querySelector('.claude-prompt-line-paint')).toBeNull()
+  expect(editor.view.dom.querySelector('s')?.textContent).toBe('Review notes and rollout')
+  expect(serialize(editor.state.doc)).toBe('~~Review notes and rollout~~')
+  editor.unregisterPlugin(key)
+})
+
+it('resets native lines over the chat-admitted underline mark with HTML input disabled', () => {
+  editor.destroy()
+  editor=new Editor({extensions:[StarterKit.configure({strike:false}),Markdown.configure({html:false})]})
+  const underline=editor.schema.marks.underline
+  expect(underline).toBeDefined()
+  editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Review notes and rollout',marks:[{type:'underline'}]}]}]})
+  editor.commands.setTextSelection(3)
+  const doc=editor.state.doc,selection=editor.state.selection,text=serialize(doc),start=text.indexOf('Review notes')
+  const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor:captureClaudePromptDocument(doc,selection.head,serialize)!.cursor,decorations:[{start,end:start+12,underline:false,strikethrough:false}]}})
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')?.style.textDecorationLine).toBe('none')
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-line-inherit')?.style.textDecorationLine).toBe('underline')
+  expect(editor.view.dom.querySelector('u')?.textContent).toBe('Review notes and rollout')
+  expect(editor.state.doc.eq(doc)).toBe(true);expect(editor.state.selection.eq(selection)).toBe(true)
+  bridge.dispose()
+})
+
+
+it('restores the original draft only while the current editor is still empty',()=>{
+ const bridge=bindClaudePromptEditor(editor,()=>{},()=>{});
+ try{
+  editor.commands.setContent('A newer draft');const document=editor.state.doc.toJSON();
+  expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(false);expect(editor.state.doc.toJSON()).toEqual(document);
+  editor.commands.clearContent();expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(true);expect(bridge.readDraft()).toEqual({text:'Original prompt',cursor:15});
+ }finally{bridge.dispose();}
+});
+
+
+it('maps Select All over the app empty paragraph and accepts its native restoration',()=>{
+ const serializer=(editor.storage as any).markdown.serializer,original=serializer.serialize.bind(serializer);
+ const spelling=vi.spyOn(serializer,'serialize').mockImplementation((doc:any)=>doc.childCount===1&&doc.firstChild?.type.name==='paragraph'&&!doc.firstChild.content.size?'&nbsp;':original(doc));
+ const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,()=>{});
+ try{
+  editor.commands.selectAll();expect(editor.state.selection.toJSON()).toEqual({type:'all'});
+  expect(bridge.readDraft()).toEqual({text:'',cursor:0});expect(send.mock.calls.at(-1)?.[0]).toMatchObject({text:'',cursor:0,revision:bridge.revision});
+  for(const position of [0,editor.state.doc.content.size])expect(captureClaudePromptDocument(editor.state.doc,position,serialize)).toMatchObject({text:'',cursor:0,position:1});
+  expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(true);expect(bridge.readDraft()).toEqual({text:'Original prompt',cursor:15});
+ }finally{bridge.dispose();spelling.mockRestore();}
+});
+
+
+it('returns focus from a dismissed notice after restoration without stealing another control',()=>{
+ const focused=vi.spyOn(document,'hasFocus').mockReturnValue(true),target=document.createElement('input');document.body.append(target);
+ const bridge=bindClaudePromptEditor(editor,()=>{},()=>{}),focus=vi.spyOn(editor.view,'focus');
+ try{
+  target.focus();expect(bridge.fillDraft({mode:'replace',text:'Original',ifEmpty:true,focus:true},bridge.revision)).toBe(true);expect(focus).not.toHaveBeenCalled();expect(document.activeElement).toBe(target);
+  editor.commands.clearContent();target.blur();expect(bridge.fillDraft({mode:'replace',text:'Original',ifEmpty:true,focus:true},bridge.revision)).toBe(true);expect(focus).toHaveBeenCalledOnce();
+ }finally{bridge.dispose();target.remove();focused.mockRestore();}
+});
+
+
+it.each(['pending', 'offered'] as const)('retires %s completion ownership when composition starts before a document change', state => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    const revision = request.mock.lastCall![0].revision
+    const reply = { revision, status: 'ready' as const, result: { start: 0, suggestions: [{ text: '#release', label: 'Release review' }] } }
+    if (state === 'offered') bridge.receiveCompletions(reply)
+    const oldOffer = update.mock.lastCall?.[1]
+    const doc = editor.state.doc, selection = editor.state.selection
+    editor.view.dom.dispatchEvent(new CompositionEvent('compositionstart'))
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+    if (state === 'pending') bridge.receiveCompletions(reply)
+    expect(update).toHaveBeenLastCalledWith([])
+    if (oldOffer) expect(bridge.selectCompletion(0, oldOffer)).toBe(false)
+    expect(serialize(editor.state.doc)).toBe('#rel')
+    editor.view.dom.dispatchEvent(new CompositionEvent('compositionend'))
+    const fresh = send.mock.lastCall![0]
+    bridge.receive({ revision: fresh.revision, status: 'applied', frame: { text: fresh.text, cursor: fresh.cursor } })
+    bridge.receiveCompletions({ ...reply, revision: request.mock.lastCall![0].revision })
+    const freshOffer = update.mock.lastCall![1]
+    expect(freshOffer).toBeTruthy()
+    expect(bridge.selectCompletion(0, freshOffer)).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
+})
+
+
+it.each(['pending', 'pointer', 'keyboard'] as const)('retires %s completion ownership when the visible caret moves before selectionchange', state => {
+  editor.commands.setContent('#rel')
+  const dom = editor.view.dom
+  document.body.append(dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  const acknowledgeEdit = () => {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+  }
+  const completionReply = () => ({
+    revision: request.mock.lastCall![0].revision, status: 'ready' as const,
+    result: { start: 0, suggestions: [{ text: '#release', label: 'Release review', replacement: { start: 0, end: 4 } }] },
+  })
+  try {
+    acknowledgeEdit()
+    const original = completionReply()
+    if (state !== 'pending') bridge.receiveCompletions(original)
+    const offer = update.mock.lastCall?.[1]
+    const text = dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 2, text, 2)
+    expect(editor.state.selection.head).toBe(5)
+    if (state === 'pending') bridge.receiveCompletions(original)
+    else if (state === 'pointer') expect(bridge.selectCompletion(0, offer!)).toBe(false)
+    else expect(bridge.canFocusCompletion(offer!)).toBe(false)
+
+    expect(update).toHaveBeenLastCalledWith([])
+    expect(editor.state.selection.head).toBe(3)
+    expect(document.getSelection()!.focusOffset).toBe(2)
+    expect(serialize(editor.state.doc)).toBe('#rel')
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'person', cursor: 2 }))
+
+    acknowledgeEdit()
+    bridge.receiveCompletions(completionReply())
+    const fresh = update.mock.lastCall![1]
+    expect(fresh).toBeTruthy()
+    expect(bridge.canFocusCompletion(fresh)).toBe(true)
+    expect(bridge.selectCompletion(0, fresh)).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); dom.remove() }
+})
+
+it.each(['pending', 'offered'] as const)('retires %s completion ownership when the window loses focus', state => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  const acknowledge = () => {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+  }
+  try {
+    acknowledge()
+    const revision = request.mock.lastCall![0].revision
+    const reply = { revision, status: 'ready' as const, result: { start: 0, suggestions: [{ text: '#release', label: 'Release review' }] } }
+    if (state === 'offered') bridge.receiveCompletions(reply)
+    const oldOffer = update.mock.lastCall?.[1]
+    const { doc, selection } = editor.state
+    focused.mockReturnValue(false)
+    window.dispatchEvent(new Event('blur'))
+    if (state === 'pending') bridge.receiveCompletions(reply)
+    expect(update).toHaveBeenLastCalledWith([])
+    if (oldOffer) expect(bridge.selectCompletion(0, oldOffer)).toBe(false)
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+
+    editor.commands.insertContent('e')
+    acknowledge()
+    expect(request).toHaveBeenCalledTimes(1)
+    focused.mockReturnValue(true)
+    editor.commands.insertContent('a')
+    acknowledge()
+    const fresh = request.mock.lastCall![0].revision
+    expect(fresh).toBeGreaterThan(revision)
+    bridge.receiveCompletions({ ...reply, revision: fresh })
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
+})
+
+
+it.each(['pending', 'offered'] as const)('retires %s completion after focus moves to another control in the same window', stage => {
+  const outside = document.createElement('button')
+  document.body.append(editor.view.dom, outside)
+  editor.view.dom.focus()
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  const acknowledge = () => {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+  }
+  try {
+    acknowledge()
+    const reply = { revision: request.mock.lastCall![0].revision, status: 'ready' as const, result: { start: 0, suggestions: [{ text: '#release' }] } }
+    if (stage === 'offered') bridge.receiveCompletions(reply)
+    const oldOffer = update.mock.lastCall?.[1]
+    const { doc, selection } = editor.state
+    outside.focus()
+    expect(document.hasFocus()).toBe(true)
+    if (stage === 'pending') bridge.receiveCompletions(reply)
+    expect(update).toHaveBeenLastCalledWith([])
+    editor.view.dom.focus()
+    if (oldOffer) expect(bridge.selectCompletion(0, oldOffer)).toBe(false)
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+
+    editor.commands.insertContent('e')
+    acknowledge()
+    bridge.receiveCompletions({ ...reply, revision: request.mock.lastCall![0].revision })
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); outside.remove(); editor.view.dom.remove() }
+})
+
+it.each([false, true])('keeps completion keyboard ownership in its own portal (template: %s)', template => {
+  const row = document.createElement('button')
+  document.body.append(editor.view.dom, row)
+  editor.view.dom.focus()
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const options = { request, update, ownsMenuFocus: (element: Element) => row.contains(element) }
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, options)
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    const suggestion = { text: '#release', ...(template ? { templateOfferId: crypto.randomUUID() } : {}) }
+    const result = { start: 0, suggestions: [suggestion] }
+    bridge.receiveCompletions({ revision: request.mock.lastCall![0].revision, status: 'ready', result })
+    const offer = update.mock.lastCall![1]
+    row.focus()
+    expect(document.activeElement).toBe(row)
+    expect(bridge.selectCompletion(0, offer)).toBe(true)
+    if (template) {
+      expect(document.activeElement).toBe(editor.view.dom)
+      expect(request.mock.lastCall![0].templateOfferId).toBe(suggestion.templateOfferId)
+      bridge.receiveCompletions({ revision: request.mock.lastCall![0].revision, status: 'ready', result })
+    }
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); row.remove(); editor.view.dom.remove() }
+})
+
+it('applies a native file replacement past the caret and preserves following text', () => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const before = 'Review @docs/old-file.txt next'
+  const cursor = 'Review @docs/old'.length
+  editor.commands.setContent(before)
+  editor.commands.setTextSelection(cursor + 1)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    bridge.receiveCompletions({
+      revision: request.mock.lastCall![0].revision,
+      status: 'ready',
+      result: { start: 7, suggestions: [{ text: '@"docs/new notes.md"', replacement: { start: 7, end: before.indexOf(' next') } }] },
+    })
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('Review @"docs/new notes.md" next')
+    expect(bridge.readDraft()?.cursor).toBe('Review @"docs/new notes.md"'.length)
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
+})
+
+it.each([false, true])('changes the draft only after MCP template selection is confirmed (%s)', confirmed => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const text = 'Review @research:file://template/re'
+  editor.commands.setContent(text)
+  editor.commands.setTextSelection(text.length + 1)
+  document.body.append(editor.view.dom)
+  editor.view.focus()
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    const row = { text: '@research:file://template/release ', templateOfferId: crypto.randomUUID() }
+    bridge.receiveCompletions({ revision: request.mock.lastCall![0].revision, status: 'ready',
+      result: { start: 7, suggestions: [row] } })
+    const initialDoc = editor.state.doc, initialSelection = editor.state.selection
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    const confirmation = request.mock.lastCall![0]
+    expect(confirmation).toMatchObject({ text, cursor: text.length, templateOfferId: row.templateOfferId })
+    expect(editor.state.doc).toBe(initialDoc)
+    bridge.receiveCompletions({ revision: confirmation.revision, status: 'ready',
+      result: confirmed ? { start: 7, suggestions: [row] } : { suggestions: [] } })
+    if (confirmed) expect(serialize(editor.state.doc)).toBe('Review ' + row.text)
+    else {
+      expect(editor.state.doc).toBe(initialDoc)
+      expect(editor.state.selection.eq(initialSelection)).toBe(true)
+    }
+  } finally { bridge.dispose(); editor.view.dom.remove(); focused.mockRestore() }
+})
+
+it('reads a whole rich-document selection without losing its text or collapsing the range on acknowledgement', () => {
+  editor.commands.setContent('# Release review\n\n```ts\nconst ready = true\n```\n\nReview changes.\n\n- Verify behavior\n- Document migration')
+  editor.commands.selectAll()
+  expect(editor.state.selection).toBeInstanceOf(AllSelection)
+  const doc = editor.state.doc, selection = editor.state.selection, send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  try {
+    const expected = { text: serialize(doc), cursor: serialize(doc).length }
+    expect(bridge.readDraft()).toEqual(expected)
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: expected })
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+    expect(problem).not.toHaveBeenCalledWith(expect.any(String))
+  } finally { bridge.dispose() }
+})
+
+it.each(['start', 'end'])('projects a document %s boundary through structure without crossing a block atom', side => {
+  editor.destroy()
+  const attachment = Node.create({ name: 'attachment', group: 'block', atom: true,
+    renderHTML: () => ['div', 'Attachment'],
+    addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('[attachment]') } } }),
+  })
+  const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Keep the attachment' }] }
+  editor = new Editor({ extensions: [StarterKit, Markdown, attachment], content: { type: 'doc', content: side === 'start' ? [{ type: 'attachment' }, paragraph] : [paragraph, { type: 'attachment' }] } })
+  const doc = editor.state.doc
+  expect(captureClaudePromptDocument(doc, side === 'start' ? 0 : doc.content.size, serialize)).toBeUndefined()
+})
+
+
+it.each(['start', 'end'])('reads an empty paragraph at the document %s without changing serialized text or nodes', side => {
+  const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Keep this draft' }] }
+  editor.commands.setContent({ type: 'doc', content: side === 'start' ? [{ type: 'paragraph' }, paragraph] : [paragraph, { type: 'paragraph' }] })
+  const doc = editor.state.doc, position = side === 'start' ? 1 : doc.content.size - 1, text = serialize(doc)
+  const snapshot = captureClaudePromptDocument(doc, position, serialize)
+  expect(snapshot).toEqual({ text, cursor: side === 'start' ? 0 : text.length, doc, position })
+  expect(editor.state.doc).toBe(doc)
+})
+
+
+it('refuses ambiguous serializer framing inside an empty middle paragraph', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'before' }] }, { type: 'paragraph' }, { type: 'paragraph', content: [{ type: 'text', text: 'after' }] }] })
+  const doc = editor.state.doc, position = doc.firstChild!.nodeSize + 1
+  expect(captureClaudePromptDocument(doc, position, serialize)).toBeUndefined()
+  expect(editor.state.doc).toBe(doc)
+})
+
+it('keeps an oversized draft local and settles a shortened edit normally', async () => {
+  const send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  send.mockClear()
+  const draft = 'x'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH) + 'Z'
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: draft }] }] })
+  expect(problem).toHaveBeenLastCalledWith(CLAUDE_UI_TEXT_LIMIT_MESSAGE)
+  expect(send).not.toHaveBeenCalled()
+  expect(editor.state.doc.textContent).toBe(draft)
+  await expect(bridge.settle()).resolves.toBe(false)
+
+  editor.commands.setContent('A shorter draft')
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  const sent = send.mock.lastCall![0]
+  expect(sent.text).toBe('A shorter draft')
+  bridge.receive({ revision: sent.revision, status: 'applied', frame: { text: sent.text, cursor: sent.cursor } })
+  await expect(bridge.settle()).resolves.toBe(true)
+  bridge.dispose()
+})

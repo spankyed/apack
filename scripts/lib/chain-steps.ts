@@ -429,6 +429,15 @@ const EVERY_WORKSPACE = PACKAGES.flatMap(workspace);
  * Build output is not in here, because a guard's subject is source. `typecheck` adds its own.
  */
 const EVERY_SOURCE = [...ROOT, ...TSCONFIG_PRESETS, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/performance', 'tests/packs', 'tests/acceptance', 'tests/_support',
+  'tests/fixtures/claude-research/linux-electron-launch.mjs',
+  'tests/fixtures/claude-research/agent-billing-journey.ts',
+  'tests/fixtures/claude-research/selection-limit-journey.ts',
+  'tests/fixtures/claude-research/workspace-layout-measurement.ts',
+  'tests/fixtures/claude-research/artifact-wheel-journey.ts',
+  'tests/fixtures/claude-research/install-system-policy.mjs',
+  'tests/fixtures/claude-research/background-api-restart.mjs',
+  'tests/fixtures/claude-research/background-formatter-lifecycle.mjs',
+  'tests/fixtures/claude-research/background-formatter-policy.mjs',
   'tests/tsconfig.json', 'playwright.config.ts', 'types', 'electron-builder.mjs', 'build/build-metadata.ts', 'package.json',
   // The drive layer's one tracked file. The driving scripts beside it are gitignored and ad-hoc, so naming
   // the directory would re-run a typecheck every time someone poked at the app
@@ -577,7 +586,8 @@ const PACK_SOURCES = fs.readdirSync(path.join(REPO_ROOT, PACK_DIR)).filter((name
 
 /**
  * What a step reads to derive something from the pack's sources, which `build:default-setup` and `facade:check` both do:
- * those sources, the tsconfig the declaration bundler compiles them with, the committed facade report, and
+ * those sources, the test roots included by that tsconfig and captured during compiler startup,
+ * the tsconfig itself, the committed facade report, and
  * the `@apackdev/cli` bundle that does the deriving.
  *
  * Named once because the two lists are identical and nothing would notice them drifting apart — the failure
@@ -595,7 +605,7 @@ const PACK_SOURCES = fs.readdirSync(path.join(REPO_ROOT, PACK_DIR)).filter((name
 const PACK_BUILD_MANIFEST = ['package.json'];
 
 const PACK_DERIVED_READS = [...ROOT, ...PACK_BUILD_MANIFEST, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
-  'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
+  'packages/default-setup/tests', 'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
 
 /**
  * What building the fixture packs writes, derived from the fixtures themselves. These sit *inside*
@@ -656,13 +666,14 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // The runtime also imports root package metadata for the app version.
   server: { pack: true, inputs: ['package.json'] },
   // `pretest: ensure-packages-built`; `published-sdk-peers` reads the built `dist` and skips without it.
+  // `packaged-app-files` reads the sealed Default Setup archive's integrity manifest.
   // `repo`: six of its specs ask git what the repo holds — the chain's input coverage, spec placement,
   // the lint's scope, the import rules — so every one of them is about files this package does not own
   // The integration HMR check traverses the fixture packs' generated frontend entries.
   // `inputs: ['docs']`: `doc-links` resolves every relative link between the repo's documents, and a
   // dead link fails nothing on its own — so the tree it reads has to be in this step's key or the check
   // caches over a move. Only here, since a typo in a guide should not re-run `typecheck`.
-  'internal-repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
+  'internal-repo-checks': { packages: true, pack: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
   // `pretest: ensure-packages-built`; it npm-packs the built packages into a consumer and compiles it
   'internal-publish-checks': { packages: true },
 };

@@ -1,0 +1,265 @@
+import vm from 'node:vm'
+import { randomUUID } from 'node:crypto'
+import { claudeTerminalClientRuntime } from '#features/code/be/services/claude-code/terminal-client-runtime.ts'
+
+it('releases native Client input when the original command result expires', () => {
+  const create = vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`, { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval })
+  let valid = true
+  const release = vi.fn(), key = vi.fn(), invalidate = vi.fn(), stop = vi.fn()
+  const instance = { release, key, subscribe: () => stop, getSnapshot: () => ({ status: 'drawn', tree: { type: 'Text', children: ['result'] } }), acceptsPointer: () => false, acceptsKeys: () => true }
+  const host = create(() => ({ acquire: () => instance, dispose() {} }), invalidate, () => 'callback', { current: () => valid })
+  const tree = host.render('view', 'CommandOutput', 'original-result', { type: 'Client', props: { key: 'result', module: './result.ts' }, client: { plugin: 'fixture' } })
+  expect(host.event('view', tree.props.id, 1, { kind: 'key', key: 'x' })).toEqual({ handled: true })
+  expect(key).toHaveBeenCalledTimes(1)
+  valid = false
+  expect(host.event('view', tree.props.id, 2, { kind: 'key', key: 'x' })).toEqual({ handled: false })
+  expect(host.count()).toBe(0); expect(stop).toHaveBeenCalledTimes(1); expect(release).toHaveBeenCalledTimes(1)
+  expect(key).toHaveBeenCalledTimes(1)
+})
+
+it('stops owned timers and old input on scoped release while another Client keeps ticking', async () => {
+  vi.useFakeTimers()
+  try {
+    const create = vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`, { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval })
+    const ticks = new Map<string, number>(), releases = new Map<string, number>(), clocks = new Map<string, { every(ms: number, fn: () => void): () => void }>()
+    const host = create(() => ({ acquire: (options: any) => { clocks.set(options.requestId, options.clock); options.clock.every(100, () => ticks.set(options.requestId, (ticks.get(options.requestId) ?? 0) + 1)); return { release: () => releases.set(options.requestId, (releases.get(options.requestId) ?? 0) + 1), subscribe: () => () => {}, getSnapshot: () => ({ status: 'drawn', tree: { type: 'Text', children: ['client'] } }), acceptsPointer: () => false, acceptsKeys: () => true, key() {} } }, dispose() {} }), () => {}, () => 'callback')
+    const tree = { type: 'Client', props: { key: 'client', module: './client.ts' }, client: { plugin: 'fixture' } }
+    const result = host.render('view', 'ToolResult', 'result', tree, 1)
+    host.render('view', 'AbovePrompt', 'above', tree)
+    await vi.advanceTimersByTimeAsync(200); expect(ticks.get('result')).toBe(2)
+    host.release('view', 'ToolResult', 'result'); host.release('view', 'ToolResult', 'result')
+    clocks.get('result')!.every(100, () => ticks.set('late', 1))
+    await vi.advanceTimersByTimeAsync(300)
+    expect(ticks.get('result')).toBe(2); expect(ticks.get('late')).toBeUndefined(); expect(ticks.get('above')).toBe(5)
+    expect(releases.get('result')).toBe(1); expect(host.count()).toBe(1)
+    expect(host.event('view', result.props.id, 1, { kind: 'key', key: 'x' })).toEqual({ handled: false })
+    host.detach(); await vi.runOnlyPendingTimersAsync(); expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+it('does not run a sandbox callback if its instance closes during the original asynchronous hook', async () => {
+  const create = vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`, { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval })
+  let finish!: (value: unknown) => void
+  const run = vi.fn(), dispatch = vi.fn(() => new Promise(resolve => { finish = resolve }))
+  const host = create(() => ({ acquire: () => ({ release() {}, subscribe: () => () => {}, getSnapshot: () => ({ status: 'drawn', tree: { type: 'Button', props: { key: 'run' }, press: { plugin: 'fixture', handle: 1 } } }), acceptsPointer: () => false, acceptsKeys: () => false }), dispose() {} }), () => {}, () => 'callback', { dispatch, run })
+  host.render('view', 'ToolResult', 'result', { type: 'Client', props: { key: 'client', module: './client.ts' }, client: { plugin: 'fixture' } }, 1)
+  const ordinary = { subtype: 'ui_press', plugin: 'fixture', handle: 1, key: 'inspect-result', component: 'ToolResult', instance_id: 'result', instance_revision: 1 }
+  expect(await host.dispatchAction('view', ordinary)).toBeUndefined()
+  expect(host.action('view', ordinary)).toBeUndefined()
+  const pending = host.dispatchAction('view', { subtype: 'ui_press', plugin: 'fixture', handle: 1, key: 'run', component: 'ToolResult', instance_id: 'result', instance_revision: 1 })
+  host.release('view', 'ToolResult', 'result'); finish({ reached: { element: 'run' } })
+  expect(await pending).toEqual({ handled: false }); expect(run).not.toHaveBeenCalled()
+})
+
+it('routes the same native Client handle to the addressed placement without falling through stale actions', async () => {
+  const { createNativeClientHost: create, runNativeClientAction } = vm.runInNewContext(
+    `${claudeTerminalClientRuntime};({createNativeClientHost,runNativeClientAction})`,
+    { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval },
+  )
+  const dispatch = vi.fn(async () => ({ reached: { element: 'refresh' } })), callback = vi.fn()
+  const held = { component: 'ToolUse', surface: 'desktop', requestId: 'shared-request#review', handle: 94 }
+  const engine = { r5: { heldPress: vi.fn(() => held) }, tut: { runnerFor: vi.fn(() => callback) } }
+  const run = (value: unknown) => runNativeClientAction(engine, value)
+  const drawing = { type: 'Button', props: { key: 'refresh' }, press: { plugin: 'fixture', handle: 1 } }
+  const instance = { id: 'shared-sandbox', release: vi.fn(), subscribe: () => () => {}, getSnapshot: () => ({ status: 'drawn', tree: drawing }), acceptsPointer: () => false, acceptsKeys: () => false }
+  const host = create(() => ({ acquire: () => instance, dispose() {} }), () => {}, (id: string, key: string) => id + '#' + key, { dispatch, run })
+  const tree = { type: 'Client', props: { key: 'review', module: './review.ts' }, client: { plugin: 'fixture' } }
+  const press = { subtype: 'ui_press', plugin: 'fixture', handle: 1, key: 'refresh', instance_id: 'shared-request' }
+  const use = { ...press, component: 'ToolUse', instance_revision: 1 }
+  const result = { ...press, component: 'ToolResult', instance_revision: 2 }
+
+  host.render('view', use.component, use.instance_id, tree, use.instance_revision)
+  host.render('view', result.component, result.instance_id, tree, result.instance_revision)
+  host.suspendInstance('view', use.component, use.instance_id)
+  expect(await host.dispatchAction('view', use)).toEqual({ handled: false })
+  expect(host.action('view', use)).toBe(false)
+  expect(await host.dispatchAction('view', { ...result, instance_revision: 1 })).toEqual({ handled: false })
+  expect(host.action('view', { ...result, instance_revision: 1 })).toBe(false)
+  expect(dispatch).not.toHaveBeenCalled()
+
+  expect(await host.dispatchAction('view', result)).toEqual({ handled: true, element: 'refresh' })
+  expect(dispatch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ component: 'ToolResult', requestId: 'shared-request' }))
+  expect(engine.r5.heldPress).toHaveBeenCalledExactlyOnceWith('fixture', 1, 'refresh')
+  expect(engine.tut.runnerFor).toHaveBeenCalledExactlyOnceWith('fixture', 94)
+  expect(callback).toHaveBeenCalledExactlyOnceWith({ element: 'refresh' })
+  expect(host.action('view', result)).toEqual({ handle: 1, component: 'ToolResult', requestId: 'shared-request#review', surface: 'desktop' })
+
+  held.surface = 'terminal'
+  expect(await host.dispatchAction('view', result)).toEqual({ handled: false })
+  held.surface = 'desktop'
+  held.requestId = 'different-request#review'
+  expect(await host.dispatchAction('view', result)).toEqual({ handled: false })
+  expect(callback).toHaveBeenCalledTimes(1)
+
+  host.release('view', use.component, use.instance_id)
+  expect(instance.release).toHaveBeenCalledTimes(1)
+  expect(await host.dispatchAction('view', use)).toEqual({ handled: false })
+  expect(host.action('view', use)).toBe(false)
+  host.detach()
+})
+
+it('suspends only the changing composer instance while another window remains actionable',()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ const key=vi.fn(),host=create(()=>({acquire:()=>({release(){},subscribe:()=>()=>{},getSnapshot:()=>({status:'drawn',tree:{type:'Text',children:['client']}}),acceptsPointer:()=>false,acceptsKeys:()=>true,key}),dispose(){}}),()=>{},()=> 'callback')
+ const tree={type:'Client',props:{key:'client',module:'./client.ts'},client:{plugin:'fixture'}}
+ const first=host.render('first','PromptHint','prompt-hint',tree,1),second=host.render('second','PromptHint','prompt-hint',tree,1)
+ expect(()=>host.suspendInstance('first','PromptHint','prompt-hint')).not.toThrow()
+ expect(host.event('first',first.props.id,1,{kind:'key',key:'x'})).toEqual({handled:false})
+ expect(host.event('second',second.props.id,1,{kind:'key',key:'x'})).toEqual({handled:true})
+ host.detach()
+})
+
+it('suspends policy-revoked Clients and resumes their existing clocks with fresh input tokens',async()=>{
+ vi.useFakeTimers()
+ try{
+  const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+  let eligible=true;const ticks=vi.fn(),release=vi.fn(),key=vi.fn(),acquire=vi.fn((options:any)=>{options.clock.every(100,ticks);return{release,subscribe:()=>()=>{},getSnapshot:()=>({status:'drawn',tree:{type:'Text',children:['client']}}),acceptsPointer:()=>false,acceptsKeys:()=>true,key}})
+  const host=create(()=>({acquire,dispose(){}}),()=>{},()=> 'callback',{eligible:()=>eligible})
+  const tree={type:'Client',props:{key:'clock',module:'./clock.ts'},client:{plugin:'fixture'}}
+  const first=host.render('view','AbovePrompt','above',tree,1)
+  await vi.advanceTimersByTimeAsync(100);expect(ticks).toHaveBeenCalledTimes(1)
+  eligible=false;await vi.advanceTimersByTimeAsync(200);expect(ticks).toHaveBeenCalledTimes(1);expect(release).not.toHaveBeenCalled()
+  expect(host.event('view',first.props.id,1,{kind:'key',key:'x'})).toEqual({handled:false})
+  expect(()=>host.render('view','AbovePrompt','above',tree,1)).toThrow('no longer eligible')
+  host.render('view','AbovePrompt','above',{type:'Text',children:['default']},1)
+  await vi.advanceTimersByTimeAsync(200);expect(ticks).toHaveBeenCalledTimes(1)
+  eligible=true;await vi.advanceTimersByTimeAsync(100);expect(ticks).toHaveBeenCalledTimes(1)
+  const restored=host.render('view','AbovePrompt','above',tree,1)
+  expect(restored.props.id).not.toBe(first.props.id);expect(acquire).toHaveBeenCalledOnce()
+  await vi.advanceTimersByTimeAsync(200);expect(ticks).toHaveBeenCalledTimes(3)
+  expect(host.event('view',first.props.id,2,{kind:'key',key:'x'})).toEqual({handled:false})
+  expect(host.event('view',restored.props.id,1,{kind:'key',key:'r'})).toEqual({handled:true});expect(key).toHaveBeenCalledOnce()
+  eligible=false;await vi.advanceTimersByTimeAsync(100)
+  host.detach();await vi.runOnlyPendingTimersAsync();expect(release).toHaveBeenCalledOnce();expect(vi.getTimerCount()).toBe(0)
+ }finally{vi.useRealTimers()}
+})
+
+it('rejects an asynchronous action spanning policy suspension and restoration',async()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ let eligible=true,finish!:(value:unknown)=>void
+ const run=vi.fn(),host=create(()=>({acquire:()=>({release(){},subscribe:()=>()=>{},getSnapshot:()=>({status:'drawn',tree:{type:'Button',props:{key:'run'},press:{plugin:'fixture',handle:1}}}),acceptsPointer:()=>false,acceptsKeys:()=>true}),dispose(){}}),()=>{},()=> 'callback',{eligible:()=>eligible,dispatch:()=>new Promise(resolve=>{finish=resolve}),run})
+ const tree={type:'Client',props:{key:'client',module:'./client.ts'},client:{plugin:'fixture'}}
+ host.render('view','AbovePrompt','above',tree)
+ const pending=host.dispatchAction('view',{subtype:'ui_press',plugin:'fixture',handle:1,key:'run'})
+ eligible=false;host.render('view','AbovePrompt','above',{type:'Text',children:['default']})
+ eligible=true;host.render('view','AbovePrompt','above',tree)
+ finish({reached:{element:'run'}});expect(await pending).toEqual({handled:false});expect(run).not.toHaveBeenCalled()
+ host.detach()
+})
+
+it('projects borrowed terminal Clients through native callbacks without creating or owning a sandbox',async()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ const registry=vi.fn(),key=vi.fn(),stop=vi.fn(),dispatch=vi.fn(),borrow=vi.fn(()=>({id:'original-terminal-client',surface:'terminal',callbackRequestId:'original-notice#clock',release(){},subscribe:()=>stop,getSnapshot:()=>({status:'drawn',tree:{type:'Button',props:{key:'run'},press:{plugin:'fixture',handle:45}}}),acceptsKeys:()=>true,acceptsPointer:()=>false,key}))
+ const host=create(registry,()=>{},()=> 'desktop-callback',{borrow,dispatch})
+ const frame=host.render('view','InfoNotice','bounded-app-id',{type:'Client',props:{key:'clock',module:'./clock.ts'},client:{plugin:'fixture'}},1)
+ expect(registry).not.toHaveBeenCalled();expect(host.surface('view',frame.props.id)).toBe('terminal')
+ expect(host.event('view',frame.props.id,1,{kind:'key',key:'k'})).toEqual({handled:true});expect(key).toHaveBeenCalledWith({key:'k'})
+ const action={subtype:'ui_press',plugin:'fixture',handle:45,key:'run',component:'InfoNotice',instance_id:'bounded-app-id',instance_revision:1}
+ expect(await host.dispatchAction('view',action)).toBeUndefined();expect(dispatch).not.toHaveBeenCalled()
+ expect(host.action('view',action)).toEqual({handle:45,component:'InfoNotice',requestId:'original-notice#clock',surface:'terminal'})
+ host.detach('view');expect(stop).toHaveBeenCalledOnce();expect(host.surface('view',frame.props.id)).toBeUndefined()
+ expect(host.event('view',frame.props.id,2,{kind:'key',key:'old'})).toEqual({handled:false})
+})
+
+
+it('keeps input on an unchanged borrowed sandbox through placement redraw but rejects replaced leases and revoked policy',()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ let original=true,eligible=true
+ const key=vi.fn(),stop=vi.fn(),borrow=()=>({id:'original',isCurrent:()=>original,surface:'terminal',release(){},subscribe:()=>stop,getSnapshot:()=>({status:'drawn',tree:{type:'Text',children:['client']}}),acceptsKeys:()=>true,acceptsPointer:()=>false,key})
+ const host=create(vi.fn(),()=>{},()=> 'callback',{borrow,current:(entry:any)=>entry.instance.isCurrent(),eligible:()=>eligible})
+ const tree={type:'Client',props:{key:'clock',module:'./clock.ts'},client:{plugin:'fixture'}}
+ const frame=host.render('view','InfoNotice','notice',tree,1)
+ host.suspendInstance('view','InfoNotice','notice')
+ expect(host.event('view',frame.props.id,1,{kind:'key',key:'k'})).toEqual({handled:true})
+ expect(host.render('view','InfoNotice','notice',tree,1).props.id).toBe(frame.props.id)
+ eligible=false;host.suspendInstance('view','InfoNotice','notice')
+ expect(host.event('view',frame.props.id,2,{kind:'key',key:'blocked'})).toEqual({handled:false})
+ eligible=true
+ const restored=host.render('view','InfoNotice','notice',tree,1)
+ expect(restored.props.id).not.toBe(frame.props.id)
+ expect(host.event('view',restored.props.id,1,{kind:'key',key:'fresh'})).toEqual({handled:true})
+ original=false;host.suspendInstance('view','InfoNotice','notice')
+ expect(host.event('view',restored.props.id,2,{kind:'key',key:'old'})).toEqual({handled:false})
+ expect(key.mock.calls.map(call=>call[0].key)).toEqual(['k','fresh'])
+ expect(stop).toHaveBeenCalledTimes(1)
+ host.detach()
+})
+
+it('keeps native callback drawings independent across two desktop registries without changing plugin message IDs', async () => {
+  const { createNativeClientHost: create, createDesktopNativeClientRegistry: scoped, runNativeClientAction } = vm.runInNewContext(
+    `${claudeTerminalClientRuntime};({createNativeClientHost,createDesktopNativeClientRegistry,runNativeClientAction})`,
+    { Map, Set, randomUUID, setTimeout, clearTimeout, setInterval, clearInterval },
+  )
+  type Site = { component: string; requestId: string; key: string; plugin: string; surface: string }
+  type Message = { plugin: string; message: { component: string; requestId: string; element: string } }
+  type FlowPort = { post(id: string, message: Message, reply: () => void): void; cancel(id: string): void }
+  const next = vi.fn()
+  const ports: FlowPort[] = []
+  const draw = new Map<string, number>()
+  const held = new Map<number, { surface: string; requestId: string; handle: number }>()
+  const run = new Map<number, () => void>()
+  const history: string[] = []
+  let count = 0
+  const originalID = (requestId: string, key: string) => requestId + '#' + key
+  const runtime = {
+    A3r: () => {
+      const port = { post: vi.fn<FlowPort['post']>(), cancel: vi.fn<FlowPort['cancel']>() }
+      ports.push(port)
+      return port
+    },
+    R3r: originalID,
+    x3r: ({ port }: { port: FlowPort }) => ({
+      acquire: (site: Site) => {
+        const handle = ++count, requestId = originalID(site.requestId, site.key)
+        const previous = draw.get(requestId)
+        if (previous !== undefined) {
+          held.delete(previous)
+          run.delete(previous)
+        }
+        draw.set(requestId, handle)
+        held.set(handle, { surface: site.surface, requestId, handle })
+        run.set(handle, () => {
+          history.push(site.component)
+          port.post(site.requestId, { plugin: site.plugin, message: {
+            component: site.component, requestId: site.requestId, element: site.key,
+          } }, next)
+        })
+        return {
+          release() { held.delete(handle); run.delete(handle); port.cancel(site.requestId) },
+          subscribe: () => () => {},
+          acceptsPointer: () => false,
+          acceptsKeys: () => false,
+          getSnapshot: () => ({ status: 'drawn', tree: {
+            type: 'Button', props: { key: 'inspect' }, press: { plugin: site.plugin, handle },
+          } }),
+        }
+      },
+      dispose() {},
+    }),
+  }
+  const engine = { r5: { heldPress: (_plugin: string, handle: number) => held.get(handle) },
+    tut: { runnerFor: (_plugin: string, handle: number) => run.get(handle) } }
+  const dispatch = vi.fn(async (_request: { requestId: string; key: string }) => ({ reached: { element: 'inspect' } }))
+  const host = create(() => scoped(runtime), () => {}, originalID, {
+    dispatch, run: (value: unknown) => runNativeClientAction(engine, value),
+  })
+  const tree = { type: 'Client', props: { key: 'release', module: './review.ts' }, client: { plugin: 'fixture' } }
+  host.render('main', 'ToolUse', 'native-read-request', tree, 1)
+  host.render('popout', 'ToolUse', 'native-read-request', tree, 1)
+  const press = { subtype: 'ui_press', component: 'ToolUse', plugin: 'fixture', key: 'inspect', instance_id: 'native-read-request', instance_revision: 1 }
+  await expect(host.dispatchAction('main', { ...press, handle: 1 })).resolves.toMatchObject({ handled: true })
+  await expect(host.dispatchAction('popout', { ...press, handle: 2 })).resolves.toMatchObject({ handled: true })
+  await expect(host.dispatchAction('main', { ...press, handle: 2 })).resolves.toBeUndefined()
+  expect(history).toEqual(['ToolUse', 'ToolUse'])
+  for (const port of ports) {
+    expect(port.post).toHaveBeenCalledExactlyOnceWith(expect.any(String), {
+      plugin: 'fixture', message: { component: 'ToolUse', requestId: 'native-read-request', element: 'release' },
+    }, next)
+  }
+  expect(dispatch.mock.calls.map(([request]) => request)).toEqual([0, 1].map(() => expect.objectContaining({
+    requestId: 'native-read-request', key: 'release',
+  })))
+  host.detach('popout')
+  expect(ports[1]?.cancel).toHaveBeenCalledOnce()
+  await expect(host.dispatchAction('main', { ...press, handle: 1 })).resolves.toMatchObject({ handled: true })
+  host.detach()
+})

@@ -22,7 +22,7 @@
  * Responsibilities:
  *   - `can_use_tool` → `onPermissionRequest` hook
  *   - everything else → `onControlRequest` hook (or a "no handler" error)
- *   - deduplicate by `request_id` with a bounded LRU (reconnect safety)
+ *   - share pending requests and replay completed responses by `request_id`, within bounded history
  *   - never let a handler throw crash the stream — thrown errors become
  *     `{subtype:'error'}` control_responses so the conversation continues
  */
@@ -49,36 +49,52 @@ export interface ControlRouterOptions {
   onControlRequest?: ControlRequestHandler
 }
 
-/** Max entries in the dedupe LRU. A single turn rarely tops a few dozen. */
-const DEDUPE_LIMIT = 500
+/** Recent responses are bounded by count and encoded size; pending decisions are never evicted. */
+const REPLAY_LIMIT = 500
+const REPLAY_BYTES = 32 * 1024 * 1024
 
-/**
- * Build a control router that dispatches to caller hooks.
- *
- * Response format: returns the full `control_response` line-object ready to
- * be written via `StreamHandle.write`. Uses `{subtype:'success'}` on success
- * and `{subtype:'error', error}` on failure.
- */
+/** A repeated request keeps the same decision, including a pending decision or an error. */
 export function createControlRouter(opts: ControlRouterOptions = {}): ControlRouter {
-  const handled = new BoundedSet(DEDUPE_LIMIT)
-
+  const pending = new Map<string, Promise<string>>()
+  const completed = new Map<string, { encoded: string; bytes: number }>()
+  let heldBytes = 0
+  function remember(id: string, encoded: string): void {
+    let bytes = Buffer.byteLength(encoded)
+    // Keep an explicit refusal for an oversized replay, rather than invoking its handler again.
+    if (bytes > REPLAY_BYTES) {
+      encoded = JSON.stringify(error(id, 'Previous Claude control response is too large to replay'))
+      bytes = Buffer.byteLength(encoded)
+    }
+    while (completed.size && (completed.size >= REPLAY_LIMIT || heldBytes + bytes > REPLAY_BYTES)) {
+      const oldest = completed.keys().next().value!
+      heldBytes -= completed.get(oldest)!.bytes
+      completed.delete(oldest)
+    }
+    completed.set(id, { encoded, bytes })
+    heldBytes += bytes
+  }
   return {
     async handle(line: ControlRequestLine): Promise<unknown> {
-      const requestId = line.request_id
-      const subtype = line.request.subtype
-
-      // Dedupe — the CLI may resend on reconnect and we must answer once.
-      if (handled.has(requestId)) {
-        return success(requestId, {})
-      }
-      handled.add(requestId)
-
+      const id = line.request_id
+      const previous = completed.get(id)
+      if (previous) return JSON.parse(previous.encoded)
+      const active = pending.get(id)
+      if (active) return JSON.parse(await active)
+      if (pending.size >= REPLAY_LIMIT) return error(id, 'Too many pending Claude control requests')
+      let complete!: (encoded: string) => void
+      pending.set(id, new Promise(resolve => { complete = resolve }))
       try {
-        const response = await dispatch(subtype, line.request, opts)
-        return success(requestId, response)
-      } catch (err) {
-        const message = errorMessage(err)
-        return error(requestId, message)
+        let encoded: string
+        try {
+          encoded = JSON.stringify(success(id, await dispatch(line.request.subtype, line.request, opts)))
+        } catch (err) {
+          encoded = JSON.stringify(error(id, errorMessage(err)))
+        }
+        remember(id, encoded)
+        complete(encoded)
+        return JSON.parse(encoded)
+      } finally {
+        pending.delete(id)
       }
     },
   }
@@ -119,40 +135,6 @@ async function dispatch(
   }
   logger.warn('unhandled control_request subtype', { subtype })
   throw new Error(`unhandled control_request subtype "${subtype}"`)
-}
-
-// ─── Bounded dedupe set ──────────────────────────────────────────────────────
-
-/**
- * Minimal LRU-ish set. Insertion order is tracked in an array; when we exceed
- * the cap, the oldest entry is dropped. Good enough for de-duplicating
- * reconnected control_requests without growing unbounded across a long
- * conversation.
- *
- * Exported for tests.
- */
-export class BoundedSet {
-  private readonly order: string[] = []
-  private readonly set = new Set<string>()
-  constructor(private readonly limit: number) {}
-
-  has(key: string): boolean {
-    return this.set.has(key)
-  }
-
-  add(key: string): void {
-    if (this.set.has(key)) return
-    this.set.add(key)
-    this.order.push(key)
-    while (this.order.length > this.limit) {
-      const evicted = this.order.shift()!
-      this.set.delete(evicted)
-    }
-  }
-
-  get size(): number {
-    return this.set.size
-  }
 }
 
 // ─── Response shaping ────────────────────────────────────────────────────────

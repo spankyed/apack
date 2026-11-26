@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../../features/code/common/native-profile.ts';
 /**
  * Retroactive `context.cliUuid` backfill for user messages.
  *
@@ -34,7 +35,7 @@ export async function backfillUserCliUuids(
 
   let transcript: Array<Record<string, unknown>>;
   try {
-    transcript = (await services.cli.claudeCode.viewSession(state.sessionId, { cwd })) as Array<Record<string, unknown>>;
+    transcript = (await services.cli.claudeCode.viewSession(state.sessionId, { cwd, ...claudeProfileOptions(state) })) as Array<Record<string, unknown>>;
   } catch (err: any) {
     log.warn('backfill: could not read session JSONL', {
       sessionId: state.sessionId,

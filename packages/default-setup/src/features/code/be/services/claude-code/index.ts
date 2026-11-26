@@ -27,16 +27,11 @@
 
 import { query as queryRaw, type QueryHandle } from './query.ts'
 import { execOnce, spawnStream } from './runner.ts'
-import type { QueryOptions } from './types.ts'
 
 import * as sessions from './sessions.ts'
 import * as mcp from './mcp.ts'
 import * as plugins from './plugins.ts'
-import * as skills from './skills.ts'
-import * as tasks from './tasks.ts'
 import * as agents from './agents.ts'
-import * as memory from './memory.ts'
-import * as config from './config.ts'
 import * as auth from './auth.ts'
 import * as system from './system.ts'
 
@@ -47,18 +42,13 @@ export * from './errors.ts'
 export type { AuthStatus } from './auth.ts'
 export type { McpServerInfo } from './mcp.ts'
 export type { PluginInfo, MarketplaceInfo } from './plugins.ts'
-export type { SkillInfo } from './skills.ts'
-export type { TaskInfo, TaskCreateOptions, TaskUpdateOptions } from './tasks.ts'
-export type { AgentInfo } from './agents.ts'
-export type { MemoryFile } from './memory.ts'
-export type { ConfigSources, ConfigInitOptions } from './config.ts'
 export type { SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './sessions.ts'
 export { decodeNdjson, encodeNdjsonLine } from './ndjson.ts'
 export { argsFromOptions } from './args.ts'
 export { execOnce, spawnStream } from './runner.ts'
 export { query } from './query.ts'
 export type { QueryHandle }
-export { sessions, mcp, plugins, skills, tasks, agents, memory, config, auth, system }
+export { sessions, mcp, plugins, agents, auth, system }
 
 // ─── Instance factory ────────────────────────────────────────────────────────
 
@@ -72,15 +62,11 @@ export interface ClaudeCodeContext {
 }
 
 export interface ClaudeCode {
-  query(opts: QueryOptions): Promise<QueryHandle>
+  query: typeof queryRaw
   sessions: typeof sessions
   mcp: typeof mcp
   plugins: typeof plugins
-  skills: typeof skills
-  tasks: typeof tasks
   agents: typeof agents
-  memory: typeof memory
-  config: typeof config
   auth: typeof auth
   system: typeof system
   /** Low-level escape hatch — run any argv you like against the binary. */
@@ -95,20 +81,16 @@ export interface ClaudeCode {
  */
 function createClaudeCode(ctx: ClaudeCodeContext = {}): ClaudeCode {
   return {
-    query: opts => queryRaw({
+    query: (opts, initialize) => queryRaw({
       cwd: ctx.cwd,
       env: ctx.env,
       cliPath: ctx.cliPath,
       ...opts,
-    }),
+    }, initialize),
     sessions,
     mcp,
     plugins,
-    skills,
-    tasks,
     agents,
-    memory,
-    config,
     auth,
     system,
     exec: execOnce,

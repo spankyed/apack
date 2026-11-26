@@ -610,7 +610,7 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
  * it and wiring listeners of their own, one host's detach tears the terminal out of whichever host holds
  * it, and the two disagree about where the user had scrolled to.
  */
-const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
+const EMULATOR_OWNER = 'packages/default-setup/src/extensions/terminal/pool.ts';
 
 /**
  * The package that draws a terminal, named once so the rule and its message cannot disagree about what
@@ -623,8 +623,8 @@ const EMULATOR_PACKAGE = '@apackdev/terminal-view';
  * be driven without a canvas or a broker. Each names the package because it is replacing it, which is the
  * one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and mocking the
  * pool instead would turn every case here into "the component called `release()`" — the shape of a test
- * that restates the implementation instead of observing it. The stand-in itself is the fourth, since it is
- * typed by what it stands in for.
+ * that restates the implementation instead of observing it. The shared stand-in is also listed
+ * because it is typed by what it replaces.
  *
  * A listed path that has stopped naming the package is reported too, so this allowance cannot outlive the
  * stand-in it was added for.
@@ -635,6 +635,7 @@ const EMULATOR_STAND_INS = [
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view-drop.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
+  'packages/default-setup/tests/features/threads/fe/chat/native-terminal-pool.frontend.spec.ts',
 ] as const;
 
 /**
@@ -746,6 +747,12 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
   'packages/default-setup/src/features/code/be/services/github-api.ts': "a request to GitHub's API: network, which no CPU reading describes",
   'packages/default-setup/src/features/code/be/services/github.ts': "a request to GitHub's sign-in or API: network, which no CPU reading describes",
+  'packages/default-setup/src/features/code/be/services/claude-code/teammate-recovery.ts':
+    'tmux replies and ready acknowledgement come from an independently running server, so CPU in its short-lived query client cannot measure progress',
+  'packages/default-setup/src/features/code/be/services/claude-code/terminal-owner.ts':
+    'tmux session and pane lookups wait on a socket outside the child process tree',
+  'packages/default-setup/src/features/threads/be/claude-ui.ts':
+    'a prediction expires on the same wall-clock deadline carried to the renderer, which can disconnect while the backend queues the request',
   'packages/default-setup/src/features/code/be/services/claude-code/runner.ts':
     "a one-shot claude subcommand waits on the model's API, during which the child is idle by design",
   'packages/default-setup/src/features/code/be/services/codex/runner.ts':
@@ -1096,9 +1103,9 @@ const RULE_LIST = [
   {
     id: 'findEmulatorImports',
     over: PACK_CODE_DIRS,
-    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to its terminal emulator, which is this pack's choice and not a contract any other pack is held to" },
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the pack's own seam to its terminal emulator, which is this pack's choice and not a contract any other pack is held to" },
     find: findEmulatorImports,
-    rule: "Only the code surface's terminal pool imports the terminal emulator: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
+    rule: "Only the shared terminal pool imports the terminal emulator: a host that draws a terminal holds an attachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

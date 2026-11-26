@@ -1,0 +1,395 @@
+import { createApp, h, ref, computed, provide, nextTick, type App } from 'vue'
+import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
+import NativeManagedTasks from '#features/threads/fe/chat/NativeManagedTasks.vue'
+import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
+import type { ClaudeNativeMcpTaskInfo } from '#features/code/common/native-mcp-task.ts'
+import type { ClaudeTerminalTaskState } from '#features/threads/be/claude-terminal-views.ts'
+let app: App | undefined
+afterEach(() => { app?.unmount(); document.body.replaceChildren() })
+async function fixture(options: { status?: string; canStop?: boolean } = {}) {
+  const task = { id: 'agent', ownerId: 'owner', sessionId: 'session', status: 'running', ...options }
+  const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, canInput: false, messages: [], truncated: false } })
+  let revision = 1
+  const operate = vi.fn(() => ++revision), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() { provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
+  ;[...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'View Agent conversation')!.click(); await nextTick()
+  const input = root.querySelector<HTMLTextAreaElement>('textarea')!
+  async function type(text: string) { input.value = text; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
+  async function send() { root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await nextTick() }
+  return { root, input, state, operate, type, send }
+}
+it('retains an unsent message when native delivery is refused', async () => {
+  const f = await fixture(); await f.type('User instruction'); await f.send()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent', ownerId: 'owner' }), 'send', 'User instruction')
+  f.state.value = { ...f.state.value, revision: 3, operation: 'send', status: 'error', problem: 'Native refusal' }; await nextTick()
+  expect(f.input.value).toBe('User instruction'); expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Native refusal')
+})
+it('labels inline teammate messaging as team-lead delivery and offers the focused human path', async () => {
+  const f = await fixture()
+  f.state.value.details!.canFocusInput = true
+  await nextTick()
+  expect(f.root.querySelector('label')?.htmlFor).toBe(f.input.id)
+  expect(f.root.querySelector('label')?.textContent).toBe('Message as team lead')
+  const readingControl = [...f.root.querySelectorAll('button')].find(button => button.textContent === 'Refresh conversation')!
+  expect(f.input.compareDocumentPosition(readingControl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(f.root.textContent).toContain('Open Agent to reply directly.')
+  await f.type('Team-lead handoff'); await f.send()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent' }), 'send', 'Team-lead handoff')
+  f.state.value.details!.canMessage = false
+  await nextTick()
+  expect(f.root.querySelector('textarea')).toBeNull()
+  expect(f.root.textContent).toContain('Open Agent to reply directly.')
+})
+
+it('clears only the submitted text after its exact receipt and preserves typing during delivery', async () => {
+  const f = await fixture(); await f.type('First instruction'); await f.send(); await f.type('New unsent text')
+  f.state.value = { ...f.state.value, revision: 3, operation: 'send', status: 'done', sent: true }; await nextTick()
+  expect(f.input.value).toBe('New unsent text')
+  await f.send(); f.state.value = { ...f.state.value, revision: 4, operation: 'send', status: 'done', sent: true }; await nextTick()
+  expect(f.input.value).toBe(''); expect(f.root.textContent).toContain('Message sent to Agent')
+})
+
+it('closes only the task conversation on Escape and preserves its unsent text', async () => {
+  const f = await fixture(); await f.type('Unsent Agent instruction'); f.input.focus()
+  const composing = new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }); f.input.dispatchEvent(composing); await nextTick()
+  expect(f.root.querySelector('textarea')).toBe(f.input)
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); f.input.dispatchEvent(escape); await nextTick()
+  expect(escape.defaultPrevented).toBe(true); expect(f.root.querySelector('textarea')).toBeNull()
+  const toggle = [...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'View Agent conversation')!; expect(document.activeElement).toBe(toggle)
+  toggle.click(); await nextTick(); expect(f.root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Unsent Agent instruction')
+})
+
+it('shows original native detail values, failed status and explicit shortened previews', async () => {
+  const f = await fixture()
+  f.state.value = { ...f.state.value, details: { ...f.state.value.details!, status: 'failed', metadata: { prompt: 'Original task prompt', promptTruncated: true, model: 'native-model', effort: 'high', elapsedMs: 4500, tokenCount: 0, toolUseCount: 4, error: 'Native failure', errorTruncated: true } } }; await nextTick()
+  const details = f.root.querySelector('[aria-label="Agent details"]')!
+  expect(details.textContent).toContain('native-model'); expect(details.textContent).toContain('high'); expect(details.textContent).toContain('4s'); expect(details.textContent).toContain('Tokens0'); expect(details.textContent).toContain('Tools4')
+  expect(f.root.querySelector('summary')?.textContent).toBe('Agent prompt')
+  expect(f.root.querySelector('details')?.textContent).toContain('Original task prompt')
+  expect(f.root.textContent).toContain('Prompt preview shortened.'); expect(f.root.querySelector('[role="alert"]')?.textContent).toContain('Native failure')
+})
+
+it('shows the native compaction boundary and collapses the summary in the inline Agent preview', async () => {
+  const f = await fixture()
+  f.state.value.details!.messages = [
+    { role: 'system', uuid: 'boundary', compaction: 'boundary', text: '' },
+    { role: 'system', uuid: 'summary', compaction: 'summary', text: 'Earlier worker context' },
+  ]
+  await nextTick()
+  const conversation = f.root.querySelector('[aria-label="Agent conversation"]')!
+  expect(conversation.textContent).toContain('Conversation compacted')
+  const details = conversation.querySelector('details')!
+  expect(details.open).toBe(false)
+  expect(details.querySelector('summary')?.textContent).toBe('Compact summary')
+  expect(details.textContent).toContain('Earlier worker context')
+})
+
+it('uses human replies when supported and clears only their exact queued receipt', async () => {
+  const f = await fixture(); f.state.value.details!.canInput = true; await nextTick()
+  expect(f.input.labels?.[0]?.textContent).toBe('Reply to this Agent')
+  await f.type('Human reply'); await f.send()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.anything(), 'input', 'Human reply')
+  f.state.value = { ...f.state.value, operation: 'input', revision: 3, status: 'done', input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }; await nextTick()
+  expect(f.input.value).toBe(''); expect(f.root.textContent).toContain('Agent resumed with your reply')
+})
+
+it.each([{ status: 'idle', canStop: true }, { status: 'running', canStop: false }])(
+  'uses the native Stop capability over the activity label: %j', async options => {
+    const f = await fixture(options)
+    const stop = [...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Stop Agent')!
+    expect(stop.disabled).toBe(!options.canStop)
+    if (options.canStop) {
+      stop.click()
+      expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent', ownerId: 'owner' }), 'stop')
+    }
+  },
+)
+
+it('opens the bound native Agent through the app control', async () => {
+  const f = await fixture()
+  const open = [...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Open Agent')!
+  open.click(); await nextTick()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent', ownerId: 'owner', sessionId: 'session' }), 'foreground')
+  f.state.value = { ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 2, operation: 'foreground', status: 'pending' }; await nextTick()
+  expect(open.disabled).toBe(true)
+})
+
+
+it('preserves the complete attributed handback and warning as inert Agent output', async () => {
+ const f=await fixture()
+ const text='Release review complete.\n<script>window.bad=true</script>\nThe caller should review the migration notes.'
+ f.state.value.details!.handback={taskId:'agent',text,warning:'Original native safety warning <img src=x onerror=bad()>'}
+ await nextTick()
+ const report=f.root.querySelector('[data-native-handback-task="agent"]')!
+ expect(report.textContent).toContain(text)
+ expect(report.querySelector('[role="alert"]')?.textContent).toContain('Original native safety warning <img src=x onerror=bad()>')
+ expect(report.querySelector('script,img')).toBeNull()
+ expect(report.textContent).toContain('From the delegated Agent')
+})
+
+it('offers shell output and Stop without Agent reply or foreground controls', async () => {
+  const task = { id: 'shell', kind: 'shell' as const, canStop: true, ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', sessionId: 'session', taskId: 'shell', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'shell', name: 'Check', status: 'running', canInput: false, canMessage: false, messages: [], truncated: false, shell: { command: 'check --all', commandTruncated: false, cwd: '/owned/project', output: '<script>literal output</script>', totalBytes: 12000, truncated: true } } })
+  const operate = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() { provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
+  const buttons = () => [...root.querySelectorAll<HTMLButtonElement>('button')]
+  expect(root.textContent).not.toContain('Agent')
+  buttons().find(button => button.textContent === 'View output')!.click(); await nextTick()
+  expect(operate).toHaveBeenLastCalledWith(task, 'inspect')
+  const output = root.querySelector('[aria-label="Background command output"]')!
+  expect(output.textContent).toContain('check --all'); expect(output.textContent).toContain('<script>literal output</script>')
+  expect(output.querySelector('script')).toBeNull(); expect(root.querySelector('textarea')).toBeNull()
+  buttons().find(button => button.textContent === 'Stop command')!.click()
+  expect(operate).toHaveBeenLastCalledWith(task, 'stop')
+  state.value = { ...state.value, status: 'pending', operation: 'stop' }; await nextTick()
+  expect(buttons().every(button => button.disabled)).toBe(true)
+})
+
+it('reveals a shell output panel only for the inspection that opened it', async () => {
+  const task = { id: 'shell', kind: 'shell' as const, ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const state = ref<ClaudeTerminalTaskState>()
+  const reply = {
+    ownerId: 'owner', sessionId: 'session', taskId: 'shell', revision: 2, operation: 'inspect' as const, status: 'done' as const,
+    details: { taskId: 'shell', name: 'Release check', status: 'running', canInput: false, canMessage: false, messages: [], truncated: false,
+      shell: { command: 'check', commandTruncated: false, output: 'Ready', totalBytes: 5, truncated: false } },
+  }
+  let revision = 1
+  const operate = vi.fn(() => ++revision)
+  const reveal = vi.fn()
+  const root = document.createElement('div')
+  document.body.append(root)
+  app = createApp({
+    setup() {
+      provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate })
+      return () => h(NativeTaskControls, { task, onRevealShellOutput: reveal })
+    },
+  })
+  app.mount(root)
+  const button = (text: string) => [...root.querySelectorAll('button')].find(node => node.textContent === text)!
+  button('View output').click()
+  state.value = { ...reply, taskId: 'other-shell' }
+  await nextTick()
+  expect(reveal).not.toHaveBeenCalled()
+  state.value = reply
+  await nextTick()
+  expect(reveal).toHaveBeenCalledExactlyOnceWith(root.firstElementChild)
+  button('Refresh output').click()
+  state.value = { ...reply, revision: 3 }
+  await nextTick()
+  expect(reveal).toHaveBeenCalledTimes(1)
+})
+
+it('shows MCP task details and native refusal without offering Agent controls', async () => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
+  const task={kind:'mcp' as const,id:'registry-mcp',ownerId:'owner',sessionId:'session',status:'running',canStop:true,mcp:{serverName:'workspace',toolName:'review',serverTaskId:'server-task-42',status:'input_required',startTime:Date.now(),protocol:'sep2663',truncated:false}}
+  const state=ref<ClaudeTerminalTaskState>({ownerId:'owner', sessionId: 'session',taskId:task.id,revision:1,operation:'inspect',status:'done',details:{taskId:task.id,name:'Review',status:'running',canInput:false,canMessage:false,mcp:task.mcp,messages:[],truncated:false}})
+  const operate=vi.fn(),root=document.createElement('div');document.body.append(root)
+  app=createApp({setup(){provide(claudeTaskControls,{foregroundAvailable:computed(()=>true),ownerId:computed(()=>'owner'),state:computed(()=>state.value),operate});return()=>h(NativeTaskControls,{task})}});app.mount(root)
+  const button=(text:string)=>[...root.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===text)!
+  expect(button('Open Agent')).toBeUndefined();expect(root.querySelector('textarea')).toBeNull()
+  button('Task details').click();await nextTick()
+  const details=root.querySelector<HTMLDialogElement>('dialog[aria-label="MCP task details"]')!
+  expect(details.open).toBe(true)
+  expect(details.textContent).toContain('workspace');expect(details.textContent).toContain('server-task-42')
+  expect(details.textContent).toContain('Waiting for your answer');expect(details.textContent).toContain('can continue after you leave')
+  details.querySelector<HTMLButtonElement>('footer button:last-child')!.click()
+  expect(operate).toHaveBeenLastCalledWith(task,'stop')
+  state.value={...state.value,revision:2,operation:'stop',status:'error',problem:'Native cancellation refused'};await nextTick()
+  expect(details.open).toBe(true)
+  expect(details.querySelector('[role="alert"]')?.textContent).toBe('Native cancellation refused')
+  expect(root.querySelector('textarea')).toBeNull()
+  state.value={ownerId:'owner', sessionId: 'session',taskId:'another-task',revision:3,operation:'inspect',status:'pending'};await nextTick()
+  expect(button('Task details').getAttribute('aria-expanded')).toBe('false')
+  state.value={...state.value,status:'done'};await nextTick()
+  button('Task details').click();expect(operate).toHaveBeenLastCalledWith(task,'inspect')
+})
+
+
+it('closes focused MCP task details when the native task asks for input', async () => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+    this.open = true
+    this.querySelector<HTMLElement>('[autofocus]')?.focus()
+  })
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
+  const task = { kind: 'mcp' as const, id: 'mcp', ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const mcp: ClaudeNativeMcpTaskInfo = { status: 'working', startTime: Date.now(), truncated: false }
+  const state = computed<ClaudeTerminalTaskState>(() => ({
+    ownerId: task.ownerId, sessionId: task.sessionId, taskId: task.id, revision: 1, operation: 'inspect', status: 'done',
+    details: { mcp, taskId: task.id, name: 'Review', status: 'running', canInput: false, canMessage: false, messages: [], truncated: false },
+  }))
+  const mcpInputPending = ref(false), operate = vi.fn(() => 1), onYieldMcpInputFocus = vi.fn()
+  const root = document.createElement('div')
+  document.body.append(root)
+  app = createApp({
+    setup() {
+      provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state, operate })
+      return () => h(NativeTaskControls, { task, mcpInputPending: mcpInputPending.value, onYieldMcpInputFocus })
+    },
+  })
+  app.mount(root)
+  const toggle = root.querySelector<HTMLButtonElement>('button[aria-expanded]')!
+  toggle.click()
+  await nextTick()
+  expect(root.querySelector('dialog')?.contains(document.activeElement)).toBe(true)
+
+  mcpInputPending.value = true
+  await nextTick()
+  expect(root.querySelector('dialog')).toBeNull()
+  expect(toggle.disabled).toBe(true)
+  expect(onYieldMcpInputFocus).toHaveBeenCalledOnce()
+
+  mcpInputPending.value = false
+  await nextTick()
+  expect(toggle.disabled).toBe(false)
+  expect(root.querySelector('dialog')).toBeNull()
+  toggle.click()
+  await nextTick()
+  expect(root.querySelector('dialog')?.open).toBe(true)
+})
+
+
+it('updates opened MCP details when the native task is parked', async () => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
+  const mcp: ClaudeNativeMcpTaskInfo = {
+    serverTaskId: 'server-task-42', status: 'working', startTime: Date.now(), pollIntervalMs: 1000, truncated: false,
+  }
+  const active = {
+    kind: 'mcp' as const, id: 'registry-mcp', ownerId: 'owner', sessionId: 'session', status: 'running', canStop: true, mcp,
+  }
+  const task = ref(active)
+  const state = ref<ClaudeTerminalTaskState>({
+    ownerId: 'owner', sessionId: 'session', taskId: active.id, revision: 1, operation: 'inspect', status: 'done',
+    details: { taskId: active.id, name: 'Review', status: 'running', canInput: false, canMessage: false, mcp: active.mcp, messages: [], truncated: false },
+  })
+  const root = document.createElement('div'), operate = vi.fn()
+  document.body.append(root)
+  app = createApp({
+    setup() {
+      provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate })
+      return () => h(NativeTaskControls, { task: task.value })
+    },
+  })
+  app.mount(root)
+  ;[...root.querySelectorAll('button')].find(button => button.textContent === 'Task details')!.click()
+  await nextTick()
+  const dialog = root.querySelector('dialog')!
+  expect(dialog.textContent).toContain('Every 1s')
+  const statusMessage = 'server did not reconnect within 300s'
+  task.value = { ...active, mcp: { ...active.mcp, parked: true, statusMessage } }
+  await nextTick()
+  expect(dialog.textContent).toContain('Outcome unknown')
+  expect(dialog.textContent).toContain('Last server status')
+  expect(dialog.textContent).toContain('working')
+  expect(dialog.textContent).toContain(statusMessage)
+  expect(dialog.textContent).toContain('server-task-42')
+  expect(dialog.textContent).not.toContain('Polling')
+  ;[...dialog.querySelectorAll('button')].find(button => button.textContent === 'Stop task')!.click()
+  expect(operate).toHaveBeenLastCalledWith(task.value, 'stop')
+  task.value = active
+  await nextTick()
+  expect(dialog.textContent).toContain('Every 1s')
+  expect(dialog.textContent).not.toContain('Outcome unknown')
+})
+
+it('routes remote-review management to Claude without invented Agent or Stop controls', async () => {
+  const root=document.createElement('div');document.body.append(root)
+  const task={id:'remote',ownerId:'owner',sessionId:'session',kind:'managed' as const,nativeTaskType:'remote_agent' as const,name:'Release <script>review</script>',status:'running',canStop:true}
+  const manage=vi.fn(),disabled=ref(false)
+  app=createApp({render:()=>h(NativeManagedTasks,{tasks:[task],disabled:disabled.value,onManage:manage})});app.mount(root)
+  expect(root.textContent).toContain(task.name);expect(root.querySelector('script')).toBeNull()
+  expect(root.textContent).toContain('Remote Agent')
+  const buttons=[...root.querySelectorAll<HTMLButtonElement>('button')]
+  expect(buttons.map(button=>button.textContent)).toEqual(['Manage in Claude'])
+  buttons[0]!.click();await nextTick();expect(manage).toHaveBeenCalledOnce()
+  disabled.value=true;await nextTick();expect(buttons[0]!.disabled).toBe(true)
+  buttons[0]!.click();expect(manage).toHaveBeenCalledOnce()
+})
+
+it('shows owned native activity Stop, pending/error state and retires old-owner access',async()=>{
+ const task={id:'scan',ownerId:'owner',sessionId:'session',kind:'managed' as const,nativeTaskType:'auto_mode_scan' as const,name:'Scan workspace',status:'running',canStop:true}
+ const owner=ref('owner'),state=ref<ClaudeTerminalTaskState>(),disabled=ref(false),operate=vi.fn()
+ const root=document.createElement('div');document.body.append(root)
+ app=createApp({setup(){provide(claudeTaskControls,{foregroundAvailable:computed(()=>false),ownerId:computed(()=>owner.value),state:computed(()=>state.value),operate});return()=>h(NativeManagedTasks,{tasks:[task],disabled:disabled.value})}});app.mount(root)
+ const stop=()=>root.querySelector<HTMLButtonElement>('[aria-label="Stop Scan workspace"]')!
+ expect(stop().disabled).toBe(false);stop().click();expect(operate).toHaveBeenCalledExactlyOnceWith(task,'stop')
+ state.value={ownerId:'owner', sessionId: 'session',taskId:'scan',revision:1,operation:'stop',status:'pending'};await nextTick()
+ expect(stop().disabled).toBe(true);expect(stop().textContent).toBe('Stopping…');stop().click();expect(operate).toHaveBeenCalledOnce()
+ state.value={...state.value,status:'error',problem:'Original Stop refused'};await nextTick()
+ expect(root.querySelector('[role="alert"]')?.textContent).toBe('Original Stop refused');expect(stop().disabled).toBe(false)
+ owner.value='replacement';await nextTick();expect(stop().disabled).toBe(true)
+ stop().click();expect(operate).toHaveBeenCalledOnce()
+ state.value={...state.value,ownerId:'replacement'};await nextTick();expect(root.querySelector('[role="alert"]')).toBeNull()
+ owner.value='owner';disabled.value=true;await nextTick();expect(stop().disabled).toBe(true)
+ expect(root.querySelector('textarea')).toBeNull();expect(root.textContent).not.toContain('Open Agent')
+})
+
+it('replaces rendered Stop and Manage targets when a native task survives a conversation reset', async () => {
+  const task = ref({ id: 'scan', ownerId: 'owner', sessionId: 'before', kind: 'managed' as const,
+    nativeTaskType: 'auto_mode_scan' as const, name: 'Scan workspace', status: 'running', canStop: true })
+  const state = ref<ClaudeTerminalTaskState>()
+  const operate = vi.fn()
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() {
+    provide(claudeTaskControls, { foregroundAvailable: computed(() => false), ownerId: computed(() => 'owner'),
+      state: computed(() => state.value), operate })
+    return () => h(NativeManagedTasks, { tasks: [task.value] })
+  } })
+  app.mount(root)
+  const stop = () => root.querySelector<HTMLButtonElement>('[aria-label="Stop Scan workspace"]')!
+  const manage = () => [...root.querySelectorAll('button')].find(button => button.textContent === 'Manage in Claude')!
+  const oldStop = stop(), oldManage = manage()
+  task.value = { ...task.value, name: 'Scan workspace again' }
+  await nextTick()
+  task.value = { ...task.value, name: 'Scan workspace' }
+  await nextTick()
+  expect(stop()).toBe(oldStop)
+  state.value = { ownerId: 'owner', sessionId: 'before', taskId: 'scan', revision: 1, operation: 'stop', status: 'pending' }
+  await nextTick()
+  expect(oldStop.textContent).toBe('Stopping…')
+
+  task.value = { ...task.value, sessionId: 'after' }
+  await nextTick()
+  expect(oldStop.isConnected).toBe(false)
+  expect(oldManage.isConnected).toBe(false)
+  expect(stop().disabled).toBe(false)
+  stop().click()
+  expect(operate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'scan', sessionId: 'after' }), 'stop')
+})
+
+it('releases old task details and replies without inheriting them in the replacement Claude conversation', async () => {
+  const task = ref({ id: 'task', ownerId: 'owner', sessionId: 'before', status: 'running' })
+  const state = ref<ClaudeTerminalTaskState>({
+    ownerId: 'owner', sessionId: 'before', taskId: 'task', revision: 1, operation: 'inspect', status: 'done',
+    details: { taskId: 'task', name: 'Old task', status: 'running', canMessage: true, canInput: false, messages: [], truncated: false }
+  })
+  const operate = vi.fn()
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() {
+    provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'),
+      state: computed(() => state.value), operate })
+    return () => h(NativeTaskControls, { task: task.value })
+  } })
+  app.mount(root)
+  const button = (name: string) => [...root.querySelectorAll('button')].find(b => b.textContent === name)!
+  button('View Agent conversation').click()
+  await nextTick()
+  const editor = root.querySelector('textarea')!
+  editor.value = 'Keep this reply for the old task'
+  editor.dispatchEvent(new Event('input', { bubbles: true }))
+  await nextTick()
+
+  const before = button('Stop Agent')
+  task.value = { ...task.value, sessionId: 'after' }
+  await nextTick()
+  expect(before.isConnected).toBe(false)
+  expect(root.querySelector('textarea')).toBeNull()
+  expect(button('View Agent conversation').getAttribute('aria-expanded')).toBe('false')
+  state.value = { ...state.value, sessionId: 'after', revision: 2 }
+  await nextTick()
+  button('View Agent conversation').click()
+  await nextTick()
+  expect(root.querySelector('textarea')?.value).toBe('')
+  expect(operate).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'after' }), 'inspect')
+})

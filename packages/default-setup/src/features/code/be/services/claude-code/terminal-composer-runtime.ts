@@ -1,0 +1,185 @@
+/** Source-bound composer inputs from the pinned original producers, never inferred from app labels. */
+export const claudeTerminalComposerRuntime = String.raw`const composerFrames=new Map(),composerSeen=new Map(),composerClocks=new Map(),composerFunctionHashes=new WeakMap(),composerFactoryIds=new WeakMap();
+let composerFactorySequence=0;
+const composerTaskSnapshotIds=new WeakMap();
+let composerTaskSnapshotSequence=0;
+const composerSignatures={
+ vtr:{component:'Spinner',hash:'303032488d6858b55a00a4718644628955b5beadbdf79e9161609313fe9ee5e2',slot:21},
+ OH:{component:'SessionMode',hash:'102949adbd5d8849d10b15d5d7bc64d7e98466e46a23fa0ad704c86ae02b8b8a',slot:4},
+ vY:{component:'PromptHint',hash:'0e01508dc7198c1522cbf5658ec5b6b83f4ce8068ddeee35694dc501b6103dd5'}
+};
+function isComposerComponent(component){return component==='Spinner'||component==='SessionMode'||component==='PromptHint';}
+function nativeComposerInputs(n,signatures=composerSignatures,maxIdLength=256,maxInstances=32){
+ const root=n.themeRoots.ai().get(process.stdout)?.container?.current,pending=root?[root]:[],seen=new Set(),result=new Map();
+ const standaloneTaskLists=[];
+ while(pending.length){
+  const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native composer traversal exceeded bound');seen.add(fiber);
+  const type=fiber.type,spec=typeof type==='function'&&Object.hasOwn(signatures,type.name)?signatures[type.name]:undefined;
+  if(type===n.privateTaskDrawing?.ktr&&fiber.memoizedProps?.hidden===false)standaloneTaskLists.push(fiber);
+  if(spec){
+   let hash=composerFunctionHashes.get(type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(type)).digest('hex');composerFunctionHashes.set(type,hash);}
+   if(hash===spec.hash){
+    const hooks=new Set();let hook=fiber.memoizedState;
+    while(hook&&typeof hook==='object'&&!hooks.has(hook)){
+     if(hooks.size>=128)throw Error('Native composer producer hook bound');hooks.add(hook);
+     const value=hook.memoizedState,candidates=[value,...(Array.isArray(value)?value.slice(0,4):[])];
+     for(const input of candidates)if(input&&typeof input==='object'&&input.component===spec.component&&input.surface==='terminal'&&typeof input.requestId==='string'&&input.requestId.length>0&&input.requestId.length<=maxIdLength&&input.props&&typeof input.props==='object'){
+      const raw=JSON.stringify(input.props);if(raw.length>65536)throw Error('Native composer props exceed limit');
+      const factory=spec.slot===undefined?undefined:fiber.updateQueue?.memoCache?.data?.[0]?.[spec.slot];
+      if(spec.slot!==undefined&&typeof factory!=='function')throw Error('Original composer default renderer cache changed');
+      let factoryId=0;if(factory){if(!composerFactoryIds.has(factory))composerFactoryIds.set(factory,++composerFactorySequence);factoryId=composerFactoryIds.get(factory);}
+      const key=JSON.stringify([spec.component,input.requestId]),fingerprint=createHash('sha256').update(JSON.stringify([raw,factoryId])).digest('hex'),prior=result.get(key);
+      if(prior&&prior.fingerprint!==fingerprint)throw Error('Ambiguous original composer input');
+      result.set(key,{component:spec.component,id:input.requestId,input,props:JSON.parse(raw),factory,fingerprint,fiber});
+      if(result.size>maxInstances)throw Error('Native composer instance limit');
+     }
+     hook=hook.next;
+    }
+   }
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
+ }
+ if(standaloneTaskLists.length===1)for(const input of result.values())if(input.component==='PromptHint')input.standaloneTasks=standaloneTaskLists[0];
+ return result;
+}
+function nativeIdleReturnHint(n){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')return;
+ const signal=new AbortController(),context=binding.toolContext(signal),notice=context.getAppState().notifications?.current;
+ // The original store owns visibility and timing. Queued notifications are not visible.
+ if(notice?.key!=='idle-return-hint'||notice.kind!=='contextual'||!Array.isArray(notice.segments)||notice.segments.length!==4)return;
+ if(context.dialogStore.getState().open.length||nativeViewFacts(n,binding,signal).view.kind!=='main')return;
+ if(notice.segments.some(segment=>typeof segment?.text!=='string'||segment.text.length>128||/[\x00-\x1f\x7f-\x9f]/.test(segment.text)))return;
+ const text=notice.segments.map(segment=>segment.text).join('');
+ return text.length<=256?text:undefined;
+}
+function nativeTeamTaskDrawing(state){
+ const {leadAgentId,teammates}=state.teamContext;
+ const teamContext={leadAgentId,teammates:Object.fromEntries(Object.entries(teammates??{}).map(([id,member])=>[id,{name:member.name,color:member.color}]))};
+ const tasks=Object.fromEntries(Object.entries(state.tasks??{}).filter(([,task])=>task.type==='in_process_teammate'&&task.status==='running').map(([id,task])=>{
+  const {agentName,agentId}=task.identity;
+  const progress=task.progress?{
+   recentActivities:task.progress.recentActivities?.map(({isSearch,isRead,activityDescription})=>({isSearch,isRead,activityDescription})),
+   lastActivity:task.progress.lastActivity?{activityDescription:task.progress.lastActivity.activityDescription}:undefined,
+  }:undefined;
+  return [id,{type:task.type,status:task.status,identity:{agentName,agentId},progress}];
+ }));
+ return {teamContext,tasks};
+}
+function nativeComposerTasks(n,fiber,state){
+ // Use the same availability and lead rules as the mounted task-store hook.
+ if(!state||!n.runtime.fse()||n.taskSessionGlobals.Bn()||state.teamContext&&!n.taskTeamContext.o$(state.teamContext))return;
+ const context=n.privateTasks.$nr;
+ for(let depth=0;fiber&&depth<128;fiber=fiber.return,depth++){
+  if(fiber.type!==context&&fiber.type!==context.Provider)continue;
+  const tasks=fiber.memoizedProps?.value?.getSnapshot?.();
+  if(!Array.isArray(tasks)||!tasks.length)return;
+  if(!composerTaskSnapshotIds.has(tasks))composerTaskSnapshotIds.set(tasks,++composerTaskSnapshotSequence);
+  const team=state.teamContext?nativeTeamTaskDrawing(state):undefined;
+  return {tasks,revision:composerTaskSnapshotIds.get(tasks),expanded:state.expandedView==='tasks',team};
+ }
+}
+function nativeComposerFacts(n,client,component,id,inputs=nativeComposerInputs(n)){
+ const source=inputs.get(JSON.stringify([component,id]));if(!source)return;
+ let taskList;
+ if(component==='Spinner'||source.standaloneTasks&&!source.props.isWorking){
+  const binding=originalContext??n.runtime.ey(),abort=new AbortController();
+  const view=nativeViewFacts(n,binding,abort).view;
+  if(component==='Spinner'){
+   const expected=view.kind==='main'?n.questionOptions.Ze():view.taskId;
+   if(id!==expected&&!(view.kind==='main'&&id==='main'))return;
+  }
+  if(view.kind==='main'){
+   const fiber=component==='Spinner'?source.fiber:source.standaloneTasks;
+   const snapshot=nativeComposerTasks(n,fiber,binding?.toolContext?.(abort)?.getAppState());
+   if(component==='Spinner'||snapshot?.expanded)taskList=snapshot;
+  }
+ }
+ const props={...source.props};
+ if(component==='Spinner'&&props.mode==='tool-input')props.mode='tool-use';
+ if(component==='PromptHint'&&edits.has(client))props.isDraft=edits.get(client).box.text.length>0;
+ const idleReturnHint=component==='PromptHint'&&!props.isWorking?nativeIdleReturnHint(n):undefined;
+ const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,props,idleReturnHint,taskList?.revision,taskList?.expanded,taskList?.team])).digest('hex');
+ return {...source,props,fingerprint,idleReturnHint,taskList};
+}
+function nativeComposerList(n,client,inputs=nativeComposerInputs(n)){
+ const result=[];for(const source of inputs.values()){const facts=nativeComposerFacts(n,client,source.component,source.id,inputs);if(facts)result.push({component:facts.component,id:facts.id,revision:facts.fingerprint});}return result;
+}
+function nativeComposerTaskActions(n,client,provider){
+ if(!clients.has(client)||!clientViewCurrent(n,client))return [];
+ const action='app:toggleTodos',entries=provider.props.handlerRegistryRef.current.get(action);
+ if(!(entries instanceof Set)||![...entries].some(entry=>entry.action===action&&entry.context==='Global'&&entry.fallback!==true&&typeof entry.handler==='function'))return [];
+ const binding=originalContext??n.runtime.ey(),abort=new AbortController();
+ if(nativeViewFacts(n,binding,abort).view.kind!=='main')return [];
+ const hint=[...nativeComposerInputs(n).values()].find(source=>source.component==='PromptHint');
+ if(!hint)return [];
+ const list=nativeComposerTasks(n,hint.fiber,binding?.toolContext?.(abort)?.getAppState());
+ return list?[{action,revision:JSON.stringify([list.revision,list.expanded])}]:[];
+}
+function currentComposerAction(n,request){
+ if(!isComposerComponent(request.component))return;
+ const frame=composerFrames.get(JSON.stringify([request.client_id,request.component,request.instance_id]));
+ const facts=frame&&nativeComposerFacts(n,request.client_id,request.component,request.instance_id);
+ if(!facts||facts.fingerprint!==frame.fingerprint)throw Error('Native composer source changed or expired');
+}
+const composerFleetLastRead=new WeakMap();
+function refreshComposerFleet(n,inputs){
+ const hint=[...inputs.values()].find(item=>item.component==='PromptHint');
+ if(!hint||!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes('ui_prompt_read')&&clientViewCurrent(n,client.clientId)))return;
+ const view=nativeViewFacts(n,originalContext??n.runtime.ey(),new AbortController()).view;
+ if(view.kind!=='main')return;
+ // Use the mounted provider and original foreground sweep cadence while a desktop client displays a waiting count.
+ // The terminal renderer can be blurred while its owned desktop composer remains visible.
+ const context=n.fleet.Kwn;
+ for(let fiber=hint.fiber,depth=0;fiber&&depth<128;fiber=fiber.return,depth++){
+  if(fiber.type!==context&&fiber.type!==context.Provider)continue;
+  const store=fiber.memoizedProps?.value;
+  if(!store?.getSnapshot?.()?.needsInput||typeof store.refetch!=='function')return;
+  const now=Date.now();
+  if(now-(composerFleetLastRead.get(store)??0)<10000)return;
+  composerFleetLastRead.set(store,now);
+  void store.refetch().catch(()=>{});
+  return;
+ }
+}
+function refreshNativeComposer(n){
+ if(!clients.size)return;
+ let inputs;try{inputs=nativeComposerInputs(n);}catch{inputs=new Map();}
+ refreshComposerFleet(n,inputs);
+ for(const client of clients){
+  if(!clientViewCurrent(n,client))continue;
+  const list=nativeComposerList(n,client,inputs),next=new Map(list.map(item=>[JSON.stringify([item.component,item.id]),item.revision])),prior=composerSeen.get(client),changed=[];
+  for(const [key,revision] of next)if(!prior||prior.get(key)!==revision){const [component,id]=JSON.parse(key);changed.push({surface:'desktop',component,instance_id:id});n.nativeClients.suspendInstance(client,component,id);}
+  for(const key of prior?.keys()??[])if(!next.has(key)){const [component,id]=JSON.parse(key);n.nativeClients.release(client,component,id);composerFrames.delete(JSON.stringify([client,component,id]));changed.push({surface:'desktop',component,instance_id:id});}
+  const second=Math.floor(Date.now()/1000);if(composerClocks.get(client)!==second){composerClocks.set(client,second);for(const item of list)if(item.component==='Spinner'&&!changed.some(value=>value.component===item.component&&value.instance_id===item.id))changed.push({surface:'desktop',component:item.component,instance_id:item.id});}
+  composerSeen.set(client,next);
+  if(changed.length)publish({type:'system',subtype:'ui_invalidate',event:'ui.render',composer_placements:true,client_id:client,instances:changed});
+ }
+}
+async function formatNativeComposer(n,facts,props,options){
+ options.signal?.throwIfAborted();
+ // Desktop has no terminal tail/pill layout. Paint its hint with the original dim Text and live theme.
+ const element=facts.component==='PromptHint'
+  ? n.jsx.e(n.terminalComponents.n,{dimColor:true,children:typeof props.hint==='string'?props.hint:''})
+  : facts.factory({...facts.input,surface:'desktop',props});
+ return drawNativeComposer(n,element,facts.component==='Spinner'?facts.taskList:undefined,options);
+}
+async function formatNativeIdleTasks(n,facts,options){
+ if(facts.component!=='PromptHint'||!facts.taskList)return;
+ return drawNativeComposer(n,n.jsx.e(n.privateTaskDrawing.ktr,{hidden:false}),facts.taskList,options);
+}
+async function drawNativeComposer(n,element,taskList,options){
+ // Export the mounted task snapshot without subscribing to the live store.
+ if(element===null||element===false)return '';const theme=nativeThemeProvider(n);
+ const subscribe=()=>()=>{};
+ let children=taskList?n.jsx.e(n.privateTasks.$nr.Provider,{value:{getSnapshot:()=>taskList.tasks,subscribe},children:element}):element;
+ const initialState=taskList?{...n.documentDefaults.$Et(),expandedView:taskList.expanded?'tasks':'none'}:undefined;
+ if(taskList?.team){
+  // The outer provider owns cleanup. Team drawing data belongs only in the nested read-only context.
+  const state={...initialState,...taskList.team};
+  children=n.jsx.e(n.taskAppState.RP.Provider,{value:{getSnapshot:()=>state,subscribe},children});
+ }
+ const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState,children:n.jsx.e(theme.type,{value:theme.value,children})});
+ const text=await n.staticRender.v6e(tree,{columns:Math.max(20,Math.min(240,options.columns??process.stdout.columns??80))});
+ options.signal?.throwIfAborted();if(typeof text!=='string'||text.length>65536)throw Error('Native composer drawing exceeds limit');return text;
+}`

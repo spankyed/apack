@@ -738,7 +738,12 @@ export type ProcessFailure =
   /** The caller's signal aborted, with that signal's reason: an `AbortSignal.timeout` aborts with a `TimeoutError` */
   | { readonly kind: 'aborted'; readonly reason: unknown; readonly stdout: string; readonly stderr: string }
   /** The watch gave up on it (`watchWork`): it stopped working, or spent its CPU */
-  | { readonly kind: 'refused'; readonly refusal: Refusal; readonly stdout: string; readonly stderr: string };
+  | { readonly kind: 'refused'; readonly refusal: Refusal; readonly stdout: string; readonly stderr: string }
+  /**
+   * Its `input` could not be written, because it closed its stdin or exited without reading it: whatever it then
+   * wrote answers something other than what it was given. A child still running is stopped as an abort stops it
+   */
+  | { readonly kind: 'input'; readonly error: Error; readonly stdout: string; readonly stderr: string };
 
 /** How a process `runProcess` ran ended: its output, or the one reason it has none to trust */
 export type ProcessOutcome =
@@ -803,7 +808,8 @@ export function runProcess(file: string, args: readonly string[], options: RunPr
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     /** Why this function ended the child, once it has: what the exit that follows is reported as */
-    let ended: { readonly kind: 'aborted'; readonly reason: unknown } | { readonly kind: 'refused'; readonly refusal: Refusal } | undefined;
+    let ended: { readonly kind: 'aborted'; readonly reason: unknown } | { readonly kind: 'refused'; readonly refusal: Refusal }
+      | { readonly kind: 'input'; readonly error: Error } | undefined;
     let watch: Watch | undefined;
     let settled = false;
     const settle = (outcome: ProcessOutcome) => {
@@ -815,19 +821,23 @@ export function runProcess(file: string, args: readonly string[], options: RunPr
     };
     const watching = (bounds: { idleMs?: number; ceilingMs?: number; fallbackMs?: number }, onRefused: (refusal: Refusal) => void): Watch | undefined =>
       (child.pid === undefined ? undefined : watchWork({ work: processWork(child.pid), watchesOutput: true, ...bounds, onRefused }));
-    const stop = () => {
+    /** Asks the child to end, for `why`, and kills it if it then does nothing */
+    const stopFor = (why: NonNullable<typeof ended>) => {
       if (ended !== undefined || settled) return;
-      ended = { kind: 'aborted', reason: signal?.reason as unknown };
+      ended = why;
       child.kill('SIGTERM');
       // Watched afresh for the stopping: a child that cleans up is waited for, one that does nothing is not
       watch?.stop();
       watch = watching({ idleMs: stopIdleMs, ceilingMs: STOP_CPU_MS, fallbackMs: stopIdleMs }, () => child.kill('SIGKILL'));
     };
+    const stop = () => stopFor({ kind: 'aborted', reason: signal?.reason as unknown });
 
     child.stdout?.on('data', (chunk: Buffer) => { out.push(chunk); watch?.output(); });
     child.stderr?.on('data', (chunk: Buffer) => { err.push(chunk); watch?.output(); });
-    // A child that exits without reading its input fails the write, and an error event nobody listens for ends this process
-    child.stdin?.on('error', () => undefined);
+    // A child that closes its stdin or exits without reading its input fails the write; one still running is stopped,
+    // since its answer would be to a question it was not given. Listened for besides, since an error event nobody
+    // listens for ends this process
+    child.stdin?.on('error', (error: Error) => { stopFor({ kind: 'input', error }); });
     // A spawn that failed says so here and has no pid. An error from a child that did start is a signal that
     // could not be delivered, and its exit is still what is waited for
     child.on('error', (error: NodeJS.ErrnoException) => {

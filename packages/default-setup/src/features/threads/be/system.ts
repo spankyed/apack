@@ -1,14 +1,29 @@
+import { claudeProfileOptions } from '#features/code/common/native-profile.ts';
+import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus, restoreNativeBackgroundStatus, prepareNativeBackgroundDesktop, getNativeBackgroundDesktopOwner } from '#features/code/be/services/claude-code/handle-store.ts';
+import { parseClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts';
+import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
+import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
+import { prepareClaudeNativeInput } from './claude-native-input.ts';
+import { reconcileDisconnectedClaudeTerminal, syncClaudeTerminalThread } from './claude-terminal-sync.ts';
+import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { createClaudeTeammateRecovery, readClaudeTeammateCheckpoint } from '#features/code/be/services/claude-code/teammate-recovery.ts';
+import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts';
+import { createClaudeTerminalViews, type TeammateReconnectAuthority } from './claude-terminal-views.ts';
+import { registerThreadTeardown } from './thread-teardown.ts';
+import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews, operateClaudeMemory, disconnectClaudeThemePickers } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
-import { broadcast, tell } from '#generated/events.ts';
+import { broadcast, sendToWindow, tell } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
-import { setup } from 'xstate';
+import { setup, fromPromise, spawnChild } from 'xstate';
+import { runThreadHistoryOperation, type ThreadHistoryOperationInput } from './history-operation.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
+import { onConnectionEnded } from '@apackdev/sdk/events';
 
 import { write, transact, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
-import type { ThreadLinkItem } from './types.ts';
+import type { ThreadLinkItem, ThreadsAsks } from './types.ts';
 import { type ChangeBlock, toMap, toIdentifierSet, mapScalar, mapArray } from '@apackdev/sdk/utils';
 import { exportThreads } from './export-threads.ts';
 import { importThreads } from './import-threads.ts';
@@ -18,6 +33,115 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+
+const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
+import { snapshotClaudeBackgroundUiTarget, matchesClaudeBackgroundUiTarget } from '#features/code/be/services/claude-code/ui-owner.ts'
+
+const terminalViews = createClaudeTerminalViews({
+  async desktop(continuation, jobId, pid, key) {
+    return snapshotClaudeBackgroundUiTarget(await prepareNativeBackgroundDesktop(key, continuation, jobId, pid))
+  },
+  backgroundApproval(key, target) {
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
+    if (!matchesClaudeBackgroundUiTarget(owner, target)) return
+    const control = owner?.controls.value
+    return control && control.kind !== 'question' ? {id: control.dialog.id, revision: control.dialog.revision} : undefined
+  },
+  backgroundQuestion(key, target) {
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
+    if (!matchesClaudeBackgroundUiTarget(owner, target)) return
+    const control = owner?.controls.value
+    const question = control?.kind === 'question' ? control.dialog : undefined
+    return question ? {id: question.id, revision: question.revision} : undefined
+  },
+  backgroundTurn(key, target) {
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
+    return matchesClaudeBackgroundUiTarget(owner, target) ? owner?.controls.turn : undefined
+  },
+  async interruptBackground(key, request) {
+    const target = request.target
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
+    if (!owner || !matchesClaudeBackgroundUiTarget(owner, target)) throw Error('Background response owner changed')
+    await owner.controls.interrupt(request.turnId)
+  },
+  desktopCurrent(key, target) {
+    return matchesClaudeBackgroundUiTarget(getNativeBackgroundDesktopOwner(key, {sessionId:target.parentSessionId,continuedInSessionId:target.jobSessionId}), target)
+  },
+  backgroundInfo(key) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    const continuation = state?.sessionId ? parseClaudeNativeContinuation({ ...state.nativeContinuation, type: 'continued-in' }, state.sessionId) : undefined;
+    return getNativeBackgroundStatus(key, continuation);
+  },
+  subscribeBackground: subscribeNativeBackgroundStatus,
+  async restoreBackground(key) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode
+    const continuation = state?.sessionId ? parseClaudeNativeContinuation({...state.nativeContinuation,type:'continued-in'},state.sessionId) : undefined
+    if (continuation && typeof state?.cwd === 'string') await restoreNativeBackgroundStatus(key,continuation,state.cwd,claudeProfileOptions(state).env)
+  },
+  async replyBackground(continuation, request, key) {
+    const owner = services.cli.claudeCode.getNativeTerminal(key)
+    const current = owner?.state.continuation
+    if (owner) {
+      if (current?.sessionId !== continuation.sessionId || current.continuedInSessionId !== continuation.continuedInSessionId) throw new Error('Background reply owner is unavailable')
+      return owner.replyBackground(request.id, request.pid, request.text)
+    }
+    return services.cli.claudeCode.replyBackgroundSession(continuation, request,
+      { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, ...claudeProfileOptions(repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode), timeoutMs: 15000 })
+  },
+  openAttachment: (continuation,jobId,key,signal) => services.cli.claudeCode.openBackgroundAttachment(continuation,jobId,{cwd:repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd,...claudeProfileOptions(repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode),timeoutMs:15000,signal}),
+  continuation(key) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    return state?.sessionId ? parseClaudeNativeContinuation({ ...state.nativeContinuation, type: 'continued-in' }, state.sessionId) : undefined;
+  },
+  background: (continuation, request, key) => services.cli.claudeCode.backgroundSession(continuation, request,
+    { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, ...claudeProfileOptions(repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode), timeoutMs: 15000 }),
+  beforeViewChange: (_client, threadId) => suspendClaudeUiThreadViews(threadId),
+  command: submitClaudeParentCommand,
+  accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
+  prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
+  savedSession: key => repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.sessionId,
+  async loadTeammateRecovery(key, signal) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    const launch = readSavedClaudeNativeLaunch(state);
+    if (!launch || signal.aborted || state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) return [];
+    const records = await readClaudeTeammateCheckpoint({profile:resolveAppEnvironment().userDataDir, threadId:key, sessionId:launch.sessionId});
+    const env = buildChildEnv(claudeProfileOptions(state).env);
+    const result: TeammateReconnectAuthority[] = [];
+    for (const record of records) {
+      if (signal.aborted) break;
+      if (record.cwd !== launch.cwd) continue;
+      const recovery = createClaudeTeammateRecovery(record, env);
+      if (await recovery.canReconnect(signal)) result.push({target:{ownerId:record.ownerId, sessionId:record.sessionId, taskId:record.taskId, name:record.name},
+        open:recovery.reconnect, available:recovery.canReconnect});
+    }
+    return result;
+  },
+  get: key => services.cli.claudeCode.getNativeTerminal(key),
+  async open(key, signal) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    if (state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) throw new Error('Complete or reset the pending history change before opening the native interface');
+    const resume = readSavedClaudeNativeLaunch(state);
+    const prePlanMode = readClaudePlanRestoreMode(state);
+    const owner = await services.cli.claudeCode.openNativeTerminal(key, {...claudeProfileOptions(state), ...(resume ? {resume} : {}), ...(prePlanMode ? {prePlanMode} : {}), signal});
+    terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
+      const current = services.cli.claudeCode.getNativeTerminal(key);
+      return current === owner;
+    }, () => services.cli.claudeCode.getNativeLaunch(key)));
+    return owner;
+  },
+});
+registerThreadTeardown(key => terminalViews.clear(key));
+
+export function startClaudeTerminalViews(): () => void {
+  const unsubscribe = onConnectionEnded(client => {
+    terminalViews.disconnect(client);
+    disconnectClaudeThemePickers(client);
+  });
+  return () => {
+    unsubscribe();
+    terminalViews.clear();
+  };
+}
 
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();
@@ -61,7 +185,83 @@ function reported<T>(refused: (error: unknown) => void, write: () => T): T {
   }
 }
 
+function prepareThreadRevert(
+  { threadId, messageId, restoreFiles, userCliUuid }: ThreadsAsks['APPLY_THREAD_REVERT']['args'],
+  committed: () => void,
+  rejected: (error: unknown) => void,
+): ThreadHistoryOperationInput {
+  const readSnapshot = () => JSON.stringify({
+    thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+    messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages,
+  });
+  return {
+    request: {kind: 'revert', threadId, messageId, restoreFiles, userMessageId: userCliUuid},
+    snapshot: readSnapshot(), readSnapshot,
+    rejected: error => {
+      logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});
+      rejected(error);
+    },
+    commit: () => {
+      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+
+      // Stop active processes before soft-deleting so nothing races
+      // against the deletion (e.g. a stream consumer writing to messages).
+      runThreadTeardown(threadId);
+
+      const deletion = repository.chatCommands.softDeleteMessagesAfter({
+        threadId: threadId as EARS.EntityId,
+        messageId: messageId as EARS.EntityId,
+      });
+      const deletedIds = new Set(deletion.deletedIds);
+      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+
+      // Determine which agent flows had messages deleted so each flow can
+      // skip its revert handler when it isn't affected.
+      const agents = {
+        claudeCode: deletedMessages.some((m: any) =>
+          m.context?.cliUuid || m.context?.agent === 'Claude Code'
+        ),
+        codex: deletedMessages.some((m: any) =>
+          m.context?.agent === 'Codex'
+        ),
+      };
+      const codexDeletedUserMessageCount = agents.codex
+        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+        : 0;
+
+      services.chat.visitThread(threadId as EARS.EntityId);
+
+      // Unified `thread.revert` brain event — the `kind` discriminator
+      // tells the claude-code flow which variant to run.
+      tell('brain', {
+        type: 'TRIGGER_BRAIN_EVENT',
+        eventType: 'thread.revert',
+        payload: {
+          threadId,
+          messageId,
+          kind: restoreFiles ? 'rewind' : 'revert',
+          deletedMessageIds: deletion.deletedIds,
+          deletedUserMessageCount,
+          agents,
+          codexDeletedUserMessageCount,
+          ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+        },
+      });
+      committed();
+    },
+  };
+}
+
 export const answers = threadsSpec.answers({
+  EDIT_CLAUDE_QUEUED_PROMPT: ({ args, client, signal }) => terminalViews.handle(
+    args, client, client ? result => sendToWindow(client, 'threads', result) : undefined, signal),
+  CLAUDE_MEMORY: ({ args, client, signal }) => operateClaudeMemory(args, client, signal),
+  SET_CLAUDE_PERMISSION_MODE: async ({ args: { threadId, mode }, client }) => {
+    if (!client) throw new Error('A Claude permission change requires a requesting window');
+    const result = await services.action.executeIfFound('CC: Update Permission Mode', { threadId, mode });
+    if (result?.success !== true) throw new Error(result?.reason ?? 'Permission action is unavailable');
+  },
   // The thread and its parent's link are one unit, so a refused link leaves no thread behind
   CREATE_THREAD: ({ args: thread }) => reported((error) => reportThreadOperationError('create', error), () => transact(() => {
     const { id } = repository.threadCommands.create({
@@ -214,6 +414,9 @@ export const answers = threadsSpec.answers({
           shortCode: result.threadData.shortCode,
         });
 
+        if (mode === 'Claude Code' && cwdOverride) {
+          repository.threadCommands.update(threadId, { context: { claudeCode: { cwd: cwdOverride } } });
+        }
         repository.threadCommands.markAsVisited(threadId);
       } else {
         threadId = providedThreadId as EARS.EntityId;
@@ -251,73 +454,92 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
-  FORK_THREAD: ({ args, client }) => {
+  APPLY_THREAD_REVERT: async ({ args, refuse, signal }) => {
+    await runThreadHistoryOperation(prepareThreadRevert(args, () => {}, error => {
+      throw refuse('rejected', errorMessage(error), { threadId: args.threadId });
+    }), signal);
+    signal.throwIfAborted();
+  },
+  FORK_THREAD: async ({ args, client, signal }) => {
       const { messageId, threadId, threadTopic } = args;
       if (!threadId) throw new Error('There is no thread to fork from');
 
       let result: { id: EARS.EntityId } | undefined;
       const forkContext: Record<string, any> = {};
 
-      try {
-        const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-        const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
-        const sourceUserMessagesAfterFork = sourceIndex >= 0
-          ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
-          : 0;
-        const originalTopic = threadTopic || 'Untitled';
+      const readSnapshot = () => JSON.stringify({
+        thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages,
+      });
+      await runThreadHistoryOperation({
+        request: { kind: 'fork', threadId, messageId },
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: error => { throw error; },
+        commit: () => {
+          try {
+            const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+            const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
+            const sourceUserMessagesAfterFork = sourceIndex >= 0
+              ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
+              : 0;
+            const originalTopic = threadTopic || 'Untitled';
 
-        const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
-        const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
+            const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
+            const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
 
-        result = services.chat.createThread({ topic: forkTopic, instructions: '' });
-        if (!result) throw new Error('Failed to create thread');
+            result = services.chat.createThread({ topic: forkTopic, instructions: '' });
+            if (!result) throw new Error('Failed to create thread');
 
-        repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
+            repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
 
-        repository.chatCommands.copyMessagesUpTo({
-          sourceThreadId: threadId as EARS.EntityId,
-          targetThreadId: result.id,
-          upToMessageId: messageId,
-        });
+            repository.chatCommands.copyMessagesUpTo({
+              sourceThreadId: threadId as EARS.EntityId,
+              targetThreadId: result.id,
+              upToMessageId: messageId,
+            });
 
-        // Set forkPending on the NEW thread so chat actions queue messages
-        // until the async handle-fork actions finish persisting session state.
-        const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
-        const sourceContext = (sourceThread as any)?.context ?? {};
-        for (const [key, value] of Object.entries(sourceContext)) {
-          if (value && typeof value === 'object') {
-            forkContext[key] = { forkPending: true };
+            // Set forkPending on the NEW thread so chat actions queue messages
+            // until the async handle-fork actions finish persisting session state.
+            const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
+            const sourceContext = (sourceThread as any)?.context ?? {};
+            for (const [key, value] of Object.entries(sourceContext)) {
+              if (value && typeof value === 'object') {
+                forkContext[key] = { forkPending: true };
+              }
+            }
+            if (Object.keys(forkContext).length > 0) {
+              repository.threadCommands.update(result.id, { context: forkContext });
+            }
+
+            services.chat.visitThread(result.id);
+            // A window that asked opens the fork from its answer. One no window asked for is shown to every window
+            if (!client) broadcast('threads', { type: 'SHOW_THREAD', threadId: result.id });
+
+            tell('brain', {
+              type: 'TRIGGER_BRAIN_EVENT',
+              eventType: 'thread.fork',
+              payload: {
+                sourceThreadId: threadId,
+                sourceMessageId: messageId,
+                newThreadId: result.id,
+                sourceUserMessagesAfterFork,
+              },
+            });
+          } catch (err) {
+            logger.error('forkThread failed', { error: err });
+            // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
+            if (result && Object.keys(forkContext).length > 0) {
+              const clearContext = Object.fromEntries(
+                Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
+              );
+              repository.threadCommands.update(result.id, { context: clearContext });
+            }
+            throw err;
           }
-        }
-        if (Object.keys(forkContext).length > 0) {
-          repository.threadCommands.update(result.id, { context: forkContext });
-        }
-
-        services.chat.visitThread(result.id);
-        // A window that asked opens the fork from its answer. One no window asked for is shown to every window
-        if (!client) broadcast('threads', { type: 'SHOW_THREAD', threadId: result.id });
-
-        tell('brain', {
-          type: 'TRIGGER_BRAIN_EVENT',
-          eventType: 'thread.fork',
-          payload: {
-            sourceThreadId: threadId,
-            sourceMessageId: messageId,
-            newThreadId: result.id,
-            sourceUserMessagesAfterFork,
-          },
-        });
-      } catch (err) {
-        logger.error('forkThread failed', { error: err });
-        // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
-        if (result && Object.keys(forkContext).length > 0) {
-          const clearContext = Object.fromEntries(
-            Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
-          );
-          repository.threadCommands.update(result.id, { context: clearContext });
-        }
-        throw err;
-      }
+        },
+      }, signal);
+      signal.throwIfAborted();
+      if (!result) throw new Error('Failed to create thread');
       return { threadId: result.id };
   },
 });
@@ -325,13 +547,35 @@ export const answers = threadsSpec.answers({
 export const threadsSystem = setup({
   types: threadsSpec.types,
   actors: {
+    historyOperation: fromPromise(async ({input, signal}: {input: ThreadHistoryOperationInput; signal: AbortSignal}) => runThreadHistoryOperation(input, signal)),
   },
   actions: {
     ...answers.actions,
     ...threadsSpec.actions({
+    claudeTerminalView: ({ event, client }) => {
+      if (client && event.type === 'CLAUDE_TERMINAL_MOUNT' && event.queueComposer === true) {
+        const threadId = event.threadId as EARS.EntityId
+        reconcileDisconnectedClaudeTerminal(threadId, () => !!services.cli.claudeCode.getNativeTerminal(threadId)
+          || services.cli.claudeCode.isConversationBusy(threadId))
+      }
+      if (event.type === 'CLAUDE_TEAMMATE_TERMINAL_OPEN' || event.type === 'CLAUDE_BACKGROUND_OPEN' || event.type === 'CLAUDE_BACKGROUND_INPUT' || event.type === 'CLAUDE_BACKGROUND_RESIZE' || event.type === 'CLAUDE_BACKGROUND_CLOSE' || event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_CANCEL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_BACKGROUND' || event.type === 'CLAUDE_TERMINAL_TASK' || event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL' || event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED' || event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'CLAUDE_TERMINAL_POLICY_RECHECK' || event.type === 'CLAUDE_TERMINAL_NOTICE' || event.type === 'CLAUDE_TERMINAL_MCP_FORM' || event.type === 'CLAUDE_TERMINAL_MCP_URL') terminalViews.handle(event, client, client ? result => sendToWindow(client, 'threads', result) : undefined);
+    },
+    claudeUiView: ({ event, client }) => {
+      if (event.type === 'CLAUDE_UI_TRANSCRIPT_LAYOUT' || event.type === 'CLAUDE_UI_AGENTS_GESTURE' || event.type === 'CLAUDE_UI_BACKGROUND_REVIEW' || event.type === 'CLAUDE_UI_SETTINGS' || event.type === 'CLAUDE_UI_COMMAND_PANEL' || event.type === 'CLAUDE_UI_COMMAND_DECISION' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_KEY' || event.type === 'CLAUDE_UI_APPROVAL_ANSWER' || event.type === 'CLAUDE_UI_DECISION_PAUSE' || event.type === 'CLAUDE_UI_QUESTION_PAUSE' || event.type === 'CLAUDE_UI_QUESTION_REJECT' || event.type === 'CLAUDE_UI_QUESTION_PARTIAL' || event.type === 'CLAUDE_UI_QUESTION_ANSWER' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, client ? result => sendToWindow(client, 'threads', result) : undefined);
+    },
     // ---- Thread management actions ----
     visitThread: ({ event }) => {
       repository.threadCommands.markAsVisited(threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId);
+    },
+    setClaudeChannels: ({event}) => {
+      const {threadId,channels}=threadsSpec.typeOf('SET_CLAUDE_CHANNELS',event);
+      try {
+        if(services.cli.claudeCode.getNativeTerminal(threadId)||services.cli.claudeCode.isConversationBusy(threadId))throw Error('Stop the native session and wait for current work before changing channels');
+        const thread=repository.threadQueries.byId(threadId as EARS.EntityId);
+        if(!thread)throw Error('Conversation no longer exists');
+        const context={...thread.context,claudeCode:{...thread.context?.claudeCode,channelSelection:copyClaudeChannelSelection(channels)}};
+        repository.threadCommands.update(thread.id,{context});
+      }catch(error){reportThreadOperationError('update',error,threadId);}
     },
     handleSettingsUpdate: ({ event }) => {
       const firstStatusLabel = (): string | undefined =>
@@ -377,99 +621,87 @@ export const threadsSystem = setup({
         }
       }
     },
-    revertThread: ({ event }) => {
-      try {
-      const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
-      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-
-      // Stop active processes before soft-deleting so nothing races
-      // against the deletion (e.g. a stream consumer writing to messages).
-      runThreadTeardown(threadId);
-
-      const deletion = repository.chatCommands.softDeleteMessagesAfter({
-        threadId: threadId as EARS.EntityId,
-        messageId: messageId as EARS.EntityId,
+    revertThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, client}) => {
+      const request = threadsSpec.typeOf('REVERT_THREAD', event);
+      return prepareThreadRevert(request, () => {
+        const show = { type: 'SHOW_THREAD' as const, threadId: request.threadId as EARS.EntityId };
+        if (client) sendToWindow(client, 'threads', show); else broadcast('threads', show);
+      }, error => {
+        if (request.threadId) services.chat.sendBlockMessage({
+          threadId: request.threadId as EARS.EntityId,
+          text: `Could not revert: ${errorMessage(error)}`,
+          blocks: [],
+          forkable: false,
+        });
       });
-      const deletedIds = new Set(deletion.deletedIds);
-      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
-
-      // Determine which agent flows had messages deleted so each flow can
-      // skip its revert handler when it isn't affected.
-      const agents = {
-        claudeCode: deletedMessages.some((m: any) =>
-          m.context?.cliUuid || m.context?.agent === 'Claude Code'
-        ),
-        codex: deletedMessages.some((m: any) =>
-          m.context?.agent === 'Codex'
-        ),
-      };
-      const codexDeletedUserMessageCount = agents.codex
-        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-        : 0;
-
-      // Unified `thread.revert` brain event — the `kind` discriminator
-      // tells the claude-code flow which variant to run.
-      tell('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.revert',
-        payload: {
-          threadId,
-          messageId,
-          kind: restoreFiles ? 'rewind' : 'revert',
-          deletedMessageIds: deletion.deletedIds,
-          deletedUserMessageCount,
-          agents,
-          codexDeletedUserMessageCount,
-          ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+    }) }),
+    summarizeThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, client}) => {
+      const request = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'summarize' as const, threadId, messageId: request.messageId},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected summarize', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not summarize: ${errorMessage(error)}`, blocks: [], forkable: false});
         },
-      });
-      } catch (err) {
-        logger.error('revertThread failed', { error: err });
-      }
-    },
-    summarizeThread: ({ event }) => {
-      try {
-      const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
-      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+        commit: () => {
+          try {
+          const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
+          const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
 
-      // Stop active processes before soft-deleting (same as revert).
-      runThreadTeardown(threadId);
+          // Stop active processes before soft-deleting (same as revert).
+          runThreadTeardown(threadId);
 
-      // Matches Claude Code's native `direction: 'from'` — the pivot and
-      // everything after it disappear from the visible transcript, then a
-      // synthetic `/compact` turn runs against the truncated session.
-      const deletion = repository.chatCommands.softDeleteMessagesAfter({
-        threadId: threadId as EARS.EntityId,
-        messageId: messageId as EARS.EntityId,
-      });
-      const deletedIds = new Set(deletion.deletedIds);
-      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+          // Matches Claude Code's native `direction: 'from'` — the pivot and
+          // everything after it disappear from the visible transcript, then a
+          // synthetic `/compact` turn runs against the truncated session.
+          const deletion = repository.chatCommands.softDeleteMessagesAfter({
+            threadId: threadId as EARS.EntityId,
+            messageId: messageId as EARS.EntityId,
+          });
+          const deletedIds = new Set(deletion.deletedIds);
+          const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+          const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
 
-      const agents = {
-        claudeCode: deletedMessages.some((m: any) =>
-          m.context?.cliUuid || m.context?.agent === 'Claude Code'
-        ),
-        codex: deletedMessages.some((m: any) =>
-          m.context?.agent === 'Codex'
-        ),
+          const agents = {
+            claudeCode: deletedMessages.some((m: any) =>
+              m.context?.cliUuid || m.context?.agent === 'Claude Code'
+            ),
+            codex: deletedMessages.some((m: any) =>
+              m.context?.agent === 'Codex'
+            ),
+          };
+          const codexDeletedUserMessageCount = agents.codex
+            ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+            : 0;
+
+          services.chat.visitThread(threadId as EARS.EntityId);
+          const show = { type: 'SHOW_THREAD' as const, threadId: threadId as EARS.EntityId };
+          if (client) sendToWindow(client, 'threads', show); else broadcast('threads', show);
+
+          tell('brain', {
+            type: 'TRIGGER_BRAIN_EVENT',
+            eventType: 'thread.revert',
+            payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
+          });
+          } catch (err) {
+            logger.error('summarizeThread failed', { error: err });
+          }
+        },
       };
-      const codexDeletedUserMessageCount = agents.codex
-        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-        : 0;
-
-      tell('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.revert',
-        payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
-      });
-      } catch (err) {
-        logger.error('summarizeThread failed', { error: err });
-      }
-    },
+    }) }),
     pauseTurn: ({ event }) => {
-      const { threadId } = threadsSpec.typeOf('PAUSE_TURN', event);
+      const { threadId, nativePause } = threadsSpec.typeOf('PAUSE_TURN', event);
+      if (nativePause !== undefined) {
+        void services.action.executeIfFound('CC: Pause Turn', { threadId, nativePause }).then(result => {
+          if (result?.success !== true) logger.warn('Native Pause refused', { threadId, reason: result?.reason ?? 'Pause action unavailable' });
+        }).catch(error => logger.error('Native Pause failed', { threadId, error: errorMessage(error) }));
+        return;
+      }
+      // A print Pause can arrive after native takeover. Only addressed controls can pause that owner.
+      if (services.cli.claudeCode.getNativeTerminal(threadId)) return;
       tell('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'user.thread.pause',
@@ -484,17 +716,27 @@ export const threadsSystem = setup({
       try {
       const { messageId, threadId, response } = threadsSpec.typeOf('INTERACTIVE_MSG_RESPONSE', event);
 
-      if (!repository.chatQueries.messageById(messageId as EARS.EntityId)) return;
+      const message = repository.chatQueries.messageById(messageId as EARS.EntityId);
+      if (!message || !repository.chatQueries.hasMessageInThread(messageId as EARS.EntityId, threadId as EARS.EntityId)) return;
+      // Retired one-shot decisions cannot regain authority through a delayed frontend response.
+      if (message.responseTimestamp && (message.context?.claudeNativeQuestion || message.blocks?.some(block => block.type === 'question' || block.type === 'approval'))) return;
+      const approval = repository.threadQueries.byId(threadId as EARS.EntityId)?.context?.claudeCode?.pendingControlRequest as
+        { approvalMessageId?: unknown; nativeTerminal?: { genericTool?: { token?: unknown } } } | undefined;
+      const choiceToken = approval?.nativeTerminal?.genericTool?.token;
+      if (approval?.approvalMessageId === messageId && typeof choiceToken === 'string' && response?.choiceToken !== choiceToken) return;
 
+      // Question image bytes are for the live native decision and the native transcript.
+      const storedResponse = message.context?.claudeNativeQuestion && response && typeof response === 'object' && 'nativeQuestionImages' in response
+        ? Object.fromEntries(Object.entries(response).filter(([key]) => key !== 'nativeQuestionImages'))
+        : response;
       repository.chatCommands.updateMessageBlockResponse({
         messageId: messageId as EARS.EntityId,
-        response
+        response: storedResponse
       });
 
       // Compute aside text for autoHide messages
       let asideText: string | undefined;
-      const message = repository.chatQueries.messageById(messageId as EARS.EntityId);
-      if (message?.autoHide) {
+      if (message.autoHide) {
         asideText = generateAsideText(message, response);
         write(messageId as EARS.EntityId).set('asideText', asideText);
       }
@@ -525,6 +767,54 @@ export const threadsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
+      CLAUDE_TERMINAL_MOUNT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_UNMOUNT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_CANCEL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_SUBMIT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_INPUT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_BACKGROUND: { actions: 'claudeTerminalView' },
+      CLAUDE_TEAMMATE_TERMINAL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_BACKGROUND_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_BACKGROUND_INPUT: { actions: 'claudeTerminalView' },
+      CLAUDE_BACKGROUND_RESIZE: { actions: 'claudeTerminalView' },
+      CLAUDE_BACKGROUND_CLOSE: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_TASK: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_QUEUE_CANCEL: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_QUEUE_SEND_NOW: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_POLICY_RECHECK: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_NOTICE: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_MCP_URL: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_MCP_FORM: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },
+      CLAUDE_UI_AGENTS_GESTURE: { actions: 'claudeUiView' },
+      CLAUDE_UI_BACKGROUND_REVIEW: { actions: 'claudeUiView' },
+      CLAUDE_UI_SETTINGS: { actions: 'claudeUiView' },
+      CLAUDE_UI_COMMAND_PANEL: { actions: 'claudeUiView' },
+      CLAUDE_UI_COMMAND_DECISION: { actions: 'claudeUiView' },
+      CLAUDE_UI_AGENT_INPUT: { actions: 'claudeUiView' },
+      CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
+      CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
+      CLAUDE_UI_KEY: { actions: 'claudeUiView' },
+      CLAUDE_UI_APPROVAL_ANSWER: { actions: 'claudeUiView' },
+      CLAUDE_UI_QUESTION_REJECT: { actions: 'claudeUiView' },
+      CLAUDE_UI_QUESTION_PAUSE: { actions: 'claudeUiView' },
+      CLAUDE_UI_DECISION_PAUSE: { actions: 'claudeUiView' },
+      CLAUDE_UI_QUESTION_PARTIAL: { actions: 'claudeUiView' },
+      CLAUDE_UI_QUESTION_ANSWER: { actions: 'claudeUiView' },
+      CLAUDE_UI_PRESS: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_HOST_RESPONSE: { actions: 'claudeUiView' },
+      CLAUDE_UI_NOTICE: { actions: 'claudeUiView' },
+      CLAUDE_UI_TRANSCRIPT_LAYOUT: { actions: 'claudeUiView' },
+      CLAUDE_UI_SCROLL: { actions: 'claudeUiView' },
+      CLAUDE_UI_PANE: { actions: 'claudeUiView' },
+      CLAUDE_UI_FOCUS: { actions: 'claudeUiView' },
+      CLAUDE_UI_CLIENT: { actions: 'claudeUiView' },
+      CLAUDE_UI_FIELD: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_AUTOCOMPLETE: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_EDIT: { actions: 'claudeUiView' },
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
       },
@@ -543,6 +833,7 @@ export const threadsSystem = setup({
           VIEW_THREAD: {
             actions: 'visitThread',
           },
+          SET_CLAUDE_CHANNELS: {actions: 'setClaudeChannels'},
           UPDATE_THREAD_FIELD: answers.on.UPDATE_THREAD_FIELD,
           UPDATE_THREAD_STATUS: answers.on.UPDATE_THREAD_STATUS,
           DELETE_THREAD: answers.on.DELETE_THREAD,
@@ -556,6 +847,7 @@ export const threadsSystem = setup({
           },
           USER_COMMAND: answers.on.USER_COMMAND,
           FORK_THREAD: answers.on.FORK_THREAD,
+          APPLY_THREAD_REVERT: answers.on.APPLY_THREAD_REVERT,
           REVERT_THREAD: {
             actions: 'revertThread',
           },
@@ -571,6 +863,9 @@ export const threadsSystem = setup({
           PAUSE_TURN: {
             actions: 'pauseTurn',
           },
+          SET_CLAUDE_PERMISSION_MODE: answers.on.SET_CLAUDE_PERMISSION_MODE,
+          EDIT_CLAUDE_QUEUED_PROMPT: answers.on.EDIT_CLAUDE_QUEUED_PROMPT,
+          CLAUDE_MEMORY: answers.on.CLAUDE_MEMORY,
           FORWARD_BRAIN_EVENT: {
             actions: 'forwardBrainEvent',
           },

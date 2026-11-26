@@ -1,0 +1,250 @@
+import { ClaudeGenericToolPermissionApprovalSchema, ClaudeToolPermissionApprovalSchema, type ClaudeToolPermissionApproval, type ClaudeGenericToolPermissionApproval } from '../../../common/native-tool-permission.ts'
+import { ClaudeWorkflowApprovalSchema, type ClaudeWorkflowApproval } from '../../../common/native-workflow-approval.ts'
+import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
+import { ClaudePlanPresentationSchema, type ClaudePlanPresentation } from '../../../common/native-plan.ts'
+import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema, type ClaudeFileApprovalReview, type ClaudeFileApprovalPresentation } from '../../../common/native-file-approval.ts'
+import { ClaudeQuestionPresentationSchema, type ClaudeQuestionImage, type ClaudeQuestionPartialAnswer, type ClaudeQuestionPresentation } from '../../../common/native-question.ts'
+import { z } from 'zod'
+
+/**
+ * **One element, one renderer.** A tool permission exists in the CLI's own TUI *and* can be drawn by this
+ * app, and the thing that must never happen is both sides answering it — that is an approval the user gave
+ * once being spent twice, or given by a card they never saw.
+ *
+ * Three things hold it, and all three are load-bearing:
+ *
+ * 1. **Every `*DialogsSchema` below is `.max(1)`.** That is not a size cap: a dialog is offered to the app
+ *    only while the CLI holds exactly one open, so two open dialogs offer nothing and the app has nothing
+ *    to draw. `terminal-dialogs-one-renderer.spec.ts` holds every schema in this module to it, derived from
+ *    the module's own exports rather than a list.
+ * 2. **A revision binds the descriptor objects**, not their contents: the native item and payload by
+ *    identity, plus the session. Anything that replaces either — a new payload, another dialog arriving,
+ *    the session changing, the dialog closing — expires an answer in flight (`terminal-ui-dialogs.spec.ts`).
+ * 3. **The app's answer goes through the CLI's own control**, which withdraws the item from the TUI as it
+ *    settles it. There is no second path that marks a dialog answered, so "answered here" and "withdrawn
+ *    there" cannot come apart.
+ */
+
+/** A one-time file decision; native retains policy, input and dialog lifecycle ownership. */
+export const ClaudeNativeFileDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.enum(['Read', 'Write', 'Edit', 'NotebookEdit']),
+  review: ClaudeFileApprovalReviewSchema.optional(), approval: ClaudeFileApprovalPresentationSchema.optional(),
+  title: z.string().max(1000), question: z.string().max(4000),
+  reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+}) satisfies z.ZodType<ClaudeNativeFileDialog>
+export const ClaudeNativeFileDialogsSchema = z.array(ClaudeNativeFileDialogSchema).max(1)
+export type ClaudeNativeFileDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'Read' | 'Write' | 'Edit' | 'NotebookEdit'
+  title: string
+  question: string
+  input: Record<string, unknown>
+  review?: ClaudeFileApprovalReview
+  approval?: ClaudeFileApprovalPresentation
+  reason?: string
+}
+export interface ClaudeNativeFileDialogResponse {
+  choice?: string
+  choiceToken?: string
+  id: string
+  revision: string
+  sessionId: string
+  decision: 'allow' | 'deny'
+  feedback?: string
+}
+
+/** Native owns the shown card and answer admission, including richer form fields. */
+export const ClaudeNativeQuestionDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.literal('AskUserQuestion'),
+  shownInput: z.record(z.string(), z.unknown()),
+  presentation: ClaudeQuestionPresentationSchema,
+}) satisfies z.ZodType<ClaudeNativeQuestionDialog>
+export const ClaudeNativeQuestionDialogsSchema = z.array(ClaudeNativeQuestionDialogSchema).max(1)
+export type ClaudeNativeQuestionDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'AskUserQuestion'
+  shownInput: Record<string, unknown>
+  presentation: ClaudeQuestionPresentation
+}
+export interface ClaudeNativeQuestionDialogResponse {
+  id: string
+  revision: string
+  sessionId: string
+  answer: Record<string, unknown>
+  decision?: 'clarify'
+  images?: readonly ClaudeQuestionImage[]
+  renderToken?: string
+  draftStarted?: boolean
+}
+
+export interface ClaudeNativeQuestionRenderRequest {
+  id: string
+  revision: string
+  sessionId: string
+  clientId: string
+  viewport?: { columns: number; rows: number; isFullscreen?: boolean }
+}
+export const ClaudeNativeQuestionRenderSchema = z.object({
+  tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(),
+  question: z.object({ token: z.string().uuid(), dialogId: z.string(), revision: z.string().uuid(), shownInput: z.record(z.string(), z.unknown()), presentation: ClaudeQuestionPresentationSchema }),
+}).passthrough().refine(value => value.tree !== undefined, 'Native question drawing must contain a tree') satisfies z.ZodType<ClaudeNativeQuestionRender>
+export type ClaudeNativeQuestionRender = {
+  [x: string]: unknown
+  tree: unknown
+  props: Record<string, unknown>
+  rewritten: boolean
+  hooked: boolean
+  question: {
+    token: string
+    dialogId: string
+    revision: string
+    shownInput: Record<string, unknown>
+    presentation: ClaudeQuestionPresentation
+  }
+}
+
+export interface ClaudeNativeQuestionHoldRequest {
+  id: string
+  revision: string
+  sessionId: string
+  clientId: string
+  renderToken: string
+  partial?: { sequence: number; answer: ClaudeQuestionPartialAnswer; images?: readonly ClaudeQuestionImage[] }
+}
+
+/** Native-owned Bash decisions; standing choices retain original callbacks and policy gates. */
+export const ClaudeNativeBashDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.literal('Bash'),
+  command: z.string().max(262144), cwd: z.string().min(1).max(16384),
+  choices: ClaudeBashApprovalPresentationSchema.shape.choices.optional(),
+  choiceToken: ClaudeBashApprovalPresentationSchema.shape.token.optional(),
+  description: z.string().max(4000).optional(), reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+}) satisfies z.ZodType<ClaudeNativeBashDialog>
+export const ClaudeNativeBashDialogsSchema = z.array(ClaudeNativeBashDialogSchema).max(1)
+export type ClaudeNativeBashDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'Bash'
+  command: string
+  cwd: string
+  input: Record<string, unknown>
+  choices?: {
+    value: string
+    token: string
+    label: string
+    prefix?: string
+  }[]
+  choiceToken?: string
+  description?: string
+  reason?: string
+}
+export interface ClaudeNativeBashDialogResponse {
+  id: string
+  revision: string
+  sessionId: string
+  decision: 'allow' | 'deny'
+  choice?: string
+  choiceToken?: string
+  prefix?: string
+  feedback?: string
+}
+
+/** Frozen native plan choices; the host never supplies permission updates or reset state. */
+export const ClaudeNativePlanDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.enum(['EnterPlanMode', 'ExitPlanMode']),
+  presentation: ClaudePlanPresentationSchema, reason: z.string().max(16000).optional(), input: z.record(z.string(), z.unknown()),
+}) satisfies z.ZodType<ClaudeNativePlanDialog>
+export const ClaudeNativePlanDialogsSchema = z.array(ClaudeNativePlanDialogSchema).max(1)
+export type ClaudeNativePlanDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'EnterPlanMode' | 'ExitPlanMode'
+  presentation: ClaudePlanPresentation
+  input: Record<string, unknown>
+  reason?: string
+}
+export interface ClaudeNativePlanDialogResponse {
+  id: string; revision: string; sessionId: string; choice: string; feedback?: string; plan?: string
+}
+
+export const ClaudeNativeWorkflowDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.literal('Workflow'),
+  presentation: ClaudeWorkflowApprovalSchema, reason: z.string().max(16000).optional(), input: z.record(z.string(), z.unknown()),
+}) satisfies z.ZodType<ClaudeNativeWorkflowDialog>
+export const ClaudeNativeWorkflowDialogsSchema = z.array(ClaudeNativeWorkflowDialogSchema).max(1)
+export type ClaudeNativeWorkflowDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'Workflow'
+  presentation: ClaudeWorkflowApproval
+  input: Record<string, unknown>
+  reason?: string
+}
+export interface ClaudeNativeWorkflowDialogResponse {
+  id: string; revision: string; sessionId: string; decision: 'allow' | 'deny'; choice?: string; choiceToken: string; feedback?: string
+}
+
+/** Original WebFetch/Skill approval; only original choice tokens cross back to native. */
+export const ClaudeNativeToolPermissionDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.enum(['WebFetch', 'Skill']),
+  presentation: ClaudeToolPermissionApprovalSchema, reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+}) satisfies z.ZodType<ClaudeNativeToolPermissionDialog>
+export const ClaudeNativeToolPermissionDialogsSchema = z.array(ClaudeNativeToolPermissionDialogSchema).max(1)
+export type ClaudeNativeToolPermissionDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: 'WebFetch' | 'Skill'
+  presentation: ClaudeToolPermissionApproval
+  input: Record<string, unknown>
+  reason?: string
+}
+export interface ClaudeNativeToolPermissionDialogResponse {
+  id: string; revision: string; sessionId: string; toolName: 'WebFetch' | 'Skill';
+  choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
+}
+
+/** Mounted tool approval presented by the shared desktop card. The native payload supplies the tool identity. */
+export const ClaudeNativeGenericToolPermissionDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.string().min(1).max(256),
+  presentation: ClaudeGenericToolPermissionApprovalSchema, reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+}) satisfies z.ZodType<ClaudeNativeGenericToolPermissionDialog>
+export const ClaudeNativeGenericToolPermissionDialogsSchema = z.array(ClaudeNativeGenericToolPermissionDialogSchema).max(1)
+export type ClaudeNativeGenericToolPermissionDialog = {
+  id: string
+  revision: string
+  sessionId: string
+  requestId: string
+  toolName: string
+  presentation: ClaudeGenericToolPermissionApproval
+  input: Record<string, unknown>
+  reason?: string
+}
+export interface ClaudeNativeGenericToolPermissionDialogResponse {
+  id: string; revision: string; sessionId: string; toolName: string;
+  choice: string; choiceToken: string; decision: 'allow' | 'deny' | 'cancel'; feedback?: string; prefix?: string
+}

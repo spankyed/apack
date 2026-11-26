@@ -367,9 +367,20 @@ type BlockMessageOptions = BlockMessageBase & AutoHideOptions;
  * assuming the union is exhaustive; the event-level and field-level types use
  * the union, because every emit matches one of its arms.
  */
-type BlockResponse = 
+type BlockResponse = {
+    buttonId: 'accept' | 'cancel' | 'decline';
+    content?: Record<string, ClaudeMcpFormValue>;
+} | {
+    validationFailed: true;
+} | {
+    nativeQuestionAnswer: ClaudeQuestionAnswer;
+    nativeQuestionDecision?: 'clarify';
+    nativeQuestionImages?: readonly ClaudeQuestionImage[];
+    nativeQuestionRenderToken?: string;
+    nativeQuestionDraftStarted?: boolean;
+}
 /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
-{
+ | {
     approved: boolean;
     reason?: string;
 }
@@ -682,6 +693,3710 @@ type ChatStart = {
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 
+/** Original Agent output, attributed to its native task; never person input or approval. */
+interface ClaudeAgentHandback {
+    taskId: string;
+    runId?: string;
+    text: string;
+    warning?: string;
+}
+
+type ClaudeBackgroundApproval = Exclude<ClaudeBackgroundControl, {
+    kind: 'question';
+}>;
+
+interface ClaudeBackgroundAttachment {
+    readonly snapshot: ClaudeBackgroundAttachmentSnapshot;
+    readonly endedTeammate?: boolean;
+    subscribe(listener: () => void): () => void;
+    input(id: string, text: string): boolean;
+    resize(id: string, columns: number, rows: number, cell?: {
+        width: number;
+        height: number;
+    }): boolean;
+    close(): Promise<void>;
+}
+
+/** An attach client is separate from the background worker it displays. */
+interface ClaudeBackgroundAttachmentSnapshot {
+    terminalSession: ClaudeNativeTerminalSession;
+    inputBlocked?: boolean;
+    id: string;
+    jobId: string;
+    sessionId: string;
+    cwd: string;
+    /**
+     * The attach client's process id, **`null` when the host did not say** — it answers one for a session it
+     * just started and not for one it took up again. A diagnostic: nothing addresses the client by it.
+     */
+    clientPid: number | null;
+    status: 'exited' | 'live';
+    exitCode?: number;
+    output: {
+        sequence: number;
+        text: string;
+    }[];
+}
+
+interface ClaudeBackgroundAttachmentView {
+    requestId: string;
+    revision: number;
+    sessionId: string;
+    continuedInSessionId: string;
+    teammate?: {
+        ownerId: string;
+        taskId: string;
+        recoveryId?: string;
+    };
+    status: 'error' | 'opening' | 'ready';
+    state?: ClaudeBackgroundAttachmentSnapshot;
+    problem?: string;
+}
+
+type ClaudeBackgroundCheckpoint = NonNullable<Awaited<ReturnType<typeof claimClaudeBackgroundCheckpoint>>>;
+
+type ClaudeBackgroundControl = {
+    kind: 'question';
+    dialog: ClaudeNativeQuestionDialog;
+} | {
+    kind: 'bash';
+    dialog: ClaudeNativeBashDialog;
+} | {
+    kind: 'file';
+    dialog: ClaudeNativeFileDialog;
+} | {
+    kind: 'workflow';
+    dialog: ClaudeNativeWorkflowDialog;
+} | {
+    kind: 'plan';
+    dialog: ClaudeNativePlanDialog;
+} | {
+    kind: 'tool';
+    dialog: ClaudeNativeToolPermissionDialog;
+} | {
+    kind: 'generic';
+    dialog: ClaudeNativeGenericToolPermissionDialog;
+};
+
+interface ClaudeBackgroundControls {
+    readonly value: ClaudeBackgroundControl | undefined;
+    readonly turn: {
+        id: string;
+        cancelled: boolean;
+    } | undefined;
+    interrupt(turnId: string): Promise<{
+        cancelled: boolean;
+        ending?: boolean;
+    }>;
+    refresh(): Promise<void>;
+    subscribe(listener: () => void): () => void;
+    settled(id: string, revision: string): void;
+    close(): void;
+}
+
+interface ClaudeBackgroundDesktopOwner {
+    readonly id: string;
+    readonly parentSessionId: string;
+    readonly identity: Readonly<ClaudeBackgroundStatusIdentity>;
+    readonly registration: number;
+    readonly transport: ClaudeTerminalUiTransport;
+    readonly controls: ReturnType<typeof createClaudeBackgroundControls>;
+    readonly done: Promise<void>;
+}
+
+/** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
+interface ClaudeBackgroundReplyRequest {
+    operation: 'reply';
+    id: string;
+    pid: number;
+    text: string;
+}
+
+interface ClaudeBackgroundReview {
+    revision: string;
+    title: string;
+    paragraphs: string[];
+    confirmLabel: string;
+    cancelLabel: string;
+    defaultFocus: 'cancel' | 'confirm';
+}
+
+interface ClaudeBackgroundReviewState {
+    status: 'error' | 'loading' | 'pending' | 'ready';
+    review?: ClaudeBackgroundReview;
+    problem?: string;
+}
+
+/** Original background job identity is distinct from the parent app conversation. */
+interface ClaudeBackgroundSession {
+    id: string;
+    sessionId: string;
+    cwd: string;
+    name?: string;
+    pid?: number;
+    state: 'blocked' | 'done' | 'failed' | 'stopped' | 'working';
+    status?: 'busy' | 'idle' | 'waiting';
+    waitingFor?: string;
+}
+
+type ClaudeBackgroundSessionRequest = {
+    operation: 'refresh';
+} | {
+    operation: 'stop';
+    id: string;
+    pid: number;
+};
+
+interface ClaudeBackgroundSessionState {
+    sessionId: string;
+    continuedInSessionId: string;
+    revision: number;
+    operation: 'interrupt' | 'refresh' | 'reply' | 'stop';
+    turn?: {
+        id: string;
+        cancelled: boolean;
+    };
+    question?: {
+        id: string;
+        revision: string;
+    };
+    approval?: {
+        id: string;
+        revision: string;
+    };
+    desktop?: ClaudeBackgroundUiTarget;
+    status: 'done' | 'error' | 'pending';
+    session?: ClaudeBackgroundSession;
+    problem?: string;
+}
+
+/** Original session totals belong to the child snapshot; they are never parent billing deltas. */
+interface ClaudeBackgroundStatus {
+    jobId: string;
+    sessionId: string;
+    pid: number;
+    observedAt: number;
+    model: string;
+    turns: number;
+    startedAt: number;
+    context?: {
+        tokens: number;
+        window: number;
+        percent: number;
+    };
+    totalCostUsd?: number;
+    statusLine?: string;
+    agents?: ClaudeNativeTerminalTask[];
+}
+
+interface ClaudeBackgroundStatusIdentity {
+    jobId: string;
+    sessionId: string;
+    activeSessionId: string;
+    pid: number;
+    start: string;
+    hostPid: number;
+    hostStart: string;
+    cwd: string;
+}
+
+type ClaudeBackgroundStatusObserver = Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>;
+
+/** Explicit original turn cancellation; never a whole-worker Stop request. */
+interface ClaudeBackgroundTurnInterruptRequest {
+    operation: 'interrupt';
+    target: ClaudeBackgroundUiTarget;
+    turnId: string;
+}
+
+/** Exact app-owned worker incarnation selected by a desktop composer. */
+interface ClaudeBackgroundUiTarget {
+    ownerId: string;
+    parentSessionId: string;
+    sessionId: string;
+    jobSessionId: string;
+    jobId: string;
+    pid: number;
+    processStart: string;
+}
+
+interface ClaudeBillingObservation {
+    sessionId: string;
+    observedAt: number;
+    info: Pick<ClaudeRateLimitInfo, 'isUsingOverage' | 'overageDisabledReason' | 'overageStatus' | 'rateLimitType' | 'resetsAt' | 'status'>;
+}
+
+type ClaudeContextUsage = {
+    [x: string]: unknown;
+    model: string;
+    totalTokens: number;
+    maxTokens: number;
+    percentage: number;
+    memoryFiles: {
+        [x: string]: unknown;
+        path: string;
+        type: string;
+        tokens: number;
+    }[];
+    categories: {
+        [x: string]: unknown;
+        name: string;
+        tokens: number;
+        kind?: string;
+    }[];
+    skills?: {
+        [x: string]: unknown;
+        skillFrontmatter: {
+            [x: string]: unknown;
+            name: string;
+            source: string;
+            tokens: number;
+        }[];
+    };
+};
+
+interface ClaudeConversation {
+    readonly billing?: ClaudeBillingObservation;
+    readonly handle: QueryHandle;
+    readonly busy: boolean;
+    readonly closing: boolean;
+    readonly sessionId?: string;
+    readonly sessionCwd?: string;
+    /** Last acknowledged selection, distinct from observed effective model. */
+    readonly modelSelection?: string;
+    readonly done: Promise<void>;
+    start(input: string | UserInputMessage, consume: ClaudeTurnConsumer): string;
+    release(handle: QueryHandle): boolean;
+    ownsTurn(handle: QueryHandle): boolean;
+    hasPendingElicitation(requestId: string): boolean;
+    subscribe(listener: (event: StreamLine) => void): () => void;
+    subscribePrediction(listener: (event: ClaudePrintPrediction) => void): () => void;
+    close(): Promise<void>;
+    kill(): void;
+}
+
+interface ClaudeConversationTurn {
+    handle: QueryHandle;
+    inputId?: string;
+    /** Explicit teardown won before or during consumption; never register new app ownership. */
+    stopped: boolean;
+    /** Native process cost already accounted for before this turn. */
+    costBaseline: number;
+    activity: ClaudeNestedActivity;
+}
+
+type ClaudeCreditRequest = {
+    requestId: string;
+    operation: {
+        kind: 'read';
+    } | {
+        kind: 'editor';
+        revision: string;
+        editorRevision: string;
+        command: {
+            action: 'change';
+            formId: string;
+            key: string;
+            value: string;
+        } | {
+            action: 'setGroup';
+            key: string;
+            value: string | boolean;
+        } | {
+            action: 'select';
+            value: string;
+        } | {
+            action: 'preview';
+            value: string;
+        } | {
+            action: 'themeEdit' | 'themeReset';
+            value: string;
+        } | {
+            action: 'toggleSyntax';
+        } | {
+            action: 'focusModel';
+            value: string;
+        } | {
+            action: 'adjustEffort';
+            direction: 'left' | 'right';
+        } | {
+            action: 'save';
+            values: Record<string, string>;
+        } | {
+            action: 'cancel';
+        };
+    };
+};
+
+/** Identity of the original pending decision, never an instruction to pause replacement work. */
+interface ClaudeDecisionPauseScope {
+    ownerId: string;
+    sessionId: string;
+    messageId: string;
+    id: string;
+    revision: string;
+    requestId: string;
+    toolName: string;
+}
+
+type ClaudeFileApprovalPresentation = {
+    token: string;
+    ready: boolean;
+    choices: {
+        value: string;
+        label: string;
+        decision: 'allow' | 'deny';
+        feedback: boolean;
+    }[];
+};
+
+type ClaudeFileApprovalReview = {
+    withheld: boolean;
+    notice?: string;
+    before?: string;
+    after?: string;
+    replaceAll?: boolean;
+    notebook?: {
+        editMode: 'delete' | 'insert' | 'replace';
+        cellId?: string;
+        cellType?: 'code' | 'markdown';
+    };
+};
+
+type ClaudeFileRewind = {
+    [x: string]: unknown;
+    canRewind: boolean;
+    error?: string;
+    filesChanged?: string[];
+    insertions?: number;
+    deletions?: number;
+    skippedLinks?: number;
+};
+
+type ClaudeGenericToolPermissionApproval = {
+    token: string;
+    ready: boolean;
+    title: string;
+    details: {
+        label: string;
+        value: string;
+        ansi?: string;
+    }[];
+    choices: {
+        value: string;
+        label: string;
+        decision: 'allow' | 'deny';
+        feedback: boolean;
+        prefix?: string;
+    }[];
+    canCancel: boolean;
+    choiceDescriptions: Record<string, string>;
+    defaultFocusValue?: string;
+};
+
+interface ClaudeHookRegistration {
+    matcher?: string;
+    timeout?: number;
+    callbacks: Array<(input: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>;
+}
+
+type ClaudeHooks = Record<string, ClaudeHookRegistration[]>;
+
+type ClaudeInitialization = {
+    [x: string]: unknown;
+    commands: {
+        [x: string]: unknown;
+        name: string;
+        description?: string;
+    }[];
+    agents: {
+        [x: string]: unknown;
+        name: string;
+    }[];
+    models: {
+        [x: string]: unknown;
+        value: string;
+        displayName: string;
+        resolvedModel?: string;
+        description?: string;
+        supportsEffort?: boolean;
+        supportedEffortLevels?: string[];
+        supportsAdaptiveThinking?: boolean;
+        supportsFastMode?: boolean;
+        supportsAutoMode?: boolean;
+        supportsThinkingOff?: boolean;
+    }[];
+    claude_code_version?: string;
+    current_permission_mode?: string;
+    capabilities?: string[];
+};
+
+/** A native `--agents` JSON definition. Claude validates values and owns feature admission. */
+interface ClaudeInlineAgentDefinition {
+    description: string;
+    prompt: string;
+    tools?: string[];
+    disallowedTools?: string[];
+    model?: string;
+    effort?: Effort | number;
+    permissionMode?: PermissionMode;
+    /** Existing MCP server names or original inline server configurations. */
+    mcpServers?: Array<string | Record<string, Record<string, unknown>>>;
+    /** Native settings hook declarations, serialized as JSON. */
+    hooks?: Record<string, unknown>;
+    maxTurns?: number;
+    /** Native compaction ceiling in tokens, from 100,000 to 1,000,000. */
+    autoCompactWindow?: number;
+    skills?: string[];
+    initialPrompt?: string;
+    memory?: 'local' | 'project' | 'user';
+    background?: boolean;
+    omitClaudeMd?: boolean;
+    isolation?: 'remote' | 'worktree';
+    observer?: string;
+    observerMessage?: string;
+    observeSubagents?: boolean;
+}
+
+type ClaudeInterruptReceipt = {
+    [x: string]: unknown;
+    still_queued: string[];
+    cancelled?: string[];
+};
+
+type ClaudeManagedSettingsDiagnostic = {
+    file: string;
+    path: string;
+    message: string;
+    severity?: 'fatal' | 'warning';
+    errorClass?: string;
+    errno?: string;
+    statusOnly?: boolean;
+    userWritable?: boolean;
+};
+
+type ClaudeMcpElicitationAnswer = {
+    action: 'accept' | 'cancel' | 'decline';
+    content?: Record<string, string | number | boolean | string[]>;
+};
+
+interface ClaudeMcpForm {
+    fields: ClaudeMcpFormField[];
+}
+
+interface ClaudeMcpFormField {
+    name: string;
+    type: 'array' | 'boolean' | 'integer' | 'number' | 'string';
+    title: string;
+    description?: string;
+    required: boolean;
+    options?: Array<{
+        value: string;
+        label: string;
+    }>;
+    minLength?: number;
+    maxLength?: number;
+    format?: 'date' | 'date-time' | 'email' | 'uri';
+    minimum?: number;
+    maximum?: number;
+    minItems?: number;
+    maxItems?: number;
+    default?: ClaudeMcpFormValue;
+}
+
+interface ClaudeMcpFormValidation {
+    valid: boolean;
+    errors: Record<string, string>;
+    content?: Record<string, ClaudeMcpFormValue>;
+}
+
+type ClaudeMcpFormValue = string | number | boolean | string[];
+
+type ClaudeMcpStatus = {
+    [x: string]: unknown;
+    mcpServers: {
+        [x: string]: unknown;
+        name: string;
+        status: string;
+        serverInfo?: {
+            [x: string]: unknown;
+            name: string;
+            version: string;
+        };
+        tools?: {
+            [x: string]: unknown;
+            name: string;
+        }[];
+    }[];
+};
+
+type ClaudeMemoryDialog = {
+    files: {
+        kind: string;
+        path: string;
+        label: string;
+        exists: boolean;
+    }[];
+    folders: {
+        path: string;
+        label: string;
+    }[];
+    auto_memory: {
+        enabled: boolean;
+        toggleable: boolean;
+        status: string;
+    };
+    auto_dream: {
+        shown: boolean;
+        status: string;
+        detail: string;
+    };
+    memories?: {
+        name: string;
+        path: string;
+        type: string | null;
+    }[];
+};
+
+type ClaudeMemoryFileAction = {
+    kind: 'createInstruction' | 'openFolder';
+    path: string;
+};
+
+type ClaudeMemoryRequest = {
+    threadId: string;
+    mountId: string;
+    attachmentId: string;
+    ownerId: string;
+    sessionId: string;
+    action: {
+        kind: 'read';
+    } | {
+        kind: 'setAutoMemory';
+        enabled: boolean;
+    } | ClaudeMemoryFileAction;
+};
+
+type ClaudeModelCatalog = {
+    [x: string]: unknown;
+    models: {
+        [x: string]: unknown;
+        value: string;
+        displayName: string;
+        resolvedModel?: string;
+        description?: string;
+        supportsEffort?: boolean;
+        supportedEffortLevels?: string[];
+        supportsAdaptiveThinking?: boolean;
+        supportsFastMode?: boolean;
+        supportsAutoMode?: boolean;
+        supportsThinkingOff?: boolean;
+    }[];
+};
+
+interface ClaudeNativeAgentCommandConfirmation {
+    id: string;
+    title: string;
+    confirmLabel: string;
+    commandName?: string;
+}
+
+interface ClaudeNativeAgentInputReview {
+    text: string;
+    removed: number;
+}
+
+/** One observed Agent selection in one native process. A mount cannot change targets. */
+interface ClaudeNativeAgentUiTarget {
+    ownerId: string;
+    sessionId: string;
+    revision: number;
+    taskId: string;
+}
+
+type ClaudeNativeAgentViewSource = Pick<ClaudeNativeAgentUiTarget, 'revision' | 'taskId'>;
+
+type ClaudeNativeBashDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: 'Bash';
+    command: string;
+    cwd: string;
+    input: Record<string, unknown>;
+    choices?: {
+        value: string;
+        token: string;
+        label: string;
+        prefix?: string;
+    }[];
+    choiceToken?: string;
+    description?: string;
+    reason?: string;
+};
+
+interface ClaudeNativeBashDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    decision: 'allow' | 'deny';
+    choice?: string;
+    choiceToken?: string;
+    prefix?: string;
+    feedback?: string;
+}
+
+interface ClaudeNativeContinuation {
+    sessionId: string;
+    continuedInSessionId: string;
+    timestamp: string;
+}
+
+type ClaudeNativeFileDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: 'Edit' | 'NotebookEdit' | 'Read' | 'Write';
+    title: string;
+    question: string;
+    input: Record<string, unknown>;
+    review?: ClaudeFileApprovalReview;
+    approval?: ClaudeFileApprovalPresentation;
+    reason?: string;
+};
+
+interface ClaudeNativeFileDialogResponse {
+    choice?: string;
+    choiceToken?: string;
+    id: string;
+    revision: string;
+    sessionId: string;
+    decision: 'allow' | 'deny';
+    feedback?: string;
+}
+
+interface ClaudeNativeFocusProjection {
+    sessionId: string;
+    viewRevision: number;
+    producerId: string;
+    active: boolean;
+    hidden: string[];
+}
+
+type ClaudeNativeGenericToolPermissionDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: string;
+    presentation: ClaudeGenericToolPermissionApproval;
+    input: Record<string, unknown>;
+    reason?: string;
+};
+
+interface ClaudeNativeGenericToolPermissionDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    toolName: string;
+    choice: string;
+    choiceToken: string;
+    decision: 'allow' | 'cancel' | 'deny';
+    feedback?: string;
+    prefix?: string;
+}
+
+interface ClaudeNativeImage {
+    mediaType: 'image/gif' | 'image/jpeg' | 'image/png' | 'image/webp';
+    data: string;
+}
+
+interface ClaudeNativeJournalBatch {
+    entries: ClaudeNativeJournalEntry[];
+    pending: boolean;
+    problems: string[];
+}
+
+interface ClaudeNativeJournalEntry {
+    sessionId: string;
+    row: Record<string, unknown>;
+}
+
+/** Persisted launch intent; credentials, resolved settings and process capabilities stay backend-only. */
+interface ClaudeNativeLaunch {
+    sessionId: string;
+    cwd: string;
+    model?: string;
+    permissionMode?: PermissionMode;
+    prePlanMode?: PermissionMode;
+    allowedTools?: string[];
+    disallowedTools?: string[];
+    appendSystemPrompt?: string;
+    addDir?: string[];
+    pluginDir?: string[];
+    channels?: string[];
+}
+
+type ClaudeNativeManagedTaskType = "auto_mode_scan" | "dream" | "local_memory_import" | "monitor_mcp" | "monitor_ws" | "remote_agent";
+
+type ClaudeNativeMcpForm = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    token: string;
+    ready: boolean;
+    serverName: string;
+    message: string;
+    schema: Record<string, unknown>;
+    propertyOrder: string[];
+    values: Record<string, string | number | boolean | string[]>;
+    errors: Record<string, string>;
+    resolvingFields: string[];
+    focusedButton: 'accept' | 'decline' | null;
+    textInputValue: string;
+    expandedAccordion?: string;
+    currentFieldIndex?: number;
+    textInputCursorOffset?: number;
+};
+
+type ClaudeNativeMcpFormOperation = {
+    operation: 'edit';
+    field: string;
+    value: string | number | boolean | string[] | null;
+    cursorOffset?: number;
+} | {
+    operation: 'focus';
+    field: string;
+} | {
+    operation: 'cursor';
+    field: string;
+    cursorOffset: number;
+} | {
+    operation: 'accept' | 'cancel' | 'decline';
+};
+
+interface ClaudeNativeMcpFormRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    token: string;
+    action: ClaudeNativeMcpFormOperation;
+}
+
+type ClaudeNativeMcpTaskInfo = {
+    truncated: boolean;
+    status: string;
+    startTime: number;
+    serverName?: string;
+    toolName?: string;
+    serverTaskId?: string;
+    statusMessage?: string;
+    parked?: true;
+    pollIntervalMs?: number;
+    endTime?: number;
+    protocol?: string;
+};
+
+type ClaudeNativeMcpUrl = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    token: string;
+    ready: boolean;
+    kind: 'mcp_elicitation' | 'mcp_elicitation_waiting' | 'mcp_url_elicitation';
+    serverName: string;
+    message: string;
+    url: string;
+    title: string;
+    phase: 'prompt' | 'waiting';
+    userConfirmsCompletion: boolean;
+    choices: {
+        operation: 'accept' | 'cancel' | 'continue' | 'decline' | 'open';
+        label: string;
+        selected: boolean;
+    }[];
+    warnings: string[];
+};
+
+type ClaudeNativeMcpUrlOperation = {
+    operation: 'accept' | 'cancel' | 'continue' | 'decline' | 'open';
+};
+
+interface ClaudeNativeMcpUrlRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    token: string;
+    action: ClaudeNativeMcpUrlOperation;
+}
+
+type ClaudeNativeMessageRetirements = {
+    sessionId: string;
+    uuids: string[];
+    rewoundUserUuids?: string[];
+    rewoundNoticeUuids?: string[];
+}[];
+
+type ClaudeNativeNotice = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    title: string;
+    paragraphs: string[];
+} & ({
+    kind: 'managed_settings_security';
+    paragraphsAnsi: string[];
+    preferredChoice: 'policy_approve' | 'policy_reject';
+    choices: {
+        value: 'policy_approve' | 'policy_reject';
+        label: string;
+    }[];
+} | {
+    kind: 'ultraplan_launch';
+    subtitle: string;
+    phase: 'loading' | 'review' | 'terms';
+    choices: {
+        value: 'ultraplan_launch_cancel' | 'ultraplan_launch_run';
+        label: string;
+        description?: string;
+    }[];
+    promptLabel?: string;
+    summary?: string;
+    helpLabel?: string;
+    helpUrl?: 'https://code.claude.com/docs/en/claude-code-on-the-web';
+} | {
+    kind: 'fable_overage_consent_prompt';
+    snapshot: ClaudeSettingsSnapshot;
+} | {
+    kind: 'credit_consent_result';
+    severity: 'feedback';
+    links: string[];
+} | {
+    kind: 'chrome_install_upsell';
+    preferredChoice: 'chrome_not_now';
+    choices: {
+        value: 'chrome_install' | 'chrome_never' | 'chrome_not_now';
+        label: string;
+        description?: string;
+    }[];
+} | {
+    kind: 'chrome_install_setup';
+    phase: 'connected' | 'connecting' | 'failed' | 'stalled' | 'waiting_install';
+    installPageOpened: boolean;
+    choices: {
+        value: 'chrome_continue' | 'chrome_skip' | 'chrome_wait';
+        label: string;
+        description?: string;
+    }[];
+} | {
+    kind: 'effort_preference_result';
+    severity: 'feedback' | 'warning';
+} | {
+    kind: 'effort_medium_nudge';
+    model: string;
+    preferredChoice: 'effort_accept' | 'effort_decline';
+    choices: {
+        value: 'effort_accept' | 'effort_decline';
+        label: string;
+    }[];
+    warning?: string;
+} | {
+    kind: 'auto_default_nudge';
+    choices: {
+        value: 'auto_nudge_accept' | 'auto_nudge_decline';
+        label: string;
+    }[];
+    preferredChoice?: 'auto_nudge_accept' | 'auto_nudge_decline';
+} | {
+    kind: 'auto_mode_setup_review';
+    choices: {
+        value: 'auto_review_accept' | 'auto_review_decline';
+        label: string;
+    }[];
+    preferredChoice?: 'auto_review_accept' | 'auto_review_decline';
+} | {
+    kind: 'auto_mode_flagged_allow';
+    choices: {
+        value: 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_submit';
+        label: string;
+    }[];
+    phase: 'pick' | 'review';
+    rules: {
+        value: string;
+        label: string;
+    }[];
+    selectedValues: string[];
+    preferredChoice?: 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_submit';
+} | {
+    kind: 'computer_use_approval';
+    phase: 'apps' | 'os_permissions';
+    choices: {
+        value: 'computer_accessibility' | 'computer_allow' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording';
+        label: string;
+    }[];
+    preferredChoice?: 'computer_deny';
+} | {
+    kind: 'permission_browser';
+    toolName: string;
+    requestId: string;
+    choices: {
+        value: 'browser_allow' | 'browser_deny' | 'browser_domain';
+        label: string;
+    }[];
+} | {
+    kind: 'left_arrow_confirm';
+    preferredChoice: 'background_confirm' | 'background_stay';
+    choices: {
+        value: 'background_confirm' | 'background_stay';
+        label: string;
+    }[];
+} | {
+    kind: 'sandbox_network_access';
+    choices: {
+        value: 'sandbox_allow' | 'sandbox_deny' | 'sandbox_remember';
+        label: string;
+    }[];
+} | {
+    kind: 'permission_publish_plugin';
+    previewFiles: string[];
+    files: string[];
+    choices: [{
+        value: 'publish_plugin_decline';
+        label: string;
+    }] | [{
+        value: 'publish_plugin_confirm';
+        label: string;
+    }, {
+        value: 'publish_plugin_decline';
+        label: string;
+    }];
+} | {
+    kind: 'refusal_fallback_prompt';
+    originalModel: string;
+    fallbackModel: string;
+    choices: {
+        value: 'edit_prompt' | 'retry_fallback';
+        label: string;
+    }[];
+    helpUrl?: string;
+} | {
+    kind: 'autocompact_offer';
+    selectedTokens: number;
+    canPrevious: boolean;
+    canNext: boolean;
+    choices: {
+        value: 'compact_accept' | 'compact_keep';
+        label: string;
+    }[];
+} | {
+    kind: 'cold_resume_quota';
+    trigger: 'idle' | 'resume';
+    choices: {
+        value: 'quota_new_conversation' | 'quota_resume';
+        label: string;
+        description?: string;
+    }[];
+    preferredChoice?: 'quota_new_conversation' | 'quota_resume';
+} | {
+    kind: 'newer_model_inline';
+    ansi: string;
+} | {
+    kind: 'newer_model_offer';
+    choices: {
+        value: 'newer_accept' | 'newer_keep';
+        label: string;
+    }[];
+} | {
+    kind: 'resume_return';
+    choices: {
+        value: 'resume_compact' | 'resume_continue' | 'resume_never';
+        label: string;
+    }[];
+} | {
+    kind: 'fullscreen_upsell';
+    choices: {
+        value: 'fullscreen_accept' | 'fullscreen_dismiss';
+        label: string;
+    }[];
+} | {
+    kind: 'ultraplan_choice';
+    plan: string;
+    choices: [{
+        value: 'ultraplan_here';
+        label: string;
+        description: string;
+    }, {
+        value: 'ultraplan_fresh';
+        label: string;
+        description: string;
+    }, {
+        value: 'ultraplan_cancel';
+        label: string;
+        description: string;
+    }];
+} | {
+    kind: 'remote_callout';
+    disabled: boolean;
+    choices: [{
+        value: 'remote_enable';
+        label: string;
+        description: string;
+    }, {
+        value: 'remote_dismiss';
+        label: string;
+        description: string;
+    }];
+} | {
+    kind: 'cost_threshold';
+    helpUrl: 'https://code.claude.com/docs/en/costs';
+    choices: [{
+        value: 'cost_acknowledge';
+        label: string;
+    }];
+} | {
+    kind: 'ide_onboarding';
+    choices: [{
+        value: 'ide_welcome_dismiss';
+        label: 'Continue';
+    }];
+} | {
+    kind: 'peer_inbound_approval';
+    message: string;
+    choices: [{
+        value: 'peer_deny';
+        label: string;
+    }, {
+        value: 'peer_deliver';
+        label: string;
+    }];
+} | {
+    kind: 'goal_proposal';
+    choices: {
+        value: 'goal_accept' | 'goal_decline';
+        label: string;
+    }[];
+} | {
+    kind: 'auto_mode_server_fallback';
+    helpUrl: string;
+} | {
+    kind: 'plugin_hint';
+    pluginName: string;
+    marketplaceName: string;
+    sourceCommand: string;
+    choices: {
+        value: 'disable' | 'no' | 'yes';
+        label: string;
+    }[];
+} | {
+    kind: 'lsp_recommendation';
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
+    choices: {
+        value: 'disable' | 'never' | 'no' | 'yes';
+        label: string;
+    }[];
+});
+
+type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({
+    decision: 'credit';
+    credit: ClaudeCreditRequest;
+} | {
+    selectedValues?: string[];
+    decision: 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'cost_acknowledge' | 'disable' | 'edit_prompt' | 'effort_accept' | 'effort_decline' | 'fullscreen_accept' | 'fullscreen_dismiss' | 'goal_accept' | 'goal_decline' | 'ide_welcome_dismiss' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'peer_cancel' | 'peer_deliver' | 'peer_deny' | 'policy_approve' | 'policy_reject' | 'publish_plugin_confirm' | 'publish_plugin_decline' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'remote_dismiss' | 'remote_enable' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'ultraplan_cancel' | 'ultraplan_fresh' | 'ultraplan_here' | 'ultraplan_launch_cancel' | 'ultraplan_launch_escape' | 'ultraplan_launch_run' | 'yes';
+});
+
+interface ClaudeNativePauseScope {
+    ownerId: string;
+    sessionId: string;
+    turnId?: string;
+    mcp?: {
+        id: string;
+        revision: string;
+    };
+}
+
+type ClaudeNativePlanDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: 'EnterPlanMode' | 'ExitPlanMode';
+    presentation: ClaudePlanPresentation;
+    input: Record<string, unknown>;
+    reason?: string;
+};
+
+interface ClaudeNativePlanDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    choice: string;
+    feedback?: string;
+    plan?: string;
+}
+
+/** Presence matters: an explicit default config path selects a different native Keychain namespace. */
+interface ClaudeNativeProfile {
+    configDir?: string;
+    secureStorageConfigDir?: string;
+}
+
+interface ClaudeNativePromptQueue {
+    revision: string;
+    count: number;
+    items: {
+        id: string;
+        text: string;
+        editable: boolean;
+        cancellable: boolean;
+    }[];
+}
+
+type ClaudeNativeQuestionDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: 'AskUserQuestion';
+    shownInput: Record<string, unknown>;
+    presentation: ClaudeQuestionPresentation;
+};
+
+interface ClaudeNativeQuestionDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    answer: Record<string, unknown>;
+    decision?: 'clarify';
+    images?: readonly ClaudeQuestionImage[];
+    renderToken?: string;
+    draftStarted?: boolean;
+}
+
+interface ClaudeNativeQuestionHoldRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    clientId: string;
+    renderToken: string;
+    partial?: {
+        sequence: number;
+        answer: ClaudeQuestionPartialAnswer;
+        images?: readonly ClaudeQuestionImage[];
+    };
+}
+
+type ClaudeNativeQuestionRender = {
+    [x: string]: unknown;
+    tree: unknown;
+    props: Record<string, unknown>;
+    rewritten: boolean;
+    hooked: boolean;
+    question: {
+        token: string;
+        dialogId: string;
+        revision: string;
+        shownInput: Record<string, unknown>;
+        presentation: ClaudeQuestionPresentation;
+    };
+};
+
+interface ClaudeNativeQuestionRenderRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    clientId: string;
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean;
+    };
+}
+
+interface ClaudeNativeSessionMetadata {
+    cwd: string;
+    model: string;
+    modelSelection?: string;
+    turns: number;
+    startedAt: number;
+    totalCostUsd?: number;
+    permissionMode?: PermissionMode;
+    prePlanMode?: PermissionMode;
+}
+
+interface ClaudeNativeSubmissionReceipt {
+    sessionId: string;
+    uuid: string;
+    text: string;
+    queued?: true;
+}
+
+interface ClaudeNativeTaskDetails {
+    mcp?: ClaudeNativeMcpTaskInfo;
+    shell?: {
+        command: string;
+        commandTruncated: boolean;
+        cwd?: string;
+        output: string;
+        totalBytes: number;
+        truncated: boolean;
+    };
+    handback?: ClaudeAgentHandback;
+    workflow?: {
+        settled: boolean;
+        canPause: boolean;
+        canResume: boolean;
+        canStop: boolean;
+        name?: string;
+        runId?: string;
+        agentCount: number;
+        phaseCount: number;
+        progress: {
+            type: 'workflow_agent' | 'workflow_log' | 'workflow_phase';
+            index?: number;
+            phaseIndex?: number;
+            tokens?: number;
+            toolCalls?: number;
+            title?: string;
+            kind?: string;
+            label?: string;
+            state?: string;
+            phaseTitle?: string;
+            agentId?: string;
+            model?: string;
+            error?: string;
+            resultPreview?: string;
+            message?: string;
+            cached?: boolean;
+            skipped?: boolean;
+            controlToken?: string;
+        }[];
+        logs: string[];
+        output?: string;
+        outputUnavailable: boolean;
+        truncated: boolean;
+    };
+    taskId: string;
+    name: string;
+    teammateName?: string;
+    ancestors?: {
+        taskId: string;
+        name: string;
+    }[];
+    status: string;
+    canInput: boolean;
+    canFocusInput?: boolean;
+    externalPane?: true;
+    canAttach?: true;
+    canMessage: boolean;
+    metadata?: {
+        prompt?: string;
+        promptTruncated: boolean;
+        model?: string;
+        effort?: string;
+        elapsedMs?: number;
+        tokenCount?: number;
+        toolUseCount?: number;
+        error?: string;
+        errorTruncated: boolean;
+    };
+    messages: ({
+        uuid: string;
+        role: 'assistant' | 'user';
+        text: string;
+        renderText?: string;
+        apiMessageId?: string;
+        origin?: {
+            kind: string;
+            name?: string;
+            asUser?: boolean;
+            server?: string;
+        };
+    } | {
+        uuid: string;
+        role: 'system';
+        text: string;
+        compaction: 'boundary' | 'summary';
+    })[];
+    truncated: boolean;
+}
+
+interface ClaudeNativeTaskInputReceipt {
+    messageId: string;
+    mode: 'queued' | 'resumed';
+}
+
+type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'columns' | 'env' | 'prePlanMode' | 'rows' | 'signal'> & {
+    resume?: ClaudeNativeLaunch;
+};
+
+interface ClaudeNativeTerminalOptions {
+    sessionId: string;
+    cwd: string;
+    settings: ClaudeSettings;
+    permissionMode: PermissionMode;
+    prePlanMode?: PermissionMode;
+    cliPath?: string;
+    env?: NodeJS.ProcessEnv;
+    columns?: number;
+    rows?: number;
+    model?: string;
+    allowedTools?: string[];
+    disallowedTools?: string[];
+    appendSystemPrompt?: string;
+    addDir?: string[];
+    pluginDir?: string[];
+    channels?: string[];
+    signal?: AbortSignal;
+}
+
+interface ClaudeNativeTerminalOwner {
+    readonly backgroundObserver?: ClaudeBackgroundStatusObserver;
+    readonly backgroundInfo?: ClaudeBackgroundStatus;
+    /** Reviewed native UI operations; reverse hosts and the full UI owner are integrated separately. */
+    readonly uiTransport: ClaudeTerminalUiTransport;
+    readonly state: ClaudeNativeTerminalState;
+    readonly busy: boolean;
+    readonly modelSelection?: string;
+    readonly done: Promise<void>;
+    /** Register persistence work before the process exits; done waits for these callbacks. */
+    beforeRelease(listener: () => Promise<void>): void;
+    /** Raw native terminal bytes, sequenced independently of presentation metadata. */
+    readonly output: readonly {
+        sequence: number;
+        text: string;
+    }[];
+    readonly canReplyBackground: boolean;
+    replyBackground(jobId: string, pid: number, text: string): Promise<ClaudeBackgroundSession>;
+    refreshMcpInput(): Promise<void>;
+    operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>;
+    operateMcpUrl(request: ClaudeNativeMcpUrlRequest): Promise<void>;
+    cancelMcpInput(expected: Pick<ClaudeNativeMcpForm, 'id' | 'revision' | 'sessionId'>): Promise<void>;
+    refreshNotice(): Promise<void>;
+    answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>;
+    readJournal(): Promise<ClaudeNativeJournalBatch>;
+    readonly records: readonly {
+        sequence: number;
+        record: ClaudeNativeTerminalRecord;
+    }[];
+    subscribe(listener: () => void): () => void;
+    input(ownerId: string, text: string): boolean;
+    resize(ownerId: string, columns: number, rows: number, cell?: {
+        width: number;
+        height: number;
+    }): boolean;
+    holdQuestionDialog(request: ClaudeNativeQuestionHoldRequest): Promise<void>;
+    renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>;
+    getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>;
+    rejectQuestionDialog(response: Omit<ClaudeNativeQuestionDialogResponse, 'answer'>): Promise<void>;
+    answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>;
+    getBashDialogs(): Promise<ClaudeNativeBashDialog[]>;
+    answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>;
+    getPlanDialogs(): Promise<ClaudeNativePlanDialog[]>;
+    answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>;
+    getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>;
+    answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>;
+    getGenericToolPermissionDialogs(): Promise<ClaudeNativeGenericToolPermissionDialog[]>;
+    answerGenericToolPermissionDialog(response: ClaudeNativeGenericToolPermissionDialogResponse): Promise<void>;
+    getToolPermissionDialogs(): Promise<ClaudeNativeToolPermissionDialog[]>;
+    answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>;
+    getFileDialogs(): Promise<ClaudeNativeFileDialog[]>;
+    answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>;
+    operateTask(taskId: string, operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop', text?: string, worker?: ClaudeNativeWorkflowWorkerTarget, fromAgent?: ClaudeNativeAgentViewSource): Promise<{
+        paused?: boolean;
+        resume?: {
+            taskId: string;
+            runId: string;
+            requested: true;
+        };
+        worker?: ClaudeNativeWorkflowWorkerReceipt;
+        view?: {
+            taskId: string | null;
+        };
+        sent?: boolean;
+        input?: ClaudeNativeTaskInputReceipt;
+        stopped?: boolean;
+        details?: ClaudeNativeTaskDetails;
+    }>;
+    /** A separately attached tmux client can outlive a parent killed outside the app. */
+    readonly keepAttachedTeammatesAfterCrash?: boolean;
+    openTeammateTerminal?(taskId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment & {
+        reconnect?: (signal: AbortSignal) => Promise<ClaudeBackgroundAttachment>;
+        canReconnect?: (signal: AbortSignal) => Promise<boolean>;
+    }>;
+    getMcpStatus(): Promise<ClaudeMcpStatus>;
+    getMemoryDialog(): Promise<ClaudeMemoryDialog>;
+    setAutoMemory(enabled: boolean): Promise<void>;
+    controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
+    getModels(options?: {
+        includeUnsupportedModels?: boolean;
+    }): Promise<ClaudeModelCatalog>;
+    renameSession(title: string): Promise<{
+        title: string;
+        message: string;
+    }>;
+    setModel(model: string): Promise<{
+        selection: string;
+        notice: string;
+    }>;
+    setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
+    submit(text: string, images?: readonly ClaudeNativeImage[], phase?: 'Edit' | 'Plan'): Promise<ClaudeNativeSubmissionReceipt>;
+    close(): Promise<void>;
+    kill(): void;
+}
+
+interface ClaudeNativeTerminalRecord {
+    sessionId: string;
+    uuid: string;
+    door: string;
+    origin: Record<string, unknown>;
+    message: {
+        type: 'assistant' | 'attachment' | 'system' | 'user';
+        role?: 'assistant' | 'user';
+        isMeta?: true;
+        content: {
+            type: string;
+            [key: string]: unknown;
+        }[];
+    };
+}
+
+/** The broker-issued drawing address; independent of Claude session IDs and process IDs. */
+interface ClaudeNativeTerminalSession {
+    id: string;
+    target: string | null;
+}
+
+interface ClaudeNativeTerminalState {
+    /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
+    terminalSession?: ClaudeNativeTerminalSession;
+    /** View/parent transition: ordinary terminal input waits; cancellation remains available. */
+    inputBlocked?: boolean;
+    /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
+    handoffPending?: boolean;
+    /** Available after the native dialog store has been observed; retained through owned shutdown. */
+    messageRetirements?: ClaudeNativeMessageRetirements;
+    mcpUrl?: ClaudeNativeMcpUrl;
+    mcpForm?: ClaudeNativeMcpForm;
+    notice?: ClaudeNativeNotice;
+    /** Original native selected view, independent of the app thread. Undefined until observed. */
+    view?: ClaudeNativeTerminalView;
+    ownerId: string;
+    sessionId: string;
+    cwd: string;
+    status: 'error' | 'exited' | 'live' | 'starting';
+    /** Process attached to the PTY; may be a configured launcher. */
+    pid?: number;
+    /** Authenticated native executable beneath that launcher. */
+    nativePid?: number;
+    exitCode?: number;
+    continuation?: ClaudeNativeContinuation;
+    preview?: {
+        turnId: string;
+        output: string;
+    };
+    /** Waiting main-conversation prompts observed in the original CLI. */
+    promptQueue?: ClaudeNativePromptQueue;
+    busy: boolean;
+    /** Original turn currently eligible for a composer Pause. */
+    activeTurnId?: string;
+    /** Original turn accepted cancellation and is still settling. */
+    endingTurnId?: string;
+    /** Native pending-work counts, independent of prompt submission readiness. */
+    activity?: {
+        pendingAgents: number;
+        pendingWorkflows: number;
+    };
+    /** Read-only active goal indicator from the current original Claude session. */
+    goalActive?: boolean;
+    focus?: ClaudeNativeFocusProjection;
+    lastTurn?: {
+        id: string;
+        reason: 'aborted' | 'answer' | 'error' | 'refusal';
+    };
+    session?: ClaudeNativeSessionMetadata;
+    billing?: ClaudeBillingObservation;
+    mainStatus?: string;
+    tasks: ClaudeNativeTerminalTask[];
+    problem?: string;
+    startupPolicyProblem?: string;
+}
+
+/** Native task ids and terminal owners are independent of apack thread ids. */
+interface ClaudeNativeTerminalTask {
+    kind?: 'managed' | 'mcp' | 'shell' | 'workflow';
+    nativeTaskType?: ClaudeNativeManagedTaskType;
+    mcp?: ClaudeNativeMcpTaskInfo;
+    settled?: boolean;
+    canPause?: boolean;
+    canResume?: boolean;
+    canStop?: boolean;
+    id: string;
+    name: string;
+    status: string;
+    statusText?: string;
+}
+
+type ClaudeNativeTerminalView = {
+    kind: 'main';
+    revision: number;
+} | {
+    kind: 'agent';
+    revision: number;
+    registryId: string;
+    taskId?: string;
+};
+
+type ClaudeNativeToolPermissionDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: 'Skill' | 'WebFetch';
+    presentation: ClaudeToolPermissionApproval;
+    input: Record<string, unknown>;
+    reason?: string;
+};
+
+interface ClaudeNativeToolPermissionDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    toolName: 'Skill' | 'WebFetch';
+    choice: string;
+    choiceToken: string;
+    decision: 'allow' | 'deny';
+    feedback?: string;
+}
+
+type ClaudeNativeWorkflowDialog = {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: 'Workflow';
+    presentation: ClaudeWorkflowApproval;
+    input: Record<string, unknown>;
+    reason?: string;
+};
+
+interface ClaudeNativeWorkflowDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    decision: 'allow' | 'deny';
+    choice?: string;
+    choiceToken: string;
+    feedback?: string;
+}
+
+interface ClaudeNativeWorkflowWorkerReceipt {
+    agentId: string;
+    operation: 'retry_worker' | 'skip_worker';
+    accepted: true;
+}
+
+interface ClaudeNativeWorkflowWorkerTarget {
+    agentId: string;
+    token: string;
+}
+
+interface ClaudeNestedAccounting {
+    toolCallCount: number;
+    mutatedPaths: string[];
+    hadErrors: boolean;
+}
+
+interface ClaudeNestedActivity {
+    /** Bind an observed root tool to its existing app activity, for this process lifetime. */
+    register(rootToolId: string, receive: (event: StreamLine) => void): void;
+    /** Drain facts once, at the next native result; output bindings remain registered. */
+    takeAccounting(): ClaudeNestedAccounting;
+}
+
+type ClaudeParentCommandResult = {
+    kind: 'direct_message';
+    recipient: string;
+} | {
+    kind: 'not_command';
+} | {
+    kind: 'review';
+    text: string;
+    removed: number;
+} | {
+    kind: 'panel';
+    id: string;
+    commandName: string;
+} | {
+    kind: 'command_output';
+    messageId: string;
+    commandName: string;
+    text: string;
+    isErrored: boolean;
+    outcome?: string;
+} | {
+    kind: 'blocked';
+    message: string;
+} | {
+    kind: 'confirmation';
+    id: string;
+    title: string;
+    confirmLabel: string;
+    commandName?: string;
+} | {
+    kind: 'ultraplan_settled';
+    draft?: string;
+} | {
+    kind: 'command_complete';
+    commandName: string;
+    messageId: string;
+    boundaryId?: string;
+    sessionId?: string;
+    conversationId?: string;
+};
+
+type ClaudePermissionsOperation = {
+    action: 'externalSave';
+    id: string;
+    value: string;
+} | {
+    action: 'externalCancel';
+    id: string;
+} | {
+    action: 'tab';
+    value: string;
+} | {
+    action: 'retry';
+    value: string;
+} | {
+    action: 'select';
+    value: string;
+} | {
+    action: 'search';
+    scope: string;
+    value: string;
+} | {
+    action: 'change';
+    scope: string;
+    value: string;
+} | {
+    action: 'complete';
+    scope: string;
+    value: string;
+    token: string;
+} | {
+    action: 'submit';
+    value: string;
+    scope?: string;
+    formRevision?: string;
+} | {
+    action: 'cancel';
+    scope?: string;
+};
+
+type ClaudePermissionsSnapshot = {
+    title: string;
+    tabs: {
+        value: string;
+        label: string;
+        selected: boolean;
+    }[];
+    paragraphs: {
+        runs: {
+            text: string;
+            style: {
+                color?: string;
+                backgroundColor?: string;
+                bold?: boolean;
+                italic?: boolean;
+                underline?: boolean;
+                strikethrough?: boolean;
+                inverse?: boolean;
+                dimColor?: boolean;
+            };
+        }[];
+        role?: 'alert';
+    }[];
+    choices: {
+        value: string;
+        label: string;
+        disabled: boolean;
+        description?: string;
+        approved?: boolean;
+        retryScheduled?: boolean;
+        retryAvailable?: boolean;
+    }[];
+    readOnly: boolean;
+    decisions?: {
+        approved: number;
+        retry: number;
+    };
+    defaultFocusValue?: string;
+    search?: string;
+    searchScope?: string;
+    form?: {
+        value: string;
+        placeholder: string;
+        multiline: boolean;
+        submitLabel: string;
+        live?: {
+            kind: 'autoRule' | 'directory';
+            id: string;
+            revision: string;
+            suggestions: {
+                value: string;
+                label: string;
+                token: string;
+                description?: string;
+            }[];
+            problem?: string;
+            selectedValue?: string;
+        };
+    };
+    editor?: {
+        id: string;
+        revision: string;
+        value: string;
+        closing: boolean;
+    };
+};
+
+type ClaudePlan = {
+    [x: string]: unknown;
+    exists: false;
+} | {
+    [x: string]: unknown;
+    exists: true;
+    content: string;
+    path?: string;
+};
+
+type ClaudePlanPresentation = {
+    plan: string;
+    initialChoice: string;
+    empty: boolean;
+    withheld: boolean;
+    choices: {
+        value: string;
+        label: string;
+        mode: 'acceptEdits' | 'auto' | 'bypassPermissions' | 'default' | 'plan';
+        clearContext: boolean;
+    }[];
+    planFilePath?: string;
+};
+
+interface ClaudePrintClientProjection {
+    managedSettingsDiagnostics(clientId: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
+    prepareRender?(request: ClaudeUiRender): Promise<void>;
+    project(request: ClaudeUiRender, frame: ClaudeUiRenderResult): Promise<ClaudeUiRenderResult>;
+    action(request: (ClaudeUiPress | ClaudeUiInput | ClaudeUiSelect) & {
+        subtype: string;
+    }): Promise<unknown | undefined>;
+    event(request: {
+        client_id: string;
+        id: string;
+        sequence: number;
+        event: ClaudeUiClientInput;
+    }): Promise<unknown>;
+    release(request: {
+        client_id: string;
+        component: string;
+        instance_id: string;
+        instance_revision: number;
+    }): Promise<{
+        released: boolean;
+    }>;
+    detach(clientId: string): Promise<void>;
+    prompt?(clientId: string, decorations: NonNullable<ClaudePromptHostFill['decorations']>): Promise<NonNullable<ClaudePromptHostFill['decorations']>>;
+}
+
+type ClaudePrintPrediction = {
+    kind: 'result';
+    signal: AbortSignal;
+} | {
+    kind: 'offer';
+    signal: AbortSignal;
+    text: string;
+};
+
+type ClaudePromptCompletionReply = {
+    revision: number;
+    status: 'ready';
+    result: ClaudeUiPromptCompletions;
+} | {
+    revision: number;
+    status: 'error';
+    message: string;
+};
+
+type ClaudePromptCompletionRequest = Omit<ClaudeUiPromptAutocomplete, 'client_id' | 'surface'> & {
+    revision: number;
+};
+
+type ClaudePromptEdit = Omit<ClaudeUiPromptEdit, 'client_id' | 'surface'> & {
+    revision: number;
+};
+
+interface ClaudePromptHost {
+    available?(): boolean;
+    read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>;
+    fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean | ClaudePromptHostFillResult>;
+    suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
+    selection?(signal: AbortSignal, expiresAt: number): Promise<ClaudeUiSelection | undefined>;
+    copy?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
+}
+
+type ClaudePromptHostBox = {
+    text: string;
+    cursor: number;
+};
+
+type ClaudePromptHostFill = {
+    text: string;
+    mode: 'append' | 'insert' | 'replace';
+    ifEmpty?: true;
+    focus?: true;
+    decorations?: {
+        start: number;
+        end: number;
+        _apackThemeColor?: string;
+        _apackThemeBackgroundColor?: string;
+        color?: string;
+        backgroundColor?: string;
+        dimColor?: boolean;
+        bold?: boolean;
+        italic?: boolean;
+        underline?: boolean;
+        strikethrough?: boolean;
+        virtualText?: string;
+    }[];
+};
+
+type ClaudePromptHostFillResult = {
+    filled: boolean;
+    change?: ClaudePromptHostBox;
+};
+
+type ClaudePromptHostRequest = {
+    requestId: string;
+    revision: number;
+    expiresAt: number;
+} & ({
+    kind: 'read';
+} | {
+    kind: 'fill';
+    input: ClaudePromptHostFill;
+} | {
+    kind: 'suggest';
+    text: string;
+} | {
+    kind: 'copy';
+    text: string;
+} | {
+    kind: 'selection';
+    replyUrl: string;
+});
+
+type ClaudePromptHostResponse = {
+    requestId: string;
+} & ({
+    kind: 'read';
+    box?: ClaudePromptHostBox;
+} | ({
+    kind: 'fill';
+} & ClaudePromptHostFillResult) | {
+    kind: 'suggest';
+    shown: boolean;
+} | {
+    kind: 'copy';
+    copied: boolean;
+} | {
+    kind: 'selection';
+    submitted: boolean;
+});
+
+type ClaudePromptReply = {
+    revision: number;
+    status: 'applied';
+    frame: ClaudeUiPromptFrame;
+} | {
+    revision: number;
+    status: 'error';
+    message: string;
+};
+
+interface ClaudeQuestionAnswer {
+    answers?: Record<string, string | string[]>;
+    annotations?: Record<string, {
+        preview?: string;
+        notes?: string;
+    }>;
+    response?: string;
+    followUp?: boolean;
+}
+
+type ClaudeQuestionImage = {
+    mediaType: 'image/gif' | 'image/jpeg' | 'image/png' | 'image/webp';
+    data: string;
+};
+
+type ClaudeQuestionPartialAnswer = {
+    answers?: Record<string, string | string[]>;
+    annotations?: Record<string, {
+        preview?: string | undefined;
+        notes?: string | undefined;
+    }>;
+};
+
+type ClaudeQuestionPresentation = {
+    previewFormat: string | null;
+    extendedQuestions: boolean;
+    optionalDescriptions: boolean;
+    previews: {
+        question: string;
+        option: string;
+        kind: 'empty' | 'full' | 'withheld';
+        markdown?: string;
+        html?: string;
+    }[];
+    notice?: string;
+};
+
+type ClaudeQueuedPromptEdit = {
+    threadId: string;
+    mountId: string;
+    ownerId: string;
+    sessionId: string;
+    viewRevision: number;
+    turnId: string;
+    queueRevision: string;
+    sequence: number;
+    itemId: string;
+};
+
+/** Native observations describe a completed request, never a promise about the next bill. */
+interface ClaudeRateLimitInfo {
+    [key: string]: unknown;
+    status?: string | null;
+    rateLimitType?: string | null;
+    resetsAt?: number | null;
+    isUsingOverage?: boolean | null;
+    overageStatus?: string | null;
+    overageDisabledReason?: string | null;
+}
+
+interface ClaudeSessionArtifactContent {
+    /** Claude CLI session id (empty string until the first system/init event). */
+    sessionId: string;
+    /** Model name reported by the CLI ("claude-sonnet-4-6" etc.). */
+    model: string;
+    /** Working directory the CLI is running in. */
+    cwd: string;
+    /** Epoch ms when the session artifact was created. */
+    startedAt: number;
+    /** Epoch ms of the most recent turn. */
+    lastTurnAt: number;
+    /** Number of turns executed in this session. */
+    turns: number;
+    /** Running cost total in USD across all turns. */
+    totalCostUsd: number;
+    /** High-level chat state. Drives the status indicator and pause button. */
+    chatState: 'idle' | 'paused' | 'working';
+    /** Total tool calls across all turns in this session. */
+    toolCallCount: number;
+    /** Last 3 tools executed (rolling window, most recent last). */
+    recentTools?: Array<{
+        name: string;
+        summary: string;
+        at: number;
+    }>;
+    /**
+     * Permission policy for the next turn. Mutated by the user via the
+     * session artifact's segmented control in the right panel and read by
+     * `chat.ts` at action entry. The three useful values are:
+     *   - `'default'` — CLI emits `can_use_tool` per Edit/Write/Bash (Ask mode)
+     *   - `'acceptEdits'` — CLI auto-approves Edit/Write (Auto mode); Bash still prompts
+     *   - `'plan'` — read-only; CLI produces a plan, makes no file changes
+     * Other `PermissionMode` variants are allowed by the type but not
+     * surfaced in the UI. Optional for backwards compat with artifacts
+     * persisted before this field existed; readers coalesce to `'default'`.
+     */
+    permissionMode?: PermissionMode;
+    /** Threshold percentages that have already fired an alert (avoids re-alerting). */
+    alertedThresholds?: number[];
+    /** Full context usage breakdown from CLI `/context` query (populated after each turn). */
+    contextUsage?: {
+        model: string;
+        totalTokens: number;
+        maxTokens: number;
+        percentage: number;
+        categories: Array<{
+            name: string;
+            tokens: number;
+            percentage: number;
+        }>;
+        memoryFiles?: Array<{
+            type: string;
+            path: string;
+            tokens: number;
+        }>;
+        skills?: Array<{
+            name: string;
+            source: string;
+            tokens: number;
+        }>;
+    };
+}
+
+interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    cwd: string;
+}
+
+interface ClaudeSessionFileRewindOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    userMessageId: string;
+    cwd: string;
+}
+
+interface ClaudeSessionPlanOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    cwd: string;
+}
+
+interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    messageUuid: string;
+    cwd: string;
+}
+
+type ClaudeSettings = {
+    [x: string]: unknown;
+    effective: Record<string, unknown>;
+    sources: {
+        [x: string]: unknown;
+        source: string;
+        settings: Record<string, unknown>;
+    }[];
+    applied?: Record<string, unknown>;
+};
+
+type ClaudeSettingsEditor = {
+    kind: 'information';
+    revision: string;
+    title: string;
+    description: string;
+} | {
+    kind: 'choice';
+    revision: string;
+    disabled: boolean;
+    options: {
+        value: string;
+        label: string;
+        disabled: boolean;
+        description?: string;
+        descriptionAnsi?: string;
+        canEdit?: boolean;
+        canReset?: boolean;
+    }[];
+    description?: string;
+    consent?: {
+        description: string;
+        cancelLabel: string;
+        links?: string[];
+        defaultFocusValue?: string;
+    };
+    title?: string;
+    value?: string;
+    previewValue?: string;
+    model?: {
+        description: string;
+        effortText: string;
+        canAdjustEffort: boolean;
+        draftEffort?: string;
+        focusValue?: string;
+        fastModeNotice?: string;
+    };
+    canPreview?: boolean;
+    canToggleSyntax?: boolean;
+    preview?: {
+        theme: {
+            text: string;
+            inverseText: string;
+        };
+        text: string;
+        lines: string[];
+        caption: string;
+        ansi?: string;
+    };
+} | {
+    kind: 'group';
+    revision: string;
+    title: string;
+    disabled: boolean;
+    rows: {
+        key: string;
+        label: string;
+        kind: 'boolean' | 'choice';
+        value: string | boolean;
+        disabled: boolean;
+        options?: {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }[];
+    }[];
+    description?: string;
+} | {
+    kind: 'form';
+    revision: string;
+    title: string;
+    submitLabel: string;
+    fields: {
+        key: string;
+        label: string;
+        value: string;
+    }[];
+    live?: {
+        id: string;
+        feedback?: {
+            text: string;
+            tone: 'error' | 'success';
+        };
+    };
+    consent?: {
+        cancelLabel: string;
+        focusField: 'answer';
+        links?: string[];
+        problem?: string;
+    };
+    description?: string;
+};
+
+type ClaudeSettingsOperation = {
+    kind: 'permissions';
+    revision: string;
+    command: ClaudePermissionsOperation;
+} | {
+    kind: 'ideSelect';
+    revision: string;
+    value: string;
+} | {
+    kind: 'helpTab';
+    revision: string;
+    tab: 'Commands' | 'Custom commands' | 'General';
+} | {
+    kind: 'read';
+} | {
+    kind: 'stats';
+    revision: string;
+    action: 'Models' | 'Overview' | 'copy' | 'cycleDates';
+} | {
+    kind: 'tab';
+    revision: string;
+    tab: 'Config' | 'Stats' | 'Status' | 'Usage';
+} | {
+    kind: 'write';
+    revision: string;
+    key: string;
+    value: string | number | boolean | null;
+} | {
+    kind: 'open';
+    revision: string;
+    key: string;
+} | {
+    kind: 'editor';
+    revision: string;
+    editorRevision: string;
+    command: {
+        action: 'change';
+        formId: string;
+        key: string;
+        value: string;
+    } | {
+        action: 'setGroup';
+        key: string;
+        value: string | boolean;
+    } | {
+        action: 'select';
+        value: string;
+    } | {
+        action: 'preview';
+        value: string;
+    } | {
+        action: 'themeEdit' | 'themeReset';
+        value: string;
+    } | {
+        action: 'toggleSyntax';
+    } | {
+        action: 'focusModel';
+        value: string;
+    } | {
+        action: 'adjustEffort';
+        direction: 'left' | 'right';
+    } | {
+        action: 'save';
+        values: Record<string, string>;
+    } | {
+        action: 'cancel';
+    };
+};
+
+type ClaudeSettingsSnapshot = {
+    revision: string;
+    rows: {
+        key: string;
+        label: string;
+        kind: 'boolean' | 'choice' | 'number' | 'text';
+        value: string | number | boolean | null;
+        isLocked: boolean;
+        description?: string;
+        options?: string[];
+        editorAvailable?: boolean;
+        lockReason?: string;
+    }[];
+    permissions?: ClaudePermissionsSnapshot;
+    ide?: {
+        stage: 'connecting' | 'disable' | 'enable' | 'finished' | 'selection';
+        title: string;
+        paragraphs: string[];
+        options: {
+            value: string;
+            label: string;
+            description?: string;
+        }[];
+        description?: string;
+        selectedValue?: string;
+        disabled?: boolean;
+    };
+    help?: {
+        selectedTab: 'Commands' | 'Custom commands' | 'General';
+        tabs: ('Commands' | 'Custom commands' | 'General')[];
+        paragraphs: string[];
+        commands: {
+            name: string;
+            label: string;
+            description: string;
+        }[];
+        links: string[];
+    };
+    frame?: {
+        selectedTab: 'Config' | 'Stats' | 'Status' | 'Usage';
+        tabs: ('Config' | 'Stats' | 'Status' | 'Usage')[];
+        hidden: boolean;
+        usage?: {
+            startedAt: number;
+            context: {
+                window: number;
+                tokens?: number;
+                percent?: number;
+            };
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string;
+            }[];
+            cost?: {
+                usd: number;
+            };
+        };
+        stats?: {
+            loading: boolean;
+            outcome: 'empty' | 'error' | 'loading' | 'success' | 'unavailable';
+            view?: 'Models' | 'Overview';
+            range?: '30d' | '7d' | 'all';
+            copyState?: 'error' | 'idle' | 'pending' | 'saved';
+            insight?: string;
+            calendar?: string;
+            problem?: string;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+                streaks?: {
+                    currentStreak: number;
+                    longestStreak: number;
+                    currentStreakStart?: string | null;
+                    longestStreakStart?: string | null;
+                    longestStreakEnd?: string | null;
+                };
+                longestSession?: {
+                    sessionId: string;
+                    duration: number;
+                    messageCount: number;
+                    timestamp: string;
+                } | null;
+                firstSessionDate?: string | null;
+                lastSessionDate?: string | null;
+                peakActivityDay?: string | null;
+                peakActivityHour?: number | null;
+                dailyModelTokens?: {
+                    date: string;
+                    tokensByModel: Record<string, number>;
+                }[];
+                allTimeActivity?: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            };
+        };
+        diagnostics?: string[];
+        status?: {
+            label: string;
+            value: string;
+        }[][];
+    };
+    editor?: ClaudeSettingsEditor;
+    commitPending?: boolean;
+    refreshPending?: boolean;
+    dismissible?: boolean;
+};
+
+type ClaudeSettingsView = {
+    requestId: string;
+    status: 'error' | 'pending' | 'ready';
+    snapshot?: ClaudeSettingsSnapshot;
+    problem?: string;
+    savedKey?: string;
+};
+
+type ClaudeTeammateReconnect = {
+    ownerId: string;
+    sessionId: string;
+    taskId: string;
+    name: string;
+    recoveryId?: string;
+};
+
+interface ClaudeTerminalStopState {
+    ownerId: string;
+    revision: number;
+    status: 'done' | 'error' | 'pending';
+    problem?: string;
+}
+
+interface ClaudeTerminalSubmissionState {
+    ownerId: string;
+    revision: number;
+    status: 'accepted' | 'pending' | 'rejected';
+    receipt?: ClaudeNativeSubmissionReceipt;
+    command?: ClaudeParentCommandResult;
+    problem?: string;
+}
+
+interface ClaudeTerminalTaskState {
+    ownerId: string;
+    sessionId: string;
+    taskId: string;
+    revision: number;
+    operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop';
+    status: 'done' | 'error' | 'pending';
+    view?: {
+        taskId: string | null;
+    };
+    paused?: boolean;
+    resume?: {
+        taskId: string;
+        runId: string;
+        requested: true;
+    };
+    worker?: ClaudeNativeWorkflowWorkerReceipt;
+    input?: ClaudeNativeTaskInputReceipt;
+    sent?: boolean;
+    details?: ClaudeNativeTaskDetails;
+    problem?: string;
+}
+
+interface ClaudeTerminalUiTransport {
+    readonly promptHosts: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>;
+    request(value: Record<string, unknown> & {
+        subtype: string;
+    }): Promise<unknown>;
+    subscribe(listener: (event: Record<string, unknown>) => void): () => void;
+}
+
+type ClaudeTerminalViewReply = ClaudeTerminalViewSnapshot & {
+    type: 'CLAUDE_TERMINAL_STATE';
+    threadId: string;
+    mountId: string;
+};
+
+type ClaudeTerminalViewRequest = {
+    threadId: string;
+    mountId: string;
+} & ({
+    type: 'CLAUDE_TERMINAL_MOUNT';
+    queueComposer?: boolean;
+    presence?: WindowPresence;
+} | {
+    type: 'CLAUDE_TERMINAL_UNMOUNT';
+} | {
+    type: 'CLAUDE_TERMINAL_OPEN';
+} | {
+    type: 'CLAUDE_TERMINAL_CANCEL_OPEN';
+    openingId: string;
+} | {
+    type: 'CLAUDE_TERMINAL_SUBMIT';
+    ownerId: string;
+    sessionId: string;
+    revision: number;
+    text: string;
+    references?: MessageReferences;
+    phase?: 'Edit' | 'Plan';
+} | {
+    type: 'CLAUDE_TERMINAL_INPUT';
+    ownerId: string;
+    text: string;
+} | {
+    type: 'CLAUDE_TERMINAL_RESIZE';
+    ownerId: string;
+    columns: number;
+    rows: number;
+    cell?: {
+        width: number;
+        height: number;
+    };
+} | ({
+    type: 'CLAUDE_TERMINAL_TASK';
+    ownerId: string;
+    sessionId: string;
+    revision: number;
+    taskId: string;
+} & ({
+    operation: 'inspect' | 'pause_workflow' | 'resume_workflow' | 'stop';
+} | {
+    operation: 'background' | 'foreground';
+    fromAgent?: ClaudeNativeAgentViewSource;
+} | {
+    operation: 'input' | 'send';
+    text: string;
+} | {
+    operation: 'retry_worker' | 'skip_worker';
+    worker: ClaudeNativeWorkflowWorkerTarget;
+})) | ({
+    ownerId: string;
+    sessionId: string;
+    viewRevision: number;
+    turnId: string;
+    queueRevision: string;
+    sequence: number;
+} & ({
+    type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW';
+} | {
+    type: 'CLAUDE_TERMINAL_QUEUE_CANCEL';
+    itemId: string;
+})) | {
+    type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED';
+    ownerId: string;
+    sessionId: string;
+    itemId: string;
+} | {
+    type: 'CLAUDE_TERMINAL_POLICY_RECHECK';
+    ownerId: string;
+    sessionId: string;
+    viewRevision: number;
+    taskId?: string;
+} | {
+    type: 'CLAUDE_TERMINAL_NOTICE';
+    ownerId: string;
+    notice: ClaudeNativeNoticeResponse;
+} | {
+    type: 'CLAUDE_TERMINAL_MCP_URL';
+    ownerId: string;
+    sequence: number;
+    request: ClaudeNativeMcpUrlRequest;
+} | {
+    type: 'CLAUDE_TERMINAL_MCP_FORM';
+    ownerId: string;
+    sequence: number;
+    request: ClaudeNativeMcpFormRequest;
+} | ({
+    type: 'CLAUDE_TERMINAL_BACKGROUND';
+    sessionId: string;
+    continuedInSessionId: string;
+    revision: number;
+} & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest)) | {
+    type: 'CLAUDE_TEAMMATE_TERMINAL_OPEN';
+    ownerId: string;
+    sessionId: string;
+    taskId: string;
+    revision: number;
+    recoveryId?: string;
+} | {
+    type: 'CLAUDE_BACKGROUND_OPEN';
+    sessionId: string;
+    continuedInSessionId: string;
+    jobId: string;
+    revision: number;
+} | {
+    type: 'CLAUDE_BACKGROUND_INPUT';
+    attachmentId: string;
+    text: string;
+} | {
+    type: 'CLAUDE_BACKGROUND_RESIZE';
+    attachmentId: string;
+    columns: number;
+    rows: number;
+    cell?: {
+        width: number;
+        height: number;
+    };
+} | {
+    type: 'CLAUDE_BACKGROUND_CLOSE';
+    requestId: string;
+} | {
+    type: 'CLAUDE_TERMINAL_CLOSE';
+    ownerId: string;
+});
+
+type ClaudeTerminalViewSnapshot = {
+    teammateReconnects?: ClaudeTeammateReconnect[];
+    backgroundInfo?: ClaudeBackgroundStatus;
+    canReplyBackground?: boolean;
+    attachment?: ClaudeBackgroundAttachmentView;
+    background?: ClaudeBackgroundSessionState;
+    mcpOperation?: {
+        sequence: number;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
+    queueOperation?: {
+        sequence: number;
+        sessionId: string;
+        viewRevision: number;
+        queueRevision: string;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
+    queueDraft?: {
+        sessionId: string;
+        id: string;
+        text: string;
+        images?: ClaudeNativeImage[];
+        automatic: boolean;
+    };
+    policyRecheck?: {
+        sessionId: string;
+        viewRevision: number;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
+    noticeAnswer?: {
+        id: string;
+        revision: string;
+        requestId?: string;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
+    task?: ClaudeTerminalTaskState;
+    stop?: ClaudeTerminalStopState;
+    submission?: ClaudeTerminalSubmissionState;
+    state?: ClaudeNativeTerminalState;
+    opening: boolean;
+    openingId?: string;
+    cancelling?: boolean;
+    problem?: string;
+    output: {
+        sequence: number;
+        text: string;
+    }[];
+};
+
+type ClaudeToolPermissionApproval = {
+    token: string;
+    ready: boolean;
+    choices: {
+        value: string;
+        label: string;
+        decision: 'allow' | 'deny';
+        feedback: boolean;
+    }[];
+    title: string;
+    details: {
+        label: string;
+        value: string;
+        ansi?: string;
+    }[];
+};
+
+type ClaudeTranscriptTimestamp = {
+    uuid: string;
+    datetime: string;
+    label: string;
+};
+
+type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
+
+type ClaudeUiActionKeyRequest = {
+    revision: string;
+    event: {
+        key: string;
+        ctrl: boolean;
+        alt: boolean;
+        shift: boolean;
+        super: boolean;
+        from_composer: boolean;
+    };
+};
+
+type ClaudeUiActionKeyState = {
+    revision: string;
+    bindings: ClaudeUiActionStroke[][];
+    continuations: ClaudeUiActionStroke[][];
+    pending: ClaudeUiActionStroke[] | null;
+};
+
+type ClaudeUiActionStroke = {
+    key: string;
+    ctrl: boolean;
+    alt: boolean;
+    shift: boolean;
+    meta: boolean;
+    super: boolean;
+};
+
+type ClaudeUiApprovalAnswer = {
+    approved: boolean;
+    cancelled?: boolean;
+    reason?: string;
+    choice?: string;
+    choiceToken?: string;
+    prefix?: string;
+    plan?: string;
+};
+
+interface ClaudeUiApprovalFrame {
+    id: string;
+    control: ClaudeBackgroundApproval;
+    pending?: boolean;
+    problem?: string;
+}
+
+type ClaudeUiAttach = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean;
+    };
+    native_view?: {
+        session_id: string;
+        revision: number;
+        agent_id: string;
+    };
+};
+
+interface ClaudeUiBoxLayout {
+    position?: 'absolute' | 'relative';
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+    flexDirection?: 'column' | 'column-reverse' | 'row' | 'row-reverse';
+    flexGrow?: number;
+    flexShrink?: number;
+    flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
+    alignItems?: 'center' | 'flex-end' | 'flex-start' | 'stretch';
+    alignSelf?: 'auto' | 'center' | 'flex-end' | 'flex-start';
+    justifyContent?: 'center' | 'flex-end' | 'flex-start' | 'space-around' | 'space-between' | 'space-evenly';
+    display?: 'flex' | 'none';
+    overflow?: 'hidden' | 'visible';
+    width?: number | string;
+    height?: number | string;
+    minWidth?: number | string;
+    minHeight?: number | string;
+    gap?: number | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+    columnGap?: ClaudeUiBoxLayout['gap'];
+    rowGap?: ClaudeUiBoxLayout['gap'];
+    margin?: ClaudeUiBoxLayout['gap'];
+    marginX?: ClaudeUiBoxLayout['gap'];
+    marginY?: ClaudeUiBoxLayout['gap'];
+    marginTop?: ClaudeUiBoxLayout['gap'];
+    marginBottom?: ClaudeUiBoxLayout['gap'];
+    marginLeft?: ClaudeUiBoxLayout['gap'];
+    marginRight?: ClaudeUiBoxLayout['gap'];
+    padding?: ClaudeUiBoxLayout['gap'];
+    paddingX?: ClaudeUiBoxLayout['gap'];
+    paddingY?: ClaudeUiBoxLayout['gap'];
+    paddingTop?: ClaudeUiBoxLayout['gap'];
+    paddingBottom?: ClaudeUiBoxLayout['gap'];
+    paddingLeft?: ClaudeUiBoxLayout['gap'];
+    paddingRight?: ClaudeUiBoxLayout['gap'];
+}
+
+interface ClaudeUiBoxPaint {
+    borderStyle?: string;
+    borderColor?: string;
+    borderDimColor?: boolean;
+    backgroundColor?: string;
+}
+
+interface ClaudeUiClientEvent {
+    id: string;
+    sequence: number;
+    event: ClaudeUiClientInput;
+}
+
+type ClaudeUiClientInput = {
+    kind: 'resize';
+    columns: number;
+    rows: number;
+} | {
+    kind: 'key';
+    key: string;
+    ctrl?: true;
+    shift?: true;
+    meta?: true;
+} | {
+    kind: 'pointer';
+    type: 'down' | 'enter' | 'leave' | 'move' | 'up';
+    x: number;
+    y: number;
+    fine?: {
+        x: number;
+        y: number;
+    };
+    button?: 'left' | 'middle' | 'right';
+    ctrl?: true;
+    shift?: true;
+    alt?: true;
+};
+
+type ClaudeUiComposerPlacement = {
+    component: 'PromptHint' | 'SessionMode' | 'Spinner';
+    id: string;
+    revision: string;
+};
+
+type ClaudeUiControls = ReturnType<typeof createClaudeUiControls>;
+
+type ClaudeUiDiagnosticAttachment = {
+    id: string;
+    revision: string;
+    anchorIds: string[];
+    summary: string;
+    detail: string;
+};
+
+type ClaudeUiFieldEvent = {
+    actionId: string;
+    revision: number;
+    kind: 'change' | 'select' | 'submit';
+    value: string;
+};
+
+type ClaudeUiFocus = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    component: 'AbovePrompt' | 'Pane';
+    instance_id: string;
+    is_held: boolean;
+    by: 'auto' | 'person';
+    element?: {
+        plugin: string;
+        key: string;
+    } | null;
+};
+
+/** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
+type ClaudeUiFocusEvent = {
+    paneId?: string;
+    revision: number;
+    isHeld: boolean;
+    focusId?: string | null;
+    by: 'auto' | 'person';
+};
+
+type ClaudeUiFocusReply = {
+    paneId?: string;
+    revision: number;
+    moved: boolean;
+    focusId: string | null;
+    deny?: string;
+};
+
+type ClaudeUiFocusResult = {
+    [x: string]: unknown;
+    moved: boolean;
+    element: {
+        plugin: string;
+        key: string;
+    } | null;
+    deny?: string;
+};
+
+/** Existing app tool data carried to a canonical native group's default drawing. */
+interface ClaudeUiGroupedTool {
+    id: string;
+    tool: string;
+    summary: string;
+    status: 'denied' | 'error' | 'ok' | 'running';
+    durationMs?: number;
+    outputSummary?: string;
+    nativeAgent?: {
+        id: string;
+        ownerId?: string;
+        sessionId?: string;
+        name: string;
+        status: string;
+        statusText?: string;
+        canStop?: boolean;
+    };
+    nativeResult?: {
+        uuid: string;
+        sessionId: string;
+    };
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
+
+interface ClaudeUiHover {
+    group?: string;
+    text?: Pick<ClaudeUiTextStyle, 'backgroundColor' | 'bold' | 'color' | 'dimColor' | 'inverse' | 'italic' | 'strikethrough' | 'underline'>;
+    paint?: ClaudeUiBoxPaint;
+    layout?: Pick<ClaudeUiBoxLayout, 'bottom' | 'display' | 'left' | 'right' | 'top'>;
+}
+
+type ClaudeUiIdeContext = {
+    text: string;
+    revision: string;
+};
+
+type ClaudeUiInput = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    plugin: string;
+    handle: number;
+    value: string;
+    kind: 'change' | 'submit';
+    key?: string;
+    component?: string;
+    instance_id?: string;
+    instance_revision?: number;
+};
+
+type ClaudeUiInstanceRelease = {
+    client_id: string;
+    component: string;
+    instance_id: string;
+    instance_revision: number;
+};
+
+type ClaudeUiMountRequest = {
+    type: 'CLAUDE_UI_MOUNT';
+    promptFocused: boolean;
+    threadId: string;
+    mountId: string;
+    resumeKey?: string;
+    nativeView?: ClaudeNativeAgentUiTarget;
+    backgroundView?: ClaudeBackgroundUiTarget;
+    messageIds?: string[];
+    userExpansion?: Record<string, boolean>;
+    blockExpansion?: Record<string, number[]>;
+};
+
+type ClaudeUiMountState = ({
+    status: 'connecting' | 'disconnected' | 'rendering';
+} | {
+    status: 'live';
+    tree: ClaudeUiNode;
+} | {
+    status: 'error';
+    message: string;
+}) & {
+    managedSettingsRevision?: number;
+    ide?: ClaudeUiIdeContext & {
+        actionId: string;
+    };
+    billing?: ClaudeBillingObservation;
+    actionKeys?: ClaudeUiActionKeyState;
+    promptPalette?: Record<string, string>;
+    agent?: ClaudeNativeTaskDetails;
+    agentProblem?: string;
+    gestureProblem?: string;
+    agentInput?: {
+        revision: number;
+        status: 'blocked' | 'command_done' | 'command_output' | 'confirmation' | 'deciding' | 'done' | 'error' | 'panel' | 'panel_done' | 'pending' | 'review';
+        panel?: {
+            id: string;
+            commandName: string;
+        };
+        backgroundReview?: ClaudeBackgroundReviewState;
+        settings?: ClaudeSettingsView;
+        output?: {
+            messageId: string;
+            commandName: string;
+            text: string;
+            isErrored: boolean;
+            outcome?: string;
+        };
+        receipt?: {
+            messageId: string;
+        };
+        command?: ClaudeNativeAgentCommandConfirmation;
+        decision?: 'cancel' | 'confirm';
+        review?: ClaudeNativeAgentInputReview;
+        problem?: string;
+    };
+    composer?: ClaudeUiTranscriptFrame[];
+    panes?: ClaudeUiPanePresentation;
+    scroll?: ClaudeUiScrollState;
+    notices?: ClaudeUiNotices;
+    managedSettingsDiagnostics?: ClaudeManagedSettingsDiagnostic[];
+    diagnostics?: (ClaudeUiDiagnosticAttachment & {
+        messageId: string;
+    })[];
+    transcriptMessages?: ClaudeUiTranscriptFrame[];
+    transcriptTimestamps?: ClaudeTranscriptTimestamp[];
+    question?: ClaudeUiQuestionFrame;
+    approval?: ClaudeUiApprovalFrame;
+};
+
+type ClaudeUiNode = {
+    kind: 'broker-image';
+    columns: number;
+    rows: number;
+    alt: string;
+    imageId: number;
+    terminalSession: ClaudeNativeTerminalSession;
+    plugin?: string;
+} | {
+    kind: 'image';
+    columns: number;
+    rows: number;
+    alt: string;
+    format: 'png' | 'rgba';
+    data: string;
+    width?: number;
+    height?: number;
+    plugin?: string;
+} | {
+    kind: 'raster';
+    columns: number;
+    rows: number;
+    nativeAnsi: string;
+    plugin?: string;
+} | {
+    kind: 'client';
+    id: string;
+    pointer: boolean;
+    keys: boolean;
+    layout?: Pick<ClaudeUiBoxLayout, 'flexGrow' | 'height' | 'width'>;
+    children: ClaudeUiNode[];
+    plugin?: string;
+} | {
+    kind: 'text';
+    hover?: ClaudeUiHover;
+    text: string;
+    children?: ClaudeUiNode[];
+    style?: ClaudeUiTextStyle;
+    plugin?: string;
+} | {
+    kind: 'svg';
+    source: string;
+    alt: string;
+    width?: number;
+    height?: number;
+    interactive: boolean;
+    plugin?: string;
+} | {
+    kind: 'link';
+    color?: string;
+    href?: string;
+    children: ClaudeUiNode[];
+    plugin?: string;
+} | {
+    kind: 'box';
+    scrollId?: string;
+    boxKey?: string | false;
+    hover?: ClaudeUiHover;
+    layout?: ClaudeUiBoxLayout;
+    paint?: ClaudeUiBoxPaint;
+    children: ClaudeUiNode[];
+    plugin?: string;
+} | {
+    kind: 'markdown';
+    formattingFallback?: boolean;
+    nativeAnsi?: string;
+    color?: string;
+    text: string;
+    dim: boolean;
+    actionId?: string;
+    pressableLinks?: string[];
+    plugin?: string;
+} | {
+    kind: 'code';
+    formattingFallback?: boolean;
+    color?: string;
+    nativeAnsi?: string;
+    source: string;
+    language?: string;
+    path?: string;
+    startLine?: number;
+    format: 'diff' | 'source';
+    wrap: 'truncate-end' | 'wrap';
+    plugin?: string;
+} | {
+    kind: 'button';
+    renderId?: string;
+    expanded?: boolean;
+    color?: string;
+    hotkeyColor?: string;
+    focusId?: string;
+    hover?: ClaudeUiHover;
+    label: string;
+    hotkey?: string;
+    children?: ClaudeUiNode[];
+    dimColor?: boolean;
+    variant?: 'primary' | 'secondary';
+    role?: 'dismiss';
+    autoFocus?: boolean;
+    actionId?: string;
+    plugin?: string;
+} | {
+    kind: 'input';
+    theme?: {
+        text: string;
+        inverseText: string;
+    };
+    focusId?: string;
+    actionId: string;
+    revision: number;
+    submitLabel: string;
+    label?: string;
+    placeholder?: string;
+    value: string;
+    rows: number;
+    autoFocus: boolean;
+    plugin?: string;
+} | {
+    kind: 'select';
+    theme?: {
+        text: string;
+        inverseText: string;
+    };
+    focusId?: string;
+    actionId: string;
+    revision: number;
+    label?: string;
+    value?: string;
+    options: {
+        value: string;
+        label: string;
+    }[];
+    autoFocus: boolean;
+    plugin?: string;
+} | {
+    kind: 'unsupported';
+    component: string;
+    plugin?: string;
+};
+
+type ClaudeUiNoticeEvent = {
+    kind: 'dismiss';
+    id: string;
+} | {
+    kind: 'hold';
+    id: string;
+    isHeld: boolean;
+};
+
+interface ClaudeUiNotices {
+    statuses: {
+        plugin: string;
+        text: string;
+    }[];
+    toasts: {
+        id: string;
+        plugin: string;
+        text: string;
+        title?: string;
+    }[];
+}
+
+type ClaudeUiPaneEvent = {
+    kind: 'close' | 'focus' | 'show';
+    id: string | null;
+} | {
+    kind: 'layout';
+    id: string;
+    columns: number;
+    rows: number;
+    offset: number;
+};
+
+interface ClaudeUiPanePresentation {
+    scroll?: ClaudeUiScrollState;
+    roster: ClaudeUiPaneRoster;
+    body: {
+        status: 'connecting' | 'error' | 'rendering';
+        message?: string;
+    } | {
+        status: 'live';
+        tree: ClaudeUiNode;
+    };
+}
+
+type ClaudeUiPaneRoster = {
+    [x: string]: unknown;
+    panes: {
+        [x: string]: unknown;
+        id: string;
+        title: string;
+        plugin: string;
+        close_on_escape?: true;
+        hold_toasts?: true;
+        rows?: number;
+        columns?: number;
+    }[];
+    shown_id: string | null;
+    focused_id: string | null;
+    focus_requested_id: string | null;
+    _apack_action_keys?: {
+        revision: string;
+        bindings: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            meta: boolean;
+            super: boolean;
+        }[][];
+        continuations: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            meta: boolean;
+            super: boolean;
+        }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            meta: boolean;
+            super: boolean;
+        }[] | null;
+    };
+};
+
+type ClaudeUiPaneSelection = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    id: string;
+};
+
+type ClaudeUiPress = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    plugin: string;
+    handle: number;
+    key?: string;
+    href?: string;
+    component?: string;
+    instance_id?: string;
+    instance_revision?: number;
+};
+
+type ClaudeUiPromptAutocomplete = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    text: string;
+    cursor: number;
+    templateOfferId?: string;
+};
+
+type ClaudeUiPromptCompletions = {
+    [x: string]: unknown;
+    suggestions: {
+        [x: string]: unknown;
+        text: string;
+        label?: string;
+        description?: string;
+        templateOfferId?: string;
+        replacement?: {
+            start: number;
+            end: number;
+        };
+    }[];
+    start?: number;
+    superseded?: true;
+};
+
+type ClaudeUiPromptEdit = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    text: string;
+    cursor: number;
+    by: 'app' | 'person';
+    key?: {
+        key: string;
+        ctrl?: true;
+        shift?: true;
+        meta?: true;
+    };
+};
+
+type ClaudeUiPromptFrame = {
+    [x: string]: unknown;
+    text: string;
+    cursor: number;
+    decorations?: {
+        [x: string]: unknown;
+        start: number;
+        end: number;
+        color?: string;
+        backgroundColor?: string;
+        dimColor?: boolean;
+        bold?: boolean;
+        italic?: boolean;
+        underline?: boolean;
+        strikethrough?: boolean;
+        virtualText?: string;
+    }[];
+    superseded?: true;
+};
+
+interface ClaudeUiQuestionFrame {
+    messageId: string;
+    id: string;
+    revision: string;
+    draftActionId: string;
+    token?: string;
+    pending?: boolean;
+    problem?: string;
+    countdownSeconds?: number;
+    shownInput?: Record<string, unknown>;
+    presentation?: ClaudeQuestionPresentation;
+    body: {
+        status: 'rendering';
+    } | {
+        status: 'live';
+        tree: ClaudeUiNode;
+    } | {
+        status: 'error';
+        message: string;
+    };
+}
+
+type ClaudeUiRender = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    component: string;
+    instance_id: string;
+    props: Record<string, unknown>;
+    instance_revision?: number;
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean;
+    };
+};
+
+type ClaudeUiRenderResult = {
+    [x: string]: unknown;
+    tree: unknown;
+    props: Record<string, unknown>;
+    rewritten: boolean;
+    hooked: boolean;
+    _apack_ide?: ClaudeUiIdeContext;
+    _apack_action_keys?: ClaudeUiActionKeyState;
+    native_hint?: boolean;
+    idle_return_hint?: string;
+    idle_task_output?: string;
+    group_engine?: boolean;
+    output_rewritten?: boolean;
+    output_in_native_process?: boolean;
+    engine_output?: string;
+    drawn_by?: string[];
+    client_modules?: Record<string, string>;
+};
+
+type ClaudeUiScroll = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    component: 'AbovePrompt' | 'Pane';
+    instance_id: string;
+    offset: number;
+    by: number;
+    body_rows: number;
+    content_rows: number;
+    pointer?: {
+        column: number;
+        row: number;
+    };
+    keyed?: {
+        plugin: string;
+        key: string;
+        top: number;
+        bottom: number;
+    }[];
+};
+
+interface ClaudeUiScrollEvent {
+    paneId?: string;
+    revision: number;
+    offset: number;
+    by: number;
+    rows: number;
+    contentRows: number;
+    pointer?: {
+        column: number;
+        row: number;
+    };
+    keyed: {
+        id: string;
+        top: number;
+        bottom: number;
+    }[];
+}
+
+interface ClaudeUiScrollState {
+    serial: number;
+    requestRevision?: number;
+    offset: number;
+    followEnd: boolean;
+}
+
+type ClaudeUiSelect = {
+    client_id: string;
+    surface: 'desktop' | 'mobile' | 'vscode';
+    plugin: string;
+    handle: number;
+    value: string;
+    key?: string;
+    component?: string;
+    instance_id?: string;
+    instance_revision?: number;
+};
+
+type ClaudeUiSelection = {
+    text?: string;
+    instance_id?: string;
+};
+
+type ClaudeUiTerminalPlacement = {
+    component: 'InfoNotice' | 'TurnDuration';
+    id: string;
+    revision: string;
+    anchorIds: string[];
+};
+
+interface ClaudeUiTextStyle {
+    wrap?: ClaudeUiTextWrap;
+    color?: string;
+    backgroundColor?: string;
+    size?: 'body' | 'caption' | 'footnote' | 'heading' | 'title';
+    weight?: 'bold' | 'medium' | 'regular' | 'semibold';
+    dir?: 'ltr' | 'rtl';
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strikethrough?: boolean;
+    mono?: boolean;
+    tabular?: boolean;
+    dimColor?: boolean;
+    inverse?: boolean;
+}
+
+type ClaudeUiTextWrap = 'end' | 'middle' | 'truncate' | 'truncate-end' | 'truncate-middle' | 'truncate-start' | 'wrap';
+
+type ClaudeUiToolGroup = {
+    id: string;
+    anchorIds: string[];
+    members: {
+        toolUseId: string;
+        revision: string;
+    }[];
+    usesEngine: boolean;
+    isActive: boolean;
+    isExpanded: boolean;
+    initialized: boolean;
+    revision: string;
+};
+
+type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
+    instanceRevision: number;
+    nativeHint?: boolean;
+    idleReturnHint?: string;
+    idleTaskOutput?: string;
+    groupExpanded?: boolean;
+    displayText: string;
+    outputRewritten?: boolean;
+    engineOutput?: string;
+    body: {
+        status: 'error' | 'rendering';
+    } | {
+        status: 'live';
+        tree: ClaudeUiNode;
+    };
+};
+
+interface ClaudeUiTranscriptLayout {
+    component: 'ToolGroup' | 'ToolProgress' | 'ToolResult' | 'ToolUse';
+    uuid: string;
+    instanceRevision: number;
+    columns: number;
+}
+
+type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & ({
+    component: 'AssistantMessage';
+    isFirstOfReply: boolean;
+    isSummary?: false;
+} | {
+    component: 'AssistantMessage';
+    isFirstOfReply: boolean;
+    isSummary: true;
+    blockIndex: number;
+} | {
+    component: 'ToolUse';
+    blockIndex: number;
+    assistantUuid: string;
+    activityStatus: string;
+    resultUuid?: string;
+} | {
+    component: 'ToolProgress';
+    blockIndex: number;
+    assistantUuid: string;
+    activityStatus: string;
+    resultUuid?: string;
+} | {
+    component: 'ToolGroup';
+    blockIndex: number;
+    revision: string;
+    isExpanded: boolean;
+    isActive: boolean;
+    usesEngine: boolean;
+    tools: ClaudeUiGroupedTool[];
+    artifacts: {
+        artifactId: string;
+        label: string;
+    }[];
+} | {
+    component: 'ToolResult';
+    blockIndex: number;
+    assistantUuid: string;
+    resultUuid: string;
+    tool: string;
+    isErrored: boolean;
+} | {
+    component: 'CommandOutput';
+    isErrored: boolean;
+} | {
+    component: 'PromptHint' | 'SessionMode' | 'Spinner';
+    sourceRevision: string;
+} | {
+    component: 'InfoNotice' | 'TurnDuration';
+    sourceRevision: string;
+} | {
+    component: 'UserMessage';
+    origin: {
+        kind: string;
+        name?: string;
+        asUser?: boolean;
+        server?: string;
+    };
+    isExpanded: boolean;
+});
+
+interface ClaudeUiTranscriptRowSource {
+    producerRevision?: string;
+    messageId: string;
+    uuid: string;
+    sessionId: string;
+    text: string;
+    start: number;
+    end: number;
+}
+
+type ClaudeUiViewRequest = ({
+    type: 'CLAUDE_UI_KEY';
+    threadId: string;
+    mountId: string;
+    sequence: number;
+} & ClaudeUiActionKeyRequest) | {
+    type: 'CLAUDE_UI_AGENTS_GESTURE';
+    threadId: string;
+    mountId: string;
+    sequence: number;
+    revision: number;
+} | {
+    type: 'CLAUDE_UI_BACKGROUND_REVIEW';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    panelId: string;
+    sourceRevision: string;
+    decision: 'cancel' | 'confirm';
+} | {
+    type: 'CLAUDE_UI_SETTINGS';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    panelId: string;
+    requestId: string;
+    action: ClaudeSettingsOperation;
+} | {
+    type: 'CLAUDE_UI_COMMAND_PANEL';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    panelId: string;
+    text?: string;
+} | {
+    type: 'CLAUDE_UI_COMMAND_DECISION';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    commandId: string;
+    decision: 'cancel' | 'confirm';
+} | {
+    type: 'CLAUDE_UI_AGENT_INPUT';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    text: string;
+} | ({
+    type: 'CLAUDE_PROMPT_HOST_RESPONSE';
+    threadId: string;
+    mountId: string;
+} & ClaudePromptHostResponse) | ({
+    type: 'CLAUDE_UI_FOCUS';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiFocusEvent) | ({
+    type: 'CLAUDE_PROMPT_AUTOCOMPLETE';
+    threadId: string;
+    mountId: string;
+} & ClaudePromptCompletionRequest) | ({
+    type: 'CLAUDE_PROMPT_EDIT';
+    threadId: string;
+    mountId: string;
+} & ClaudePromptEdit) | ({
+    type: 'CLAUDE_UI_NOTICE';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiNoticeEvent) | ({
+    type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiTranscriptLayout) | ({
+    type: 'CLAUDE_UI_SCROLL';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiScrollEvent) | ({
+    type: 'CLAUDE_UI_PANE';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiPaneEvent) | ClaudeUiMountRequest | {
+    type: 'CLAUDE_UI_UNMOUNT';
+    threadId: string;
+    mountId: string;
+    resumeKey?: string;
+} | ({
+    type: 'CLAUDE_UI_CLIENT';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiClientEvent) | ({
+    type: 'CLAUDE_UI_FIELD';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiFieldEvent) | {
+    type: 'CLAUDE_UI_APPROVAL_ANSWER';
+    threadId: string;
+    mountId: string;
+    frameId: string;
+    answer: ClaudeUiApprovalAnswer;
+} | {
+    type: 'CLAUDE_UI_QUESTION_REJECT';
+    threadId: string;
+    mountId: string;
+    messageId: string;
+    token: string;
+} | {
+    type: 'CLAUDE_UI_QUESTION_PAUSE';
+    threadId: string;
+    mountId: string;
+    messageId: string;
+    token: string;
+} | {
+    type: 'CLAUDE_UI_DECISION_PAUSE';
+    threadId: string;
+    mountId: string;
+    scope: ClaudeDecisionPauseScope;
+} | {
+    type: 'CLAUDE_UI_QUESTION_PARTIAL';
+    threadId: string;
+    mountId: string;
+    messageId: string;
+    token: string;
+    sequence: number;
+    answer: ClaudeQuestionPartialAnswer;
+    images?: readonly ClaudeQuestionImage[];
+} | {
+    type: 'CLAUDE_UI_QUESTION_ANSWER';
+    threadId: string;
+    mountId: string;
+    messageId: string;
+    token: string;
+    decision?: 'clarify';
+    images?: readonly ClaudeQuestionImage[];
+    answer: ClaudeQuestionAnswer;
+} | {
+    type: 'CLAUDE_UI_PRESS';
+    threadId: string;
+    mountId: string;
+    actionId: string;
+    href?: string;
+};
+
+type ClaudeWorkflowApproval = {
+    token: string;
+    ready: boolean;
+    withheld: boolean;
+    choices: {
+        value: 'no' | 'yes' | 'yes-always';
+        label: string;
+        decision: 'allow' | 'deny';
+        feedback: boolean;
+    }[];
+    script?: string;
+    args?: string;
+    summary?: {
+        title: string;
+        prompts: string[];
+        detail?: string;
+    }[];
+    canEdit?: boolean;
+    description?: string;
+    raw?: boolean;
+    summaryUnavailable?: boolean;
+};
+
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
@@ -722,8 +4437,7 @@ interface CliServiceType {
     };
     /**
      * Claude Code wrapper. Highlights only — the full surface (sessions, mcp,
-     * surfaces, skills, …) is available via `import { claudeCode } from
-     * '#features/code/be/services/claude-code/index.ts'`.
+     * plugins, skills, …) is available from '#features/code/be/services/claude-code/index.ts'.
      */
     /** Clear-cache resolve + exec test — same path as the Settings test button. */
     testCli(provider: string): Promise<{
@@ -734,15 +4448,59 @@ interface CliServiceType {
         error: string;
     }>;
     claudeCode: {
+        openBackgroundAttachment: typeof openBackgroundAttachment;
+        backgroundSession: typeof backgroundSession;
+        replyBackgroundSession: typeof replyBackgroundSession;
+        parseMcpElicitationForm: typeof parseMcpElicitationForm;
+        validateMcpElicitationForm: typeof validateMcpElicitationForm;
         query(opts: Omit<QueryOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<QueryHandle>;
+        openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & {
+            cwd?: string;
+            accountedCostUsd?: number;
+            onSessionCost?: (sessionId: string, totalCostUsd: number) => void;
+        }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>;
+        getConversation(key: string): {
+            owner: ClaudeConversation;
+            launchKey: string;
+        } | undefined;
+        isConversationBusy(key: string): boolean;
+        isCurrentTurn(key: string, handle: QueryHandle): boolean;
+        closeIdleConversation(key: string): Promise<boolean>;
+        /** Read a saved session's native plan without a prompt or transcript writes. */
+        getPlan(opts: Omit<ClaudeSessionPlanOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudePlan>;
+        /** Read a saved session's native context summary without a prompt or transcript writes. */
+        getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudeContextUsage>;
+        /** Validate native fork/resume membership without a prompt or persisted fork. */
+        validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<void>;
+        getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudeFileRewind>;
+        rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudeFileRewind>;
+        /** Config root to pin before creating a conversation. No credentials are returned. */
+        profile(): ClaudeNativeProfile;
+        prepareOwnedProfileSetup(): Promise<{
+            command: string;
+            cwd: string;
+        }>;
         version(): Promise<string>;
-        authStatus(): Promise<AuthStatus>;
+        authStatus(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
         /** List sessions across ALL project directories (not just the configured cwd). */
         listAllSessions(opts?: {
             limit?: number;
+            env?: NodeJS.ProcessEnv;
         }): Promise<SessionInfo[]>;
         /**
          * Parse a session's JSONL transcript into an in-memory array of entries.
@@ -763,8 +4521,12 @@ interface CliServiceType {
         storeHandle(key: string, handle: QueryHandle): void;
         /** Retrieve a stored query handle by key (typically threadId). */
         getHandle(key: string): QueryHandle | undefined;
-        /** Clear a stored handle (call on query end to avoid leaking references). */
+        /** Release an owned turn; idle process controls remain available until close/teardown. */
         clearHandle(key: string): void;
+        /** Explicitly move an idle live conversation into its native terminal interface. */
+        openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>;
+        getNativeLaunch(key: string): Promise<ClaudeNativeLaunch | undefined>;
+        getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined;
         /**
          * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
          * `claude --resume <sid> --rewind-files <uuid>` for file-rewind on revert.
@@ -774,28 +4536,41 @@ interface CliServiceType {
             cwd?: string;
         }): Promise<ExecOnceResult>;
         /** Read the CLI's user-scope settings.json (~/.claude/settings.json). */
-        readSettings(): Promise<Record<string, any>>;
+        readSettings(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<Record<string, any>>;
         /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
-        writeSettings(settings: Record<string, any>): Promise<void>;
+        writeSettings(settings: Record<string, any>, opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<void>;
+        /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
+        getModels(opts?: {
+            cwd?: string;
+            env?: NodeJS.ProcessEnv;
+            includeUnsupportedModels?: boolean;
+        }): Promise<ClaudeModelCatalog>;
         /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
-        listSkills(): Promise<Array<{
+        listSkills(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<Array<{
             name: string;
             scope: string;
             path: string;
         }>>;
-        /** List memory/CLAUDE.md files from known locations. */
-        listMemoryFiles(): Promise<Array<{
-            name: string;
-            scope: string;
-            path: string;
-        }>>;
-        /** Rename a Claude Code session by appending a metadata entry to its JSONL file. */
+        /** Persist the explicit Auto-memory preference through Claude's native user settings writer. */
+        setAutoMemory(enabled: boolean, opts: {
+            cwd: string;
+            env?: NodeJS.ProcessEnv;
+        }): Promise<void>;
+        /** Rename a Claude Code session through the native process. */
         renameSession(id: string, title: string, opts?: {
             cwd?: string;
+            env?: NodeJS.ProcessEnv;
         }): Promise<void>;
         /** Check whether a session JSONL file exists under the given (or default) project directory. */
         sessionExists(id: string, opts?: {
             cwd?: string;
+            env?: NodeJS.ProcessEnv;
         }): Promise<boolean>;
     };
     /** Codex CLI wrapper for one-shot tasks. */
@@ -867,6 +4642,7 @@ type CodeContext = {
     searchPrefillText: string;
     panelTerminalId: string | null;
     panelTerminalExpanded: boolean;
+    claudeProfileSetupError?: string;
     pendingTerminalTabIds?: string[];
     panelNavHistory: NavHistory<PanelType>;
 };
@@ -877,6 +4653,8 @@ type CodeContext = {
  * prefix — so they are spelled out, and each names the child that handles it.
  */
 type CodeInboxEvent = {
+    type: 'OPEN_CLAUDE_PROFILE_SETUP';
+} | {
     type: 'UPDATE_STATE';
     updates: Partial<CodeContext>;
 }
@@ -895,6 +4673,9 @@ type CodeInboxEvent = {
     type: 'explorer.SET_BASE_DIRECTORY';
     path: string;
 } | {
+    type: 'explorer.OPEN_FILE';
+    path: string;
+} | {
     type: 'codeActions.OPEN_ACTION';
     actionId: EARS.EntityId;
 } | {
@@ -909,6 +4690,12 @@ type CodeSystemAsks = {
     /** What a window's code surface starts from: the directory and the settings. Its panels ask for what they show */
     GET_CODE_START: {
         answer: CodeConnectedData;
+    };
+    PREPARE_CLAUDE_PROFILE_SETUP: {
+        answer: {
+            command: string;
+            cwd: string;
+        };
     };
     /**
      * The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees, for
@@ -1010,6 +4797,16 @@ interface CollectionDTO {
     createdAt: string;
     updatedAt: string;
     symlinkPath?: string;
+}
+
+/** Native input queue lifecycle; command_uuid identifies the submitted user message. */
+interface CommandLifecycleLine extends PassthroughFields {
+    type: 'command_lifecycle';
+    command_uuid: string;
+    state: 'cancelled' | 'completed' | 'discarded' | 'queued' | 'refused' | 'started';
+    ran_ahead?: true;
+    uuid: string;
+    session_id: string;
 }
 
 /** What a window asks of the repository, answered by the commit child over the repository it holds */
@@ -2256,7 +6053,14 @@ declare namespace EARS {
 /** A transition between two nodes, as the SDK's flow repository returns it */
 type EdgeEntity = FlowEdge;
 
-type Effort = 'high' | 'low' | 'max' | 'medium';
+type Effort = 'high' | 'low' | 'max' | 'medium' | 'xhigh';
+
+type Endpoint = {
+    directory: string;
+    token: string;
+};
+
+type EntityId = EARS$1.EntityId;
 
 /** ── Brain-local types ──────────────────────────────────────────────────── */
 interface EventListenerEntity {
@@ -2291,11 +6095,9 @@ interface EventListenerEntity {
 interface ExecOnceOptions {
     cwd?: string;
     /**
-     * Override the env passed to the child. Defaults to a copy of `process.env`
-     * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
-     * (`claude auth login`) instead of an env-var key meant for the server's
-     * LLM client. Pass an explicit object if you want no scrubbing — the
-     * helper assumes you know what you're doing and does not post-process it.
+     * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+     * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+     * on only when its environment switch is unset.
      */
     env?: NodeJS.ProcessEnv;
     /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -3065,12 +6867,17 @@ type IncomingTerminalEvents =
     rows: number;
 };
 
-type IncomingThreadsEvents = {
+type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
     type: 'VIEW_THREAD';
     threadId: string;
 } | {
+    type: 'SET_CLAUDE_CHANNELS';
+    threadId: string;
+    channels: string[];
+} | {
     type: 'PAUSE_TURN';
     threadId: string;
+    nativePause?: ClaudeNativePauseScope;
 } | {
     type: 'INTERACTIVE_MSG_RESPONSE';
     messageId: string;
@@ -3117,7 +6924,7 @@ interface KillNode extends NodeBase {
     nodeType: 'kill';
 }
 
-type KnownStreamLine = UserStreamLine | AssistantStreamLine | StreamEventLine | ToolProgressLine | SystemLine | RateLimitLine | ToolUseSummaryLine | ResultLine | ControlRequestLine | ControlResponseLine | ControlCancelLine | KeepAliveLine | ParseErrorLine;
+type KnownStreamLine = UserStreamLine | AssistantStreamLine | StreamEventLine | ToolProgressLine | SystemLine | RateLimitLine | ToolUseSummaryLine | ResultLine | ControlRequestLine | ControlResponseLine | ControlCancelLine | KeepAliveLine | CommandLifecycleLine | ParseErrorLine;
 
 interface LLMNode extends NodeBase {
     nodeType: 'llm';
@@ -4127,9 +7934,48 @@ type OutgoingTerminalEvents =
  * What the threads system sends every window: a thread to show (one a flow opened, a first message started, or a
  * fork), the streamed reply's feed, and the few notifications a flow sends a window, none of which carries a row.
  */
-type OutgoingThreadsEvents = 
+type OutgoingThreadsEvents = {
+    type: 'CLAUDE_UI_KEY_RESULT';
+    threadId: string;
+    mountId: string;
+    sequence: number;
+    handled: boolean;
+    actionKeys?: ClaudeUiMountState['actionKeys'];
+} | ClaudeTerminalViewReply | {
+    type: 'CLAUDE_PROMPT_COMPLETIONS';
+    threadId: string;
+    mountId: string;
+    result: ClaudePromptCompletionReply;
+} | {
+    type: 'CLAUDE_PROMPT_STATE';
+    threadId: string;
+    mountId: string;
+    result: ClaudePromptReply;
+} | {
+    type: 'CLAUDE_PROMPT_HOST_REQUEST';
+    threadId: string;
+    mountId: string;
+    request: ClaudePromptHostRequest;
+} | {
+    type: 'CLAUDE_UI_FOCUS_STATE';
+    threadId: string;
+    mountId: string;
+    result: ClaudeUiFocusReply;
+} | {
+    type: 'CLAUDE_UI_STATE';
+    threadId: string;
+    mountId: string;
+    resumeKey: string;
+    attachmentId?: string;
+    state: ClaudeUiMountState;
+} | {
+    type: 'CLAUDE_UI_LEASE_EXPIRED';
+    threadId: string;
+    mountId: string;
+    resumeKey: string;
+}
 /** Open this thread in the chat, in every window: one a flow opened, a first message or command started, or a fork */
-{
+ | {
     type: 'SHOW_THREAD';
     threadId: EARS.EntityId;
     restore?: boolean;
@@ -4172,6 +8018,8 @@ type OutgoingThreadsEvents =
 } | {
     type: 'SET_PHASE';
     phase: string;
+    threadId?: string;
+    source?: 'native';
 } | {
     type: 'FLASH_CHAT_STATE';
     threadId: string;
@@ -4437,19 +8285,6 @@ type PermissionDecision = {
 
 /** Caller hook: decide a tool permission request. */
 type PermissionHandler = (request: CanUseToolRequest) => PermissionDecision | Promise<PermissionDecision>;
-
-/**
- * Type definitions + Zod schemas for the Claude Code stream-json wire protocol.
- *
- * The CLI is fast-moving and routinely adds fields; every object schema uses
- * `.passthrough()` so unknown fields survive round-trips and we only validate
- * the bits we actually read. Explicit TS types are exported next to each schema
- * so pack-types.d.ts stays free of Zod types.
- *
- * Source of truth for field shapes: the stream-json writer at
- * `src/cli/structuredIO.ts` and the SDK Zod schemas at
- * `src/entrypoints/sdk/coreSchemas.ts` in the leaked Claude Code source.
- */
 
 /**
  * Permission modes accepted by `claude --permission-mode`. Names match the
@@ -4914,44 +8749,27 @@ type QualifiedSurfaceEvents = Qualified<'default-setup', OwnSurfaceEvents> & Hos
 /** Every system this pack's code can send to, by ref: its own, its dependencies' and the host's. */
 type QualifiedSystemEvents = Qualified<'default-setup', PackSystemEvents> & HostSystemEvents;
 
-/**
- * High-level streaming conversation API.
- *
- * `query()` spawns `claude -p` in stream-json mode, drives the control loop,
- * and exposes two things to the caller:
- *
- *   - an async iterable of parsed stream events (everything except the
- *     control-request traffic, which is handled internally)
- *   - a `result` promise that resolves with the final normalised result
- *
- * Two modes, picked by whether an initial `prompt` is provided:
- *
- *  1. **Single-turn (default)**: pass `{ prompt }`. The wrapper writes the
- *     turn, immediately EOFs stdin, and the CLI runs once + exits. Drain
- *     `handle.events` in a `for await` and then `await handle.result`.
- *     No cleanup needed — the child unwinds itself.
- *
- *  2. **Multi-turn (opt-in)**: pass `{ keepStdinOpen: true, prompt }` OR
- *     pass no prompt. The wrapper leaves stdin open; the caller drives
- *     follow-up turns via `handle.send(text)` and MUST call `handle.close()`
- *     when done. Forgetting to close hangs the child until process exit.
- *
- * The implementation uses a fan-out: the raw NDJSON stream from the child is
- * consumed once by an internal pump that (a) routes control requests to the
- * control router and (b) pushes everything else into an async queue the
- * public iterable reads from. This is the only way to share a single Readable
- * between "internal logic" and "caller" without races.
- */
-
 interface QueryHandle {
+    /** Exact native child identity for owned process handoff and cleanup verification. */
+    readonly pid: number | undefined;
+    /** Structured native UI controls; requires initialized ui_surface_v1 capability. */
+    readonly ui: ClaudeUiControls;
+    /** Native commands, models and capabilities, available before a model turn. */
+    readonly initialized: Promise<ClaudeInitialization>;
+    /** Explicit dryRun is required: preview and mutation have different effects. */
+    rewindFiles(userMessageId: string, options: {
+        dryRun: boolean;
+    }): Promise<ClaudeFileRewind>;
     /** Resolves with the session id as soon as the CLI emits `system/init`. */
     readonly sessionId: Promise<string>;
     /** Every non-control stream line, in order, until the child exits. */
     readonly events: AsyncIterable<StreamLine>;
-    /** Final normalised result. Rejects on error result or non-zero exit. */
+    /** Pending native task state when this result was emitted, independent of later buffered events. */
+    hasPendingBackgroundTasks(result: StreamLine): boolean;
+    /** First normalised result; later multi-turn results arrive through events. */
     readonly result: Promise<QueryResult>;
-    /** Send another user turn. No-op after close(). */
-    send(text: string | UserInputMessage): void;
+    /** Write a user turn and return its host UUID. Lifecycle/replay events confirm native acceptance; throws when stdin is closed. */
+    send(text: string | UserInputMessage): string;
     /**
      * Send a control_response back to the CLI for a surfaced control_request.
      * Only meaningful when `surfaceControlRequests: true` — in callback mode
@@ -4972,8 +8790,39 @@ interface QueryHandle {
         message?: string;
         updatedInput?: unknown;
     }): void;
-    /** Ask the CLI to cancel the current turn (interrupt control request). */
-    interrupt(): void;
+    /** Send an MCP form/URL answer through its distinct correlated native response channel. */
+    respondElicitation(requestId: string, response: ClaudeMcpElicitationAnswer): void;
+    /** Cancel an unsupported generic dialog through its native response channel. */
+    cancelUserDialog(requestId: string): void;
+    /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
+    interrupt(options?: {
+        cancelQueued?: boolean;
+    }): Promise<ClaudeInterruptReceipt>;
+    /** Cancel one input in this print process's native queue; false means Claude did not remove it. */
+    cancelQueuedMessage(messageUuid: string): Promise<boolean>;
+    /** Request process-wide prediction pause or resume; acknowledgement does not establish native eligibility. */
+    setPromptSuggestionsPaused(paused: boolean): Promise<void>;
+    /** Rename the native session; an explicit ID protects against renaming a different session. */
+    renameSession(title: string, sessionId?: string): Promise<void>;
+    /** Read the current native plan without a model turn. */
+    getPlan(): Promise<ClaudePlan>;
+    /** Read live MCP server and tool status without a model turn. */
+    getMcpStatus(): Promise<ClaudeMcpStatus>;
+    controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
+    /** Read structured context usage; summary avoids per-category token-count API calls. */
+    getContextUsage(): Promise<ClaudeContextUsage>;
+    /** Read native instructions and effective memory availability without a model turn. */
+    getMemoryDialog(): Promise<ClaudeMemoryDialog>;
+    /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
+    getModels(): Promise<ClaudeModelCatalog>;
+    /** Effective native settings for an explicit same-session terminal handoff. Backend only. */
+    getSettings(): Promise<ClaudeSettings>;
+    /** Acknowledges selection only; effective-model metadata comes from native turns. */
+    setModel(model: string): Promise<void>;
+    /** Change the running CLI policy and return its acknowledged permission mode. */
+    setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
+    /** Last native acknowledgement, initialized from the native handshake. */
+    getPermissionMode(): Promise<PermissionMode | undefined>;
     /** Close stdin and wait for the child to exit. */
     close(): Promise<void>;
     /** Force-terminate the child process. */
@@ -4988,18 +8837,22 @@ interface QueryNode extends NodeBase {
 }
 
 /**
- * Every option supported by `claude --print`. Grouped by concern.
+ * Typed launch options exposed by this wrapper. Grouped by concern.
  *
  * These translate 1:1 to CLI flags via `argsFromOptions()` — if you add a
  * field here, add the mapping there and a unit test covering it.
  */
 interface QueryOptions {
+    /** Native hook callbacks registered during initialization. */
+    hooks?: ClaudeHooks;
     prompt?: string | UserInputMessage;
     cwd?: string;
     env?: NodeJS.ProcessEnv;
     signal?: AbortSignal;
     cliPath?: string;
     model?: string;
+    /** Offer account models not yet recognized by the pinned native runtime. Explicit opt-in. */
+    includeUnsupportedModels?: boolean;
     fallbackModel?: string;
     effort?: Effort;
     thinking?: Thinking;
@@ -5008,11 +8861,10 @@ interface QueryOptions {
     maxBudgetUsd?: number;
     betas?: string[];
     agent?: string;
-    agents?: Record<string, {
-        description: string;
-        prompt: string;
-    }>;
+    agents?: Record<string, ClaudeInlineAgentDefinition>;
     permissionMode?: PermissionMode;
+    /** Make a later user-requested bypass switch available without starting in bypass mode. */
+    allowDangerouslySkipPermissions?: boolean;
     dangerouslySkipPermissions?: boolean;
     allowedTools?: string[];
     disallowedTools?: string[];
@@ -5022,6 +8874,8 @@ interface QueryOptions {
     systemPromptFile?: string;
     appendSystemPromptFile?: string;
     mcpConfig?: string[];
+    /** Explicit native channel selection; original policy and allowlist still govern admission. */
+    channels?: string[];
     strictMcpConfig?: boolean;
     pluginDir?: string[];
     addDir?: string[];
@@ -5114,7 +8968,7 @@ type Ran = {
 /** Rate limit warnings. */
 interface RateLimitLine extends UuidLine {
     type: 'rate_limit_event';
-    rate_limit_info: Record<string, unknown>;
+    rate_limit_info: ClaudeRateLimitInfo;
 }
 
 /** A note as the welcome page shows it, with when it last changed */
@@ -5163,10 +9017,13 @@ interface RepositoryUnder {
     kind: 'nested' | 'submodule' | 'top' | 'worktree';
 }
 
-/** Final result line — marks turn completion. */
+/** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
 interface ResultLine extends UuidLine {
     type: 'result';
     subtype: string;
+    /** Correlates a host input; autonomous results can omit it. */
+    user_message_uuid?: string;
+    queued_turn_count?: number;
     is_error?: boolean;
     duration_ms?: number;
     duration_api_ms?: number;
@@ -5334,6 +9191,8 @@ interface SessionInfo {
 }
 
 interface SessionListOptions {
+    /** Same environment as the native process that owns these journals. */
+    env?: NodeJS.ProcessEnv;
     /** Working directory whose sessions to list. Defaults to `process.cwd()`. */
     cwd?: string;
     limit?: number;
@@ -5346,6 +9205,7 @@ interface SessionTranscriptEntry {
 }
 
 interface SessionViewOptions {
+    env?: NodeJS.ProcessEnv;
     cwd?: string;
     limit?: number;
     offset?: number;
@@ -5393,6 +9253,18 @@ interface SlowStatus {
     fileMonitorAvailable: boolean;
 }
 
+interface SpawnStreamOptions {
+    cwd?: string;
+    /**
+     * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+     * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+     * on only when its environment switch is unset.
+     */
+    env?: NodeJS.ProcessEnv;
+    signal?: AbortSignal;
+    cliPath?: string;
+}
+
 /** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
 type StartableOperation = 'cherry-pick' | 'merge' | 'rebase';
 
@@ -5433,6 +9305,25 @@ interface StreamEventLine extends UuidLine {
  * types without breaking the wrapper.
  */
 type StreamLine = KnownStreamLine | UnknownLine;
+
+/**
+ * Shared helpers for subcommand namespaces.
+ *
+ * Every `mcp.list()` / `auth.status()` / `plugins.install()` etc. ultimately
+ * becomes an `execOnce` call. Rather than each namespace reinventing error
+ * handling and JSON parsing, they all go through these two helpers:
+ *
+ *   - `run(args, opts)`      → one-shot, returns trimmed stdout
+ *   - `runJson<T>(args, opts)` → one-shot, `JSON.parse` the stdout
+ *
+ * Callers are free to fall through to `execOnce` directly for bespoke cases
+ * (long-lived children, custom stdin, etc.).
+ */
+
+interface SubcommandOptions extends ExecOnceOptions {
+    /** Prepend these args before everything else (e.g. `['--debug']`). */
+    prefix?: readonly string[];
+}
 
 interface SwitchNode extends NodeBase {
     nodeType: 'switch';
@@ -5748,7 +9639,10 @@ type Thinking = 'adaptive' | 'disabled' | 'enabled';
  */
 interface ThreadContext {
     claudeCode?: {
+        nativeContinuation?: ClaudeNativeContinuation;
+        retiredNativeMessages?: ClaudeNativeMessageRetirements;
         sessionId?: string;
+        profile?: ClaudeNativeProfile;
         lastTurnAt?: number;
         cwd?: string;
         model?: string;
@@ -5925,6 +9819,23 @@ type ThreadViewData = Simplify<ThreadCreateData & {
  * asks, answered to the window that made them.
  */
 type ThreadsAsks = {
+    EDIT_CLAUDE_QUEUED_PROMPT: {
+        args: ClaudeQueuedPromptEdit;
+    };
+    CLAUDE_MEMORY: {
+        args: ClaudeMemoryRequest;
+        answer: {
+            dialog?: ClaudeMemoryDialog;
+            saved?: boolean;
+            path?: string;
+        };
+    };
+    SET_CLAUDE_PERMISSION_MODE: {
+        args: {
+            threadId: string;
+            mode: PermissionMode;
+        };
+    };
     CREATE_THREAD: {
         args: {
             topic: string;
@@ -6014,6 +9925,20 @@ type ThreadsAsks = {
             threadId: EARS.EntityId;
         };
     };
+    /** Revert after native history validation and acknowledge the requesting composer. */
+    APPLY_THREAD_REVERT: {
+        args: {
+            messageId: string;
+            threadId: string;
+            restoreFiles?: boolean;
+            userCliUuid?: string;
+        };
+        refuses: {
+            'rejected': {
+                threadId: string;
+            };
+        };
+    };
     /** What a window's chat starts from */
     GET_CHAT_START: {
         answer: ChatStart;
@@ -6053,6 +9978,35 @@ interface ThreadsContext {
         filePath: string;
         threadCount: number;
     };
+    nativeTerminalViews: Record<string, {
+        threadId: string;
+        queueComposer?: boolean;
+    } & ClaudeTerminalViewSnapshot>;
+    nativeUiViews: Record<string, {
+        threadId: string;
+        resumeKey?: string;
+        attachmentId?: string;
+        mountRequest?: ClaudeUiMountRequest;
+        state: ClaudeUiMountState;
+        actionKeyResult?: {
+            sequence: number;
+            handled: boolean;
+            actionKeys?: ClaudeUiMountState['actionKeys'];
+        };
+        promptHostRequest?: ClaudePromptHostRequest;
+        focusRevision?: number;
+        focusSite?: string;
+        focus?: ClaudeUiFocusReply;
+        prompt?: ClaudePromptReply;
+        promptRevision?: number;
+        completions?: ClaudePromptCompletionReply;
+        completionRevision?: number;
+        completionEditRevision?: number;
+    }>;
+    permissionModeChanges: Record<string, {
+        pending: boolean;
+        reason?: string;
+    }>;
     currentThread: AgentThreadData | null;
     recentThreadIds: string[];
     messageInput: string;
@@ -6153,6 +10107,10 @@ interface ThreadsContext$1 {
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */
 type ThreadsInboxEvent = {
+    type: 'SET_CLAUDE_PERMISSION_MODE';
+    threadId: string;
+    mode: NonNullable<ClaudeSessionArtifactContent['permissionMode']>;
+} | {
     type: 'SELECT_ARTIFACT';
     artifactId: string;
 } | {
@@ -6183,7 +10141,24 @@ interface ToolActivityEntry {
     durationMs?: number;
     /** One-line output summary if the tool reported one (e.g. "3 matches"). */
     outputSummary?: string;
+    /** Native agent matched by structured journal identity, independent of the Agent call's launch result. */
+    nativeAgent?: {
+        id: string;
+        ownerId?: string;
+        sessionId?: string;
+        name: string;
+        status: string;
+        statusText?: string;
+        canStop?: boolean;
+    };
+    /** Exact original result row; structured output remains owned by the native process. */
+    nativeResult?: {
+        uuid: string;
+        sessionId: string;
+        outputFile?: string;
+    };
     /** Optional full details revealed when the row is expanded. */
+    handbacks?: ClaudeAgentHandback[];
     details?: {
         input?: unknown;
         output?: string;
@@ -6346,6 +10321,8 @@ type UserCommand = {
 /** User message written to stdin during a stream-json conversation. */
 interface UserInputMessage {
     type: 'user';
+    /** Stable native command identity for lifecycle tracking and queued-message cancellation. */
+    uuid?: string;
     message: {
         role: 'user';
         content: string | Array<Record<string, unknown>>;
@@ -6404,6 +10381,13 @@ interface UuidLine extends PassthroughFields {
 interface WatcherHandle {
     readonly [gitHandle]: 'watcher';
 }
+
+type WindowPresence = {
+    ownerId: string;
+    sessionId: string;
+    focused: boolean;
+    terminal: boolean;
+};
 
 interface WorktreeEntry {
     path: string;
@@ -6486,6 +10470,7 @@ declare namespace __FeatureSettings_Code {
         cliPaths: {
             [k: string]: string;
         };
+        claudeProfile: "app" | "shared";
     }
 }
 
@@ -6724,6 +10709,9 @@ declare function appendMessageBlockText(blockId: EARS.EntityId, at: number, text
  */
 declare function appendMessageText(messageId: EARS.EntityId, at: number, text: string): void;
 
+/** Read only the child linked by the original parent's durable journal. */
+declare function backgroundSession(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, options?: SubcommandOptions): Promise<ClaudeBackgroundSession | undefined>;
+
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
     readonly createEventRunNode: (eventNode: {
@@ -6825,6 +10813,14 @@ declare const chatCommands: {
         asideText?: string;
         compacted?: boolean;
         context?: Record<string, unknown>;
+        /**
+         * When the message happened, where a new one happens now.
+         *
+         * **A restored session's messages carry the CLI's own time**, not the time this process wrote them: an
+         * import walks a transcript in whatever order it reads it, and the chat is ordered by this
+         * (`orderClaudeSessionMessages`). Absent means now, which is every message a user sends.
+         */
+        timestamp?: number;
         skipRelink?: boolean;
     }) => {
         id: EARS.EntityId;
@@ -6949,7 +10945,7 @@ declare const chatCommands: {
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
-        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
+        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "sender" | "status" | "text">>;
     }) => {
         messageId: EARS.EntityId;
         updatedAt: number;
@@ -7027,6 +11023,8 @@ declare const chatQueries: {
      * and each pinned one's; and the threads settings
      */
     readonly chatStart: () => ChatStart;
+    /** Whether that message is in that thread, without reading anything about it */
+    readonly hasMessageInThread: (messageId: EARS.EntityId, threadId: EARS.EntityId) => boolean;
     /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
     readonly blocksOf: (messageId: EARS.EntityId) => StoredBlock[];
     readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
@@ -7043,6 +11041,21 @@ declare const chatQueries: {
     /** One message, whole; `null` once it is gone */
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
+
+/**
+ * An immutable generation grants its successor with one exclusive hard link. No stale lock is
+ * unlinked: concurrent claimants follow the winner, including when it dies during socket recovery.
+ * The registry contains only a private endpoint capability, never Claude credentials or settings.
+ */
+declare function claimClaudeBackgroundCheckpoint(options: {
+    profile: string;
+    parentSessionId: string;
+    endpoint?: Endpoint;
+}): Promise<{
+    directory: string;
+    token: string;
+    retire(): Promise<void>;
+} | undefined>;
 
 /**
  * Stop and remove all cron jobs. Called on brain kill/restart.
@@ -7075,6 +11088,673 @@ declare function contentOf(artifactId: EARS.EntityId): unknown;
  */
 declare function create(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
+};
+
+/** Observe the verified child once, independently of desktop clients and Reply visibility. */
+declare function createClaudeBackgroundControls(options: {
+    sessionId: string;
+    transport: Pick<ClaudeTerminalUiTransport, 'request'>;
+    changed(): void;
+}): ClaudeBackgroundControls;
+
+/** A read-only original runtime owns identity checks independently of the parent's UI socket. */
+declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, options: SpawnStreamOptions): {
+    identify(sessionId: string, pid: number, cwd: string): Promise<ClaudeBackgroundStatusIdentity>;
+    close: () => Promise<void>;
+};
+
+/** The linked child owns this transport and plugin directory after the parent writer exits. */
+declare function createClaudeBackgroundStatusObserver(options: {
+    parentSessionId: string;
+    profile?: string;
+    childUiLaunch?: {
+        configDir?: string;
+        secureStorageConfigDir?: string;
+        executable: string;
+        cwd: string;
+        searchPath: string | undefined;
+    };
+    checkpoint?: ClaudeBackgroundCheckpoint;
+    target(): {
+        sessionId: string;
+        cwd: string;
+    } | undefined;
+    authority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>;
+    changed(): void;
+}): Promise<{
+    directory: string;
+    socketPath: string;
+    token: string;
+    readonly desktopOwner: ClaudeBackgroundDesktopOwner | undefined;
+    /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
+    desktopTransport: () => Promise<ClaudeTerminalUiTransport | undefined>;
+    readonly parentSessionId: string;
+    readonly value: ClaudeBackgroundStatus | undefined;
+    readonly available: boolean;
+    resetParent(sessionId: string): Promise<void>;
+    adoptParent(nextTarget: typeof options.target, changed: () => void): void;
+    subscribe(listener: () => void): () => void;
+    releaseParent(): Promise<void>;
+    close: () => Promise<void>;
+}>;
+
+/** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
+declare function createClaudePromptHosts(write: (value: unknown) => boolean, paintFill?: (clientId: string, input: ClaudePromptHostFill) => Promise<ClaudePromptHostFill>): {
+    register(client: string, host: ClaudePromptHost): () => void;
+    answers(client: string): string[];
+    detach: (client: string) => void;
+    receive(line: ControlRequestLine, ownedTerminal?: boolean): boolean;
+    cancel(id: string): boolean;
+    close(): void;
+};
+
+/** Native UI transport only. A renderer must validate tree nodes before displaying them. */
+declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
+    transcriptTimestamps(id: string): Promise<ClaudeTranscriptTimestamp[]>;
+    terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]>;
+    composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]>;
+    managedSettingsDiagnostics(id: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
+    diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]>;
+    toolGroups(id: string): Promise<ClaudeUiToolGroup[]>;
+    releaseInstance(options: ClaudeUiInstanceRelease): Promise<{
+        released: boolean;
+    }>;
+    prepareParentCommand(options: {
+        client_id: string;
+        text: string;
+    }): Promise<{
+        kind: "direct_message";
+        recipient: string;
+    } | {
+        kind: "not_command";
+    } | {
+        kind: "review";
+        text: string;
+        removed: number;
+    } | {
+        kind: "panel";
+        id: string;
+        commandName: string;
+    } | {
+        kind: "command_output";
+        messageId: string;
+        commandName: string;
+        text: string;
+        isErrored: boolean;
+        outcome?: string | undefined;
+    } | {
+        kind: "blocked";
+        message: string;
+    } | {
+        kind: "confirmation";
+        id: string;
+        title: string;
+        confirmLabel: string;
+        commandName?: string | undefined;
+    } | {
+        kind: "ultraplan_settled";
+        draft?: string | undefined;
+    } | {
+        kind: "command_complete";
+        commandName: string;
+        messageId: string;
+        boundaryId?: string | undefined;
+        sessionId?: string | undefined;
+        conversationId?: string | undefined;
+    } | {
+        kind: "prepared";
+        id: string;
+    }>;
+    startParentCommand(options: {
+        client_id: string;
+        command_id: string;
+    }): Promise<{
+        kind: "running";
+        id: string;
+    }>;
+    readParentCommand(options: {
+        client_id: string;
+        command_id: string;
+    }): Promise<{
+        kind: "prepared" | "running";
+        id: string;
+    } | {
+        kind: "finished";
+        id: string;
+        result: {
+            kind: "direct_message";
+            recipient: string;
+        } | {
+            kind: "not_command";
+        } | {
+            kind: "review";
+            text: string;
+            removed: number;
+        } | {
+            kind: "panel";
+            id: string;
+            commandName: string;
+        } | {
+            kind: "command_output";
+            messageId: string;
+            commandName: string;
+            text: string;
+            isErrored: boolean;
+            outcome?: string | undefined;
+        } | {
+            kind: "blocked";
+            message: string;
+        } | {
+            kind: "confirmation";
+            id: string;
+            title: string;
+            confirmLabel: string;
+            commandName?: string | undefined;
+        } | {
+            kind: "ultraplan_settled";
+            draft?: string | undefined;
+        } | {
+            kind: "command_complete";
+            commandName: string;
+            messageId: string;
+            boundaryId?: string | undefined;
+            sessionId?: string | undefined;
+            conversationId?: string | undefined;
+        };
+    } | {
+        kind: "failed";
+        id: string;
+        message: string;
+    }>;
+    submitAgent(options: {
+        client_id: string;
+        text: string;
+    }): Promise<{
+        kind: "input";
+        messageId: string;
+        previousStatus: string;
+    } | {
+        kind: "review";
+        text: string;
+        removed: number;
+    } | {
+        kind: "panel";
+        id: string;
+        commandName: string;
+    } | {
+        kind: "command_output";
+        messageId: string;
+        commandName: string;
+        text: string;
+        isErrored: boolean;
+        outcome?: string | undefined;
+    } | {
+        kind: "blocked";
+        message: string;
+    } | {
+        kind: "confirmation";
+        id: string;
+        title: string;
+        confirmLabel: string;
+        commandName?: string | undefined;
+    }>;
+    agentsGesture(options: {
+        client_id: string;
+        sequence: number;
+    }): Promise<{
+        handled: boolean;
+    }>;
+    backgroundReview(options: {
+        client_id: string;
+        panel_id: string;
+    } & ({
+        operation: "read";
+    } | {
+        operation: "cancel" | "confirm";
+        revision: string;
+    })): Promise<{
+        open: boolean;
+        review?: {
+            revision: string;
+            title: string;
+            paragraphs: string[];
+            confirmLabel: string;
+            cancelLabel: string;
+            defaultFocus: "cancel" | "confirm";
+        } | undefined;
+    } | {
+        answered: true;
+    }>;
+    settings(options: {
+        client_id: string;
+        panel_id: string;
+        action: ClaudeSettingsOperation;
+    }): Promise<{
+        snapshot: {
+            revision: string;
+            rows: {
+                key: string;
+                label: string;
+                kind: "boolean" | "choice" | "number" | "text";
+                value: string | number | boolean | null;
+                isLocked: boolean;
+                description?: string | undefined;
+                options?: string[] | undefined;
+                editorAvailable?: boolean | undefined;
+                lockReason?: string | undefined;
+            }[];
+            permissions?: {
+                title: string;
+                tabs: {
+                    value: string;
+                    label: string;
+                    selected: boolean;
+                }[];
+                paragraphs: {
+                    runs: {
+                        text: string;
+                        style: {
+                            color?: string | undefined;
+                            backgroundColor?: string | undefined;
+                            bold?: boolean | undefined;
+                            italic?: boolean | undefined;
+                            underline?: boolean | undefined;
+                            strikethrough?: boolean | undefined;
+                            inverse?: boolean | undefined;
+                            dimColor?: boolean | undefined;
+                        };
+                    }[];
+                    role?: "alert" | undefined;
+                }[];
+                choices: {
+                    value: string;
+                    label: string;
+                    disabled: boolean;
+                    description?: string | undefined;
+                    approved?: boolean | undefined;
+                    retryScheduled?: boolean | undefined;
+                    retryAvailable?: boolean | undefined;
+                }[];
+                readOnly: boolean;
+                decisions?: {
+                    approved: number;
+                    retry: number;
+                } | undefined;
+                defaultFocusValue?: string | undefined;
+                search?: string | undefined;
+                searchScope?: string | undefined;
+                form?: {
+                    value: string;
+                    placeholder: string;
+                    multiline: boolean;
+                    submitLabel: string;
+                    live?: {
+                        kind: "autoRule" | "directory";
+                        id: string;
+                        revision: string;
+                        suggestions: {
+                            value: string;
+                            label: string;
+                            token: string;
+                            description?: string | undefined;
+                        }[];
+                        problem?: string | undefined;
+                        selectedValue?: string | undefined;
+                    } | undefined;
+                } | undefined;
+                editor?: {
+                    id: string;
+                    revision: string;
+                    value: string;
+                    closing: boolean;
+                } | undefined;
+            } | undefined;
+            ide?: {
+                stage: "connecting" | "disable" | "enable" | "finished" | "selection";
+                title: string;
+                paragraphs: string[];
+                options: {
+                    value: string;
+                    label: string;
+                    description?: string | undefined;
+                }[];
+                description?: string | undefined;
+                selectedValue?: string | undefined;
+                disabled?: boolean | undefined;
+            } | undefined;
+            help?: {
+                selectedTab: "Commands" | "Custom commands" | "General";
+                tabs: ("Commands" | "Custom commands" | "General")[];
+                paragraphs: string[];
+                commands: {
+                    name: string;
+                    label: string;
+                    description: string;
+                }[];
+                links: string[];
+            } | undefined;
+            frame?: {
+                selectedTab: "Config" | "Stats" | "Status" | "Usage";
+                tabs: ("Config" | "Stats" | "Status" | "Usage")[];
+                hidden: boolean;
+                usage?: {
+                    startedAt: number;
+                    context: {
+                        window: number;
+                        tokens?: number | undefined;
+                        percent?: number | undefined;
+                    };
+                    rateLimits: {
+                        kind: string;
+                        percentUsed: number;
+                        resetsAt?: string | undefined;
+                    }[];
+                    cost?: {
+                        usd: number;
+                    } | undefined;
+                } | undefined;
+                stats?: {
+                    loading: boolean;
+                    outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+                    view?: "Models" | "Overview" | undefined;
+                    range?: "30d" | "7d" | "all" | undefined;
+                    copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+                    insight?: string | undefined;
+                    calendar?: string | undefined;
+                    problem?: string | undefined;
+                    data?: {
+                        totalSessions: number;
+                        totalMessages: number;
+                        totalDays: number;
+                        activeDays: number;
+                        modelUsage: Record<string, {
+                            inputTokens: number;
+                            outputTokens: number;
+                            cacheReadInputTokens: number;
+                            cacheCreationInputTokens: number;
+                            costUSD: number;
+                        }>;
+                        dailyActivity: {
+                            date: string;
+                            messageCount: number;
+                            sessionCount: number;
+                            toolCallCount: number;
+                        }[];
+                        streaks?: {
+                            currentStreak: number;
+                            longestStreak: number;
+                            currentStreakStart?: string | null | undefined;
+                            longestStreakStart?: string | null | undefined;
+                            longestStreakEnd?: string | null | undefined;
+                        } | undefined;
+                        longestSession?: {
+                            sessionId: string;
+                            duration: number;
+                            messageCount: number;
+                            timestamp: string;
+                        } | null | undefined;
+                        firstSessionDate?: string | null | undefined;
+                        lastSessionDate?: string | null | undefined;
+                        peakActivityDay?: string | null | undefined;
+                        peakActivityHour?: number | null | undefined;
+                        dailyModelTokens?: {
+                            date: string;
+                            tokensByModel: Record<string, number>;
+                        }[] | undefined;
+                        allTimeActivity?: {
+                            date: string;
+                            messageCount: number;
+                            sessionCount: number;
+                            toolCallCount: number;
+                        }[] | undefined;
+                    } | undefined;
+                } | undefined;
+                diagnostics?: string[] | undefined;
+                status?: {
+                    label: string;
+                    value: string;
+                }[][] | undefined;
+            } | undefined;
+            editor?: {
+                kind: "information";
+                revision: string;
+                title: string;
+                description: string;
+            } | {
+                kind: "choice";
+                revision: string;
+                disabled: boolean;
+                options: {
+                    value: string;
+                    label: string;
+                    disabled: boolean;
+                    description?: string | undefined;
+                    descriptionAnsi?: string | undefined;
+                    canEdit?: boolean | undefined;
+                    canReset?: boolean | undefined;
+                }[];
+                description?: string | undefined;
+                consent?: {
+                    description: string;
+                    cancelLabel: string;
+                    links?: string[] | undefined;
+                    defaultFocusValue?: string | undefined;
+                } | undefined;
+                title?: string | undefined;
+                value?: string | undefined;
+                previewValue?: string | undefined;
+                model?: {
+                    description: string;
+                    effortText: string;
+                    canAdjustEffort: boolean;
+                    draftEffort?: string | undefined;
+                    focusValue?: string | undefined;
+                    fastModeNotice?: string | undefined;
+                } | undefined;
+                canPreview?: boolean | undefined;
+                canToggleSyntax?: boolean | undefined;
+                preview?: {
+                    theme: {
+                        text: string;
+                        inverseText: string;
+                    };
+                    text: string;
+                    lines: string[];
+                    caption: string;
+                    ansi?: string | undefined;
+                } | undefined;
+            } | {
+                kind: "group";
+                revision: string;
+                title: string;
+                disabled: boolean;
+                rows: {
+                    key: string;
+                    label: string;
+                    kind: "boolean" | "choice";
+                    value: string | boolean;
+                    disabled: boolean;
+                    options?: {
+                        value: string;
+                        label: string;
+                        disabled: boolean;
+                    }[] | undefined;
+                }[];
+                description?: string | undefined;
+            } | {
+                kind: "form";
+                revision: string;
+                title: string;
+                submitLabel: string;
+                fields: {
+                    key: string;
+                    label: string;
+                    value: string;
+                }[];
+                live?: {
+                    id: string;
+                    feedback?: {
+                        text: string;
+                        tone: "error" | "success";
+                    } | undefined;
+                } | undefined;
+                consent?: {
+                    cancelLabel: string;
+                    focusField: "answer";
+                    links?: string[] | undefined;
+                    problem?: string | undefined;
+                } | undefined;
+                description?: string | undefined;
+            } | undefined;
+            commitPending?: boolean | undefined;
+            refreshPending?: boolean | undefined;
+            dismissible?: boolean | undefined;
+        };
+        savedKey?: string | undefined;
+        problem?: string | undefined;
+    }>;
+    agentPanel(options: {
+        client_id: string;
+        panel_id: string;
+    } & ({
+        operation: "close" | "read";
+    } | {
+        operation: "input";
+        text: string;
+    })): Promise<{
+        open: boolean;
+    }>;
+    answerAgentCommand(options: {
+        client_id: string;
+        command_id: string;
+        decision: "cancel" | "confirm";
+    }): Promise<{
+        answered: true;
+    }>;
+    clientEvent(options: {
+        client_id: string;
+        id: string;
+        sequence: number;
+        event: ClaudeUiClientInput;
+    }): Promise<{
+        handled: boolean;
+    }>;
+    /** Register only a mounted composer; registration alone does not attach or create a process. */
+    servePrompt(id: string, host: ClaudePromptHost): () => void;
+    /** Advertise only reverse APIs the attached view can actually answer. */
+    attach(options: ClaudeUiAttach): Promise<{
+        [x: string]: unknown;
+        surfaces: ("desktop" | "mobile" | "terminal" | "vscode")[];
+    }>;
+    detach(id: string): Promise<{
+        [x: string]: unknown;
+        detached: boolean;
+        surfaces: ("desktop" | "mobile" | "terminal" | "vscode")[];
+    }>;
+    render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult>;
+    /** Read on mount: a pane opened before stream arming produces no roster push. */
+    panes(id: string): Promise<ClaudeUiPaneRoster>;
+    showPane(options: ClaudeUiPaneSelection): Promise<{
+        [x: string]: unknown;
+        shown_id: string | null;
+    }>;
+    /** Null returns the keyboard and settles a refused plugin focus request. */
+    focusPane(options: Omit<ClaudeUiPaneSelection, "id"> & {
+        id: string | null;
+    }): Promise<{
+        [x: string]: unknown;
+        focused_id: string | null;
+    }>;
+    /** Native runs ui.close with origin person; a hook may refuse, so never hide optimistically. */
+    closePane(options: {
+        client_id: string;
+        id: string;
+    }): Promise<{
+        [x: string]: unknown;
+        closed: boolean;
+    }>;
+    /** Native owns scroll hooks and the authoritative offset, including a denied move. */
+    scroll(options: ClaudeUiScroll): Promise<{
+        [x: string]: unknown;
+        moved: boolean;
+        offset: number;
+        deny?: string | undefined;
+        follow_end?: boolean | undefined;
+    }>;
+    /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
+    focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult>;
+    /** Native resolves configured keys; no terminal callback handle is accepted from the renderer. */
+    dismissIde(options: {
+        client_id: string;
+        revision: string;
+    }): Promise<{
+        handled: boolean;
+    }>;
+    key(options: ClaudeUiActionKeyRequest & {
+        client_id: string;
+    }): Promise<{
+        handled: boolean;
+        action_keys: {
+            revision: string;
+            bindings: {
+                key: string;
+                ctrl: boolean;
+                alt: boolean;
+                shift: boolean;
+                meta: boolean;
+                super: boolean;
+            }[][];
+            continuations: {
+                key: string;
+                ctrl: boolean;
+                alt: boolean;
+                shift: boolean;
+                meta: boolean;
+                super: boolean;
+            }[][];
+            pending: {
+                key: string;
+                ctrl: boolean;
+                alt: boolean;
+                shift: boolean;
+                meta: boolean;
+                super: boolean;
+            }[] | null;
+        };
+    }>;
+    /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
+    promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame>;
+    /** Plugin rows follow the host's own completion rows; autocomplete never gates an edit or Send. */
+    promptAutocomplete(options: ClaudeUiPromptAutocomplete): Promise<ClaudeUiPromptCompletions>;
+    /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
+    input(options: ClaudeUiInput): Promise<{
+        [x: string]: unknown;
+        handled: boolean;
+        element?: string | undefined;
+        value?: string | undefined;
+    }>;
+    /** Native validates membership against the Select options in the current drawing. */
+    select(options: ClaudeUiSelect): Promise<{
+        [x: string]: unknown;
+        handled: boolean;
+        element?: string | undefined;
+        value?: string | undefined;
+    }>;
+    /** Forward the capability issued in the current tree; a stale handle returns handled:false. */
+    press(options: ClaudeUiPress): Promise<{
+        [x: string]: unknown;
+        handled: boolean;
+        element?: string | undefined;
+    }>;
+};
+
+/** Host-to-CLI requests are independent of CLI-to-host tool permission requests. */
+declare function createHostControls(write: (value: unknown) => boolean, pid?: number): {
+    request(request: Record<string, unknown> & {
+        subtype: string;
+    }, timeoutMs?: number): Promise<unknown>;
+    receive(value: unknown): void;
+    close(error?: Error): void;
 };
 
 /**
@@ -7124,6 +11804,7 @@ declare const featureServices: {
         streamMessageBlockText: typeof streamMessageBlockText;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
+        importClaudeSessionMessages: typeof importClaudeSessionMessages;
         createThread: typeof createThread;
         showThread: typeof showThread;
         visitThread: typeof visitThread;
@@ -7287,6 +11968,13 @@ declare function getHandle(key: string): CodexTurnHandle | undefined;
 
 declare const gitHandle: unique symbol;
 
+/** Import canonical native rows without acquiring or persisting live drawing capabilities. */
+declare function importClaudeSessionMessages({ threadId, transcript, sessionId }: {
+    threadId: EntityId;
+    transcript: readonly Record<string, unknown>[];
+    sessionId: string;
+}): number;
+
 declare const libraryCommands: {
     /** Follows every write above, until the returned function is called */
     readonly onDocumentsChanged: (listener: DocumentsListener) => () => void;
@@ -7420,8 +12108,14 @@ declare const noteQueries: {
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
 };
 
+/** Own the original attach client; never send Stop to its background worker on close. */
+declare function openBackgroundAttachment(continuation: ClaudeNativeContinuation, jobId: string, options?: SubcommandOptions): Promise<ClaudeBackgroundAttachment>;
+
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
+
+/** Interpret the pinned native MCP primitive form surface; unknown constructs fail visibly. */
+declare function parseMcpElicitationForm(input: unknown, propertyOrder?: string[]): ClaudeMcpForm;
 
 declare const promptCommands: {
     create: (data: _apackdev_sdk_repositories.PromptInput) => PromptEntity;
@@ -7460,6 +12154,9 @@ declare function registerSchedule(key: string, cronExpression: string, callback:
  * entries. It used to be written as a rewrite of the *surviving* blocks, so removing one rewrote the other.
  */
 declare function removeMessageBlock(messageId: EARS.EntityId, type: string): void;
+
+/** A fresh original CLI sends to the existing supervisor; it never resumes or writes the conversation. */
+declare function replyBackgroundSession(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundReplyRequest, options?: SubcommandOptions): Promise<ClaudeBackgroundSession>;
 
 /**
  * Resolve all message reference types (images, files, notes, threads,
@@ -7771,7 +12468,7 @@ declare function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig
  *   text: 'Updated message content'
  * });
  */
-declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
+declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'references' | 'responseTimestamp' | 'sender' | 'status' | 'text'>>): void;
 
 /**
  * Writes one of a block's tool entries, and answers its row.
@@ -7784,6 +12481,9 @@ declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<P
  * Pass the row id a previous write answered and it is one row by id, with no walk for the entry.
  */
 declare function updateMessageToolEntry(blockId: EARS.EntityId, entry: ToolActivityEntry, entryRowId?: EARS.EntityId): EARS.EntityId | undefined;
+
+/** Validate without coercion, default insertion or silently deleting unknown response properties. */
+declare function validateMcpElicitationForm(form: ClaudeMcpForm, input: unknown): ClaudeMcpFormValidation;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {

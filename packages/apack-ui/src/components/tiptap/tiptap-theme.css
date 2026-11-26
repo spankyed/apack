@@ -657,3 +657,8 @@
   background: rgba(250, 204, 21, 0.6);
   border-radius: 2px;
 }
+
+.tiptap-viewer [data-transcript-math="display"] {
+  max-width: 100%;
+  overflow-x: auto;
+}

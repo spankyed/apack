@@ -55,3 +55,22 @@ it("answers what a window's code surface starts from to it alone, and sends ever
     expect(sent, 'the directory, to the asker alone').toEqual([{ type: 'ASK_ANSWERED', client: MAIN }])
   } finally { stop() }
 })
+
+
+it('opens and saves an explicitly named file before a Code folder is selected', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-named-file-'))
+  dirs.push(dir)
+  const file = path.join(dir, 'CLAUDE.md')
+  fs.writeFileSync(file, 'Original instructions.\n')
+  const app = await startApp({ systems: ['code'] })
+  await app.connect()
+  const options = { client: MAIN }
+  expect(await app.ask('code', { type: 'explorer.READ_FILE', path: file }, options))
+    .toMatchObject({ ok: true, value: { path: file, content: 'Original instructions.\n' } })
+  expect(await app.ask('code', { type: 'explorer.WRITE_FILE', path: file, content: 'Updated instructions.\n' }, options))
+    .toMatchObject({ ok: true, value: { path: file } })
+  expect(fs.readFileSync(file, 'utf8')).toBe('Updated instructions.\n')
+  expect(await app.ask('code', { type: 'explorer.READ_FILE', path: 'CLAUDE.md' }, options))
+    .toMatchObject({ ok: false, failure: { kind: 'file', message: 'No directory selected.' } })
+  expect(await app.ask('code', { type: 'GET_CODE_START' }, options)).toMatchObject({ ok: true, value: { baseDirectory: null } })
+})

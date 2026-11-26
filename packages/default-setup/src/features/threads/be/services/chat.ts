@@ -1,3 +1,4 @@
+import { importClaudeSessionMessages } from '../claude-session-import.ts';
 import { broadcast } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
@@ -225,7 +226,7 @@ export function updateMessageBlockResponse(
  */
 export function updateMessageState(
   messageId: EARS.EntityId,
-  updates: Partial<Pick<MessageEntity, 'text' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
+  updates: Partial<Pick<MessageEntity, 'sender' | 'text' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted' | 'references'>>
 ): void {
   try {
     repository.chatCommands.updateMessageState({
@@ -696,6 +697,7 @@ export const chatService = {
   streamMessageBlockText,
   createMarkerMessage,
   addMessagesToThread,
+  importClaudeSessionMessages,
   createThread,
   showThread,
   visitThread,

@@ -6,6 +6,12 @@
     @dragover.prevent
     @drop.capture="handleDrop"
   >
+    <div v-if="claudeProfileSetupError" role="alert" class="flex shrink-0 items-start gap-3 border-b border-amber-500/20 bg-amber-500/5 p-4 text-sm text-neutral-200">
+      <div class="min-w-0 flex-1 break-words"><p class="font-medium">Could not set up the Claude profile</p><p class="mt-1 text-neutral-400">{{ claudeProfileSetupError }}</p></div>
+      <button type="button" class="shrink-0 rounded border border-neutral-600 px-2 py-1" @click="actor.send({type: 'OPEN_CLAUDE_PROFILE_SETUP'})">Try again</button>
+      <button type="button" class="shrink-0 px-2 py-1 text-neutral-400" @click="actor.send({type: 'DISMISS_CLAUDE_PROFILE_SETUP_ERROR'})">Dismiss</button>
+    </div>
+    <div v-else-if="pendingClaudeProfileSetup" role="status" class="shrink-0 border-b border-neutral-800 p-4 text-sm text-neutral-400">Preparing Claude profile…</div>
     <!-- Drop overlay -->
     <div
       v-if="isDraggingOver"
@@ -132,6 +138,8 @@ const commitActor = panelChild(actor, 'commit')
 const { state: code, send } = useState(actor)
 const { state: git, send: sendCommit } = useState(commitActor)
 const isApplyingHunk = computed(() => git.value !== undefined && git.value.data.making.hunk)
+const pendingClaudeProfileSetup = computed(() => code.value.data.making.claudeProfileSetup)
+const claudeProfileSetupError = computed(() => code.value.data.claudeProfileSetupError)
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
 const appliedHunks = computed(() => git.value?.data.appliedHunks[code.value.data.activeFilePath ?? ''] ?? [])
 const applyHunk = (path: string, staged: boolean, hunk: string) => sendCommit({ type: 'commit.APPLY_HUNK', path, staged, hunk })

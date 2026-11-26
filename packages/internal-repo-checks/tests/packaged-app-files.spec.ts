@@ -8,7 +8,7 @@ import { completeBuildFixture } from './_support/app-build.ts';
 import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
 import { PACK_WORK_DIR } from '@apackdev/host/build/pack-workdir';
 import * as fileMatcher from 'app-builder-lib/out/fileMatcher.js';
-import { FileMatcher } from 'app-builder-lib/out/fileMatcher.js';
+import { FileMatcher, getFileMatchers } from 'app-builder-lib/out/fileMatcher.js';
 import { doMergeConfigs } from 'app-builder-lib/out/util/config/config.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -42,6 +42,7 @@ const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm tes
 
 /** The `files` array electron-builder is given, which is also the data the mutation cases edit a copy of */
 let patterns: string[];
+let packagedFiles: Parameters<typeof getFileMatchers>[0]['files'];
 
 const stage = createBuildSession({ APACK_ENV: 'production' });
 completeBuildFixture(stage);
@@ -49,8 +50,10 @@ afterAll(() => { vi.unstubAllEnvs(); fs.rmSync(stage, { recursive: true, force: 
 beforeAll(async () => {
   vi.stubEnv('APACK_BUILD_ROOT', stage);
   // Load the same config the packaging command uses.
-  const config = (await import(pathToFileURL(path.join(REPO_ROOT, 'electron-builder.mjs')).href)).default as { files: (string | object)[] };
-  patterns = config.files.filter((file): file is string => typeof file === 'string');
+  const config = (await import(pathToFileURL(path.join(REPO_ROOT, 'electron-builder.mjs')).href)).default as Parameters<typeof getFileMatchers>[0];
+  packagedFiles = config.files;
+  if (!Array.isArray(packagedFiles)) throw new Error('Expected the packaged app file sets');
+  patterns = packagedFiles.filter((file): file is string => typeof file === 'string');
 });
 
 /**
@@ -314,6 +317,22 @@ describe("the packaged app's file list", () => {
 
     it("ships every file of a package's compiled output", () => {
       expect(population("@apackdev/sdk's dist", filesUnder('packages/apack-sdk/dist')).filter((file) => !ships(file))).toEqual([]);
+    });
+
+    it('ships the sealed Default Setup pack, including its generated declarations', () => {
+      const dist = 'packages/default-setup/dist';
+      const root = path.join(REPO_ROOT, dist);
+      const destination = path.join(stage, 'app');
+      const matchers = getFileMatchers({ files: packagedFiles }, 'files', destination, {
+        defaultSrc: REPO_ROOT, globalOutDir: stage, macroExpander: value => value, customBuildOptions: {},
+      })!;
+      const pack = matchers.find(matcher => matcher.from === root && matcher.to === path.join(destination, dist));
+      expect(pack).toBeDefined();
+      const required = population('the sealed pack', Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'integrity.json'), 'utf8')).files));
+      expect(population('the required declaration files', required.filter(file => file.endsWith('.d.ts')))).not.toHaveLength(0);
+      const includes = pack!.createFilter();
+      expect(required.filter(file => !includes(path.join(root, file), { isDirectory: () => false } as never))).toEqual([]);
+      expect(required.filter(file => ships(path.join(dist, file)))).toEqual([]);
     });
 
     /** The mapping the templates cases derive: what `bundle-package` copied is what they assumed it would */

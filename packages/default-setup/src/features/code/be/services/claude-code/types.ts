@@ -1,3 +1,4 @@
+import type { ClaudeHooks } from './hooks.ts'
 /**
  * Type definitions + Zod schemas for the Claude Code stream-json wire protocol.
  *
@@ -12,6 +13,7 @@
  */
 
 import { z } from 'zod'
+import { ClaudeRateLimitInfoSchema, type ClaudeRateLimitInfo } from '../../../common/native-billing.ts'
 
 // ─── Primitives ──────────────────────────────────────────────────────────────
 
@@ -35,20 +37,20 @@ export type PermissionMode =
   | 'dontAsk'
   | 'auto'
 
-export const PermissionModeSchema: z.ZodType<PermissionMode> = z.enum([
+export const PermissionModeSchema = z.enum([
   'default',
   'acceptEdits',
   'plan',
   'bypassPermissions',
   'dontAsk',
   'auto',
-])
+]) satisfies z.ZodType<PermissionMode>
 
 export type Thinking = 'enabled' | 'adaptive' | 'disabled'
 export const ThinkingSchema: z.ZodType<Thinking> = z.enum(['enabled', 'adaptive', 'disabled'])
 
-export type Effort = 'low' | 'medium' | 'high' | 'max'
-export const EffortSchema: z.ZodType<Effort> = z.enum(['low', 'medium', 'high', 'max'])
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export const EffortSchema: z.ZodType<Effort> = z.enum(['low', 'medium', 'high', 'xhigh', 'max'])
 
 export type SettingScope = 'user' | 'project' | 'local'
 export const SettingScopeSchema: z.ZodType<SettingScope> = z.enum(['user', 'project', 'local'])
@@ -178,11 +180,11 @@ export interface SystemInitLine extends SystemLine {
 /** Rate limit warnings. */
 export interface RateLimitLine extends UuidLine {
   type: 'rate_limit_event'
-  rate_limit_info: Record<string, unknown>
+  rate_limit_info: ClaudeRateLimitInfo
 }
 export const RateLimitLineSchema: z.ZodType<RateLimitLine> = withUuid.extend({
   type: z.literal('rate_limit_event'),
-  rate_limit_info: z.object({}).passthrough(),
+  rate_limit_info: ClaudeRateLimitInfoSchema,
 }).passthrough()
 
 /** Tool-use summary ("Read 2 files, wrote 1 file"). */
@@ -197,10 +199,13 @@ export const ToolUseSummaryLineSchema: z.ZodType<ToolUseSummaryLine> = withUuid.
   preceding_tool_use_ids: z.array(z.string()).optional(),
 }).passthrough()
 
-/** Final result line — marks turn completion. */
+/** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
 export interface ResultLine extends UuidLine {
   type: 'result'
   subtype: string
+  /** Correlates a host input; autonomous results can omit it. */
+  user_message_uuid?: string
+  queued_turn_count?: number
   is_error?: boolean
   duration_ms?: number
   duration_api_ms?: number
@@ -217,6 +222,9 @@ export interface ResultLine extends UuidLine {
 export const ResultLineSchema: z.ZodType<ResultLine> = withUuid.extend({
   type: z.literal('result'),
   subtype: z.string(),
+  /** Correlates a host input; autonomous results can omit it. */
+  user_message_uuid: z.string().optional(),
+  queued_turn_count: z.number().int().nonnegative().optional(),
   is_error: z.boolean().optional(),
   duration_ms: z.number().optional(),
   duration_api_ms: z.number().optional(),
@@ -279,6 +287,24 @@ export interface KeepAliveLine {
 }
 export const KeepAliveLineSchema: z.ZodType<KeepAliveLine> = z.object({ type: z.literal('keep_alive') })
 
+/** Native input queue lifecycle; command_uuid identifies the submitted user message. */
+export interface CommandLifecycleLine extends PassthroughFields {
+  type: 'command_lifecycle'
+  command_uuid: string
+  state: 'queued' | 'started' | 'completed' | 'cancelled' | 'discarded' | 'refused'
+  ran_ahead?: true
+  uuid: string
+  session_id: string
+}
+export const CommandLifecycleLineSchema: z.ZodType<CommandLifecycleLine> = z.object({
+  type: z.literal('command_lifecycle'),
+  command_uuid: z.string(),
+  state: z.enum(['queued', 'started', 'completed', 'cancelled', 'discarded', 'refused']),
+  ran_ahead: z.literal(true).optional(),
+  uuid: z.string(),
+  session_id: z.string(),
+}).passthrough()
+
 /** Fallthrough catch-all: the CLI adds new top-level types regularly. */
 export interface UnknownLine extends PassthroughFields {
   type: string
@@ -310,6 +336,7 @@ export type KnownStreamLine =
   | ControlResponseLine
   | ControlCancelLine
   | KeepAliveLine
+  | CommandLifecycleLine
   | ParseErrorLine
 
 /**
@@ -390,13 +417,42 @@ export type ControlRequestHandler = (
 
 // ─── Query options ───────────────────────────────────────────────────────────
 
+/** A native `--agents` JSON definition. Claude validates values and owns feature admission. */
+export interface ClaudeInlineAgentDefinition {
+  description: string
+  prompt: string
+  tools?: string[]
+  disallowedTools?: string[]
+  model?: string
+  effort?: Effort | number
+  permissionMode?: PermissionMode
+  /** Existing MCP server names or original inline server configurations. */
+  mcpServers?: Array<string | Record<string, Record<string, unknown>>>
+  /** Native settings hook declarations, serialized as JSON. */
+  hooks?: Record<string, unknown>
+  maxTurns?: number
+  /** Native compaction ceiling in tokens, from 100,000 to 1,000,000. */
+  autoCompactWindow?: number
+  skills?: string[]
+  initialPrompt?: string
+  memory?: 'user' | 'project' | 'local'
+  background?: boolean
+  omitClaudeMd?: boolean
+  isolation?: 'worktree' | 'remote'
+  observer?: string
+  observerMessage?: string
+  observeSubagents?: boolean
+}
+
 /**
- * Every option supported by `claude --print`. Grouped by concern.
+ * Typed launch options exposed by this wrapper. Grouped by concern.
  *
  * These translate 1:1 to CLI flags via `argsFromOptions()` — if you add a
  * field here, add the mapping there and a unit test covering it.
  */
 export interface QueryOptions {
+  /** Native hook callbacks registered during initialization. */
+  hooks?: ClaudeHooks
   // Turn content — string for text-only, UserInputMessage for text + images
   prompt?: string | UserInputMessage
 
@@ -408,6 +464,8 @@ export interface QueryOptions {
 
   // Model / behaviour
   model?: string
+  /** Offer account models not yet recognized by the pinned native runtime. Explicit opt-in. */
+  includeUnsupportedModels?: boolean
   fallbackModel?: string
   effort?: Effort
   thinking?: Thinking
@@ -416,10 +474,12 @@ export interface QueryOptions {
   maxBudgetUsd?: number
   betas?: string[]
   agent?: string
-  agents?: Record<string, { description: string; prompt: string }>
+  agents?: Record<string, ClaudeInlineAgentDefinition>
 
   // Permissions
   permissionMode?: PermissionMode
+  /** Make a later user-requested bypass switch available without starting in bypass mode. */
+  allowDangerouslySkipPermissions?: boolean
   dangerouslySkipPermissions?: boolean
   allowedTools?: string[]
   disallowedTools?: string[]
@@ -433,6 +493,8 @@ export interface QueryOptions {
 
   // MCP / plugins / dirs
   mcpConfig?: string[]
+  /** Explicit native channel selection; original policy and allowlist still govern admission. */
+  channels?: string[]
   strictMcpConfig?: boolean
   pluginDir?: string[]
   addDir?: string[]
@@ -493,6 +555,8 @@ export interface QueryOptions {
 /** User message written to stdin during a stream-json conversation. */
 export interface UserInputMessage {
   type: 'user'
+  /** Stable native command identity for lifecycle tracking and queued-message cancellation. */
+  uuid?: string
   message: {
     role: 'user'
     content: string | Array<Record<string, unknown>>

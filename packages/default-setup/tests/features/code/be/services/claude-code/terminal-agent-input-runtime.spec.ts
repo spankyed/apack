@@ -1,0 +1,317 @@
+import { claudeTerminalFileCompletionRuntime } from '#features/code/be/services/claude-code/terminal-file-completion-runtime.ts'
+import { claudeTerminalParentCommandRuntime } from '#features/code/be/services/claude-code/terminal-parent-command-runtime.ts'
+import { randomUUID } from 'node:crypto'
+import { claudeTerminalAgentInputRuntime } from '#features/code/be/services/claude-code/terminal-agent-input-runtime.ts'
+import { CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/be/services/claude-code/ui-text-limits.ts'
+
+function fixture(main = false) {
+  let draft = '', sequence = 1, sessionId = 'session', panelShown = false, finish!: () => void
+  const messageId = randomUUID(), rows: unknown[] = [], parentRows: unknown[] = [], notices: { current?: unknown } = {}
+  const cancel = vi.fn(() => finish()), confirm = vi.fn(() => finish())
+  const localJsx = { show: vi.fn((_element: unknown, _options: unknown) => { panelShown = true; return { nodeId: 'native-node', closed: new Promise<void>(resolve => { finish = () => { panelShown = false; resolve() } }) } }) }
+  const dismissPanel = vi.fn((_id: string) => finish()), stdin = { unshift: vi.fn(), emit: vi.fn() }
+  const task = { id: 'registry', type: 'local_agent', status: 'completed' }
+  const context = { dialogStore: { dismiss: dismissPanel, getState: () => ({ open: panelShown ? [{ id: 'native-dialog', kind: 'local_jsx', payload: { nodeId: 'native-node' } }] : [] }) }, localJsx, getAppState: () => ({ notifications: notices }), taskRegistry: { all: () => ({ registry: task }), getTranscript: () => ({ messages: rows }) } }
+  const composer = {
+    read: vi.fn(async () => ({ text: draft })),
+    write: vi.fn(async (text: string, _mode: 'replace'): Promise<{ isFilled: boolean; refusal?: string }> => {
+      draft = text
+      return { isFilled: true }
+    }),
+    attribute: vi.fn((_origin: { kind: string }, write: () => Promise<{ isFilled: boolean; refusal?: string }>) => write()),
+  }
+  const module = { call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ type: 'text', value: '' })) }, commands = new Map<string, { name: string; type: string; load(): Promise<typeof module> }>()
+  const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: ['context', 'ultraplan'].includes(name) ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
+  const binding = { messages: () => parentRows, commands: () => [...commands.values()], composer, toolContext: () => context, savedAgentMessages: async () => [] }
+  const parseCommand = (text: string) => {
+    if (!text.startsWith('/')) return null
+    const [name, ...args] = text.slice(1).split(' ')
+    return { commandName: name, args: args.join(' ') }
+  }
+  const native = { commandTags: { Ms: () => null }, questionOptions: { q: () => sessionId }, commandInput: { IS: parseCommand }, engine: { Rs: command, Cie: (command: { name: string }, args = '') => ({ command: command.name, args }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
+  const enter = vi.fn(async () => {
+    if (draft === '/compact') localJsx.show({ props: { title: 'Original parent confirmation', confirmLabel: 'Original confirm', onConfirm: confirm, onCancel: cancel } }, { commandName: 'compact' })
+    else if (draft === '/usage') localJsx.show({ type: () => {}, props: {} }, { commandName: 'usage' })
+    else if (draft === '/model haiku') notices.current = { key: 'agent-view-command-notice', segments: [{ text: 'Original block notice' }] }
+    else if (draft.startsWith('/ultraplan ')) {
+      const args = draft.slice('/ultraplan '.length)
+      const implementation = await command('ultraplan').load()
+      await implementation.call((_text: unknown, options: { nextInput?: string }) => { draft = options.nextInput ?? '' }, {}, args)
+    }
+    else if (draft === '/context') { parentRows.push({ uuid: messageId, type: 'system', subtype: 'local_command', content: 'Native Context usage', commandRun: { command: 'context', args: '' } }); draft = '' }
+    else if (draft === '/cost') { parentRows.push({ uuid: messageId, type: 'system', subtype: 'local_command', content: 'Original cost output', commandRun: { command: 'cost', args: '' } }); draft = '' }
+    else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
+    return { entered: true }
+  })
+  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', 'nativeUiTextMaxLength', claudeTerminalFileCompletionRuntime + claudeTerminalAgentInputRuntime + claudeTerminalParentCommandRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parentOperation:nativeParentCommand };')
+  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId, sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }, CLAUDE_UI_TEXT_MAX_LENGTH) as {
+    dispatch(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<{ kind: string; id: string; messageId: string; message: string }>
+    parentOperation(n: unknown, request: { client_id: string; operation: string; text?: string; command_id?: string }): Promise<{ kind: string; id: string; result?: Record<string, unknown> }>
+    answer(n: unknown, request: { client_id: string; command_id: string; decision: string }): Promise<unknown>
+    panel(n: unknown, request: { client_id: string; panel_id: string; operation: string; text?: string }): Promise<{ open: boolean }>
+    retire(client: string): Promise<void>
+  }
+  return { controller, native, module, command, task, changeSession: (id: string) => { sessionId = id; sequence++ }, composer, enter, cancel, confirm, dismissPanel, localJsx, notices, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
+}
+it('correlates the original human UUID and leaves native blocking policy in the dispatcher', async () => {
+  const f = fixture()
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: 'Human input' }, new AbortController())).toMatchObject({ kind: 'input', messageId: f.messageId })
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/model haiku' }, new AbortController())).toMatchObject({ kind: 'blocked', message: 'Original block notice' })
+  expect(f.draft()).toBe('')
+  expect(f.composer.write.mock.calls).toEqual([['Human input', 'replace'], ['/model haiku', 'replace'], ['', 'replace']])
+  expect(f.composer.attribute.mock.calls).toEqual(Array.from({ length: 3 }, () => [{ kind: 'composer' }, expect.any(Function)]))
+})
+it('submits to a running selected teammate through the native composer and refuses a stopped one', async () => {
+  const f = fixture()
+  Object.assign(f.task, { type: 'in_process_teammate', status: 'running' })
+  const input = { client_id: 'client', text: 'Review the final heading' }
+  await expect(f.controller.dispatch(f.native, input, new AbortController())).resolves.toMatchObject({ kind: 'input', messageId: f.messageId })
+  expect(f.enter).toHaveBeenCalledOnce()
+  expect(f.rows).toEqual([expect.objectContaining({ origin: { kind: 'human' }, message: { content: input.text } })])
+  f.task.status = 'killed'
+  await expect(f.controller.dispatch(f.native, input, new AbortController())).rejects.toThrow('cannot accept input')
+  expect(f.enter).toHaveBeenCalledOnce()
+})
+
+it('rejects a selected pane-backed teammate before writing or submitting a parent draft', async () => {
+  const f = fixture()
+  Object.assign(f.task, { type: 'in_process_teammate', status: 'running', paneTeardown: vi.fn() })
+  await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'Keep this draft' }, new AbortController()))
+    .rejects.toThrow('cannot accept input')
+  expect(f.composer.write).not.toHaveBeenCalled()
+  expect(f.enter).not.toHaveBeenCalled()
+})
+
+it('keeps confirmation alive after the initial HTTP request completes and refuses replay/foreign clients', async () => {
+  const f = fixture(), abort = new AbortController()
+  const result = await f.controller.dispatch(f.native, { client_id: 'client', text: '/compact' }, abort)
+  expect(result.kind).toBe('confirmation'); abort.abort()
+  await expect(f.controller.answer(f.native, { client_id: 'foreign', command_id: result.id, decision: 'cancel' })).rejects.toThrow('expired')
+  expect(await f.controller.answer(f.native, { client_id: 'client', command_id: result.id, decision: 'cancel' })).toEqual({ answered: true })
+  expect(f.cancel).toHaveBeenCalledOnce(); expect(f.confirm).not.toHaveBeenCalled(); expect(f.draft()).toBe('')
+  await expect(f.controller.answer(f.native, { client_id: 'client', command_id: result.id, decision: 'cancel' })).rejects.toThrow('expired')
+})
+it('preserves an unrelated native draft and refuses an old view confirmation', async () => {
+  const f = fixture(); f.setDraft('Native person draft')
+  await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'App draft' }, new AbortController())).rejects.toThrow('unsent draft')
+  expect(f.enter).not.toHaveBeenCalled(); expect(f.draft()).toBe('Native person draft')
+  f.setDraft('')
+  const result = await f.controller.dispatch(f.native, { client_id: 'client', text: '/compact' }, new AbortController())
+  f.move(); f.setDraft('New view draft')
+  await expect(f.controller.answer(f.native, { client_id: 'client', command_id: result.id, decision: 'confirm' })).rejects.toThrow('selection changed')
+  expect(f.confirm).not.toHaveBeenCalled()
+  await f.controller.retire('client'); expect(f.cancel).toHaveBeenCalledOnce(); expect(f.draft()).toBe('New view draft')
+})
+
+it('reports an original dialog refusal before dispatch and allows a fresh command after it closes', async () => {
+  const f = fixture(true)
+  const request = { client_id: 'client', operation: 'prepare', text: '/cost' }
+  f.composer.write.mockResolvedValueOnce({ isFilled: false, refusal: 'dialog' })
+
+  const first = await f.controller.parentOperation(f.native, request)
+  const refused = { client_id: 'client', command_id: first.id }
+  await f.controller.parentOperation(f.native, { ...refused, operation: 'start' })
+  const readRefusal = () => f.controller.parentOperation(f.native, { ...refused, operation: 'read' })
+  await vi.waitFor(async () => expect((await readRefusal()).kind).toBe('failed'))
+  expect(await readRefusal()).toMatchObject({
+    message: 'Respond to the open Claude Code prompt before running this command.',
+  })
+  expect(f.enter).not.toHaveBeenCalled()
+  expect(f.draft()).toBe('')
+
+  const second = await f.controller.parentOperation(f.native, request)
+  const retry = { client_id: 'client', command_id: second.id }
+  await f.controller.parentOperation(f.native, { ...retry, operation: 'start' })
+  await vi.waitFor(async () => {
+    expect(await f.controller.parentOperation(f.native, { ...retry, operation: 'read' })).toMatchObject({
+      kind: 'finished', result: { kind: 'command_output', text: 'Original cost output' },
+    })
+  })
+  expect(f.enter).toHaveBeenCalledOnce()
+})
+
+it('returns a new matching parent command result without treating it as worker input', async () => {
+  const f = fixture()
+  f.parentRows.push({ uuid: randomUUID(), type: 'system', subtype: 'local_command', content: 'Old output', commandRun: { command: 'cost', args: '' } })
+  f.parentRows.push({ uuid: randomUUID(), type: 'system', subtype: 'local_command', content: 'Other output', commandRun: { command: 'help', args: '' } })
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/cost' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'cost', text: 'Original cost output', isErrored: false })
+  expect(f.rows).toHaveLength(0)
+  expect(f.draft()).toBe('')
+})
+
+it('scopes live panel input and original store dismissal by client, selection and lifecycle', async () => {
+  const f = fixture(), result = await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController())
+  expect(result.kind).toBe('panel')
+  const request = { client_id: 'client', panel_id: result.id }
+  await expect(f.controller.panel(f.native, { ...request, client_id: 'foreign', operation: 'input', text: 'x' })).rejects.toThrow('expired')
+  expect(f.stdin.unshift).not.toHaveBeenCalled()
+  await f.controller.panel(f.native, { ...request, operation: 'input', text: 'x' })
+  expect(f.stdin.unshift).toHaveBeenCalledWith('x'); expect(f.stdin.emit).toHaveBeenCalledWith('readable')
+  expect(await f.controller.panel(f.native, { ...request, operation: 'close' })).toEqual({ open: false })
+  expect(f.dismissPanel).toHaveBeenCalledWith('native-dialog'); expect(f.rows).toHaveLength(0)
+  await expect(f.controller.panel(f.native, { ...request, operation: 'input', text: 'late' })).rejects.toThrow('expired')
+  await expect(f.controller.panel(f.native, { ...request, operation: 'close' })).rejects.toThrow('expired')
+  const next = await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController()); f.move()
+  await expect(f.controller.panel(f.native, { ...request, panel_id: next.id, operation: 'input', text: 'stale' })).rejects.toThrow('selection changed')
+  await f.controller.retire('client'); expect(f.dismissPanel).toHaveBeenCalledTimes(2)
+})
+
+it('observes JSX command text completion without requiring a panel or worker receipt', async () => {
+  const f = fixture()
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/context' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage', isErrored: false })
+  expect(f.rows).toHaveLength(0)
+})
+
+it('does not acknowledge an unrelated original panel as the submitted command', async () => {
+  const f = fixture()
+  f.enter.mockImplementationOnce(async () => {
+    f.localJsx.show({ props: {} }, { commandName: 'foreign-command' })
+    f.notices.current = { key: 'agent-view-command-notice', text: 'Original command block' }
+    return { entered: true }
+  })
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController())).toMatchObject({ kind: 'blocked', message: 'Original command block' })
+  f.dismissPanel('native-dialog')
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: 'Human reply' }, new AbortController())).toMatchObject({ kind: 'input' })
+})
+
+it('dispatches parent local commands while leaving ordinary prompts on their original bridge', async () => {
+  const f = fixture(true)
+  expect(await f.controller.parentOperation(f.native, { client_id: 'client', text: 'Ordinary parent prompt', operation: 'prepare' })).toEqual({ kind: 'not_command' })
+  expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
+  const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', text: '/context', operation: 'prepare' }), ticket = { client_id: 'client', command_id: prepared.id }
+  await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
+  await vi.waitFor(async () => expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage', isErrored: false } }))
+  expect(f.rows).toHaveLength(0)
+  await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'Worker input' }, new AbortController())).rejects.toThrow('No native Agent')
+  const selected = fixture()
+  await expect(selected.controller.parentOperation(selected.native, { client_id: 'client', text: '/help', operation: 'prepare' })).rejects.toThrow('main view')
+  expect(selected.enter).not.toHaveBeenCalled()
+})
+
+
+it('settles a typed parent local-jsx command only from its new original invocation and callback output', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true)
+    const argument = 'invalid-cap', invocationId = randomUUID(), outputId = randomUUID()
+    const command = f.command('autocompact')
+    command.type = 'local-jsx'
+    f.native.commandInput.IS = () => ({ commandName: command.name, args: argument })
+    f.native.engine.Cie = () => ({ command: command.name, args: argument })
+    const envelope = (name: string, args: string) => '<command-name>/' + name + '</command-name><command-message>' + name + '</command-message><command-args>' + args + '</command-args>'
+    Object.assign(f.native.runtime, { Xse: envelope })
+    const invocation = (name: string, args: string, uuid = randomUUID()) =>
+      ({ type: 'user', uuid, message: { content: envelope(name, args) } })
+    const output = (text: string, uuid = randomUUID(), parentUuid?: string) =>
+      ({ type: 'user', uuid, parentUuid, message: { content: '<local-command-stdout>' + text + '</local-command-stdout>' } })
+    f.parentRows.push(invocation(command.name, argument), output('Old result'))
+    f.enter.mockImplementationOnce(async () => {
+      f.parentRows.push(invocation(command.name, 'auto'), output('Different arguments'),
+        invocation(command.name, argument), { ...output('Human text'), origin: { kind: 'human' } },
+        invocation(command.name, argument), output('Wrong parent', randomUUID(), randomUUID()))
+      f.setDraft('')
+      return { entered: true }
+    })
+    const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/autocompact ' + argument })
+    const ticket = { client_id: 'client', command_id: prepared.id }
+    await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'running' })
+    f.parentRows.push(invocation(command.name, argument, invocationId), output("Couldn't parse 'invalid-cap'.", outputId, invocationId))
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({
+      kind: 'finished',
+      result: { kind: 'command_output', commandName: command.name, messageId: outputId, text: "Couldn't parse 'invalid-cap'.", isErrored: false },
+    })
+    expect(f.enter).toHaveBeenCalledOnce()
+  } finally { vi.useRealTimers() }
+})
+
+it('prepares without Enter, refuses duplicate/foreign execution, and waits beyond the RPC window for the applied compact boundary', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true), boundaryId = randomUUID(), commandMessageUuid = randomUUID()
+    let finish!: (value: unknown) => void
+    f.module.call.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    f.enter.mockImplementationOnce(async () => { void f.command('compact').load().then(module => module.call('', { commandMessageUuid })); f.setDraft(''); return { entered: true } })
+    const request = { client_id: 'client', operation: 'prepare', text: '/compact' }
+    const prepared = await f.controller.parentOperation(f.native, request)
+    expect(prepared.kind).toBe('prepared'); expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
+    const ticket = { client_id: 'client', command_id: prepared.id }
+    await expect(f.controller.parentOperation(f.native, { ...ticket, client_id: 'foreign', operation: 'start' })).rejects.toThrow('expired')
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })).toMatchObject({ kind: 'running' })
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })).rejects.toThrow('already used')
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'running' })
+    finish({ type: 'compact', compactionResult: { boundaryMarker: { type: 'system', subtype: 'compact_boundary', uuid: boundaryId, compactMetadata: { trigger: 'manual' } } } })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'running' })
+    f.parentRows.push({ type: 'system', subtype: 'compact_boundary', uuid: boundaryId })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_complete', commandName: 'compact', messageId: commandMessageUuid, boundaryId } })
+    expect(f.enter).toHaveBeenCalledOnce()
+  } finally { vi.useRealTimers() }
+})
+
+it('follows only the original clear reset, keeps conversation and saved-session identities distinct, and rejects later view changes', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true), commandMessageUuid = randomUUID(), conversationId = randomUUID(), nextSession = randomUUID()
+    const query = vi.fn(), context = { commandMessageUuid, onQueryEvent: query }
+    f.module.call.mockImplementationOnce(async () => { context.onQueryEvent({ type: 'conversation_reset', newConversationId: conversationId }); f.changeSession(nextSession); return { type: 'text', value: '' } })
+    f.enter.mockImplementationOnce(async () => { void f.command('clear').load().then(module => module.call('', context)); f.setDraft(''); return { entered: true } })
+    const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/clear' }), ticket = { client_id: 'client', command_id: prepared.id }
+    await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' }); await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_complete', messageId: commandMessageUuid, sessionId: nextSession, conversationId } })
+    expect(query).toHaveBeenCalledOnce(); expect(context.onQueryEvent).toBe(query)
+    f.move()
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).rejects.toThrow('session or selection changed')
+  } finally { vi.useRealTimers() }
+})
+
+
+it('leaves ordinary prompts and admission review outside ticket execution', async () => {
+  const f = fixture(true)
+  expect(await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: 'Ordinary prompt' })).toEqual({ kind: 'not_command' })
+  f.native.runtime.GYt = text => ({ input: text.replace('hidden', ''), removed: { removedTotal: 6 } })
+  expect(await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/contexthidden' })).toEqual({ kind: 'review', text: '/context', removed: 6 })
+  expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
+})
+
+it('expires unused tickets before Enter and does not authorize unrelated session changes', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true), prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/clear' }), ticket = { client_id: 'client', command_id: prepared.id }
+    await vi.advanceTimersByTimeAsync(30001)
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })).rejects.toThrow('expired')
+    expect(f.enter).not.toHaveBeenCalled()
+    f.changeSession(randomUUID())
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).rejects.toThrow('session or selection changed')
+  } finally { vi.useRealTimers() }
+})
+
+it.each([true, false])('settles an original Ultraplan callback with draft return %s and no transcript result', async (returnsDraft) => {
+  const f = fixture(true)
+  const text = 'Review the release notes.'
+  f.module.call.mockImplementationOnce(async (done, _context, args) => {
+    expect(args).toBe(text)
+    expect(f.draft()).toBe('/ultraplan ' + text)
+    const onDone = done as (message: undefined, options: { display: string; nextInput?: string }) => void
+    onDone(undefined, { display: 'skip', nextInput: returnsDraft ? text : undefined })
+    return null
+  })
+  const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/ultraplan ' + text })
+  expect(prepared.kind).toBe('prepared')
+  const ticket = { client_id: 'client', command_id: prepared.id }
+  await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
+  try {
+    await expect.poll(() => f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({
+      kind: 'finished', result: returnsDraft ? { kind: 'ultraplan_settled', draft: text } : { kind: 'ultraplan_settled' },
+    })
+    expect(f.draft()).toBe('')
+    expect(f.parentRows).toHaveLength(0)
+    expect(f.module.call).toHaveBeenCalledOnce()
+  } finally {
+    f.move()
+  }
+})

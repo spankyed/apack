@@ -2,15 +2,16 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor, type ActorRefFrom } from 'xstate';
 import { asksOf, latestAsk, made, resetAsks } from '../../_support/asks.ts';
 
-const { tell, updateParentState } = vi.hoisted(() => ({ tell: vi.fn(), updateParentState: vi.fn() }));
+const { tell, updateParentState, parent } = vi.hoisted(() => ({ tell: vi.fn(), updateParentState: vi.fn(), parent: { baseDirectory: '/work' as string | null, openFiles: [{ path: '/work/gone' }], activeFilePath: '/work/gone' } }));
 vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
-  updateParentState, getParentContext: () => ({ baseDirectory: '/work', openFiles: [{ path: '/work/gone' }], activeFilePath: '/work/gone' }), addTabToParent: vi.fn(),
+  updateParentState, getParentContext: () => parent, addTabToParent: vi.fn(),
 }));
 const { explorerState } = await import('#features/code/fe/features/explorer/state.ts');
 let actor: ActorRefFrom<typeof explorerState>;
 beforeEach(() => {
   tell.mockReset(); updateParentState.mockReset(); resetAsks();
+  parent.baseDirectory = '/work';
   actor = createActor(explorerState).start();
 });
 afterEach(() => actor.stop());
@@ -90,4 +91,48 @@ it('lists every file for quick open in a state of its own, where a newer listing
   expect(asksOf('explorer.QUICK_OPEN_SEARCH')[1]!.event).toEqual({ type: 'explorer.QUICK_OPEN_SEARCH', baseDirectory: '/other' });
   expect(updateParentState).toHaveBeenLastCalledWith(actor, { quickOpenResults: [{ path: '/other/x', relativePath: 'x', name: 'x', type: 'file' }], quickOpenLoading: false });
   expect(actor.getSnapshot().matches('idle')).toBe(true);
+});
+
+
+it('opens an external file without revealing unrelated directories or changing tree selection', () => {
+  actor.send({ type: 'explorer.REVEAL_IN_TREE', path: '/work/current.txt' });
+  const previous = actor.getSnapshot().context;
+  resetAsks();
+  actor.send({ type: 'explorer.OPEN_FILE', path: '/workspace/session/tool-results/mcp-resource-image.png' });
+  actor.send({ type: 'explorer.REVEAL_IN_TREE', path: '/workspace/session/tool-results/mcp-resource-image.png' });
+  expect(asked()).toEqual([
+    { type: 'explorer.READ_FILE', path: '/workspace/session/tool-results/mcp-resource-image.png' },
+  ]);
+  expect(actor.getSnapshot().context.expandedDirs).toEqual(previous.expandedDirs);
+  expect(actor.getSnapshot().context.loadingDirs).toEqual(previous.loadingDirs);
+  expect(actor.getSnapshot().context.selectedPaths).toEqual(['/work/current.txt']);
+  expect(actor.getSnapshot().context.revealPath).toBe('/work/current.txt');
+});
+
+it('reveals only the workspace ancestors for an internal file', () => {
+  actor.send({ type: 'explorer.REVEAL_IN_TREE', path: '/work/src/nested/file.ts' });
+  expect(asked()).toEqual([
+    { type: 'explorer.LIST_FILES', path: '/work/src/nested' },
+    { type: 'explorer.LIST_FILES', path: '/work/src' },
+    { type: 'explorer.LIST_FILES', path: '/work' },
+  ]);
+  expect(actor.getSnapshot().context.selectedPaths).toEqual(['/work/src/nested/file.ts']);
+});
+
+
+it.each(['/work/', '/'])('reveals files under a normalized workspace root %s', (root) => {
+  parent.baseDirectory = root;
+  actor.send({ type: 'explorer.REVEAL_IN_TREE', path: '/work/file.ts' });
+  expect(actor.getSnapshot().context.revealPath).toBe('/work/file.ts');
+  expect(asked()).toContainEqual({ type: 'explorer.LIST_FILES', path: root === '/' ? '/' : '/work' });
+});
+
+it('does not reveal a file when no workspace is selected and preserves real read errors', async () => {
+  parent.baseDirectory = null;
+  actor.send({ type: 'explorer.REVEAL_IN_TREE', path: '/outside/missing.png' });
+  expect(asked()).toEqual([]);
+  actor.send({ type: 'explorer.OPEN_FILE', path: '/outside/missing.png' });
+  expect(asked()).toContainEqual({ type: 'explorer.READ_FILE', path: '/outside/missing.png' });
+  await latestAsk('explorer.READ_FILE').refuse('File not found', { kind: 'file', code: 'NOT_FOUND', path: '/outside/missing.png' });
+  expect(updateParentState).toHaveBeenCalledWith(actor, { error: 'File not found', isLoading: false });
 });

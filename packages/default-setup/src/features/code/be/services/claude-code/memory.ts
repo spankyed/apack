@@ -1,44 +1,19 @@
-/**
- * `claude memory` — list/add/remove memory files (CLAUDE.md fragments).
- */
+import { z } from 'zod'
+import { ClaudeProtocolError } from './errors.ts'
+import { execOnce } from './runner.ts'
 
-import { run, runJson, type SubcommandOptions } from './subcommand.ts'
+const ClaudeAutoMemoryWriteSchema = z.object({
+  ok: z.literal(true),
+  written: z.object({ autoMemoryEnabled: z.boolean() }),
+})
 
-type Scope = 'user' | 'project' | 'local'
-
-export interface MemoryFile {
-  name: string
-  scope?: Scope
-  path?: string
-  size?: number
-  [key: string]: unknown
-}
-
-export async function list(
-  opts: { scope?: Scope; dir?: string } & SubcommandOptions = {},
-): Promise<MemoryFile[]> {
-  const args = ['memory', 'list', '--json']
-  if (opts.scope) args.push('--scope', opts.scope)
-  if (opts.dir) args.push('--dir', opts.dir)
-  return runJson<MemoryFile[]>(args, opts)
-}
-
-export async function add(
-  name: string,
-  opts: { scope?: Scope; dir?: string } & SubcommandOptions = {},
-): Promise<string> {
-  const args = ['memory', 'add', name]
-  if (opts.scope) args.push('--scope', opts.scope)
-  if (opts.dir) args.push('--dir', opts.dir)
-  return run(args, opts)
-}
-
-export async function remove(
-  name: string,
-  opts: { scope?: Scope; dir?: string } & SubcommandOptions = {},
-): Promise<string> {
-  const args = ['memory', 'remove', name]
-  if (opts.scope) args.push('--scope', opts.scope)
-  if (opts.dir) args.push('--dir', opts.dir)
-  return run(args, opts)
+/** Native persistence and effective availability have separate receipts. */
+export async function setClaudeAutoMemory(enabled: boolean, options: { cwd: string; env?: NodeJS.ProcessEnv }): Promise<void> {
+  const result = await execOnce(['edit-memory-settings', '--json'], {
+    ...options, input: JSON.stringify({ autoMemoryEnabled: enabled }) + '\n', timeoutMs: 15_000,
+  })
+  const receipt = ClaudeAutoMemoryWriteSchema.parse(JSON.parse(result.stdout))
+  if (receipt.written.autoMemoryEnabled !== enabled) {
+    throw new ClaudeProtocolError('Native Auto-memory acknowledgement does not match the request')
+  }
 }

@@ -16,7 +16,9 @@ import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, 
 import { freshKey, makes, viewRead, viewWrites, writeEnded, writeSent, writing, type MadeEvent, type Making, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
-import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
+import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
+import { readClaudeComposerPhase, stageClaudeComposerPhase, commitClaudeComposerPhase } from './chat/native-composer-phase.ts';
+import { takeClaudeUiRetirements, rememberClaudeUiLease, forgetClaudeUiLease } from './chat/native-ui-retirement.ts';
 import { fromAsk, tell } from '#generated/events.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
@@ -92,6 +94,10 @@ function loadTabsFromStorage(): StoredTabData | null {
   } catch { return null; }
 }
 
+function claudePhaseForNativeMode(mode: string | undefined, phase: string | undefined): string | undefined {
+  return !mode ? phase : mode === 'plan' ? 'Plan' : !phase || phase === 'Plan' ? 'Edit' : phase;
+}
+
 function extractChatSettings(chatSettings: AgentSettings) {
   const hotkeys: HotkeysMap = {};
   if (chatSettings.hotkeys) {
@@ -158,6 +164,7 @@ const defaultChatThread: AgentThreadData = {
  */
 const made = makes(({ each }) => ({
   chatStart: each(fromAsk(id, 'GET_CHAT_START')),
+  claudePermission: each(fromAsk(id, 'SET_CLAUDE_PERMISSION_MODE')),
   created: each(fromAsk(id, 'CREATE_THREAD')),
   opened: each(fromAsk(id, 'OPEN_THREAD_CHAT')),
   /** A message, which may have started a thread */
@@ -202,6 +209,9 @@ type ViewEvent =
   | { type: 'VIEW.FAILED'; view: string; error: string }
 
 type UIEvent =
+  | Extract<import('./contract.ts').ThreadsInboxEvent, { type: 'SET_CLAUDE_PERMISSION_MODE' }>
+  | (import('../be/claude-terminal-views.ts').ClaudeTerminalViewRequest & { localOnly?: true })
+  | (ClaudeUiViewRequest & { localOnly?: true })
   // Thread management events
   | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
   | { type: 'SHOW_CREATE_FORM' }
@@ -254,7 +264,8 @@ type UIEvent =
   | { type: 'CLOSE_ACTIVE_TAB' }
   | { type: 'SELECT_ARTIFACT'; artifactId: string }
   | { type: 'SET_MODE'; mode: string }
-  | { type: 'SET_PHASE'; phase: string }
+  | { type: 'SET_PHASE'; phase: string; threadId?: string; source?: 'native' }
+  | { type: 'STAGE_CLAUDE_PHASE'; phase: 'Plan' | 'Edit' }
   | { type: 'RESPOND_TO_BLOCK_INTERACTION'; messageId: string; response: BlockResponse }
   | { type: 'HOTKEY_PRESSED'; } & HotkeyEvent
   | { type: 'OPEN_QUICK_PROMPTS' }
@@ -264,7 +275,7 @@ type UIEvent =
   | { type: 'FORK_THREAD'; messageId: string; threadId?: string; threadTopic?: string }
   | { type: 'REVERT_THREAD'; messageId: string; threadId: string; restoreFiles?: boolean; userCliUuid?: string }
   | { type: 'SUMMARIZE_THREAD'; messageId: string; threadId: string }
-  | { type: 'PAUSE_TURN'; threadId: string }
+  | { type: 'PAUSE_TURN'; threadId: string; nativePause?: import('#features/code/common/native-terminal.ts').ClaudeNativePauseScope }
   | { type: 'UNQUEUE_MESSAGE'; threadId: string; messageId: string }
   | { type: 'DISMISS_MESSAGE'; messageId: string }
   | { type: 'LOAD_MORE_MESSAGES' }
@@ -477,9 +488,14 @@ const threadsState = setup({
   actions: {
     // ---- Following the views ----
     /** Asks for what the chat starts from, and follows the list, as the shell starts the surface */
-    startSurface: enqueueActions(({ enqueue }) => {
+    startSurface: enqueueActions(({ context, enqueue }) => {
       made.make(enqueue, 'chatStart', freshKey(), {});
       enqueue('followList');
+      enqueue(() => {
+        for (const release of takeClaudeUiRetirements()) tell(id, { type: 'CLAUDE_UI_UNMOUNT', ...release });
+        for (const [mountId, view] of Object.entries(context.nativeTerminalViews)) tell(id, { type: 'CLAUDE_TERMINAL_MOUNT', threadId: view.threadId, mountId, queueComposer: view.queueComposer });
+        for (const view of Object.values(context.nativeUiViews)) if (view.mountRequest) tell(id, { ...view.mountRequest, ...(view.resumeKey ? { resumeKey: view.resumeKey } : {}) });
+      });
     }),
     followList: enqueueActions(({ enqueue }) => {
       enqueue.stopChild(viewChild.list);
@@ -612,12 +628,16 @@ const threadsState = setup({
       if (context.openedThreadId === threadId) {
         enqueue.assign(({ context }) => {
           const forcedMode = header.forcedMode;
-          if (!forcedMode) return { openedThreadId: null };
-          const modeConfig = context.modes.find(m => m.name === forcedMode);
-          const phase = modeConfig?.phases?.length
-            ? (forcedMode in context.phaseByModeName ? context.phaseByModeName[forcedMode] : modeConfig.phases[0].name)
-            : undefined;
-          return { openedThreadId: null, mode: forcedMode, phase: phase ?? '' };
+          const mode = forcedMode ?? context.mode;
+          const modeConfig = context.modes.find(m => m.name === mode);
+          const fallback = forcedMode && modeConfig?.phases?.length
+            ? (mode in context.phaseByModeName ? context.phaseByModeName[mode] : modeConfig.phases[0].name)
+            : context.phase;
+          const staged = header.context?.claudeCode ? readClaudeComposerPhase(threadId)?.phase : undefined;
+          const nativeMode = header.context?.claudeCode?.permissionMode;
+          const phase = staged ?? (nativeMode && !Object.hasOwn(context.phaseByModeName, mode)
+            ? claudePhaseForNativeMode(nativeMode, fallback) : fallback);
+          return { openedThreadId: null, ...(forcedMode ? { mode: forcedMode } : {}), phase: phase ?? '' };
         });
       }
       enqueue('followMessages');
@@ -1143,10 +1163,26 @@ const threadsState = setup({
         ? (newMode in updatedPhaseByModeName ? updatedPhaseByModeName[newMode] : modeConfig.phases[0].name)
         : undefined;
 
-      return { mode: newMode, phase: newPhase, phaseByModeName: updatedPhaseByModeName };
+      const stagedPhase = newMode === 'Claude Code' && context.currentThread?.context?.claudeCode && context.currentThread.id
+        ? readClaudeComposerPhase(context.currentThread.id)?.phase : undefined;
+      return { mode: newMode, phase: stagedPhase ?? newPhase, phaseByModeName: updatedPhaseByModeName };
+    }),
+    stageClaudePhase: assign(({ context, event }) => {
+      const { phase } = typeOf('STAGE_CLAUDE_PHASE', event);
+      const threadId = context.currentThread?.id;
+      if (!threadId || !context.currentThread?.context?.claudeCode) return {};
+      stageClaudeComposerPhase(threadId, phase);
+      return { phase, phaseByModeName: { ...context.phaseByModeName, [context.mode]: phase } };
     }),
     setPhase: assign(({ context, event }) => {
-      const newPhase = typeOf('SET_PHASE', event).phase;
+      const change = typeOf('SET_PHASE', event);
+      if (change.threadId && change.threadId !== context.currentThread?.id) return {};
+      const threadId = context.currentThread?.context?.claudeCode ? context.currentThread.id : undefined;
+      const staged = threadId ? readClaudeComposerPhase(threadId) : undefined;
+      if (staged && change.source === 'native') return {};
+      // Print controls and explicit print-phase choices supersede a leftover native stage.
+      if (staged && threadId) commitClaudeComposerPhase(threadId, staged.revision);
+      const newPhase = change.phase;
       return {
         phase: newPhase,
         phaseByModeName: { ...context.phaseByModeName, [context.mode]: newPhase }
@@ -1160,6 +1196,9 @@ const threadsState = setup({
     },
     sendMessage: enqueueActions(({ enqueue, context, event }) => {
       const { text, references } = typeOf('SEND_MESSAGE', event);
+      // Explicit print submission supersedes a leftover next-native-turn choice.
+      const staged = context.currentThread?.id ? readClaudeComposerPhase(context.currentThread.id) : undefined;
+      if (staged && context.currentThread?.id) commitClaudeComposerPhase(context.currentThread.id, staged.revision);
       made.make(enqueue, 'sent', freshKey(), {
         text,
         mode: context.mode,
@@ -1244,9 +1283,14 @@ const threadsState = setup({
       const start: ChatStart = outcome.value;
       const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
       const visibleModes = extracted.modes.filter(m => !m.hidden);
-      const { mode, phase } = resolveDefaultModePhase(
+      const { mode, phase: defaultPhase } = resolveDefaultModePhase(
         extracted.chatSettings, extracted.modes, visibleModes[0]?.name ?? context.mode, visibleModes[0]?.phases?.[0]?.name,
       );
+
+      const native = context.currentThread?.id === start.currentThreadId ? context.currentThread.context?.claudeCode : undefined;
+      const staged = native && context.currentThread?.id ? readClaudeComposerPhase(context.currentThread.id)?.phase : undefined;
+      const phase = native ? staged ?? (native.permissionMode && !Object.hasOwn(context.phaseByModeName, mode)
+        ? claudePhaseForNativeMode(native.permissionMode, defaultPhase) : context.phase) : defaultPhase;
 
       // The tabs this window kept in its storage, after the ones every window opens; a thread gone since closes its
       // tab when the tab's view says so
@@ -1567,8 +1611,7 @@ const threadsState = setup({
       tell(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
     },
     pauseTurn: ({ event }) => {
-      const { threadId } = typeOf('PAUSE_TURN', event);
-      tell(id, { type: 'PAUSE_TURN', threadId });
+      tell(id, typeOf('PAUSE_TURN', event));
     },
     unqueueMessage: ({ event }) => {
       const { threadId, messageId } = typeOf('UNQUEUE_MESSAGE', event);
@@ -1614,6 +1657,9 @@ const threadsState = setup({
     filters: { statuses: [], tags: [], chatStates: [], search: '', showRootOnly: true },
     threadsImport: { status: 'idle' as const, errors: [], importedCount: 0 },
     threadsExport: { status: 'idle' as const, errors: [], filePath: '', threadCount: 0 },
+    nativeTerminalViews: {},
+    nativeUiViews: {},
+    permissionModeChanges: {},
     // Chat/agent
     currentThread: defaultChatThread,
     recentThreadIds: [] as string[],
@@ -1654,6 +1700,172 @@ const threadsState = setup({
     sendFailures: [],
   }),
   on: {
+    SET_CLAUDE_PERMISSION_MODE: { actions: enqueueActions(({ context, event, enqueue }) => {
+      if (context.making.claudePermission[event.threadId]) return;
+      const { threadId, mode } = event;
+      enqueue.assign(({ context }) => ({ permissionModeChanges: {
+        ...context.permissionModeChanges, [threadId]: { pending: true },
+      } }));
+      made.make(enqueue, 'claudePermission', threadId, { threadId, mode });
+    }) },
+    'made.claudePermission': { actions: assign(({ context, event }) => ({
+      permissionModeChanges: { ...context.permissionModeChanges, [event.key]: {
+        pending: false,
+        ...(event.outcome.ok ? {} : { reason: event.outcome.failure.message }),
+      } },
+    })) },
+    CLAUDE_UI_MOUNT: { actions: [assign(({ context, event }) => ({ nativeUiViews: {
+      ...context.nativeUiViews, [event.mountId]: { ...(context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } }), mountRequest: event },
+    } })), ({ context, event }) => { const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey; tell(id, { ...event, ...(resumeKey ? { resumeKey } : {}) }) }] },
+    CLAUDE_UI_UNMOUNT: { actions: [({ context, event }) => {
+      forgetClaudeUiLease(event)
+      const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey ?? event.resumeKey
+      if (!event.localOnly) tell(id, { type: event.type, threadId: event.threadId, mountId: event.mountId, ...(resumeKey ? { resumeKey } : {}) })
+    }, assign(({ context, event }) => {
+      const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
+      return { nativeUiViews }
+    })] },
+    CLAUDE_PROMPT_EDIT: { actions: [assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.promptRevision ?? 0)) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptRevision: event.revision, completions: undefined } } }
+    }), ({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.promptRevision === event.revision) tell(id, event)
+    }] },
+    CLAUDE_PROMPT_AUTOCOMPLETE: { actions: [assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.completionRevision ?? 0)) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, completions: undefined, completionRevision: event.revision, completionEditRevision: view.promptRevision } } }
+    }), ({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.completionRevision === event.revision) tell(id, event)
+    }] },
+    CLAUDE_PROMPT_COMPLETIONS: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || view.completionRevision !== event.result.revision || view.completionEditRevision !== view.promptRevision) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, completions: event.result } } }
+    }) },
+    CLAUDE_PROMPT_STATE: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || view.promptRevision !== event.result.revision) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, prompt: event.result } } }
+    }) },
+    CLAUDE_PROMPT_HOST_REQUEST: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptHostRequest: event.request } } }
+    }) },
+    CLAUDE_PROMPT_HOST_RESPONSE: { actions: [({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.promptHostRequest?.requestId === event.requestId && view.promptHostRequest.kind === event.kind) tell(id, event)
+    }, assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || view.promptHostRequest?.requestId !== event.requestId || view.promptHostRequest.kind !== event.kind) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptHostRequest: undefined } } }
+    })] },
+    CLAUDE_UI_FOCUS: { actions: [assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || (view.focusSite === event.paneId && event.revision <= (view.focusRevision ?? 0))) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focusRevision: event.revision, focusSite: event.paneId, focus: undefined } } }
+    }), ({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.focusRevision === event.revision && view.focusSite === event.paneId) tell(id, event)
+    }] },
+    CLAUDE_UI_FOCUS_STATE: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || (view.focusRevision ?? 0) !== event.result.revision || view.focusSite !== event.result.paneId) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focus: event.result } } }
+    }) },
+    CLAUDE_UI_NOTICE: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_UI_TRANSCRIPT_LAYOUT: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_UI_SCROLL: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_UI_PANE: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_UI_AGENTS_GESTURE: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_BACKGROUND_REVIEW: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_SETTINGS: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_COMMAND_PANEL: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_COMMAND_DECISION: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_AGENT_INPUT: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_CLIENT: { actions: ({context,event})=>{if(context.nativeUiViews[event.mountId]?.threadId===event.threadId)tell(id,event)} },
+    CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_UI_KEY_RESULT: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || (view.actionKeyResult?.sequence ?? 0) >= event.sequence) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, actionKeyResult: { sequence: event.sequence, handled: event.handled, actionKeys: event.actionKeys } } } }
+    }) },
+    CLAUDE_UI_KEY: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_UI_APPROVAL_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_REJECT: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_DECISION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_PARTIAL: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
+    } },
+    CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, queueComposer: event.queueComposer, opening: false, output: [] } } })), ({ event }) => tell(id, event)] },
+    CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => {
+      if (!event.localOnly) tell(id, { type: event.type, threadId: event.threadId, mountId: event.mountId })
+    }, assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
+    CLAUDE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_CANCEL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_SUBMIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_POLICY_RECHECK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_NOTICE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_MCP_URL: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_MCP_FORM: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_BACKGROUND: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TEAMMATE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_QUEUE_CANCEL: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_QUEUE_SEND_NOW: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_TASK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_STATE: { actions: assign(({ context, event }) => {
+      const view = context.nativeTerminalViews[event.mountId]; if (view?.threadId !== event.threadId) return {};
+      const sameOwner = view.state?.ownerId === event.state?.ownerId;
+      const previous = view.background, incoming = event.background;
+      const oldBackground = previous && incoming && previous.sessionId === incoming.sessionId
+        && previous.continuedInSessionId === incoming.continuedInSessionId && previous.revision > incoming.revision;
+      const output = [...(sameOwner ? view.output : []), ...event.output];
+      let bytes = 0, from = output.length; while (from > 0 && bytes < 262144) bytes += output[--from].text.length;
+      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, queueComposer: view.queueComposer, backgroundInfo: oldBackground ? view.backgroundInfo : event.backgroundInfo, canReplyBackground: oldBackground ? view.canReplyBackground : event.canReplyBackground, state: event.state, attachment: event.attachment, teammateReconnects: event.teammateReconnects, background: oldBackground ? previous : incoming, mcpOperation: event.mcpOperation, queueOperation: event.queueOperation, queueDraft: event.queueDraft, policyRecheck: event.policyRecheck, noticeAnswer: event.noticeAnswer, task: event.task, stop: event.stop, submission: event.submission, opening: event.opening, openingId: event.openingId, cancelling: event.cancelling, problem: event.problem, output: output.slice(from) } } };
+    }) },
+    CLAUDE_UI_STATE: { actions: [() => {
+      // Module refresh can unmount the old view after startup; a native frame also proves readiness.
+      for (const release of takeClaudeUiRetirements()) tell(id, { type: 'CLAUDE_UI_UNMOUNT', ...release })
+    }, assign(({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
+      if (event.state.status === 'disconnected') forgetClaudeUiLease(event)
+      else rememberClaudeUiLease({ threadId: event.threadId, mountId: event.mountId, resumeKey: event.resumeKey })
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, resumeKey: event.resumeKey, attachmentId: event.attachmentId, state: event.state, ...(['disconnected', 'connecting'].includes(event.state.status) || context.nativeUiViews[event.mountId].resumeKey !== event.resumeKey ? { promptHostRequest: undefined } : {}) } } }
+    })] },
+    CLAUDE_UI_LEASE_EXPIRED: {
+      guard: ({ context, event }) => context.nativeUiViews[event.mountId]?.threadId === event.threadId && context.nativeUiViews[event.mountId]?.resumeKey === event.resumeKey,
+      actions: [assign(({ context, event }) => ({ nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], resumeKey: undefined, promptHostRequest: undefined } } })), ({ context, event, self }) => {
+        const request = context.nativeUiViews[event.mountId]?.mountRequest
+        if (request) self.send({ ...request, resumeKey: undefined })
+      }],
+    },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation', 'followDetail'] },
     SURFACE_STARTED: { actions: 'startSurface' },
     // What the views gave
@@ -1935,6 +2147,7 @@ const threadsState = setup({
     },
     SET_MODE: { actions: 'setMode' },
     SET_PHASE: { actions: 'setPhase' },
+    STAGE_CLAUDE_PHASE: { actions: 'stageClaudePhase' },
     CLEAR_THREAD: { actions: ['clearThread', 'followChat', 'followMessages'] },
     NEW_THREAD_IN_PROJECT: { actions: ['newThreadInProject', 'followChat', 'followMessages'] },
     NEW_THREAD_NO_PROJECT: { actions: ['newThreadNoProject', 'followChat', 'followMessages'] },

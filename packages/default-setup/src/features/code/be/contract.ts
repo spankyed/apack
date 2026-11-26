@@ -481,6 +481,7 @@ export type OutgoingCodeEvents =
 export type CodeSystemAsks = {
   /** What a window's code surface starts from: the directory and the settings. Its panels ask for what they show */
   GET_CODE_START: { answer: CodeConnectedData }
+  PREPARE_CLAUDE_PROFILE_SETUP: { answer: { command: string; cwd: string } }
   /**
    * The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees, for
    * the commit panel's picker. `current` is the one the panels show
