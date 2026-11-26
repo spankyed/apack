@@ -301,7 +301,19 @@ export function muxTransport(raw: RawTransport, options: MuxTransportOptions = {
     queuedLink.length = 0;
     controlListeners.length = 0;
     queuedControl.length = 0;
-    for (const listener of closeListeners.splice(0)) listener();
+    let firstError: unknown;
+    let hasError = false;
+    for (const listener of closeListeners.splice(0)) {
+      try {
+        listener();
+      } catch (error) {
+        if (!hasError) {
+          hasError = true;
+          firstError = error;
+        }
+      }
+    }
+    if (hasError) throw firstError;
   };
 
   const closeAll = (): void => {
