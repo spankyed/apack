@@ -1,32 +1,97 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
-import { takeSystemErrors } from '@apackdev/sdk/testing';
-import type { ActorRefFrom, EventFrom } from 'xstate';
-import { commitSystem } from '../../../../src/features/code/be/features/commit.ts';
+import { state, system, type Clock, type System } from '@apackdev/state';
+import { commitSystem, type CommitReport, type Event as CommitEvent } from '../../../../src/features/code/be/features/commit.ts';
+import type { AppGitRepository } from '../../../../src/features/code/be/services/app-git-repository.ts';
+import type { RepositoryChange } from '../../../../src/features/code/be/types.ts';
 
-const actors: Array<{ stop(): void }> = [];
-beforeEach(() => { vi.useFakeTimers(); });
-afterEach(() => { actors.splice(0).forEach(actor => actor.stop()); vi.useRealTimers(); });
-/**
- * A window's ask as it reaches the commit child, which the code system forwards it to: the child answers it over the
- * repository it holds. Nobody waits here, so what the ask did is read off the repository and the announcements
- */
-function windowAsks(commit: ActorRefFrom<typeof commitSystem>, ask: EventFrom<typeof commitSystem>) {
-  commit.send(ask);
-}
+const systems: System[] = [];
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  systems.splice(0).forEach((sys) => sys.stop());
+  vi.useRealTimers();
+});
 
-function start() {
-  const announced = vi.fn();
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: null } }).start();
-  actors.push(actor);
-  return { actor, announced };
+const timerClock: Clock = {
+  now: () => Date.now(),
+  after: (ms, fn) => {
+    const timer = setTimeout(fn, ms);
+    return () => clearTimeout(timer);
+  },
+};
+
+function startCommit(options: { baseDirectory: string | null; gitRepository?: AppGitRepository | null } = { baseDirectory: null }) {
+  const announced = vi.fn<(changed: RepositoryChange) => void>();
+  const reported = vi.fn<(event: CommitReport) => void>();
+
+  const parent = state<
+    { starts: { commit: typeof commitSystem } },
+    CommitEvent | (CommitReport & { from?: string })
+  >()({
+    starts: (s) => ({
+      commit: s(commitSystem, {
+        given: () => ({
+          baseDirectory: options.baseDirectory,
+          gitRepository: options.gitRepository ?? null,
+        }),
+      }),
+    }),
+    on: {
+      'commit.UPDATE_BASE_DIRECTORY': (event, { tell, child }) => {
+        tell(child('commit'), event);
+      },
+      'commit.GIT_STATUS_CHANGED': (event, { tell, child }) => {
+        tell(child('commit'), event);
+      },
+      'commit.REPOSITORY_MAY_HAVE_CHANGED': (event, { tell, child }) => {
+        tell(child('commit'), event);
+      },
+      REPOSITORY_CHANGED: () => {},
+      GIT_STATUS_CHANGED: () => {
+        reported({ type: 'GIT_STATUS_CHANGED' });
+      },
+      CHECK_FOR_EXTERNAL_CHANGES: () => {
+        reported({ type: 'CHECK_FOR_EXTERNAL_CHANGES' });
+      },
+    },
+  });
+
+  const sys = system({ side: 'backend', clock: timerClock });
+  sys.attach({
+    tell: (_to, event) => {
+      const payload = event as { type?: string; changed?: RepositoryChange };
+      if (payload.type === 'commit.REPOSITORY_CHANGED' && payload.changed) {
+        announced(payload.changed);
+      }
+    },
+    ask: (_to, _name, _args, _progress, done) => {
+      done({ ok: false, failure: { kind: 'unavailable', message: 'unused' } });
+      return () => {};
+    },
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'unused' });
+      return { stop: () => {} };
+    },
+  });
+
+  const root = sys.start('default-setup/code', parent);
+  const commit = sys.child(root, 'commit');
+  systems.push(sys);
+
+  return {
+    send: (event: CommitEvent) => sys.send(commit, event),
+    ask: sys.ask.bind(sys, commit),
+    stop: () => sys.stop(),
+    announced,
+    reported,
+  };
 }
 
 // Each window asks again for its status and history on the one announcement
 it('coalesces repeated status changes into one announcement that the repository changed', async () => {
-  const { actor, announced } = start();
-  for (let i = 0; i < 3; i++) actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
+  const { send, announced } = startCommit();
+  for (let i = 0; i < 3; i++) send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(149);
   expect(announced).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
@@ -34,9 +99,9 @@ it('coalesces repeated status changes into one announcement that the repository 
 });
 
 it('cancels a pending refresh when the commit actor stops', async () => {
-  const { actor, announced } = start();
-  actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
-  actor.stop();
+  const { send, stop, announced } = startCommit();
+  send({ type: 'commit.GIT_STATUS_CHANGED' });
+  stop();
   expect(vi.getTimerCount()).toBe(0);
   await vi.advanceTimersByTimeAsync(150);
   expect(announced).not.toHaveBeenCalled();
@@ -45,37 +110,44 @@ it('cancels a pending refresh when the commit actor stops', async () => {
 // A write here changes the repository every window shows, so it is the same news as the watcher's, and no window
 // is sent a listing it did not ask for
 it('announces a write as the repository changing, and lists nothing itself', async () => {
-  const announced = vi.fn();
   const stashDrop = vi.fn(async () => {});
-  const gitRepository = { whenFetchDue: () => {}, stashDrop, undoables: async () => [], refreshSnapshot: async () => NOTHING } as never;
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository } }).start();
-  actors.push(actor);
+  const gitRepository = {
+    whenFetchDue: () => {},
+    stashDrop,
+    undoables: async () => [],
+    refreshSnapshot: async () => NOTHING,
+  } as never;
+  const { ask, announced } = startCommit({ baseDirectory: '/repo', gitRepository });
 
-  windowAsks(actor, { type: 'commit.STASH_DROP', index: 0 });
+  await ask('commit.STASH_DROP', { index: 0 });
   await vi.advanceTimersByTimeAsync(150);
 
   expect(stashDrop).toHaveBeenCalledWith(0);
   expect(announced).toHaveBeenCalledTimes(1);
 });
 
-const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, refs: false, worktrees: false };
 /** The parts each announcement so far said changed */
-const announcedParts = (announced: ReturnType<typeof vi.fn>) =>
-  announced.mock.calls.map(([{ event }]) => (event as { changed: typeof NOTHING }).changed);
+const announcedParts = (announced: ReturnType<typeof vi.fn<(changed: RepositoryChange) => void>>) =>
+  announced.mock.calls.map(([changed]) => changed);
 
 // A file event or a reconcile is a hint: git says which parts of the repository changed, and only those are news
 it('announces a hint as the parts git says changed, one check at a time, and nothing when none did', async () => {
   let found = NOTHING;
   let release = () => {};
-  const refreshSnapshot = vi.fn(() => new Promise<typeof NOTHING>((resolve) => { release = () => resolve(found); }));
-  const announced = vi.fn();
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot } as never } }).start();
-  actors.push(actor);
+  const refreshSnapshot = vi.fn(
+    () =>
+      new Promise<typeof NOTHING>((resolve) => {
+        release = () => resolve(found);
+      }),
+  );
+  const { send, announced } = startCommit({
+    baseDirectory: '/repo',
+    gitRepository: { whenFetchDue: () => {}, refreshSnapshot } as never,
+  });
 
-  actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
-  for (let i = 0; i < 3; i++) actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  for (let i = 0; i < 3; i++) send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
   expect(refreshSnapshot).toHaveBeenCalledTimes(1);
   release();
   await vi.advanceTimersByTimeAsync(0);
@@ -95,13 +167,13 @@ it('announces a hint as the parts git says changed, one check at a time, and not
 // no event at all: each of those reads everything
 it('reads what was noted for a hint, and everything for a reconcile and for a write', async () => {
   const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
-  const announced = vi.fn();
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot, fetchIfDue: async () => false } as never } }).start();
-  actors.push(actor);
-  const read = async (event: Parameters<typeof actor.send>[0]) => {
+  const { send } = startCommit({
+    baseDirectory: '/repo',
+    gitRepository: { whenFetchDue: () => {}, refreshSnapshot, fetchIfDue: async () => false } as never,
+  });
+  const read = async (event: CommitEvent) => {
     refreshSnapshot.mockClear();
-    actor.send(event);
+    send(event);
     await vi.advanceTimersByTimeAsync(150);
     return refreshSnapshot.mock.calls.map(([reading]) => reading);
   };
@@ -115,20 +187,23 @@ it('reads what was noted for a hint, and everything for a reconcile and for a wr
 // stopped fetching, the remote having asked for a sign-in, has it checked too: that is something a window shows
 it('has the repository checked again when a fetch behind a reconcile stops fetching, and not when nothing came of it', async () => {
   const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
-  const announced = vi.fn();
   let stops = false;
+  let suspended = false;
   const gitRepository = {
     refreshSnapshot,
-    isAutoFetchSuspended: false,
+    get isAutoFetchSuspended() {
+      return suspended;
+    },
     whenFetchDue() {},
-    async fetchIfDue() { if (stops) this.isAutoFetchSuspended = true; return false; },
+    async fetchIfDue() {
+      if (stops) suspended = true;
+      return false;
+    },
   };
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
-  actors.push(actor);
+  const { send } = startCommit({ baseDirectory: '/repo', gitRepository: gitRepository as never });
   const checks = async () => {
     refreshSnapshot.mockClear();
-    actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true });
+    send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true });
     await vi.advanceTimersByTimeAsync(150);
     return refreshSnapshot.mock.calls.map(([reading]) => reading);
   };
@@ -144,70 +219,72 @@ it('has the repository checked again when a fetch behind a reconcile stops fetch
 it('announces a write as its status changing and whatever else git says did, after checking the repository once', async () => {
   let found = NOTHING;
   const refreshSnapshot = vi.fn(async () => found);
-  const announced = vi.fn();
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot } as never } }).start();
-  actors.push(actor);
+  const { send, announced } = startCommit({
+    baseDirectory: '/repo',
+    gitRepository: { whenFetchDue: () => {}, refreshSnapshot } as never,
+  });
 
-  actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
+  send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(150);
   expect(refreshSnapshot).toHaveBeenCalledTimes(1);
 
   found = { ...NOTHING, stashes: true };
-  actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
+  send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(150);
-  expect(announcedParts(announced)).toEqual([{ ...NOTHING, status: true }, { ...NOTHING, status: true, stashes: true }]);
+  expect(announcedParts(announced)).toEqual([
+    { ...NOTHING, status: true },
+    { ...NOTHING, status: true, stashes: true },
+  ]);
 });
 
 // A pull request is read from commits, so an edited file is not news to it, and asking a remote about one is a
 // round trip nobody needs
 it('tells the pull requests only when the history changed', async () => {
   let found = NOTHING;
-  const code = { send: vi.fn() };
-  const gitRepository = { whenFetchDue: () => {}, refreshSnapshot: async () => found, isGitRepository: async () => false }
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
-    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never, code: code as never } }).start();
-  actors.push(actor);
+  const gitRepository = { whenFetchDue: () => {}, refreshSnapshot: async () => found, isGitRepository: async () => false };
+  const { send, ask, reported } = startCommit({ baseDirectory: '/repo', gitRepository: gitRepository as never });
 
-  // A write made here that moved no commit, as staging a file is
   // A window showing the repository asks for its status each time it is told that changed
   const aWindowAsks = async () => {
-    windowAsks(actor, { type: 'commit.GET_GIT_STATUS' });
+    await ask('commit.GET_GIT_STATUS', {});
     await vi.advanceTimersByTimeAsync(0);
-    // The stand-in is no repository, so the status is refused, which is reported since nobody waits to be told
-    takeSystemErrors();
   };
-  actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
+  send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(150);
-  expect(code.send).not.toHaveBeenCalled();
+  expect(reported).not.toHaveBeenCalled();
   await aWindowAsks();
 
   found = { ...NOTHING, status: true };
-  actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
   await vi.advanceTimersByTimeAsync(0);
-  expect(code.send).not.toHaveBeenCalled();
+  expect(reported).not.toHaveBeenCalled();
   await aWindowAsks();
 
   found = { ...NOTHING, history: true, worktrees: true };
-  actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
   await vi.advanceTimersByTimeAsync(0);
-  expect(code.send.mock.calls).toEqual([[{ type: 'pr.GIT_STATUS_CHANGED' }]]);
+  expect(reported.mock.calls).toEqual([[{ type: 'GIT_STATUS_CHANGED' }]]);
 });
 
 /** A commit system over a stand-in repository whose every check finds its status changed, with what was read each time */
 function overAChangingRepository() {
-  const refreshSnapshot = vi.fn(async (_reading?: string, _options?: { refreshIndex?: boolean }) => ({ ...NOTHING, status: true }));
-  const gitRepository = { whenFetchDue: () => {}, refreshSnapshot, isGitRepository: async () => false, fetchIfDue: async () => false, isAutoFetchSuspended: false };
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
-    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
-  actors.push(actor);
-  const after = async (event: Parameters<typeof actor.send>[0] | typeof WINDOW_ASKS) => {
+  const refreshSnapshot = vi.fn(async (_reading?: string, _options?: { refreshIndex?: boolean }) => ({
+    ...NOTHING,
+    status: true,
+  }));
+  const gitRepository = {
+    whenFetchDue: () => {},
+    refreshSnapshot,
+    isGitRepository: async () => false,
+    fetchIfDue: async () => false,
+    isAutoFetchSuspended: false,
+  };
+  const { send, ask } = startCommit({ baseDirectory: '/repo', gitRepository: gitRepository as never });
+  const after = async (event: CommitEvent | typeof WINDOW_ASKS) => {
     refreshSnapshot.mockClear();
-    if (event.type === 'commit.GET_GIT_STATUS') windowAsks(actor, event);
-    else actor.send(event);
+    if (event.type === 'commit.GET_GIT_STATUS') await ask('commit.GET_GIT_STATUS', {});
+    else send(event);
     await vi.advanceTimersByTimeAsync(0);
-    // The stand-in is no repository, so a status asked of it is refused, which is reported since nobody waits to be told
-    takeSystemErrors();
     return refreshSnapshot.mock.calls.map(([reading, options]) => `${reading}${options?.refreshIndex ? ', may write the index' : ''}`);
   };
   return after;
@@ -254,4 +331,3 @@ it('lets git write its index when a command or a turn ended, and at no other che
   await after({ ...HINT, reconcile: true });
   expect(await after(WINDOW_ASKS), 'nor when a check that was put off is made').toEqual(['everything']);
 });
-
