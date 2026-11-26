@@ -40,6 +40,7 @@ afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 // The host's own rows (settings, onboarding) and a pack's `Memo`
 const entityTypes = new Set([...HOST_ENTITY_TYPES, 'Memo']);
 const newEngine = () => _createTestEngine({ entityTypes: [...entityTypes] });
+const mockDatabase = (extra: Partial<EarsDatabase> = {}): EarsDatabase => ({ isOpen: true, ...extra }) as EarsDatabase;
 
 /** A test run history whose database reset is watched */
 function blockedHistory() {
@@ -68,7 +69,7 @@ describe('createHostRuntime', () => {
       const { runHistory } = blockedHistory();
       vi.spyOn(runHistory.engine.admin, 'onFoundElsewhere').mockImplementation(() => () => {});
       vi.spyOn(runHistory.engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('run history watches'); return true; });
-      const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+      const runtime = createHostRuntime({ runHistory, database: mockDatabase(), engine, transport: { rootEvents: testRootEvents },
         appVersion: '1.2.3', packs: createNativePackTestRegistry() });
       return { engine, runHistoryEngine: runHistory.engine, runtime, found: () => found(), told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
     }
@@ -181,7 +182,7 @@ describe('createHostRuntime', () => {
       const engine = newEngine();
       vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation(() => { throw new Error('no loopback here'); });
       const { runHistory } = blockedHistory();
-      expect(() => createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+      expect(() => createHostRuntime({ runHistory, database: mockDatabase(), engine, transport: { rootEvents: testRootEvents },
         appVersion: '1.2.3', packs: createNativePackTestRegistry() })).not.toThrow();
       vi.restoreAllMocks();
     });
@@ -189,7 +190,7 @@ describe('createHostRuntime', () => {
 
   it('refuses overlapping resets and imports before either can touch the store', async () => {
     const { runHistory, reset, finish } = blockedHistory();
-    const store = { reset: vi.fn() } as unknown as EarsDatabase;
+    const store = mockDatabase({ reset: vi.fn() });
     const engine = newEngine();
     // The app's database is emptied through the engine reading it, so the engine's watches hear of it
     const clear = vi.spyOn(engine.admin, 'clear').mockImplementation(() => {});
@@ -212,7 +213,7 @@ describe('createHostRuntime', () => {
 
   it('excludes pack operations while app data is replaced, and refuses to replace it under one', async () => {
     const { runHistory, finish } = blockedHistory();
-    const store = { reset: vi.fn() } as unknown as EarsDatabase;
+    const store = mockDatabase({ reset: vi.fn() });
     const engine = newEngine();
     const clear = vi.spyOn(engine.admin, 'clear').mockImplementation(() => {});
     const packs = createNativePackTestRegistry();
@@ -238,7 +239,7 @@ describe('createHostRuntime', () => {
     const firstEngine = newEngine();
     const secondEngine = newEngine();
     const runtime = (engine: ReturnType<typeof newEngine>) => createHostRuntime({ runHistory: _openTestRunHistory(),
-      database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+      database: mockDatabase(), engine, transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs: createNativePackTestRegistry(),
     });
     const first = runtime(firstEngine);
@@ -259,7 +260,7 @@ describe('createHostRuntime', () => {
     // The services reach the store only when called
     const engine = newEngine();
     const packs = createNativePackTestRegistry();
-    const runtime = createHostRuntime({ runHistory: _openTestRunHistory(), database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
+    const runtime = createHostRuntime({ runHistory: _openTestRunHistory(), database: mockDatabase(), engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
     // What log redaction masks: the host's own check over the values its secrets store has handled
     expect(runtime.redaction).toBe(secretRedaction);
     expect(runtime.transport.rootEvents).toBe(testRootEvents);
@@ -286,7 +287,7 @@ describe('createHostRuntime', () => {
   it("offers counting both engines' calls only when asked, each engine counting its own", () => {
     const engine = newEngine();
     const runHistory = _openTestRunHistory();
-    const options = { runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs: createNativePackTestRegistry() };
+    const options = { runHistory, database: mockDatabase(), engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs: createNativePackTestRegistry() };
     expect(createHostRuntime(options).diagnostics).toBeUndefined();
 
     const calls = createHostRuntime({ ...options, countCalls: true }).diagnostics!.calls;

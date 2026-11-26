@@ -13,7 +13,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPOSITORIES, releaseOf, releaseUrl } from './lib/external-packages.mjs';
+import { REPOSITORIES, missingHoistedOverrides, pruneNestedOverrides, releaseOf, releaseUrl } from './lib/external-packages.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -57,7 +57,8 @@ function writeOverrides(specs) {
  */
 const NPM_FLOOR = [11, 21, 1];
 
-function install() {
+/** @param {readonly string[]} switchedPackages */
+function install(switchedPackages) {
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const version = spawnSync(npmCommand, ['--version'], { encoding: 'utf8', shell: process.platform === 'win32' }).stdout.trim();
   const parts = version.split('.').map(Number);
@@ -66,32 +67,44 @@ function install() {
     refuse(`npm ${version} does not apply a changed override to a locked package; this needs npm ${NPM_FLOOR.join('.')} or later `
       + `(npm install -g npm@${NPM_FLOOR.join('.')}). package.json is rewritten: run npm install with it.`);
   }
+  const pruned = pruneNestedOverrides(ROOT, switchedPackages);
+  if (pruned.length > 0) console.log(`Removed ${pruned.length} stale nested package link(s): ${pruned.join(', ')}`);
   const npm = spawnSync(npmCommand, ['install', '--no-audit', '--no-fund'], {
     cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32',
   });
-  process.exit(npm.status ?? 1);
+  if ((npm.status ?? 1) !== 0) process.exit(npm.status ?? 1);
+  const missing = missingHoistedOverrides(ROOT, switchedPackages);
+  if (missing.length > 0) {
+    refuse(`Override package(s) did not hoist to root node_modules: ${missing.join(', ')}. `
+      + 'Check that the target checkout is built or re-run `npm install` after cleaning nested node_modules.');
+  }
+  process.exit(0);
 }
 
-/** @param {string} repo @param {string | undefined} commit */
+/** @param {string} repo @param {string | undefined} commit @returns {string[]} */
 function pin(repo, commit) {
   if (commit === undefined || !/^[0-9a-f]{40}$/.test(commit)) refuse('Name the commit by its full 40-character hash.');
-  writeOverrides(Object.fromEntries(Object.keys(REPOSITORIES[repo].packages).map((name) => [name, releaseUrl(repo, commit, name)])));
+  const names = Object.keys(REPOSITORIES[repo].packages);
+  writeOverrides(Object.fromEntries(names.map((name) => [name, releaseUrl(repo, commit, name)])));
   console.log(`${repo}: the release of ${commit}`);
+  return names;
 }
 
-/** @param {string} repo @param {string | undefined} given */
+/** @param {string} repo @param {string | undefined} given @returns {string[]} */
 function local(repo, given) {
   const checkout = path.resolve(given ?? path.join(path.dirname(primaryWorktree(ROOT)), repo));
-  const specs = Object.fromEntries(Object.entries(REPOSITORIES[repo].packages).map(([name, { dir }]) => {
+  const entries = Object.entries(REPOSITORIES[repo].packages);
+  const specs = Object.fromEntries(entries.map(([name, { dir }]) => {
     const packageDir = path.join(checkout, dir);
     if (!existsSync(path.join(packageDir, 'package.json'))) refuse(`${packageDir} holds no package.json: is ${checkout} a checkout of ${repo}?`);
     return [name, `file:${path.relative(ROOT, packageDir).split(path.sep).join('/')}`];
   }));
   writeOverrides(specs);
   console.log(`${repo}: the checkout at ${checkout}, which has to be built (npm run deps:released undoes this)`);
+  return entries.map(([name]) => name);
 }
 
-/** @param {string[]} repos */
+/** @param {string[]} repos @returns {string[]} */
 function released(repos) {
   const committed = /** @type {{ overrides?: Record<string, string> }} */ (
     JSON.parse(execFileSync('git', ['show', 'HEAD:package.json'], { cwd: ROOT, encoding: 'utf8' }))).overrides ?? {};
@@ -106,11 +119,14 @@ function released(repos) {
   }
   writeOverrides(specs);
   console.log(`${repos.join(', ')}: the releases HEAD names`);
+  return Object.keys(specs);
 }
 
 const [command, repo, argument] = process.argv.slice(2);
-if (command === 'pin') pin(repository(repo), argument);
-else if (command === 'local') local(repository(repo), argument);
-else if (command === 'released') released(repo === undefined ? Object.keys(REPOSITORIES) : [repository(repo)]);
+/** @type {string[]} */
+let switched;
+if (command === 'pin') switched = pin(repository(repo), argument);
+else if (command === 'local') switched = local(repository(repo), argument);
+else if (command === 'released') switched = released(repo === undefined ? Object.keys(REPOSITORIES) : [repository(repo)]);
 else refuse('Usage: node scripts/deps.mjs <pin <repo> <commit> | local <repo> [path] | released [repo]>');
-install();
+install(switched);

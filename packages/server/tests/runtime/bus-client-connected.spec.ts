@@ -27,7 +27,7 @@ const { createHostRuntime } = await import('@apackdev/host/services');
 const { _createTestEngine } = await import('@apackdev/sdk/testing');
 const { untypedBroadcast } = await import('@apackdev/sdk/events');
 type EarsDatabase = import('@elmdb/ears').EarsDatabase;
-bindHost(createHostRuntime({ runHistory: _openTestRunHistory(), database: {} as EarsDatabase, engine: _createTestEngine(), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
+bindHost(createHostRuntime({ runHistory: _openTestRunHistory(), database: { isOpen: true } as EarsDatabase, engine: _createTestEngine(), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
 const backendSystem = createAppBus(registry);
 
 const received: string[] = [];
