@@ -11,7 +11,7 @@ const BRAIN = 'default-setup/brain'
 /** Each `enabled` the bus carried to the Brain surface as `INSPECT_TOGGLED` */
 function toggles() {
   const enabled: boolean[] = []
-  const stop = testRootEvents.onSurfaceSend((message) => {
+  const stop = testRootEvents.onOutgoing((message) => {
     if (message.to === BRAIN && message.event.type === 'INSPECT_TOGGLED') enabled.push(message.event.enabled as boolean)
   })
   return { enabled, stop }

@@ -108,14 +108,51 @@ export type IncomingBrainEvents =
   | { type: 'HANDLE_BRAIN_EVENT'; eventType: string; payload?: any; targetFlowId?: string }
   | { type: 'TRIGGER_BRAIN_EVENT'; eventType: string; payload?: any; targetFlowId?: string }
 
-// What the brain's own children send it: the flow and step machines it spawns, reporting what they did. Nothing
-// outside the feature sends these, so they reach the machine's event union and no dependent pack's facade.
-// `HANDLE_BRAIN_EVENT` is not one of them despite being raised here too — the database system sends it
+export interface BrainTriggerNode {
+  id?: string;
+  label?: string;
+  eventType?: string;
+  triggerType: string;
+  scope?: string;
+  cronExpression?: string;
+  trackKey?: string;
+}
+
+export interface BrainFlowSpec {
+  readonly flowRunNodeId: RunNodeId;
+  readonly flowId: EARS.EntityId;
+  readonly flowLabel: string;
+  readonly isRootFlow: boolean;
+  readonly parentFlowRunNodeId?: RunNodeId;
+  readonly parentEventRunNodeId?: RunNodeId;
+  readonly flowStepNodeId?: EARS.EntityId;
+  readonly flowStepLabel?: string;
+  readonly isFinalStep: boolean;
+  readonly entryData?: Record<string, unknown>;
+  readonly entrySteps: Pick<ExecutionContext, 'steps' | 'lastStep'>;
+  readonly eventNodes: readonly BrainTriggerNode[];
+  readonly hasPersistentTriggers: boolean;
+  readonly startPaused: boolean;
+}
+
+// What the brain's own children send it: the flow states it starts, reporting subflow spawns, completions and kills.
+// Nothing outside the feature sends these, so they reach the state's event union and no dependent pack's facade.
+// `HANDLE_BRAIN_EVENT` is not one of them despite being sent internally too — the database system sends it
 // (`features/database/be/system.ts`), which makes it incoming.
 export type BrainInternalEvents =
-  | { type: 'RUN_NODE_SPAWNED'; runNode: RunNode; parentId?: EARS.EntityId; eventRunNodeId?: RunNodeId; flowRunNodeId: EARS.EntityId }
-  | { type: 'RUN_NODE_UPDATED'; data: RunNodeUpdate }
-  | { type: 'CHILD_COMPLETED'; stepId?: EARS.EntityId; runNodeId?: RunNodeId; stepLabel?: string; result?: any; final?: boolean; eventRunNodeId?: RunNodeId; isFlow?: boolean }
+  | { type: 'SPAWN_SUBFLOW'; spec: BrainFlowSpec }
+  | {
+      type: 'FLOW_COMPLETED';
+      flowRunNodeId: RunNodeId;
+      isRootFlow: boolean;
+      parentFlowRunNodeId?: RunNodeId;
+      parentEventRunNodeId?: RunNodeId;
+      flowStepNodeId?: EARS.EntityId;
+      flowStepLabel?: string;
+      result?: unknown;
+      final: boolean;
+    }
+  | { type: 'KILL_FLOW'; flowRunNodeId: RunNodeId };
 
 /** A flow run a window opens: its tree, and where it sits among the flows that ran it */
 export type OpenedRun = { runNodeId: EARS.EntityId; data: FlowRunNodeData };
@@ -161,7 +198,6 @@ export type OutgoingBrainEvents =
   | { type: 'BRAIN_RESUMED' }
 
 export interface BrainContext {
-  brainActor?: any;
   eventQueue: Array<{ eventType: string; payload?: any; targetFlowId?: string }>;
   /** Why the brain last failed to start, while it stays stopped for that reason: part of each client's startup data */
   startError?: Error;

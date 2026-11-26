@@ -4,7 +4,6 @@
 
 ```ts
 
-import type { AnyActorRef } from 'xstate';
 import type { BaseEntity } from '@elmdb/ears';
 import { EARS as EARS_2 } from '@elmdb/ears';
 import type { ShortCode } from '@elmdb/ears';
@@ -148,7 +147,7 @@ export type RunStatus = 'active' | 'completed' | 'failed' | 'stopped';
 // @public (undocumented)
 export interface RuntimeServices {
     // (undocumented)
-    getFlowActor: (flowRunNodeId: EARS.EntityId) => AnyActorRef | undefined;
+    killFlow: (flowRunNodeId: EARS.EntityId) => void;
     // (undocumented)
     servicesForAction: PackServiceAccess['servicesForAction'];
 }

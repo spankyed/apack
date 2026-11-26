@@ -1,6 +1,5 @@
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
-import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
 import { startTerminalSizing } from './code/be/features/terminal.ts';
 import { endAllTurns as endClaudeTurns } from './code/be/services/claude-code/handle-store.ts';
@@ -52,5 +51,4 @@ export const onShutdown = () => {
   stopTerminalSizing = undefined;
   clearAllSchedules();
   removeAllAdHocListeners();
-  clearFlowActorRegistry();
 };

@@ -7,7 +7,6 @@ import { importFlows, mockService, startApp, takeSystemErrors, type TestApp } fr
 import { action, entry, on, keepAlive, schedule, subflow, transform } from '#generated/flow-helpers.ts'
 import { repository } from '#generated/repository.ts'
 import { services, type Services } from '#generated/services.ts'
-import { isBrainPaused } from '#features/brain/be/utils/brain-pause.ts'
 
 const step = (label: string) => transform('return true', { label })
 const startBrain = () => startApp({ systems: ['brain'] })
@@ -123,8 +122,13 @@ describe('runFlow', () => {
 
 describe('brain start', () => {
   const brainState = (app: TestApp) => {
-    const snapshot = app.system('brain').getSnapshot() as { matches(state: string): boolean; context: { brainActor?: unknown } }
-    return { running: snapshot.matches('running'), hasActor: snapshot.context.brainActor !== undefined }
+    const snapshot = app.system('brain').getSnapshot() as {
+      value: string
+      context: { rootRunId?: string; flows?: Record<string, unknown> }
+    }
+    const running = snapshot.value === 'running' || snapshot.value.startsWith('running.')
+    const hasActor = Boolean(snapshot.context.rootRunId && snapshot.context.flows?.[snapshot.context.rootRunId])
+    return { running, hasActor }
   }
   /** A root flow's tracks that keep it running, as the app's root flow does */
   const staysRunning = [entry([keepAlive()])]
@@ -233,12 +237,12 @@ describe('brain start', () => {
     const paused = await startBrain()
     await paused.connect()
     await paused.send('brain', { type: 'PAUSE_BRAIN' })
-    expect(isBrainPaused()).toBe(true)
+    expect(paused.system('brain').getSnapshot().value).toBe('running.paused')
     paused.stop()
 
-    await startBrain()
+    const fresh = await startBrain()
 
-    expect(isBrainPaused()).toBe(false)
+    expect(fresh.system('brain').getSnapshot().value).toBe('running.active')
   })
 })
 

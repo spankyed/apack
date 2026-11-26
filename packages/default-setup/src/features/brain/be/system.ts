@@ -1,22 +1,18 @@
+import { within, type Each, type Read } from '@apackdev/state';
 import { featureSettings } from '#generated/settings.ts';
-
-import { broadcast } from '#generated/events.ts';
-import { assign, setup, enqueueActions, raise } from 'xstate';
-import { defineSystem } from '@apackdev/sdk/framework';
-
-import { EARS } from '#generated/ears.ts';
-import type { Contract } from './contract.ts';
-import type { BrainContext, FlowRunNodeData, OutgoingBrainEvents } from './types.ts';
-import type { RunNodeId } from '@apackdev/sdk/steps';
 import { repository } from '#generated/repository.ts';
-import { createLogger, reportError, setDebugEnabled, isDebugEnabled } from '@apackdev/sdk/logger';
-import { createFlowNodeSystem, getFlowActor, getAllFlowActors, getAllFlowActorIds, clearFlowActorRegistry } from './flow-system.ts';
-import { setBrainPausedState } from './utils/brain-pause.ts';
-import { notify as notifyAdHocListeners, removeAllListeners as removeAllAdHocListeners } from './services/brain.ts';
 import { services } from '#generated/services.ts';
+import { state } from '#generated/state.ts';
+import type { EARS } from '#generated/ears.ts';
+import type { ContractAsks, IncomingOnlyEventsOf, NormalizeAsks } from '@apackdev/sdk/events';
+import type { HostLifecycleEvents, StateMatchesContract } from '@apackdev/sdk/framework';
+import type { RunNodeId } from '@apackdev/sdk/steps';
+import { createLogger, reportError, setDebugEnabled, isDebugEnabled } from '@apackdev/sdk/logger';
 
-export const brainSpec = defineSystem<Contract>();
-export const brainRuntime = 'brain-runtime' as const;
+import type { Contract } from './contract.ts';
+import type { BrainFlowSpec, BrainInternalEvents, FlowRunNodeData, OutgoingBrainEvents } from './types.ts';
+import { flowState, loadFlowTriggers, type FlowEvent } from './flow-system.ts';
+import { notify as notifyAdHocListeners, removeAllListeners as removeAllAdHocListeners } from './services/brain.ts';
 
 const logger = createLogger('brain');
 
@@ -38,28 +34,19 @@ function reportStartError(error: Error) {
   reportError({ error, title: 'Could not start the brain', source: 'brain', operation: 'start' });
 }
 
-/**
- * A start found no flow to run: clears the running root flow and tells clients the brain is stopped, and why when
- * flows exist but none is the root. That error is reported now if a client is connected, else when one connects.
- * Returns the context the brain stays stopped with.
- */
-function stopWithoutRootFlow({ clientConnected }: BrainContext): Partial<BrainContext> {
-  const startError = noRootFlowError();
-  if (!startError) logger.warn('No flow to run; start the brain once a flow exists');
-  else if (clientConnected) reportStartError(startError);
-  broadcast('brain', { type: 'BRAIN_KILLED', startError: startError?.message });
-  return { brainActor: undefined, runningRootFlowId: undefined, rootRunId: undefined, startError, startErrorReported: clientConnected };
-}
-
 /** The brain's state (`BRAIN_STATE`). Inspection is restored from the settings, on by default in development */
-function brainState(context: BrainContext, paused: boolean): Extract<OutgoingBrainEvents, { type: 'BRAIN_STATE' }> {
+function buildBrainState(
+  runningRootFlowId: EARS.EntityId | undefined,
+  startError: Error | undefined,
+  paused: boolean,
+): Extract<OutgoingBrainEvents, { type: 'BRAIN_STATE' }> {
   const inspectEnabled = featureSettings.forFeature('brain').get()?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
   setDebugEnabled('brain', inspectEnabled);
   return {
     type: 'BRAIN_STATE',
-    ...(context.brainActor && context.runningRootFlowId
-      ? { rootFlowId: context.runningRootFlowId }
-      : { startError: context.startError?.message }),
+    ...(runningRootFlowId
+      ? { rootFlowId: runningRootFlowId }
+      : { startError: startError?.message }),
     paused,
     inspectEnabled,
   };
@@ -68,442 +55,434 @@ function brainState(context: BrainContext, paused: boolean): Extract<OutgoingBra
 /** A flow run's tree, as a window opens it */
 const openedRun = (runNodeId: RunNodeId) => ({ runNodeId, data: repository.brainQueries.extendedRunNodeData(runNodeId) });
 
-export const answers = brainSpec.answers({
-  REQUEST_SURFACE_DATA: ({ context, args, self }) => {
-    const flowId = args.flowRunNodeId ? args.flowRunNodeId as RunNodeId : undefined;
-    let data: FlowRunNodeData;
-    try {
-      data = flowId
-        ? repository.brainQueries.extendedRunNodeData(flowId)
-        : repository.brainQueries.rootData(context.rootRunId);
-    } catch {
-      // A run the history no longer holds (pruned, or the data replaced)
-      data = { flowRunNodeId: '' as EARS.EntityId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] };
+/** Collects `flowRunNodeId` and every active descendant subflow spawned under it. */
+function collectDescendantFlowIds(
+  flows: Readonly<Record<string, Read<BrainFlowSpec>>>,
+  rootId: string,
+): Set<string> {
+  const toRemove = new Set<string>([rootId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const [id, spec] of Object.entries(flows)) {
+      if (!toRemove.has(id) && spec.parentFlowRunNodeId && toRemove.has(spec.parentFlowRunNodeId)) {
+        toRemove.add(id);
+        added = true;
+      }
     }
-    return { data, state: brainState(context, self.getSnapshot().matches({ running: 'paused' })) };
-  },
-  OPEN_RUN_NODE: ({ args, refuse }) => {
-    const runNodeId = args.runNodeId as RunNodeId;
-    if (repository.brainQueries.runNodeById(runNodeId)?.kind !== 'flow') throw refuse('not-a-flow', 'Only a flow run opens');
-    return openedRun(runNodeId);
-  },
-  GO_BACK_RUN_NODE: ({ context, args }) => {
-    const current = args.currentFlowRunNodeId as RunNodeId | undefined;
-    const parentFlow = current ? repository.brainQueries.parentFlowOf(current) : undefined;
-    const data = parentFlow
-      ? repository.brainQueries.extendedRunNodeData(parentFlow.id)
-      : repository.brainQueries.rootData(context.rootRunId);
-    return { runNodeId: data.flowRunNodeId, data };
-  },
-  GET_RUN_NODE_DETAILS: ({ args }) => {
-    const runNodeId = args.runNodeId as RunNodeId;
-    const runNode = repository.brainQueries.runNodeById(runNodeId);
-    const revealIn = repository.brainQueries.revealIn(runNodeId);
-    // Said as JSON, where a missing run node has to be: null
-    return { runNodeId, details: runNode ? { ...runNode, ...(revealIn && { revealIn }) } : null };
-  },
+  }
+  return toRemove;
+}
+
+type QueuedBrainEvent = {
+  readonly eventType: string;
+  readonly payload?: unknown;
+  readonly targetFlowId?: string;
+};
+
+type BrainShape = {
+  data: {
+    startError: Error | undefined;
+    startErrorReported: boolean;
+    clientConnected: boolean;
+  };
+  states: {
+    booting: {};
+    stopped: {};
+    running: {
+      data: {
+        runningRootFlowId: EARS.EntityId | undefined;
+        rootRunId: RunNodeId | undefined;
+        flows: Record<string, BrainFlowSpec>;
+        eventQueue: QueuedBrainEvent[];
+      };
+      starts: { flow: Each<typeof flowState> };
+      states: {
+        active: {};
+        paused: {};
+      };
+    };
+  };
+};
+
+const emptyRunningData = () => ({
+  runningRootFlowId: undefined,
+  rootRunId: undefined,
+  flows: {} as Record<string, BrainFlowSpec>,
+  eventQueue: [] as QueuedBrainEvent[],
 });
 
-export const brainSystem = setup({
-  types: brainSpec.types,
-  actions: {
-    ...answers.actions,
-    ...brainSpec.actions({
-    logError: ({ event }) => {
-      logger.error('Brain system error', { error: 'error' in event ? event.error : undefined });
-    },
-    startBrain: enqueueActions(({ context, enqueue }) => {
-      // Defensive: clear stale flow actor references before starting new brain.
-      // restartBrain/killBrain already do this, but startBrain must also guard
-      // against leaks from lifecycle paths that bypass those actions.
-      clearFlowActorRegistry();
+type BrainEvent =
+  | IncomingOnlyEventsOf<Contract>
+  | BrainInternalEvents
+  | Extract<HostLifecycleEvents, { type: 'SEND_STATE' | 'CLIENT_CONNECTED' | 'DATA_REPLACED' }>;
 
-      // Stop existing brain if any using enqueue.stopChild
-      if (context.brainActor) {
-        enqueue.stopChild(context.brainActor);
-      }
+function dispatchBrainEvent(
+  ev: QueuedBrainEvent,
+  flows: Readonly<Record<string, Read<BrainFlowSpec>>>,
+  tell: (to: ReturnType<typeof Object>, event: Read<FlowEvent>) => void,
+  child: (name: 'flow', key: string) => unknown,
+  broadcast: (to: 'brain', event: Read<OutgoingBrainEvents>) => void,
+): void {
+  const { eventType, payload, targetFlowId } = ev;
 
-      // Starts unpaused (a pause from an earlier run doesn't carry over)
-      setBrainPausedState(false);
+  broadcast('brain', {
+    type: 'EVENT_PULSE',
+    eventType,
+  });
 
-      const currentRootFlowId = rootFlowToRun();
-      // Nothing to run: `running` leaves for `stopped` without a brain actor
-      if (!currentRootFlowId) {
-        enqueue.assign(stopWithoutRootFlow(context));
-        return;
-      }
-
-      // Start new brain and assign to context
-      enqueue.assign(({ spawn, self }) => {
-        const { machine, runNodeId } = createFlowNodeSystem(self)
-        const actor = spawn(machine, {
-          input: {}
+  if (targetFlowId) {
+    if (targetFlowId in flows) {
+      tell(child('flow', targetFlowId) as never, {
+        type: 'TRACK_EVENT',
+        eventType,
+        payload,
+        targetFlowId,
+      });
+    } else {
+      logger.error(`Target flow actor not found: ${eventType}`, { targetFlowId });
+    }
+  } else {
+    const flowIds = Object.keys(flows);
+    if (flowIds.length === 0) {
+      logger.warn(`No flow actors registered to receive global event: ${eventType}`);
+    } else {
+      logger.info(`Broadcasting global event "${eventType}" to ${flowIds.length} flow actors`, {
+        eventType,
+        actorCount: flowIds.length,
+        flowActorIds: flowIds,
+      });
+      for (const flowRunNodeId of flowIds) {
+        tell(child('flow', flowRunNodeId) as never, {
+          type: 'TRACK_EVENT',
+          eventType,
+          payload,
         });
+      }
+    }
+  }
+
+  notifyAdHocListeners(eventType, payload, targetFlowId);
+}
+
+export const brainSystem = state<
+  BrainShape,
+  BrainEvent,
+  NormalizeAsks<ContractAsks<Contract>>
+>()({
+  data: {
+    startError: undefined,
+    startErrorReported: false,
+    clientConnected: false,
+  },
+  initial: 'booting',
+  on: {
+    SEND_STATE: (_ev, { snapshot, broadcast }) => {
+      const isRunning = within(snapshot, 'running');
+      broadcast(
+        'brain',
+        buildBrainState(
+          isRunning ? snapshot.data.runningRootFlowId : undefined,
+          snapshot.data.startError,
+          snapshot.at === 'running.paused',
+        ),
+      );
+    },
+    // Kept as a fact: whether a client is attached is not something publishing can say
+    CLIENT_CONNECTED: (_ev, { data }) => {
+      if (data.clientConnected) return;
+      return { data: { clientConnected: true } };
+    },
+    // A setting of the feature rather than of a run, so it toggles whether a flow runs or not
+    TOGGLE_INSPECT: (_ev, { broadcast }) => {
+      const currentState = isDebugEnabled('brain');
+      const newState = !currentState;
+      setDebugEnabled('brain', newState);
+
+      featureSettings.forFeature('brain').set({ path: ['inspectEnabled'], value: newState });
+
+      broadcast('brain', {
+        type: 'INSPECT_TOGGLED',
+        enabled: newState,
+      });
+    },
+  },
+  answers: {
+    REQUEST_SURFACE_DATA: (args, { snapshot }) => {
+      const flowId = args.flowRunNodeId ? (args.flowRunNodeId as RunNodeId) : undefined;
+      const isRunning = within(snapshot, 'running');
+      const rootRunId = isRunning ? snapshot.data.rootRunId : undefined;
+      let flowData: FlowRunNodeData;
+      try {
+        flowData = flowId
+          ? repository.brainQueries.extendedRunNodeData(flowId)
+          : repository.brainQueries.rootData(rootRunId);
+      } catch {
+        // A run the history no longer holds (pruned, or the data replaced)
+        flowData = { flowRunNodeId: '' as EARS.EntityId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] };
+      }
+      return {
+        data: flowData,
+        state: buildBrainState(
+          isRunning ? snapshot.data.runningRootFlowId : undefined,
+          snapshot.data.startError,
+          snapshot.at === 'running.paused',
+        ),
+      };
+    },
+  },
+  states: {
+    booting: {
+      run: () => ({ at: 'running', data: emptyRunningData() }),
+    },
+    stopped: {
+      on: {
+        // Stopped, describing itself means working out why it will not start and saying so once.
+        SEND_STATE: (_ev, { data, broadcast }) => {
+          const startError = data.startError && noRootFlowError();
+          broadcast('brain', buildBrainState(undefined, startError, false));
+          if (startError && !data.startErrorReported) {
+            reportStartError(startError);
+            return { data: { startError, startErrorReported: true } };
+          }
+          if (startError !== data.startError) {
+            return { data: { startError } };
+          }
+        },
+        START_BRAIN: () => ({ at: 'running', data: emptyRunningData() }),
+        RESTART_BRAIN: () => ({ at: 'running', data: emptyRunningData() }),
+      },
+    },
+    running: {
+      data: {
+        runningRootFlowId: undefined,
+        rootRunId: undefined,
+        flows: {},
+        eventQueue: [],
+      },
+      initial: 'active',
+      starts: (start) => ({
+        flow: start(flowState, {
+          each: 'flows',
+          given: (key, data) => ({
+            spec: data.flows[key]!,
+            paused: data.flows[key]!.startPaused,
+          }),
+        }),
+      }),
+      run: ({ data, onExit, tell, child, broadcast }) => {
+        // Register `onExit` first so every leave from `running` (KILL_BRAIN, DATA_REPLACED, RESTART_BRAIN, root
+        // completion, or stop) runs after child flows/steps exit: marks still-active RunNodes `'stopped'`, removes
+        // ad-hoc listeners, and clears schedules.
+        onExit(() => {
+          services.runHistory.stopActive();
+          removeAllAdHocListeners();
+          services.scheduler.clearAllSchedules();
+        });
+
+        const currentRootFlowId = rootFlowToRun();
+        if (!currentRootFlowId) {
+          const startError = noRootFlowError();
+          if (!startError) logger.warn('No flow to run; start the brain once a flow exists');
+          else if (data.clientConnected) reportStartError(startError);
+          broadcast('brain', { type: 'BRAIN_KILLED', startError: startError?.message });
+          return {
+            at: 'stopped',
+            data: { startError, startErrorReported: data.clientConnected },
+          };
+        }
+
+        const { rootFlow, rootFlowRunNode } = repository.brainCommands.createRootFlowRunNode();
+        const { nodes: eventNodes, hasPersistentTriggers } = loadFlowTriggers(rootFlow.id, rootFlowRunNode.id);
+        const rootSpec: BrainFlowSpec = {
+          flowRunNodeId: rootFlowRunNode.id,
+          flowId: rootFlow.id,
+          flowLabel: rootFlowRunNode.label || 'Unknown Flow',
+          isRootFlow: true,
+          isFinalStep: Boolean(rootFlowRunNode.final),
+          entrySteps: { steps: [], lastStep: undefined },
+          eventNodes,
+          hasPersistentTriggers,
+          startPaused: false,
+        };
 
         logger.info('Started brain root flow', { flowId: currentRootFlowId });
-
-        // Return the updated context with the actor reference
-        return {
-          brainActor: actor,
-          runningRootFlowId: currentRootFlowId,
-          rootRunId: runNodeId,
-          startError: undefined,
-        };
-      });
-
-      // News for every window, each of which asks for the new run's tree
-      enqueue(({ context }) => {
-        if (context.brainActor && context.runningRootFlowId) {
-          broadcast('brain', {
-            type: 'BRAIN_STARTED',
-            rootFlowId: context.runningRootFlowId,
-          });
-        }
-      });
-      enqueue('notifyClientReady');
-    }),
-
-    // A root run receives readiness once: on the first client, or when restarted after that client.
-    notifyClientReady: enqueueActions(({ context, enqueue }) => {
-      if (!context.clientConnected || !context.brainActor) return;
-      // Address this actor instance, so delayed or paused delivery cannot reach a replacement root.
-      enqueue.sendTo(context.brainActor, { type: 'client.ready' }, { delay: 0 });
-    }),
-    setClientConnected: enqueueActions(({ context, enqueue }) => {
-      if (context.clientConnected) return;
-      enqueue.assign({ clientConnected: true });
-      enqueue('notifyClientReady');
-    }),
-
-    /** A client connected while the brain is stopped: it stays stopped with its start error unless a root flow exists by now */
-    refreshStartError: assign({
-      startError: ({ context }) => context.startError && noRootFlowError(),
-    }),
-
-    /** Report why the brain couldn't start, if no client was told yet: a start before any client connected */
-    reportStartError: enqueueActions(({ context, enqueue }) => {
-      if (!context.startError || context.startErrorReported) return;
-      reportStartError(context.startError);
-      enqueue.assign({ startErrorReported: true });
-    }),
-
-    killBrain: enqueueActions(({ context, enqueue }) => {
-      if (context.brainActor) {
-        setBrainPausedState(false);
-        enqueue.stopChild(context.brainActor);
-        enqueue.assign({ brainActor: undefined, runningRootFlowId: undefined, rootRunId: undefined, eventQueue: [] });
-
-        // The runs it ended stay in the run history, stopped
-        services.runHistory.stopActive();
-
-        // Clear all ad-hoc brain event listeners
-        removeAllAdHocListeners();
-
-        // Clear all cron schedules
-        services.scheduler.clearAllSchedules();
-
-        // Defensive: drop any lingering flow actor references. Exit actions
-        // on the stopped actor should unregister themselves, but if pending
-        // async work interrupted that path, stale entries would leak here.
-        clearFlowActorRegistry();
-
-        // Send BRAIN_KILLED event
-        broadcast('brain', {
-            type: 'BRAIN_KILLED'
-        });
-
-        logger.info('Brain flow machine killed and its runs stopped');
-      }
-    }),
-
-    restartBrain: enqueueActions(({ context, enqueue }) => {
-      logger.info('Restarting brain flow machine');
-
-      setBrainPausedState(false);
-
-      // Clear event queue
-      enqueue.assign({ eventQueue: [] });
-
-      // Kill existing brain using enqueue.stopChild
-      if (context.brainActor) {
-        enqueue.stopChild(context.brainActor);
-      }
-
-      // The runs it ends stay in the run history, stopped
-      services.runHistory.stopActive();
-
-      // Clear all ad-hoc brain event listeners
-      removeAllAdHocListeners();
-
-      // Clear all cron schedules
-      services.scheduler.clearAllSchedules();
-
-      // Defensive: drop any lingering flow actor references. Exit actions
-      // on the stopped actor should unregister themselves, but if pending
-      // async work interrupted that path, stale entries would leak here.
-      clearFlowActorRegistry();
-
-      const currentRootFlowId = rootFlowToRun();
-      // Nothing to run: `running` leaves for `stopped` without a brain actor
-      if (!currentRootFlowId) {
-        enqueue.assign(stopWithoutRootFlow(context));
-        return;
-      }
-
-
-      // Start new brain and assign to context
-      enqueue.assign(({ spawn, self }) => {
-        const { machine, runNodeId } = createFlowNodeSystem(self)
-        const actor = spawn(machine, {
-          input: {}
-        });
-
-        // News for every window, each of which asks for the new run's tree
         broadcast('brain', {
           type: 'BRAIN_STARTED',
           rootFlowId: currentRootFlowId,
         });
 
-        logger.info('Restarted brain with root flow', { flowId: currentRootFlowId });
+        // A root run receives readiness once: on the first client, or when started after that client connected.
+        if (data.clientConnected) {
+          tell(child('flow', rootFlowRunNode.id), { type: 'TRACK_EVENT', eventType: 'client.ready' });
+        }
 
         return {
-          brainActor: actor,
-          runningRootFlowId: currentRootFlowId,
-          rootRunId: runNodeId,
-          startError: undefined,
+          data: {
+            runningRootFlowId: currentRootFlowId,
+            rootRunId: rootFlowRunNode.id,
+            startError: undefined,
+            startErrorReported: false,
+            flows: { [rootFlowRunNode.id]: rootSpec },
+            eventQueue: [],
+          },
         };
-      });
-      enqueue('notifyClientReady');
-    }),
-    /** The brain's state, for every window whenever it is asked to publish: none of it is a row */
-    publishBrainState: ({ context, self }) => {
-      broadcast('brain', brainState(context, self.getSnapshot().matches({ running: 'paused' })));
-    },
-    toggleInspect: () => {
-      const currentState = isDebugEnabled('brain');
-      const newState = !currentState;
-      setDebugEnabled('brain', newState);
-
-      // Persist to settings DB
-      featureSettings.forFeature('brain').set({ path: ['inspectEnabled'], value: newState });
-
-      // Send confirmation back to frontend
-      broadcast('brain', {
-        type: 'INSPECT_TOGGLED',
-        enabled: newState
-      });
-    },
-    queueBrainEvent: assign(({ context, event }) => {
-      const ev = brainSpec.typeOf(['TRIGGER_BRAIN_EVENT', 'HANDLE_BRAIN_EVENT'], event);
-      return {
-        eventQueue: [...context.eventQueue, { eventType: ev.eventType, payload: ev.payload, targetFlowId: ev.targetFlowId }]
-      };
-    }),
-    replayQueuedEvents: enqueueActions(({ context, enqueue }) => {
-      for (const queuedEvent of context.eventQueue) {
-        enqueue.raise({
-          type: 'HANDLE_BRAIN_EVENT',
-          eventType: queuedEvent.eventType,
-          payload: queuedEvent.payload,
-          targetFlowId: queuedEvent.targetFlowId,
-        }, { delay: 0 });
-      }
-      enqueue.assign({ eventQueue: [] });
-    }),
-    triggerBrainEvent: ({ event }) => {
-      const ev = brainSpec.typeOf(['TRIGGER_BRAIN_EVENT', 'HANDLE_BRAIN_EVENT'], event);
-      const { eventType, payload, targetFlowId } = ev;
-
-      // Pulse the event in UI
-      broadcast('brain', {
-        type: 'EVENT_PULSE',
-        eventType: eventType
-      });
-
-      // Handle local vs global events
-      if (targetFlowId) {
-        // LOCAL EVENT: Send to specific flow only
-        const targetActor = getFlowActor(targetFlowId as EARS.EntityId);
-
-        if (targetActor?.send) {
-          targetActor.send({
-            type: eventType,
-            payload,
-            targetFlowId
-          });
-        } else {
-          logger.error(`Target flow actor not found: ${eventType}`, { targetFlowId });
-        }
-      } else {
-        // GLOBAL EVENT: Broadcast to ALL registered flow actors
-        const allFlowActors = getAllFlowActors();
-        const allFlowActorIds = getAllFlowActorIds();
-
-        if (allFlowActors.length === 0) {
-          logger.warn(`No flow actors registered to receive global event: ${eventType}`);
-        } else {
-          logger.info(`Broadcasting global event "${eventType}" to ${allFlowActors.length} flow actors`, {
-            eventType,
-            actorCount: allFlowActors.length,
-            flowActorIds: allFlowActorIds
-          });
-
-          // Send to all flow actors (including root and all children)
-          allFlowActors.forEach(actor => {
-            if (actor?.send) {
-              actor.send({
-                type: eventType,
-                payload,
-                // No targetFlowId for global events
-              });
-            }
-          });
-        }
-      }
-
-      // Notify ad-hoc listeners (after normal flow routing)
-      notifyAdHocListeners(eventType, payload, targetFlowId);
-    },
-  }),
-  },
-}).createMachine(
-  {
-    id: 'brain',
-    initial: 'running',
-    context: () => ({
-      brainActor: undefined,
-      eventQueue: [],
-      startErrorReported: false,
-      clientConnected: false,
-    }),
-    on: {
-      SEND_STATE: {
-        actions: 'publishBrainState',
       },
-      // Kept as a fact: whether a client is attached is not something publishing can say
-      CLIENT_CONNECTED: {
-        actions: 'setClientConnected',
-      },
-      REQUEST_SURFACE_DATA: answers.on.REQUEST_SURFACE_DATA,
-      // A setting of the feature rather than of a run, so it toggles whether a flow runs or not
-      TOGGLE_INSPECT: {
-        actions: 'toggleInspect',
-      },
-      ERROR: {
-        actions: 'logError',
-      },
-    },
-    states: {
-      stopped: {
-        on: {
-          // Stopped, describing itself means working out why it will not start and saying so once. The
-          // root's CLIENT_CONNECTED still runs: only the ask is shadowed here
-          SEND_STATE: {
-            actions: ['refreshStartError', 'publishBrainState', 'reportStartError'],
-          },
-          START_BRAIN: {
-            target: 'running',
-          },
-          RESTART_BRAIN: {
-            target: 'running',
-          },
-        }
-      },
-      running: {
-        entry: ['startBrain'],
-        // Started (or restarted) with no flow to run
-        always: { guard: ({ context }) => context.brainActor === undefined, target: 'stopped' },
-        initial: 'active',
-        on: {
-          // A run is opened while the brain runs; stopped, the bus answers that nothing took the ask
-          OPEN_RUN_NODE: answers.on.OPEN_RUN_NODE,
-          GO_BACK_RUN_NODE: answers.on.GO_BACK_RUN_NODE,
-          GET_RUN_NODE_DETAILS: answers.on.GET_RUN_NODE_DETAILS,
-          KILL_BRAIN: {
-            actions: 'killBrain',
-            target: 'stopped',
-          },
-          // The rows the running flow is part way through are gone. It stops and does not restart: whether
-          // there is a flow worth running afterwards is the caller's to know — a reset makes a root flow and
-          // asks, a restored backup may hold anything and tells the user to start it themselves
-          DATA_REPLACED: {
-            actions: 'killBrain',
-            target: 'stopped',
-          },
-          RESTART_BRAIN: {
-            actions: 'restartBrain',
-            target: '.active',
-          },
-          CHILD_COMPLETED: {
-            actions: 'killBrain',
-            target: 'stopped',
-          },
-          RUN_NODE_SPAWNED: {
-            actions: ({ event }) => {
-              // Forward to frontend
-              broadcast('brain', event);
-            }
-          },
-          RUN_NODE_UPDATED: {
-            actions: ({ event }) => {
-              // Forward to frontend
-              broadcast('brain', event);
-            }
-          },
+      answers: {
+        // A run is opened while the brain runs; stopped, the bus answers that nothing took the ask
+        OPEN_RUN_NODE: ({ runNodeId }, { refuse }) => {
+          const id = runNodeId as RunNodeId;
+          if (repository.brainQueries.runNodeById(id)?.kind !== 'flow') {
+            throw refuse('not-a-flow', 'Only a flow run opens');
+          }
+          return openedRun(id);
         },
-        states: {
-          active: {
-            on: {
-              TRIGGER_BRAIN_EVENT: {
-                actions: raise(({ event }) => ({
-                  ...brainSpec.typeOf('TRIGGER_BRAIN_EVENT', event),
-                  type: 'HANDLE_BRAIN_EVENT',
-                }), { delay: 0 }),
-              },
-              HANDLE_BRAIN_EVENT: {
-                actions: 'triggerBrainEvent',
-              },
-              PAUSE_BRAIN: {
-                target: 'paused',
-                actions: () => {
-                  setBrainPausedState(true);
-                  broadcast('brain', { type: 'BRAIN_PAUSED' });
-                },
-              },
+        GO_BACK_RUN_NODE: ({ currentFlowRunNodeId }, { data }) => {
+          const current = currentFlowRunNodeId as RunNodeId | undefined;
+          const parentFlow = current ? repository.brainQueries.parentFlowOf(current) : undefined;
+          const flowData = parentFlow
+            ? repository.brainQueries.extendedRunNodeData(parentFlow.id)
+            : repository.brainQueries.rootData(data.rootRunId);
+          return { runNodeId: flowData.flowRunNodeId, data: flowData };
+        },
+        GET_RUN_NODE_DETAILS: ({ runNodeId }) => {
+          const id = runNodeId as RunNodeId;
+          const runNode = repository.brainQueries.runNodeById(id);
+          const revealIn = repository.brainQueries.revealIn(id);
+          // Said as JSON, where a missing run node has to be: null
+          return { runNodeId: id, details: runNode ? { ...runNode, ...(revealIn && { revealIn }) } : null };
+        },
+      },
+      on: {
+        CLIENT_CONNECTED: (_ev, { data, tell, child }) => {
+          if (data.clientConnected) return;
+          if (data.rootRunId && data.rootRunId in data.flows) {
+            tell(child('flow', data.rootRunId), { type: 'TRACK_EVENT', eventType: 'client.ready' });
+          }
+          return { data: { clientConnected: true } };
+        },
+        KILL_BRAIN: (_ev, { broadcast }) => {
+          broadcast('brain', { type: 'BRAIN_KILLED' });
+          logger.info('Brain flow machine killed and its runs stopped');
+          return { at: 'stopped' };
+        },
+        // The rows the running flow is part way through are gone. It stops and does not restart: whether
+        // there is a flow worth running afterwards is the caller's to know — a reset makes a root flow and
+        // asks, a restored backup may hold anything and tells the user to start it themselves
+        DATA_REPLACED: (_ev, { broadcast }) => {
+          broadcast('brain', { type: 'BRAIN_KILLED' });
+          logger.info('Brain flow machine killed and its runs stopped');
+          return { at: 'stopped' };
+        },
+        RESTART_BRAIN: () => {
+          logger.info('Restarting brain flow machine');
+          return { at: 'running', data: emptyRunningData() };
+        },
+        SPAWN_SUBFLOW: (ev, { snapshot }) => ({
+          data: (d) => {
+            d.flows[ev.spec.flowRunNodeId] = {
+              ...ev.spec,
+              startPaused: snapshot.at === 'running.paused',
+            };
+          },
+        }),
+        FLOW_COMPLETED: (ev, { data, tell, child, broadcast }) => {
+          if (ev.isRootFlow) {
+            broadcast('brain', { type: 'BRAIN_KILLED' });
+            logger.info('Brain flow machine killed and its runs stopped');
+            return { at: 'stopped' };
+          }
+          if (
+            ev.parentFlowRunNodeId &&
+            ev.parentFlowRunNodeId in data.flows &&
+            ev.flowStepNodeId &&
+            ev.parentEventRunNodeId
+          ) {
+            tell(child('flow', ev.parentFlowRunNodeId), {
+              type: 'SUBFLOW_COMPLETED',
+              subflowRunNodeId: ev.flowRunNodeId,
+              stepId: ev.flowStepNodeId,
+              stepLabel: ev.flowStepLabel ?? '',
+              eventRunNodeId: ev.parentEventRunNodeId,
+              result: ev.result,
+              failed: false,
+              final: ev.final,
+            });
+          }
+          const toRemove = collectDescendantFlowIds(data.flows, ev.flowRunNodeId);
+          return {
+            data: (d) => {
+              for (const id of toRemove) {
+                delete d.flows[id];
+              }
+            },
+          };
+        },
+        KILL_FLOW: (ev, { data, tell, child }) => {
+          if (ev.flowRunNodeId in data.flows) {
+            tell(child('flow', ev.flowRunNodeId), { type: 'KILL_FLOW' });
+          }
+        },
+      },
+      states: {
+        active: {
+          on: {
+            TRIGGER_BRAIN_EVENT: (ev, { data, tell, child, broadcast }) => {
+              dispatchBrainEvent(ev, data.flows, tell as never, child, broadcast);
+            },
+            HANDLE_BRAIN_EVENT: (ev, { data, tell, child, broadcast }) => {
+              dispatchBrainEvent(ev, data.flows, tell as never, child, broadcast);
+            },
+            PAUSE_BRAIN: (_ev, { data, tell, child, broadcast }) => {
+              for (const flowRunNodeId of Object.keys(data.flows)) {
+                tell(child('flow', flowRunNodeId), { type: 'SET_PAUSED', paused: true });
+              }
+              broadcast('brain', { type: 'BRAIN_PAUSED' });
+              return { at: 'running.paused' };
             },
           },
-          paused: {
-            on: {
-              TRIGGER_BRAIN_EVENT: {
-                actions: 'queueBrainEvent',
-              },
-              HANDLE_BRAIN_EVENT: {
-                actions: 'queueBrainEvent',
-              },
-              RESUME_BRAIN: {
-                target: 'active',
-                actions: [
-                  () => {
-                    setBrainPausedState(false);
-                    // Resume deferred steps in all active flows
-                    for (const actor of getAllFlowActors()) {
-                      actor.send({ type: 'RESUME_FLOW' });
-                    }
-                  },
-                  'replayQueuedEvents',
-                  () => {
-                    broadcast('brain', { type: 'BRAIN_RESUMED' });
-                  },
+        },
+        paused: {
+          on: {
+            TRIGGER_BRAIN_EVENT: (ev, { data }) => ({
+              data: {
+                eventQueue: [
+                  ...data.eventQueue,
+                  { eventType: ev.eventType, payload: ev.payload, targetFlowId: ev.targetFlowId },
                 ],
               },
+            }),
+            HANDLE_BRAIN_EVENT: (ev, { data }) => ({
+              data: {
+                eventQueue: [
+                  ...data.eventQueue,
+                  { eventType: ev.eventType, payload: ev.payload, targetFlowId: ev.targetFlowId },
+                ],
+              },
+            }),
+            RESUME_BRAIN: (_ev, { data, tell, child, send, broadcast }) => {
+              for (const flowRunNodeId of Object.keys(data.flows)) {
+                tell(child('flow', flowRunNodeId), { type: 'SET_PAUSED', paused: false });
+              }
+              for (const queued of data.eventQueue) {
+                send({
+                  type: 'HANDLE_BRAIN_EVENT',
+                  eventType: queued.eventType,
+                  payload: queued.payload,
+                  targetFlowId: queued.targetFlowId,
+                });
+              }
+              broadcast('brain', { type: 'BRAIN_RESUMED' });
+              return { at: 'running.active', data: { eventQueue: [] } };
             },
           },
         },
-      }
+      },
     },
-  }
-);
+  },
+});
 
-const brainEntry = { spec: brainSpec, machine: brainSystem };
+const _contractMatches: StateMatchesContract<typeof brainSystem, Contract> = true;
+void _contractMatches;
 
-export default brainEntry;
+export default brainSystem;

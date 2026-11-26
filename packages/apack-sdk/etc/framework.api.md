@@ -5,7 +5,6 @@
 ```ts
 
 import type { ActionArgs } from 'xstate';
-import type { AnyActorRef } from 'xstate';
 import type { AnyState } from '@apackdev/state';
 import type { AnyStateMachine } from 'xstate';
 import type { AsksOf } from '@apackdev/state';
@@ -1310,7 +1309,7 @@ export const SPECIALTY_CONTENT_KEYS: readonly string[];
 // @public
 export type StateMatchesContract<T, C extends SystemContract> = [
 T
-] extends [AnyState] ? [IncomingOnlyEventsOf<C>, Exclude<EventsOf<T>, HostLifecycleEvents>] extends [EventsOf<T>, IncomingOnlyEventsOf<C>] ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>] ? true : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature' : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature' : 'this system\'s default export is not a @apackdev/state State';
+] extends [AnyState] ? [IncomingOnlyEventsOf<C>, Exclude<EventsOf<T>, HostLifecycleEvents | ContractInternal<C>>] extends [EventsOf<T>, IncomingOnlyEventsOf<C>] ? [AsksOf<T>, NormalizeAsks<ContractAsks<C>>] extends [NormalizeAsks<ContractAsks<C>>, AsksOf<T>] ? true : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature' : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature' : 'this system\'s default export is not a @apackdev/state State';
 
 // @internal
 export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build' | 'trigger'>>): {

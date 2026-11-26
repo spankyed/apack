@@ -1,34 +1,43 @@
-// A flow spawns a child actor per step and per subflow, each under a `step-run-node-…`/`flow-run-node-…` id.
-// XState tracks a parent's children by their own id, so each spawn names one: without it they share a key,
-// the parent holds only the last, and stopping the flow leaves the rest running.
+// The brain tracks each running flow by its own RunNode id in `data.flows`, and each flow tracks its running
+// steps by their own RunNode ids in `data.steps`, so stopping a flow or the brain tears down every active child.
 import { describe, expect, it } from 'vitest'
 import { importFlows, startApp } from '@apackdev/testing/harness'
-import { entry, keepAlive, on, transform } from '#generated/flow-helpers.ts'
-import { getFlowActor } from '#features/brain/be/flow-system.ts'
+import { entry, keepAlive, on, subflow, transform } from '#generated/flow-helpers.ts'
 import { services } from '#generated/services.ts'
+
 const step = (label: string) => transform('return true', { label })
 
-/** The keys the root flow tracks its spawned children by */
-function childKeys(): string[] {
-  // The session's root run: the root the brain started, still running
-  const root = services.runHistory.findRuns().find((run) => run.parentId === undefined && run.status === 'active')
-  const actor = root && getFlowActor(root.id)
-  expect(actor, 'the root flow actor is running').toBeDefined()
-  return Object.keys(actor.getSnapshot().children as Record<string, unknown>)
-}
-
 describe('a flow’s spawned children', () => {
-  it('are tracked by their own ids, one per step, not collapsed onto a single key', async () => {
+  it('are tracked by their own ids, one per flow and step, not collapsed onto a single key', async () => {
     importFlows({
-      Outer: { root: true, tracks: [entry([keepAlive()]), on('go', [[step('one'), step('two'), step('three')]])] },
+      Outer: {
+        root: true,
+        tracks: [
+          entry([subflow('ChildA')], [subflow('ChildB')], [keepAlive('stay-outer')]),
+          on('go', [[step('one'), step('two'), step('three')]]),
+        ],
+      },
+      ChildA: { tracks: [entry([keepAlive('stay-a')])] },
+      ChildB: { tracks: [entry([keepAlive('stay-b')])] },
     })
     const app = await startApp({ systems: ['brain'] })
 
     await app.runFlow('Outer', { event: 'go' })
     await app.settle()
 
-    const keys = childKeys()
-    expect(keys, `children were ${JSON.stringify(keys)}`).not.toContain('undefined')
-    expect(new Set(keys).size).toBe(keys.length)
+    const snap = app.system('brain').getSnapshot() as {
+      value: string
+      context: { flows?: Record<string, unknown> }
+    }
+    const flowKeys = Object.keys(snap.context.flows ?? {})
+    expect(snap.value).toBe('running.active')
+    expect(flowKeys, `flows were ${JSON.stringify(flowKeys)}`).toHaveLength(3)
+    expect(flowKeys).not.toContain('undefined')
+    expect(new Set(flowKeys).size).toBe(flowKeys.length)
+
+    // Killing the brain stops all active flows and steps cleanly
+    await app.send('brain', { type: 'KILL_BRAIN' })
+    await app.settle()
+    expect(services.runHistory.findRuns().filter((r) => r.status === 'active')).toEqual([])
   })
 })

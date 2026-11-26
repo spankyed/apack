@@ -480,7 +480,6 @@ interface BrainContext {
 }
 
 interface BrainContext$1 {
-    brainActor?: any;
     eventQueue: Array<{
         eventType: string;
         payload?: any;
@@ -506,30 +505,55 @@ interface BrainEventPayload {
     targetFlowId?: string;
 }
 
+interface BrainFlowSpec {
+    readonly flowRunNodeId: RunNodeId;
+    readonly flowId: EARS.EntityId;
+    readonly flowLabel: string;
+    readonly isRootFlow: boolean;
+    readonly parentFlowRunNodeId?: RunNodeId;
+    readonly parentEventRunNodeId?: RunNodeId;
+    readonly flowStepNodeId?: EARS.EntityId;
+    readonly flowStepLabel?: string;
+    readonly isFinalStep: boolean;
+    readonly entryData?: Record<string, unknown>;
+    readonly entrySteps: Pick<ExecutionContext, 'lastStep' | 'steps'>;
+    readonly eventNodes: readonly BrainTriggerNode[];
+    readonly hasPersistentTriggers: boolean;
+    readonly startPaused: boolean;
+}
+
 type BrainInternalEvents = {
-    type: 'RUN_NODE_SPAWNED';
-    runNode: RunNode;
-    parentId?: EARS.EntityId;
-    eventRunNodeId?: RunNodeId;
-    flowRunNodeId: EARS.EntityId;
+    type: 'SPAWN_SUBFLOW';
+    spec: BrainFlowSpec;
 } | {
-    type: 'RUN_NODE_UPDATED';
-    data: RunNodeUpdate;
+    type: 'FLOW_COMPLETED';
+    flowRunNodeId: RunNodeId;
+    isRootFlow: boolean;
+    parentFlowRunNodeId?: RunNodeId;
+    parentEventRunNodeId?: RunNodeId;
+    flowStepNodeId?: EARS.EntityId;
+    flowStepLabel?: string;
+    result?: unknown;
+    final: boolean;
 } | {
-    type: 'CHILD_COMPLETED';
-    stepId?: EARS.EntityId;
-    runNodeId?: RunNodeId;
-    stepLabel?: string;
-    result?: any;
-    final?: boolean;
-    eventRunNodeId?: RunNodeId;
-    isFlow?: boolean;
+    type: 'KILL_FLOW';
+    flowRunNodeId: RunNodeId;
 };
 
 /** What the brain's state is, as every window hears it */
 type BrainStateEvent = Extract<OutgoingBrainEvents, {
     type: 'BRAIN_STATE';
 }>;
+
+interface BrainTriggerNode {
+    id?: string;
+    label?: string;
+    eventType?: string;
+    triggerType: string;
+    scope?: string;
+    cronExpression?: string;
+    trackKey?: string;
+}
 
 /** How a local branch stands against the branch it follows */
 interface BranchStandingOf {
