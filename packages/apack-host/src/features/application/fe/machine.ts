@@ -19,6 +19,7 @@ import { announcePackClientReady, PACK_FRONTEND_LOADER_ID, packFrontendLoader } 
 import { historyAfter, neighbourOf, spawnSurfaceActor, withHostLast } from './surfaces.ts';
 import { surfaceNavigationItems } from '../../../fe/surface-navigation.ts';
 import { notifySurfaceActor, sendToSurfaceActor } from '../../../fe/surface-delivery.ts';
+import { createWindowStateBridge, registerShellStateSystem, type WindowStateBridge } from '../../../fe/state-bridge.ts';
 import { computeCrumbs, surfaceTrailer } from './trail.ts';
 import type { SurfaceRequest, ShellContext, ShellEvent, ShellOptions, ShellParams } from './types.ts';
 
@@ -76,6 +77,7 @@ type Enqueue = {
 
 /** The app shell over `options`, the I/O it's given */
 export function createShellMachine({ packs, catalog, client, packFrontends, storage, notify, target }: ShellOptions) {
+  const shellBridges = new WeakMap<object, WindowStateBridge>();
   const entityOptions = { client, catalog, bindings: () => packs.surfaceBindings(), refuse: (title: string, detail: string) => notify.error(title, detail) };
   const selectedDefaultSurface = (surfaces: readonly Surface[]) => {
     const declaration = selectDefaultSurfaceDeclaration(catalog);
@@ -175,6 +177,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
       connectionListener: connectionListener(client),
       packFrontendLoader: packFrontendLoader(client, packFrontends),
       surfaceTrailer,
+      stateBridgeLifecycle: fromCallback<ShellEvent, WindowStateBridge | undefined>(({ input }) => () => { input?.stopAll(); }),
     },
     // An action is named for what it does to the shell, never for the event or the API call that triggered it: a
     // trigger name collides with whatever does the triggering, and it can't survive a second caller — several of
@@ -221,7 +224,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
 
       updateHotkeys: assign(({ event }) => ({ hotkeys: typeOf('APPLICATION_HOTKEYS', event).hotkeys })),
 
-      mergePackSurfaces: enqueueActions(({ event, context, system, enqueue }) => {
+      mergePackSurfaces: enqueueActions(({ event, context, system, enqueue, self }) => {
         const { packId, registrationId, surfaces: packSurfaces } = typeOf('PACK_FRONTEND_LOADED', event);
 
         // The pack was unloaded while its frontend was loading: keep its surfaces out, since nothing would ever take
@@ -272,7 +275,8 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
           ...(activeSurface ? { activeSurface } : {}) });
         if (newSurfaces.length > 0) {
           // Visibility is the host's (AppState, sent on each connection); unset shows the surface
-          for (const surface of newSurfaces) spawnSurfaceActor(enqueue, surface, context.ownsLastActiveSurface);
+          const stateBridge = shellBridges.get(self);
+          for (const surface of newSurfaces) spawnSurfaceActor(enqueue, surface, context.ownsLastActiveSurface, stateBridge);
           const added = new Set<string>(newSurfaces.map((p) => p.id));
           // A pack claiming the app's default is how this window learns what it is. It opens it only while
           // nothing else has decided what is shown, so a window the user has navigated, or one the host told
@@ -639,8 +643,9 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
           return surfaceActor ? { targetView: computeCrumbs(surfaceActor.getSnapshot()).target ?? '' } : {};
         });
       }),
-      spawnSurfaceActors: enqueueActions(({ enqueue, context }) => {
-        for (const surface of context.surfaces) spawnSurfaceActor(enqueue, surface, context.ownsLastActiveSurface);
+      spawnSurfaceActors: enqueueActions(({ enqueue, context, self }) => {
+        const stateBridge = shellBridges.get(self);
+        for (const surface of context.surfaces) spawnSurfaceActor(enqueue, surface, context.ownsLastActiveSurface, stateBridge);
       }),
 
       resizePanel: assign(({ context, event }) => {
@@ -666,6 +671,9 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
     // `#application.*` targets name this id; the actor runs as HOST.application
     id: 'application',
     context: ({ input, spawn, self }) => {
+      const bridge = createWindowStateBridge({ client, designation: (role) => packs.designation(role) });
+      shellBridges.set(self, bridge);
+      registerShellStateSystem(self, bridge.system);
       const surfaces = withHostLast(packs.getRegisteredSurfaces());
       // A popout opens on its surface (once its pack's frontend adds it); a main window on the
       // first, until the host says which was last open
@@ -706,6 +714,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
     },
     initial: 'running',
     entry: [
+      spawnChild('stateBridgeLifecycle', { id: 'stateBridgeLifecycle', input: ({ self }) => shellBridges.get(self) }),
       'spawnSurfaceActors',
       ({ context, system }) => {
         notifySurfaceActor(system.get(context.activeSurface.id), context.activeSurface.id, { type: 'SURFACE_ACTIVATED' });

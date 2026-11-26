@@ -19,9 +19,8 @@ import { SYSTEM_EVENT_TYPES, type PackEventContracts } from '@apackdev/sdk/frame
 
 import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import type { AnyStateMachine } from 'xstate';
 import type { RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
-import type { PackRegistration, PackLifecycleHooks, PackEARS, PackMigration, PackFeature, PackFeatureSystem } from '@apackdev/sdk/framework';
+import type { PackRegistration, PackLifecycleHooks, PackEARS, PackMigration, PackFeature, PackFeatureSystem, PackSystemLogic } from '@apackdev/sdk/framework';
 import { _packDeclarationProblem, type ContentRuntime } from '@apackdev/sdk/framework';
 import type { MigrationLine, PackManifest } from '@apackdev/pack-format';
 import type { PackRegistryView } from '@apackdev/sdk/runtime';
@@ -245,7 +244,7 @@ export interface PackRegistry extends PackRegistryView {
    */
   claimAllPackOperations(): PackOperationClaim | null;
   /** Host systems and every registered pack's that the bus runs, by id: all but the early ones */
-  getRegisteredSystems(): Map<string, AnyStateMachine>;
+  getRegisteredSystems(): Map<string, PackSystemLogic>;
   /** The refs of a registered pack's systems, `<packId>/<featureId>` */
   getRegisteredPackSystemIds(packId: string): string[];
   /**
@@ -897,7 +896,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     },
 
     getRegisteredSystems() {
-      const systems = new Map<string, AnyStateMachine>();
+      const systems = new Map<string, PackSystemLogic>();
       for (const pack of admitted.values()) {
         for (const [ref, system] of pack.systems) systems.set(ref, system.machine);
       }

@@ -451,3 +451,12 @@ export type StateMatchesContract<T, C extends SystemContract> =
         : 'this system\'s @apackdev/state asks do not match the contract apack.json names for its feature'
       : 'this system\'s @apackdev/state events do not match the contract apack.json names for its feature'
     : 'this system\'s default export is not a @apackdev/state State';
+
+/**
+ * Whether a feature's backend system — either a `@apackdev/state` `State` or an XState `SystemEntry` — matches the
+ * contract `apack.json` names for its feature: `true`, or a sentence saying how they differ.
+ */
+export type SystemMatchesContract<Entry, C extends SystemContract> =
+  [Entry] extends [AnyState]
+    ? StateMatchesContract<Entry, C>
+    : MachineMatchesContract<Entry, C>;

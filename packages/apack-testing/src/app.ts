@@ -1,8 +1,8 @@
 // A test app: the pack's registered systems under the app's bus core, with a client the test drives.
-import { createActor, type Actor, type AnyActorRef, type AnyStateMachine } from 'xstate';
+import { createActor, type Actor, type AnyActorRef } from 'xstate';
 import { createBusMachine, HOST } from '@apackdev/host/bus';
 import { resolveName, resolveRegistered } from '@apackdev/sdk/ids';
-import type { PackLifecycleHooks, PackRegistration, ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
+import type { PackLifecycleHooks, PackRegistration, PackSystemLogic, ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 import { createViewHost } from '@apackdev/host/views';
 import { boundEars } from '@apackdev/sdk/ears';
 import { _askOnConnection, newCall, untypedAsk, type Message, type UntypedAskOutcome } from '@apackdev/sdk/events';
@@ -187,7 +187,7 @@ export interface TestApp {
 /** What test apps read of the test file's registered packs (host's PackRegistry, which the published declarations can't name) */
 interface AppPacks {
   getLifecycleHooks(): PackLifecycleHooks[];
-  getRegisteredSystems(): Map<string, AnyStateMachine>;
+  getRegisteredSystems(): Map<string, PackSystemLogic>;
   getRegisteredPackSystemIds(packId: string): string[];
   /** What each surface receives, so a test app drops a send no surface declares, as the app does */
   getSurfaceEventValidationMap(): Map<string, Set<string>>;
@@ -283,7 +283,7 @@ function shutDownPacks(): void {
 }
 
 /** The registered system a name stands for, as the pack under test's `tell` resolves it */
-const resolveSystemId = (name: string, registered: ReadonlyMap<string, AnyStateMachine>): string =>
+const resolveSystemId = (name: string, registered: ReadonlyMap<string, PackSystemLogic>): string =>
   resolveRegistered('system', name, { packId, registered: [...registered.keys()] });
 
 /**
@@ -365,7 +365,9 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   const brainRunning = () => {
     const brainId = hasDesignation('brain') ? getDesignated('brain') : undefined;
     const brain = brainId === undefined ? undefined : bus.system.get(brainId);
-    return (brain?.getSnapshot() as { matches(state: string): boolean } | undefined)?.matches('running') === true;
+    const snap = brain?.getSnapshot() as { matches?: (state: string) => boolean; value?: unknown } | undefined;
+    if (typeof snap?.matches === 'function') return snap.matches('running') === true;
+    return snap?.value === 'running' || (typeof snap?.value === 'string' && snap.value.startsWith('running.'));
   };
   /** The running flows' run nodes and labels: the root flow's, and each subflow's not yet finished */
   /** The brain's session root: the newest root run still active */

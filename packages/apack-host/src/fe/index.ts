@@ -6,6 +6,7 @@
 export type { Surface } from '@apackdev/sdk/fe';
 export { createFePackRegistry, type FePackRegistry, type FrontendSettingsBinding, type PreparedFrontend } from './pack-store.ts';
 export { HOST } from '../refs.ts';
+export { hostState, type HostNet } from '../state.ts';
 export { hostDeclaration, hostSurfaceDeclarations } from '../features/declaration.ts';
 export type { PackFERegistration } from '@apackdev/sdk/fe';
 export { describeFailure, type ShellClient, type ShellConnection, type ShellFailure } from './client.ts';
@@ -18,6 +19,14 @@ export { createShellMachine, type ShellMachine } from '../features/application/f
 export { withHostLast } from '../features/application/fe/surfaces.ts';
 export { surfaceNavigationItems, type SurfaceNavigationItem } from './surface-navigation.ts';
 export { notifySurfaceActor, sendToSurfaceActor } from './surface-delivery.ts';
+export {
+  createWindowStateBridge,
+  stateSystemOf,
+  type StateSurfaceMeta,
+  type StateSurfaceSnapshot,
+  type WindowStateBridge,
+  type WindowStateBridgeOptions,
+} from './state-bridge.ts';
 export { computeCrumbs, type BreadcrumbItem } from '../features/application/fe/trail.ts';
 export {
   computeTrail,

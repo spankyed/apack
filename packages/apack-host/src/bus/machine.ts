@@ -3,13 +3,14 @@ import { carrySettingsRequest } from '../features/settings/be/access.ts';
 // The backend bus: spawns the registered systems, routes client events to them and their events to
 // clients. The app composes it with its event sources and client sink (createAppBus, app-bus.ts); the pack
 // test harness runs the same machine with a recording sink.
-import { enqueueActions, fromCallback, setup, spawnChild, type AnyActorRef, type AnyActorLogic, type AnyStateMachine } from 'xstate';
+import { enqueueActions, fromCallback, setup, spawnChild, type AnyActorRef, type AnyActorLogic } from 'xstate';
 import { reportError } from '@apackdev/sdk/logger';
 import { HOST } from '../refs.ts';
 import { answerUnavailable, deliverAs } from './delivery.ts';
-import { SYSTEM_EVENT_TYPES } from '@apackdev/sdk/framework';
-import { SURFACE_EVENT_TYPES, _callOn, _cancelAsk, _currentDelivery, _isPendingAsk, _settleAsk, senderSuffix, type Message } from '@apackdev/sdk/events';
+import { isState, SYSTEM_EVENT_TYPES, type PackSystemLogic } from '@apackdev/sdk/framework';
+import { SURFACE_EVENT_TYPES, _callOn, _cancelAsk, _currentDelivery, _isPendingAsk, _settleAsk, newCall, senderSuffix, type Message } from '@apackdev/sdk/events';
 import type { PackRegistry } from '../packs/registry.ts';
+import { createStateSystemActor, dispatchStateAsk, stateSystemBridgeOf } from './state-bridge.ts';
 
 
 /** A message in for a system (INCOMING) or out for a surface (OUTGOING) */
@@ -54,9 +55,9 @@ export type BusSourceEvent = Extract<BackendEvents, { type: 'INCOMING' | 'OUTGOI
 
 export interface BusOptions {
   /** The registered packs whose systems the bus runs */
-  registry: Pick<PackRegistry, 'getRegisteredSystems' | 'getRegisteredPackSystemIds' | 'getSurfaceEventValidationMap' | 'getEventValidationMap' | 'askKinds'>;
+  registry: Pick<PackRegistry, 'getRegisteredSystems' | 'getRegisteredPackSystemIds' | 'getSurfaceEventValidationMap' | 'getEventValidationMap' | 'askKinds'> & Partial<Pick<PackRegistry, 'designation'>>;
   /** The systems the bus runs, by id; defaults to every system in `registry` */
-  systems?(): ReadonlyMap<string, AnyStateMachine>;
+  systems?(): ReadonlyMap<string, PackSystemLogic>;
   /** Delivers a message a system sent to a frontend surface */
   onOutgoing(message: Message): void;
   /**
@@ -118,13 +119,32 @@ const listening = (bus: { getSnapshot(): { matches(state: string): boolean } }):
  */
 function spawnSystems(
   enqueue: unknown,
-  machines: ReadonlyMap<string, AnyStateMachine>,
+  machines: ReadonlyMap<string, PackSystemLogic>,
   systemIds: readonly string[],
+  busSelf: AnyActorRef,
+  registry: BusOptions['registry'],
 ): string[] {
   // XState types `id` from the machine's declared children, and the bus's are whatever is registered
   const spawner = enqueue as { spawnChild(machine: AnyActorLogic, options: { id: string; systemId: string }): void };
   const spawned = systemIds.filter((id) => machines.has(id));
-  for (const id of spawned) spawner.spawnChild(withActorContext(machines.get(id)!), { id, systemId: id });
+  for (const id of spawned) {
+    const entry = machines.get(id)!;
+    const logic: AnyActorLogic = isState(entry)
+      ? createStateSystemActor(id, entry, {
+          onBroadcast: (message) => {
+            if (busSelf.getSnapshot().status === 'active') busSelf.send({ type: 'OUTGOING', message });
+          },
+          onTellPeer: (peer, event) => {
+            if (!peer.startsWith('role:') || busSelf.getSnapshot().status !== 'active') return;
+            const role = peer.slice('role:'.length);
+            const target = registry.designation?.(role);
+            if (!target) return;
+            busSelf.send({ type: 'INCOMING', message: { to: target, event, sender: id, call: newCall() } });
+          },
+        })
+      : entry;
+    spawner.spawnChild(withActorContext(logic), { id, systemId: id });
+  }
   return spawned;
 }
 
@@ -328,6 +348,11 @@ export function createBusMachine(options: BusOptions) {
         // before a guard runs, so the event is the only channel to one.
         if (actor) {
           reportUndeclared(to, incoming.type, event.message);
+          const stateBridge = stateSystemBridgeOf(actor);
+          if (stateBridge && kinds !== undefined) {
+            dispatchStateAsk(stateBridge, event.message, kinds);
+            return;
+          }
           const delivered = { ...incoming, ..._callOn(event.message) };
           carrySettingsRequest(incoming, delivered);
           const ask = kinds === undefined ? undefined : { kinds, taken: false };
@@ -386,17 +411,17 @@ export function createBusMachine(options: BusOptions) {
         sendToRunning(system, event.systemIds, { type: 'CLIENT_CONNECTED' });
         askToPublish(system, event.systemIds);
       },
-      spawnActors: enqueueActions(({ enqueue }) => {
+      spawnActors: enqueueActions(({ enqueue, self }) => {
         const machines = systems();
-        spawnSystems(enqueue, machines, [...machines.keys()]);
+        spawnSystems(enqueue, machines, [...machines.keys()], self, registry);
       }),
-      reloadPack: enqueueActions(({ enqueue, event, context, system }) => {
+      reloadPack: enqueueActions(({ enqueue, event, context, system, self }) => {
         if (event.type !== 'RELOAD_PACK') return;
         enqueue.assign({ awaitingFrontends: awaiting(context.awaitingFrontends, event.packId) });
         // Stopping releases each system's id and its children's, so the fresh copies claim them here
         stopSystems(enqueue, system, event.systemIds);
         // Startup requests wait for acceptance of the fresh frontend; pack facts still reach its systems.
-        const spawned = spawnSystems(enqueue, systems(), event.systemIds);
+        const spawned = spawnSystems(enqueue, systems(), event.systemIds, self, registry);
         if (spawned.length > 0 && !clientLoadedPacks().has(event.packId)) enqueue.raise({ type: 'SYSTEMS_SPAWNED', systemIds: spawned });
       }),
       teardownPack: enqueueActions(({ enqueue, event, context, system, self }) => {
@@ -409,10 +434,10 @@ export function createBusMachine(options: BusOptions) {
         // Drain already queued sends before revoking the inboxes they were sent to.
         stopSystems(enqueue, system, event.systemIds, afterStop && (() => self.send({ type: 'SYSTEMS_STOPPED', afterStop })));
       }),
-      activatePack: enqueueActions(({ enqueue, event, context }) => {
+      activatePack: enqueueActions(({ enqueue, event, context, self }) => {
         if (event.type !== 'ACTIVATE_PACK') return;
         enqueue.assign({ awaitingFrontends: awaiting(context.awaitingFrontends, event.packId) });
-        const spawned = spawnSystems(enqueue, systems(), event.systemIds);
+        const spawned = spawnSystems(enqueue, systems(), event.systemIds, self, registry);
         // A pack whose frontend a client loads next gets CLIENT_CONNECTED when the client asks for it
         // (PACK_CLIENT_CONNECTED), once its surface actors can receive the data; any other sends it now
         if (spawned.length > 0 && !clientLoadedPacks().has(event.packId)) {

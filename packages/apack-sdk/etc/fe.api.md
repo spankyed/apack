@@ -8,6 +8,7 @@ import { AnyActorLogic } from 'xstate';
 import type { AnyActorRef } from 'xstate';
 import { AnyEventObject } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
+import type { AnyState } from '@apackdev/state';
 import type { AnyStateMachine } from 'xstate';
 import { CallbackActorLogic } from 'xstate';
 import type { Component } from 'vue';
@@ -78,6 +79,15 @@ function breadcrumb(target: string, label: string, isDefault?: boolean): {
 export { breadcrumb }
 export default breadcrumb;
 
+// @public
+export interface BreadcrumbItem {
+    info?: unknown;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    target: string;
+}
+
 // @public (undocumented)
 export function breadcrumbList<C>(getCrumbs: (ctx: C) => Array<{
     label: string;
@@ -117,6 +127,16 @@ export function canGoForward<T>(history: NavHistory<T>): boolean;
 
 // @public (undocumented)
 export function clearTabGroups(storage: SurfaceStorage, name: string): void;
+
+// @public
+export interface ComputedTrail {
+    // (undocumented)
+    readonly breadcrumbs: readonly BreadcrumbItem[];
+    // (undocumented)
+    readonly contextMenu: readonly ContextMenuItem[];
+    // (undocumented)
+    readonly target: string | undefined;
+}
 
 // @public (undocumented)
 export function contextMenu(items: ContextMenuItem[]): {
@@ -561,6 +581,9 @@ export type HotkeysMap = {
 // @public (undocumented)
 export const isAnyMenuOpen: ComputedRef<boolean>;
 
+// @public
+export function isState(value: unknown): value is AnyState;
+
 // @public (undocumented)
 export interface KeyboardShortcut {
     // (undocumented)
@@ -881,6 +904,7 @@ export interface Surface {
     canvas?: Component | RouteComponents;
     // (undocumented)
     chat?: Component;
+    chrome?: SurfaceChrome<any>;
     fallbackPanel?: {
         label: string;
         isShown: (state: {
@@ -907,7 +931,19 @@ export interface Surface {
     // (undocumented)
     panel?: Component;
     // (undocumented)
-    state: AnyStateMachine;
+    state: AnyStateMachine | AnyState;
+}
+
+// @public
+export interface SurfaceChrome<V extends SurfaceStateValue = SurfaceStateValue> {
+    // (undocumented)
+    readonly breadcrumb?: BreadcrumbSpec<V>;
+    // (undocumented)
+    readonly default?: BreadcrumbItem;
+    // (undocumented)
+    readonly menu?: MenuSpec<V>;
+    // (undocumented)
+    readonly states?: Readonly<Record<string, SurfaceStateChrome<V>>>;
 }
 
 // @public
@@ -969,9 +1005,25 @@ required: true;
 }>> & Readonly<{}>, {}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public
+export interface SurfaceStateChrome<V extends SurfaceStateValue = SurfaceStateValue> {
+    // (undocumented)
+    readonly breadcrumb?: BreadcrumbSpec<V>;
+    // (undocumented)
+    readonly menu?: MenuSpec<V>;
+}
+
+// @public
 export type SurfaceStateOf<C> = C extends {
     state: infer State;
 } ? State : never;
+
+// @public
+export interface SurfaceStateValue {
+    // (undocumented)
+    readonly at?: string;
+    // (undocumented)
+    readonly data: unknown;
+}
 
 // @public
 export interface SurfaceStorage {

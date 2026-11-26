@@ -1,6 +1,10 @@
+import type { AnyState } from '@apackdev/state';
 import type { AnyStateMachine } from 'xstate';
 import type { PackFeatureSystem } from './pack-registration.ts';
 import { SYSTEM_EVENT_TYPES } from './define-system.ts';
+import { isState } from '../state-guard.ts';
+
+export { isState };
 
 export interface SystemEntry {
   /**
@@ -13,12 +17,13 @@ export interface SystemEntry {
 }
 
 /**
- * A feature's system as its pack registers it: the entry the feature's `system.ts` default-exports, accepting its
- * declared incoming events and the shared SDK lifecycle protocol.
+ * A feature's system as its pack registers it: the entry the feature's `system.ts` default-exports (an XState
+ * `SystemEntry` or a `@apackdev/state` `State`), accepting its declared incoming events and the shared SDK lifecycle
+ * protocol.
  */
-export function packSystem(entry: SystemEntry, options: { incoming: readonly string[] }): PackFeatureSystem {
+export function packSystem(entry: SystemEntry | AnyState, options: { incoming: readonly string[] }): PackFeatureSystem {
   return {
-    machine: entry.machine,
+    machine: isState(entry) ? entry : entry.machine,
     receives: [...new Set([...options.incoming, ...SYSTEM_EVENT_TYPES])],
   };
 }

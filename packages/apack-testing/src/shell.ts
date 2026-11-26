@@ -2,8 +2,9 @@ import { boundEars } from '@apackdev/sdk/ears';
 // The app shell in a pack's unit tests: the host's own shell machine, run over the in-memory bus the harness's test
 // apps use, with the test pack's surfaces registered, so a pack's frontend (navigation, the shell's state, sends to
 // its systems) is tested as the app runs it rather than against a stand-in.
-import { createActor, type AnyActorRef, type AnyStateMachine } from 'xstate';
-import { createFePackRegistry, createShellMachine, describeFailure, HOST, type ShellClient, type ShellConnection } from '@apackdev/host/fe';
+import { createActor, type AnyActorRef } from 'xstate';
+import type { System } from '@apackdev/state';
+import { createFePackRegistry, createShellMachine, describeFailure, HOST, stateSystemOf, type ShellClient, type ShellConnection } from '@apackdev/host/fe';
 import type { Message } from '@apackdev/sdk/events';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import type { HostShell, SurfaceDefinition, PackFERegistration } from '@apackdev/sdk/fe';
@@ -11,8 +12,8 @@ import { nativeFrontendDeclarationFixture, startFeTestRuntime, testRootEvents } 
 import { _isFeHostBound, type FePackRegistryView, type PackExtensionsView } from '@apackdev/sdk/runtime';
 import { testViews } from './app.ts';
 
-/** One of the pack's surfaces, as a test registers it: its state machine, and whatever else of its definition it needs */
-export type TestSurface = { state: AnyStateMachine } & Partial<Omit<SurfaceDefinition, 'state'>>;
+/** One of the pack's surfaces, as a test registers it: its state machine or `@apackdev/state` `State`, and whatever else of its definition it needs */
+export type TestSurface = { state: SurfaceDefinition['state'] } & Partial<Omit<SurfaceDefinition, 'state'>>;
 
 export interface StartShellOptions {
   /**
@@ -32,6 +33,8 @@ export interface TestShell {
    * packages, and the shell's machine is the host's
    */
   actor: HostShell;
+  /** The per-window `@apackdev/state` `System` owned by this shell, for `vueBinding` `provide` and direct inspection */
+  readonly stateSystem: System;
   /** The ref of the surface open */
   opened(): string;
   /** A surface's running actor, named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`) */
@@ -176,6 +179,7 @@ export async function startShell(packId: string, options: StartShellOptions, bac
   const ownedStops = stops.move();
   const shell: TestShell = {
     actor: started,
+    stateSystem: stateSystemOf(started),
     opened: () => started.getSnapshot().context.activeSurface.id,
     surface: (name) => {
       const ref = resolveName(name, packId);

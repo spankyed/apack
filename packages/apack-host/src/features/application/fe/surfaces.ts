@@ -1,11 +1,12 @@
 import { withActorContext } from '../../../diagnostics/actors.ts';
-import type { AnyActorLogic } from 'xstate';
+import type { AnyState } from '@apackdev/state';
+import type { AnyActorLogic, AnyActorRef } from 'xstate';
 // The shell's surfaces: their order, which show, spawning each one's actor, and moving between them.
-import type { Surface } from '@apackdev/sdk/fe';
+import { isState, type Surface } from '@apackdev/sdk/fe';
 import { HOST_PACK_ID, splitRef } from '@apackdev/sdk/ids';
 import type { ShellContext } from './types.ts';
-import type { AnyActorRef } from 'xstate';
 import { notifySurfaceActor } from '../../../fe/surface-delivery.ts';
+import type { WindowStateBridge } from '../../../fe/state-bridge.ts';
 
 /** `surfaces` with the app's own (the host's: the Packs tab) after every pack's, each group in its order */
 export function withHostLast(surfaces: Surface[]): Surface[] {
@@ -28,12 +29,26 @@ export function withHostLast(surfaces: Surface[]): Surface[] {
  * returned, and the surface's startup asks would go out with no sender for the system to answer. `start()` on a
  * running actor returns at once, so the deferred start finds it running and does nothing.
  */
-export function spawnSurfaceActor(enqueue: unknown, surface: Surface, ownsAppLayout: boolean): void {
+export function spawnSurfaceActor(
+  enqueue: unknown,
+  surface: Surface,
+  ownsAppLayout: boolean,
+  stateBridge?: WindowStateBridge,
+): void {
   const spawner = enqueue as {
     spawnChild(state: AnyActorLogic, options: { id: string; systemId: string }): void;
     (action: (args: { system: { get(id: string): AnyActorRef | undefined } }) => void): void;
   };
-  spawner.spawnChild(withActorContext(surface.state), { id: surface.id, systemId: surface.id });
+  let logic: AnyActorLogic;
+  if (isState(surface.state)) {
+    if (!stateBridge) {
+      throw new Error(`Surface "${surface.id}" uses @apackdev/state, but no WindowStateBridge was provided to spawnSurfaceActor`);
+    }
+    logic = stateBridge.createSurfaceActor(surface as Surface & { state: AnyState }, ownsAppLayout);
+  } else {
+    logic = surface.state;
+  }
+  spawner.spawnChild(withActorContext(logic), { id: surface.id, systemId: surface.id });
   spawner(({ system }) => {
     const actor = system.get(surface.id);
     if (!actor) return;

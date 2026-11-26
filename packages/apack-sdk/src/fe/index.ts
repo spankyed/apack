@@ -10,6 +10,8 @@ export type { _BackendPortTransport, _HostBridge } from './electron-api.ts';
 // manifest could describe, so nothing could derive that they compile this file
 export type { SpeechEvent } from './speech-event.ts';
 export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceLifecycleEvent, SurfaceStateOf, RouteComponents } from './surface.ts'
+export type { BreadcrumbItem, ComputedTrail, SurfaceChrome, SurfaceStateChrome, SurfaceStateValue } from './chrome.ts'
+export { isState } from '../state-guard.ts'
 export type { PackFEFeature, PackFERegistration } from './pack-fe-registration.ts'
 export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
 export { useSurfaceDraft } from './surface-draft.ts'

@@ -12,7 +12,7 @@ import './boot/monaco';
 import 'highlight.js/styles/github-dark.css'
 import { hostFrontend } from '@/views/packs/surface';
 import { createAppShell } from '@/runtime/shell';
-import { HOST, installFromProtocol, runWindowStorageMigrations } from '@apackdev/host/fe';
+import { HOST, installFromProtocol, runWindowStorageMigrations, stateSystemOf } from '@apackdev/host/fe';
 import 'virtual:host-shared-modules';
 import { bindRendererHost, onRendererDispose } from '@/runtime';
 import { fePacks } from '@/runtime/packs';
@@ -101,6 +101,7 @@ window.electronAPI?.protocolAction?.onAction(({ action, params }) => {
 });
 
 const app = createApp(App);
+app.provide(Symbol.for('@apackdev/state/vue/system'), stateSystemOf(applicationState));
 
 app.config.errorHandler = (err, _instance, info) => {
   handleVueError(err, info);

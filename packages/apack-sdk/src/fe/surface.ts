@@ -1,6 +1,8 @@
+import type { AnyState } from '@apackdev/state';
 import type { FeatureRef } from '../ids/refs.ts';
 import type { Component } from 'vue';
 import type { AnyStateMachine } from 'xstate';
+import type { SurfaceChrome } from './chrome.ts';
 import type { SurfaceHotkeyDefinition } from './hotkeys.ts';
 
 type RouteName = string;
@@ -73,7 +75,9 @@ export interface Surface {
   id: FeatureRef;
   label: string;
   isPinned?: boolean;
-  state: AnyStateMachine;
+  state: AnyStateMachine | AnyState;
+  /** Declarative breadcrumbs and context menu for `@apackdev/state` surfaces (replaces XState `meta`). */
+  chrome?: SurfaceChrome<any>;
   icon?: Component;
   canvas?: Component | RouteComponents;
   panel?: Component;
