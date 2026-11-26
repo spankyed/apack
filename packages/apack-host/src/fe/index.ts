@@ -3,6 +3,11 @@
 // host feature's frontend. The features' halves are named here rather than each keeping a `public.ts` of its own:
 // this is the package's export surface, which is why naming a feature's frontend from here is not the crossing
 // `check:specifiers` refuses. A feature's modules are otherwise its own, exactly as a pack's are.
+import { vueBinding } from '@apackdev/state/vue';
+import { HOST_PACK_ID, resolveName } from '@apackdev/sdk/ids';
+import type packsMachineRef from '../features/packs/fe/machine.ts';
+import type { createSettingsMachine as createSettingsMachineRef } from '../features/settings/fe/machine.ts';
+
 export type { Surface } from '@apackdev/sdk/fe';
 export { createFePackRegistry, type FePackRegistry, type FrontendSettingsBinding, type PreparedFrontend } from './pack-store.ts';
 export { HOST } from '../refs.ts';
@@ -40,12 +45,21 @@ export type { ShellNotify, ShellOptions, ShellStorage } from '../features/applic
 
 // The Packs surface, the pack-frontend loader the shell is given, and the install a deep link asks for
 // (`features/packs/fe/`)
-export { default as packsMachine, type PacksContext, type PacksState, type InstalledPackSummary, type AppPackSourceSummary } from '../features/packs/fe/machine.ts';
+export { default as packsMachine, packsChrome, type PacksContext, type PacksState, type InstalledPackSummary, type AppPackSourceSummary } from '../features/packs/fe/machine.ts';
 export { createPackFrontends, loadPackFEEntry, type DevPackFrontends, type PackFrontendIO, type PackFrontendStyles, type PackFrontendStyle } from '../features/packs/fe/frontends.ts';
 export { installFromProtocol, packInstallRequest, requestPackInstall, type PackInstallRequest } from '../features/packs/fe/install-url.ts';
 
 // The Settings view's machine, as the renderer pairs it with the view's components (`features/settings/fe/`)
-export { createSettingsMachine, type SettingsContext, type SettingsEvents, type SettingsIO, type SettingsState } from '../features/settings/fe/machine.ts';
+export { createSettingsMachine, settingsChrome, type SettingsContext, type SettingsEvents, type SettingsIO, type SettingsState } from '../features/settings/fe/machine.ts';
+
+export type HostSurfaces = {
+  packs: typeof packsMachineRef;
+  settings: ReturnType<typeof createSettingsMachineRef>;
+};
+
+export const { provide: provideHostState, useState: useHostState } = /*#__PURE__*/ vueBinding<HostSurfaces>(
+  (name) => resolveName(name, HOST_PACK_ID),
+);
 
 export { createWindowSettingsRuntime, type WindowSettingsIO } from './settings-runtime.ts';
 export { settingsProblems, isEqual } from '../features/settings/document.ts';

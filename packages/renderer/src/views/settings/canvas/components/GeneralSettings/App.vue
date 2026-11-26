@@ -178,14 +178,12 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed, ref } from 'vue'
 import { HardDrive, PackageOpen, RotateCcw, Trash2 } from 'lucide-vue-next'
 import ImportPackContentPicker from './ImportPackContentPicker.vue'
 import Hotkeys from './Hotkeys.vue'
 import { errorMessage } from '@apackdev/sdk/utils/pure';
-import type { SettingsEvents, SettingsState } from '@apackdev/host/fe'
+import { useHostState, type SettingsEvents } from '@apackdev/host/fe'
 import type { ApplicationHotkeys } from '@apackdev/sdk/types'
 import type { SettingUpdate } from '@apackdev/sdk/fe'
 
@@ -211,9 +209,7 @@ function onHotkeyUpdate(event: SettingUpdate) {
   })
 }
 
-const actor: SettingsState = useSurface()
-
-const { state: settingsView, send } = useState(actor)
+const { state: settingsView, send } = useHostState('settings')
 
 const status = computed(() => settingsView.value.data.packContentImport?.status ?? 'idle')
 const preview = computed(() => settingsView.value.data.packContentImport?.preview ?? null)

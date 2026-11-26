@@ -1,5 +1,7 @@
 import { afterAll, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { system, type AnyState, type State } from '@apackdev/state';
+import { defectGuard } from '@apackdev/state/testing';
 import { startFeTestRuntime } from '@apackdev/sdk/testing';
 import type { OpenEntity } from '@apackdev/sdk/events';
 import type { NoteSummary } from '#generated/types.ts';
@@ -26,9 +28,31 @@ interface DestinationActor {
   getSnapshot(): { value: unknown; context: unknown };
   stop(): void;
 }
+function startStateSurface(ref: string, def: AnyState): DestinationActor {
+  const guard = defectGuard();
+  const sys = system({ side: 'window', onDefect: guard.onDefect });
+  sys.attach({
+    tell: (to, event) => { tell(to, event); },
+    ask: () => () => {},
+    follow: () => ({ stop: () => {} }),
+  });
+  const handle = sys.start(ref, def as State<any, any, any, never>);
+  return {
+    send: (event) => sys.send(handle, event as never),
+    getSnapshot: () => {
+      const snap = sys.read(handle) as { at?: string; data: unknown };
+      return { value: snap.at, context: snap.data };
+    },
+    stop: () => {
+      guard.assertNone();
+      sys.stop();
+      guard[Symbol.dispose]();
+    },
+  };
+}
 const destinations: Array<[string, () => DestinationActor]> = [
-  ['actions', () => createActor(actions).start()],
-  ['prompts', () => createActor(prompts).start()],
+  ['actions', () => startStateSurface('default-setup/actions', actions)],
+  ['prompts', () => startStateSurface('default-setup/prompts', prompts)],
   ['notes', () => createActor(notes).start()],
   ['threads', () => createActor(threads).start()],
   ['flows', () => createActor(flows).start()],

@@ -1495,6 +1495,8 @@ export interface SurfaceDeclaration {
     // (undocumented)
     chat?: ComponentTarget;
     // (undocumented)
+    chrome?: string;
+    // (undocumented)
     contract?: string;
     // (undocumented)
     default?: boolean;

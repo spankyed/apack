@@ -4,9 +4,9 @@ import { createApp, defineComponent, h, nextTick, onUnmounted, ref, shallowRef, 
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 
 const { update, reset, send } = vi.hoisted(() => ({ update: vi.fn(), reset: vi.fn(), send: vi.fn() }));
-vi.mock('@apackdev/sdk/fe', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/sdk/fe')>(),
-  useSurface: () => ({ send }),
+vi.mock('@apackdev/host/fe', async importOriginal => ({
+  ...await importOriginal<typeof import('@apackdev/host/fe')>(),
+  useHostState: () => ({ send }),
 }));
 vi.mock('@/views/settings/save', () => ({ useSettingsSaveStatus: () => ({
   saveStatus: ref('idle'), problems: ref([]), updateSettings: update, resetSettings: reset,

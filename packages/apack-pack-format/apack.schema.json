@@ -623,6 +623,11 @@
                 "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
                 "description": "Machine module, by default export or path#exportName."
               },
+              "chrome": {
+                "type": "string",
+                "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
+                "description": "Declarative surface chrome (breadcrumbs and context menu) module, by default export or path#exportName."
+              },
               "icon": {
                 "anyOf": [
                   {

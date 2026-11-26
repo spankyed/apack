@@ -69,14 +69,12 @@ import Secrets from '../components/GeneralSettings/Secrets.vue'
 import App from '../components/GeneralSettings/App.vue'
 import Projects from '../components/GeneralSettings/Projects.vue'
 import SettingsJsonEditor from '../components/GeneralSettings/SettingsJsonEditor.vue'
-import { useAppSettings, useState, useSurface } from '@apackdev/sdk/fe'
+import { useAppSettings } from '@apackdev/sdk/fe'
 import { useSettingsSaveStatus } from '@/views/settings/save'
-import type { SettingsState } from '@apackdev/host/fe'
+import { useHostState } from '@apackdev/host/fe'
 import type { SettingUpdate } from '@apackdev/sdk/fe'
 
-const actor: SettingsState = useSurface()
-
-const { state: settings, send } = useState(actor)
+const { state: settings, send } = useHostState('settings')
 const appSettings = useAppSettings()
 
 // Use the settings save status composable

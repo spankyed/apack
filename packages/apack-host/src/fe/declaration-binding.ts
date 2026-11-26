@@ -24,7 +24,8 @@ function surfaceBindingProblem(declaration: SurfaceDeclaration, surface: unknown
   if (!isPlainObject(surface) || typeof surface.label !== 'string' || !surface.label.trim()
     || !isSurfaceState(surface.state)) return problem();
   for (const key of Object.keys(surface)) if (!hasOwn(SURFACE_KEYS, key)) return problem(key);
-  if (surface.chrome !== undefined && !isPlainObject(surface.chrome)) return problem('chrome');
+  if ((surface.chrome !== undefined) !== (declaration.chrome !== undefined)
+    || (declaration.chrome !== undefined && !isPlainObject(surface.chrome))) return problem('chrome');
   for (const field of ['label', 'isPinned'] as const) if (surface[field] !== declaration[field]) return problem(field);
   for (const field of ['icon', 'panel', 'chat'] as const) {
     if ((surface[field] !== undefined) !== (declaration[field] !== undefined)

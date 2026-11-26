@@ -111,7 +111,6 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
 import { computed } from 'vue';
 import type { Category } from '#generated/types.ts';
 import { ExternalLink } from 'lucide-vue-next';
@@ -121,8 +120,7 @@ import ActionParametersEditor from './ActionParametersEditor.vue';
 import ActionFunctionEditor from './ActionFunctionEditor.vue';
 import JsonSchemaEditor from '@apackdev/ui/components/JsonSchemaEditor';
 import { openSurface } from '#generated/fe.ts'
-import { useCollapsibleState } from '@apackdev/ui/composables/useCollapsibleState';
-import type { ActionsState } from '#features/actions/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 import type { ActionEntity } from '@apackdev/sdk';
 import type { ActionParameter } from '@apackdev/sdk';
 
@@ -150,13 +148,20 @@ const emit = defineEmits<{
   back: [];
 }>();
 
-// Get the actions state machine actor
-const actor: ActionsState = useSurface();
+const { state: actions, send } = useState('actions');
 
-// Use the composable for managing collapsible section states
-const parametersExpanded = useCollapsibleState(actor, ['formData', 'parametersExpanded'], 'TOGGLE_PARAMETERS_SECTION');
-const outputExpanded = useCollapsibleState(actor, ['formData', 'outputExpanded'], 'TOGGLE_OUTPUT_SECTION');
-const metadataExpanded = useCollapsibleState(actor, ['formData', 'metadataExpanded'], 'TOGGLE_METADATA_SECTION');
+const parametersExpanded = computed({
+  get: () => Boolean(actions.value.data.formData.parametersExpanded),
+  set: (show: boolean) => send({ type: 'TOGGLE_PARAMETERS_SECTION', show }),
+});
+const outputExpanded = computed({
+  get: () => Boolean(actions.value.data.formData.outputExpanded),
+  set: (show: boolean) => send({ type: 'TOGGLE_OUTPUT_SECTION', show }),
+});
+const metadataExpanded = computed({
+  get: () => Boolean(actions.value.data.formData.metadataExpanded),
+  set: (show: boolean) => send({ type: 'TOGGLE_METADATA_SECTION', show }),
+});
 
 const isValid = computed(() => {
   return props.formData.label.trim() !== '' && props.formData.actionFn.trim() !== '';

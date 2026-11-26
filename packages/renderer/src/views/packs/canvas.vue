@@ -196,15 +196,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useState, useSurface } from '@apackdev/sdk/fe';
 import { Package as PackageIcon, X } from 'lucide-vue-next';
-import type { PacksState } from '@apackdev/host/fe';
+import { useHostState } from '@apackdev/host/fe';
 import PackDetail from './PackDetail.vue';
 import ContentOfferNotice from './ContentOfferNotice.vue';
 
-const actor = useSurface<PacksState>();
-
-const { state: packs, send } = useState(actor);
+const { state: packs, send } = useHostState('packs');
 const missingDefaults = computed(() => packs.value.data.appPackSources.filter(source => !packs.value.data.packs.some(pack => pack.id === source.id)));
 const selectedPack = computed(() => {
   if (!packs.value.data.selectedPackId) return null;

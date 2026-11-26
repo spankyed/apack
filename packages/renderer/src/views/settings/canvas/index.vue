@@ -31,19 +31,17 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useSettingsStatus, useState, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsStatus } from '@apackdev/sdk/fe'
 
 import GeneralTab from './tabs/GeneralTab.vue'
 import FeaturesTab from './tabs/FeaturesTab.vue'
 import PacksTab from './tabs/PacksTab.vue'
 import HelpTab from './tabs/HelpTab.vue'
-import type { SettingsState } from '@apackdev/host/fe'
+import { useHostState } from '@apackdev/host/fe'
 
 const settingsStatus = useSettingsStatus()
 const settingsReady = computed(() => settingsStatus.value === 'ready' || settingsStatus.value === 'replacing')
-const actor: SettingsState = useSurface()
-
-const { state: settings, send } = useState(actor)
+const { state: settings, send } = useHostState('settings')
 
 const tabs = [
   { id: 'general', label: 'General' },

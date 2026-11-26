@@ -69,6 +69,11 @@ export interface HostNet {
     'role:code': {
       events: { type: 'TEST_CLI_PROVIDER'; provider: string };
     };
+    shell: {
+      events:
+        | { type: 'LOAD_PACK_FRONTENDS' }
+        | { type: 'PACK_SURFACES_UNLOADED'; packId: string };
+    };
   };
 }
 
