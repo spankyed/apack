@@ -7,6 +7,7 @@ import type { ReferenceTypeConfig, ReferenceBindings, ReferenceBinding } from '.
 import type { Message } from '../events/index.ts';
 import type { ViewRequest, ViewUpdate } from '../framework/views.ts';
 import type { SecretsClient } from '../fe/secrets-client.ts';
+import type { FeClock } from '../fe/clock.ts';
 import type { TerminalViewStream } from '../fe/terminal-views.ts';
 import type { SettingsPort } from '../fe/settings.ts';
 import type { Component } from 'vue';
@@ -75,6 +76,15 @@ export interface FeHostRuntime {
    * connection that is already over.
    */
   terminalViews?(target?: string): TerminalViewStream;
+  /**
+   * The window's shared clock (`hostClock`, `@apackdev/sdk/fe`). Absent in tests that bind no clock.
+   */
+  clock?: FeClock;
+  /**
+   * Registers a teardown callback that runs before the window closes its shared clock (`onHostDispose`,
+   * `@apackdev/sdk/fe`). Returns an unregister function.
+   */
+  onDispose?(listener: () => void): () => void;
 }
 
 let bound: FeHostRuntime | undefined;

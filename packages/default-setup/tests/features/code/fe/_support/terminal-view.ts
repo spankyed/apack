@@ -30,6 +30,7 @@ export interface FakeView {
   mountedIn: HTMLElement | null
   mounts: number
   disposed: boolean
+  dispose(): void
   focused: number
   fits: number
   followed: number

@@ -17,6 +17,7 @@
     "lint:fix": "oxlint . -D correctness --ignore-path .gitignore --fix && eslint . --fix"
   },
   "dependencies": {
+    "@apackdev/clock": "0.1.0",
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "@apackdev/ui": "*",

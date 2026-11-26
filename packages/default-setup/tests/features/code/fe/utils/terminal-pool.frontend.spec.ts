@@ -761,3 +761,94 @@ describe('a link a program printed', () => {
     expect(openTerminalLink).not.toHaveBeenCalled()
   })
 })
+
+describe('the shared renderer clock', () => {
+  it('is omitted from TerminalView when the host runtime binds no clock', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    expect(lastView().options.clock).toBeUndefined()
+  })
+
+  it('passes the bound host clock to TerminalView and disposes views before the clock closes', () => {
+    let waiting = 0
+    let closed = false
+    const disposeListeners = new Set<() => void>()
+    const clock = {
+      now: () => 1_700_000_000_000,
+      monotonic: () => 100,
+      after: (_ms: number, _run: () => void) => {
+        if (closed) throw new Error('Clock is closed')
+        waiting += 1
+        let cancelled = false
+        return () => {
+          if (cancelled) return
+          cancelled = true
+          waiting -= 1
+        }
+      },
+    }
+
+    stopRuntime?.()
+    stopRuntime = startFeTestRuntime({
+      clock,
+      onDispose: (listener) => {
+        disposeListeners.add(listener)
+        return () => { disposeListeners.delete(listener) }
+      },
+    })
+
+    const info = terminal()
+    terminalPool.ensure(info)
+    const view = lastView()
+    expect(view.options.clock).toBe(clock)
+    expect(disposeListeners.size).toBe(1)
+
+    // Simulate a timer armed by TerminalView on the shared clock and cancelled in view.dispose()
+    const cancelViewTimer = view.options.clock!.after(530, () => {})
+    const originalDispose = view.dispose.bind(view)
+    view.dispose = () => {
+      cancelViewTimer()
+      originalDispose()
+    }
+    expect(waiting).toBe(1)
+
+    // Host teardown runs registered dispose hooks before closing the shared clock
+    for (const listener of [...disposeListeners].reverse()) listener()
+    expect(view.disposed).toBe(true)
+    expect(waiting, 'view timer was still armed when the shared clock closed').toBe(0)
+    expect(disposeListeners.size).toBe(0)
+    closed = true
+    made.length = 0
+  })
+
+  it('unregisters its host dispose hook once the last terminal is disposed and re-registers on a new host', () => {
+    const firstListeners = new Set<() => void>()
+    stopRuntime?.()
+    stopRuntime = startFeTestRuntime({
+      onDispose: (listener) => {
+        firstListeners.add(listener)
+        return () => { firstListeners.delete(listener) }
+      },
+    })
+
+    const first = terminal()
+    terminalPool.ensure(first)
+    expect(firstListeners.size).toBe(1)
+
+    terminalPool.dispose(first.id)
+    expect(firstListeners.size).toBe(0)
+
+    const secondListeners = new Set<() => void>()
+    stopRuntime()
+    stopRuntime = startFeTestRuntime({
+      onDispose: (listener) => {
+        secondListeners.add(listener)
+        return () => { secondListeners.delete(listener) }
+      },
+    })
+
+    const second = terminal()
+    terminalPool.ensure(second)
+    expect(secondListeners.size).toBe(1)
+  })
+})

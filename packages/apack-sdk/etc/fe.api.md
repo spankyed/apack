@@ -207,6 +207,13 @@ export type ExtractEvent<TEvent extends {
     type: TType;
 }>;
 
+// @public
+export interface FeClock {
+    after(ms: number, run: () => void): () => void;
+    monotonic(): number;
+    now(): number;
+}
+
 // @public (undocumented)
 export interface FeSettingsHandle<T> extends ReadonlyFeSettingsHandle<T> {
     // (undocumented)
@@ -441,6 +448,9 @@ export interface _HostBridge {
 }
 
 // @public
+export function hostClock(): FeClock | undefined;
+
+// @public
 export interface HostShell {
     // (undocumented)
     getSnapshot(): HostShellSnapshot;
@@ -632,6 +642,9 @@ export interface OneMade<TLogic extends AnyActorLogic> {
     readonly kind: 'one';
     readonly logic: TLogic;
 }
+
+// @public
+export function onHostDispose(listener: () => void): () => void;
 
 // @public (undocumented)
 export function onMenuOpenChange(open: boolean): void;

@@ -57,7 +57,9 @@ export interface FeHostRuntime {
     application: HostShell;
     catalog: PackCatalogView;
     client: FeClient;
+    clock?: FeClock;
     diagnostics?: PerformanceExecution;
+    onDispose?(listener: () => void): () => void;
     packs: FePackRegistryView;
     secrets: SecretsClient;
     settings: SettingsPort;
