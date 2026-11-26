@@ -2,8 +2,7 @@
 // feature, which keeps it in AppState. A window opens on its first surface, and each connection's CLIENT_CONNECTED
 // brings the stored state; what the user changes here is sent back to be recorded, so every window agrees.
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { createActor, type Actor } from 'xstate';
-import { createShellMachine, surfaceNavigationItems, withHostLast, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, surfaceNavigationItems, withHostLast, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, surface } from './fakes.ts';
 
 const notes = surface('default-setup/notes');
@@ -12,16 +11,13 @@ const threads = surface('default-setup/threads');
 let shell = fakeShell({ surfaces: [notes, threads] });
 let fake = shell.client;
 let mutate = fake.send;
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 
 beforeEach(() => {
   shell = fakeShell({ surfaces: [notes, threads] });
   fake = shell.client;
   mutate = fake.send;
-  app = createActor(createShellMachine(shell.options), {
-    systemId: 'host/application',
-    input: { ownsLastActiveSurface: true },
-  }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: true }).start();
 });
 
 afterEach(() => app.stop());
@@ -69,9 +65,9 @@ it('keeps the surface the user opened while that pack was loading', () => {
 });
 
 it("opens a popout on an external pack's surface once that pack's frontend adds it, without recording it as the app's", () => {
-  const popout = createActor(createShellMachine(shell.options), {
-    systemId: 'host/application',
-    input: { initialSurfaceId: 'memo-pack/memos', ownsLastActiveSurface: false },
+  const popout = createShell(shell.options, {
+    initialSurfaceId: 'memo-pack/memos',
+    ownsLastActiveSurface: false,
   }).start();
 
   loadMemoPack(popout);

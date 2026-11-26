@@ -1,7 +1,5 @@
 import { computed, onScopeDispose, shallowRef } from 'vue';
-import { useState } from '@apackdev/sdk/fe';
-import { surfaceNavigationItems } from '@apackdev/host/fe';
-import { applicationState } from '@/main';
+import { surfaceNavigationItems, useHostState } from '@apackdev/host/fe';
 import { windowCatalog } from '@/runtime/catalog';
 import { fePacks } from '@/runtime/packs';
 
@@ -9,10 +7,9 @@ import { fePacks } from '@/runtime/packs';
 export function useSurfaceNavigation() {
   const revision = shallowRef(0);
   onScopeDispose(windowCatalog.subscribe(() => { revision.value++; }));
-  const { state: shell } = useState(applicationState);
-  const context = computed(() => ({ ...shell.value.data }));
+  const { state: shell } = useHostState('application');
   return computed(() => {
     void revision.value;
-    return surfaceNavigationItems(windowCatalog, fePacks.surfaceBindings(), context.value.surfaceVisibility);
+    return surfaceNavigationItems(windowCatalog, fePacks.surfaceBindings(), shell.value.data.surfaceVisibility);
   });
 }

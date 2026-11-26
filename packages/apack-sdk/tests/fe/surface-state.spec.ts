@@ -47,7 +47,7 @@ beforeEach(() => {
   shellChanged = () => { for (const fn of [...shellListeners]) fn(); };
   bindFeHost({ catalog: {} as never,
     application: {
-      system: { get: (ref: string) => running[ref] },
+      surface: (ref: string) => running[ref],
       subscribe: (fn: () => void) => { shellListeners.add(fn); return { unsubscribe: () => shellListeners.delete(fn) }; },
     } as never,
     secrets: {} as never,
@@ -194,7 +194,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never,
       settings: {} as never,
       client: { send() {}, watchView: () => () => {} },
@@ -240,7 +240,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
@@ -270,7 +270,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
@@ -311,7 +311,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 

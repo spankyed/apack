@@ -634,6 +634,7 @@ async function awaitShell(page: Page, condition: ShellCondition, timeout: number
     const actor = (window as any).applicationState;
     /** The dot-path match `waitForState` has always used: a nested value, or a leaf equal to the segment. */
     const atPath = (value: unknown, path: string): boolean => {
+      if (typeof value === 'string') return value === path || value.startsWith(`${path}.`);
       if (typeof value !== 'object' || value === null) return value === path;
       let current: any = value;
       for (const part of path.split('.')) {
@@ -691,6 +692,10 @@ export function waitForAppReady(page: Page, { state = APP_READY_STATE, timeout =
       __disableOnboardingUI?: () => void;
     };
     const value = win.applicationState?.getSnapshot().value;
+    if (typeof value === 'string') {
+      if (dismiss && (value === 'onboarding' || value.startsWith('onboarding.'))) win.__disableOnboardingUI?.();
+      return value === want || value.startsWith(`${want}.`);
+    }
     if (typeof value !== 'object' || value === null) return value === want;
     // Dismissed from inside the poll because it can arrive at any point during the boot
     if (dismiss && 'onboarding' in value) win.__disableOnboardingUI?.();

@@ -1,11 +1,10 @@
 import type { FeatureRef } from '@apackdev/sdk/ids';
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 import { expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
 import { effectScope } from 'vue';
 import { _createFeSettings, type PackFERegistration } from '@apackdev/sdk/fe';
 import { fakeSettings } from '@apackdev/sdk/testing';
-import { createPackFrontends, createShellMachine } from '../../../../src/fe/index.ts';
+import { createPackFrontends, createShell } from '../../../../src/fe/index.ts';
 import { fakeShell, surface, settle } from './fakes.ts';
 
 it.each(['reconnect', 'live publication'] as const)('rebinds the real shell, loader and generated settings to a cached module after %s', async mode => {
@@ -37,33 +36,31 @@ it.each(['reconnect', 'live publication'] as const)('rebinds the real shell, loa
     packId: 'ext', origin: 'installed', enabled: true, declarationRevision: entry.declarationRevision,
     buildRevision: entry.buildRevision, declaration: entry.manifest.features.own.surface });
   shell.client.loadedPacks.mockResolvedValue([entry]);
-  const app = createActor(createShellMachine({ ...shell.options, packs, packFrontends: frontends }), {
-    systemId: 'host/application', input: { ownsLastActiveSurface: false },
-  }).start();
+  const app = createShell({ ...shell.options, packs, packFrontends: frontends }, { ownsLastActiveSurface: false }).start();
   const scope = effectScope();
   const target = { kind: 'feature', featureRef: 'ext/own' } as const;
   try {
     shell.client.connect();
     await settle();
     app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
-    const actor = app.system.get('ext/own');
+    const actor = app.surface('ext/own');
     expect(actor).toBeDefined();
     const old = scope.run(() => generated.useSettings<{ limit: number }>(target))!;
     shell.client.loadedPacks.mockResolvedValue([{ ...entry, registrationId: 'second' }]);
     if (mode === 'reconnect') {
       shell.client.dropConnection();
-      expect(app.system.get('ext/own')).toBe(actor);
+      expect(app.surface('ext/own')).toBe(actor);
       shell.client.connect();
     } else {
       shell.client.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: { ext: 'second' } } });
-      expect(app.system.get('ext/own')).toBe(actor);
+      expect(app.surface('ext/own')).toBe(actor);
     }
     await settle();
     expect(shell.client.packClientReady.mock.calls).toEqual([['ext', 'first'], ['ext', 'second']]);
     expect(imported).toHaveBeenCalledTimes(2);
     expect(imported.mock.calls[0]).toEqual(imported.mock.calls[1]);
     expect(shell.notify.error).not.toHaveBeenCalled();
-    expect(app.system.get('ext/own')).not.toBe(actor);
+    expect(app.surface('ext/own')).not.toBe(actor);
     expect(actor?.getSnapshot().status).toBe('stopped');
     expect(app.getSnapshot().context.activeSurface.id).toBe('ext/own');
     expect(disposed[0]).toHaveBeenCalledOnce();

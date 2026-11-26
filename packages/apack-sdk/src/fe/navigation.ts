@@ -52,7 +52,7 @@ export function openLink(url: string): void {
     return;
   }
   const ref = hasDesignation('browser') ? getDesignated('browser') : undefined;
-  const browser = ref ? getApp().system.get(ref) : undefined;
+  const browser = ref ? getApp().surface(ref) : undefined;
   // Reaching the actor rather than asking the shell, because the lookup *is* the decision: a shell request for a
   // surface that isn't here waits and then tells the user, where this has somewhere better to go. The delivery is
   // opened anyway, so a send the browser makes while handling carries its own ref — the thing every other path to

@@ -82,8 +82,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import type { ActorRefFrom, AnyStateMachine } from 'xstate'
+import { computed, onMounted, onScopeDispose, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { within } from '@apackdev/state'
 import { CircleHelp, Settings as SettingsIcon, ExternalLink, PanelRight, PanelTop, Terminal } from 'lucide-vue-next'
 import Toolbar from '@/views/layout/Toolbar.vue'
 import { useSurfaceNavigation } from '@/views/layout/surface-navigation';
@@ -92,8 +92,8 @@ import ChatArea from '@/views/layout/ChatArea.vue'
 import InspectionPanel from '@/views/layout/InspectionPanel.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import { applicationState } from '@/main'
-import { HOST, notifySurfaceActor } from '@apackdev/host/fe'
-import { untypedOpenSurface, useState } from '@apackdev/sdk/fe'
+import { HOST, notifySurfaceActor, useHostState } from '@apackdev/host/fe'
+import { untypedOpenSurface } from '@apackdev/sdk/fe'
 import SurfacePane from '@/views/layout/SurfacePane.vue'
 import { useContextualHelp } from '@/views/settings/contextual-help';
 const { hasHelp, openFeatureHelp } = useContextualHelp();
@@ -107,16 +107,26 @@ const toast = ref<InstanceType<typeof ToastNotification> | null>(null)
 onMounted(() => registerGlobalToast(toast.value))
 onUnmounted(() => registerGlobalToast(null))
 
-const { state: shell } = useState(applicationState)
+const { state: shell } = useHostState('application')
 const surfaces = useSurfaceNavigation()
 const chatMaximized = computed(() => shell.value.data.panelSizes.chatMaximized ?? false)
-const isOnboarding = computed(() => shell.value.at === 'onboarding' || shell.value.at.startsWith('onboarding.'))
+const isOnboarding = computed(() => within(shell.value, 'onboarding'))
 
 /** The surface offering its panel for surfaces without one (`fallbackPanel`), which says itself when it shows */
 const fallbackSurface = computed(() => shell.value.data.surfaces.find((p) => p.fallbackPanel && p.panel))
-const fallbackActor = computed(() => fallbackSurface.value && applicationState.system.get(fallbackSurface.value.id) as ActorRefFrom<AnyStateMachine> | undefined)
-const { state: fallback } = useState(() => fallbackActor.value)
-const fallbackShown = computed(() => !!fallback.value && !!fallbackSurface.value?.fallbackPanel?.isShown(fallback.value))
+const fallbackState = shallowRef<{ readonly at: string; readonly data: unknown } | undefined>(undefined)
+const readFallback = () => {
+  const surface = fallbackSurface.value
+  if (!surface) { fallbackState.value = undefined; return }
+  const snap = applicationState.system.read({ ref: surface.id }) as { at?: string; data?: unknown } | undefined
+  fallbackState.value = snap ? { at: snap.at ?? '', data: snap.data } : undefined
+}
+watch(() => fallbackSurface.value?.id, readFallback, { immediate: true, flush: 'sync' })
+onScopeDispose(applicationState.system.subscribe((changed) => {
+  const id = fallbackSurface.value?.id
+  if (id && changed.includes(id)) readFallback()
+}))
+const fallbackShown = computed(() => !!fallbackState.value && !!fallbackSurface.value?.fallbackPanel?.isShown(fallbackState.value))
 
 // The default pack's canvas when the default toggle is on, and the open surface's otherwise. `defaultSurface`
 // is null until a pack claims it, which is every window's first moment, so the open surface is the fallback
@@ -188,7 +198,7 @@ const handleMenuAction = (event: ContextMenuItem['event']) => {
 
   if (event.type === 'APP_TOGGLE_FALLBACK_PANEL') {
     const surface = fallbackSurface.value
-    if (surface?.fallbackPanel) fallbackActor.value?.send(surface.fallbackPanel.toggle)
+    if (surface?.fallbackPanel) applicationState.surface(surface.id)?.send(surface.fallbackPanel.toggle)
     return
   }
 
@@ -212,7 +222,8 @@ const handleMenuAction = (event: ContextMenuItem['event']) => {
   const surfaceId = canvasSurface.value.id
   // Through the funnel, so the surface is named while it handles this and a send it makes can be answered.
   // A menu click is nobody's question, so it carries no asker.
-  notifySurfaceActor(applicationState.system.get(surfaceId), surfaceId, event)
+  const target = applicationState.surface(surfaceId)
+  if (target) notifySurfaceActor(target, surfaceId, event)
 }
 
 const MIN_CHAT_HEIGHT = 180 // px — enough for chat input to remain visible

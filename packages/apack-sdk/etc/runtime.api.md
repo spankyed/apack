@@ -4,7 +4,6 @@
 
 ```ts
 
-import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyState } from '@apackdev/state';
 import type { AnyStateMachine } from 'xstate';
@@ -28,6 +27,7 @@ import type { OutputInterface } from 'ai';
 import type { Ref } from 'vue';
 import type { rerank } from 'ai';
 import type { streamText } from 'ai';
+import type { System } from '@apackdev/state';
 import type { ToolLoopAgent } from 'ai';
 import type { ToolLoopAgentSettings } from 'ai';
 import type { ToolSet } from 'ai';

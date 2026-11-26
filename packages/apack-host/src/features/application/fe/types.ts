@@ -1,5 +1,5 @@
 import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
-import type { EntityOpeningActor } from './entity-opening.ts';
+import type { Clock, Defect } from '@apackdev/state';
 import type { OpenEntity } from '@apackdev/sdk/events';
 // The app shell's state, events and the I/O it's given. Its machine (machine.ts) reads the rest of the app only
 // through these ports, so it runs the same in the renderer, over the API and the window, and in a pack's tests.
@@ -41,6 +41,10 @@ export interface ShellOptions {
   notify: ShellNotify;
   /** Where the key and mouse listeners attach (the window); with none, none attach */
   target?: EventTarget;
+  /** Optional clock override for the frontend `@apackdev/state` system; defaults to `boundFeHost().clock` or wall clock. */
+  clock?: Clock;
+  /** Optional hook called when the frontend `@apackdev/state` system reports a defect. */
+  onDefect?: (defect: Defect) => void;
 }
 
 /** What a window's shell starts with */
@@ -101,7 +105,6 @@ export interface SurfaceRequest {
 }
 
 export interface ShellContext {
-  entityOpening: EntityOpeningActor;
   defaultToggles: {
     canvas: boolean;
   };
@@ -189,7 +192,6 @@ export type ShellEvent =
   | { type: 'TOGGLE_INSPECTION_PANEL' }
   | { type: 'MAXIMIZE_CHAT' }
   | { type: 'RESTORE_CHAT' }
-  | HotkeyEvent
   | { type: 'SWITCH_SURFACE_UP' }
   | { type: 'SWITCH_SURFACE_DOWN' }
   | { type: 'NAVIGATE_BACK' }

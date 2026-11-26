@@ -1,9 +1,12 @@
 import { windowPerformance, startStartupRecording } from './runtime/performance.ts';
-import { hostDeclaration } from '@apackdev/host/fe';
+import {
+  hostDeclaration,
+  installFromProtocol,
+  provideHostState,
+  runWindowStorageMigrations,
+  type ShellRuntime,
+} from '@apackdev/host/fe';
 import { createApp } from 'vue'
-import { createActor } from 'xstate';
-// import { createBrowserInspector } from '@statelyai/inspect';
-import type { Actor } from 'xstate';
 import App from './views/App.vue'
 import './style.css'
 import './boot/monaco';
@@ -12,7 +15,6 @@ import './boot/monaco';
 import 'highlight.js/styles/github-dark.css'
 import { hostFrontend } from '@/views/packs/surface';
 import { createAppShell } from '@/runtime/shell';
-import { HOST, installFromProtocol, runWindowStorageMigrations, stateSystemOf } from '@apackdev/host/fe';
 import 'virtual:host-shared-modules';
 import { bindRendererHost, onRendererDispose } from '@/runtime';
 import { fePacks } from '@/runtime/packs';
@@ -23,7 +25,7 @@ declare const __APP_VERSION__: string;
 
 declare global {
   interface Window {
-    applicationState: Actor<ReturnType<typeof createAppShell>>;
+    applicationState: ShellRuntime;
     __disableOnboardingUI?: () => void;
     /** The E2E suite's sends and asks to the backend's systems (`transport/e2e-door.ts`) */
     __e2eSystems?: E2eSystems;
@@ -61,13 +63,9 @@ let createdApplication: typeof applicationState | undefined;
 bindRendererHost(() => createdApplication);
 
 // The shell starts with the surfaces registered above, its default the one a pack claims
-export const applicationState = createActor(createAppShell(), {
-  systemId: HOST.application,
-  // inspect,
-  input: {
-    initialSurfaceId,
-    ownsLastActiveSurface: !isSurfacePopout,
-  }
+export const applicationState = createAppShell({
+  initialSurfaceId,
+  ownsLastActiveSurface: !isSurfacePopout,
 });
 
 createdApplication = applicationState;
@@ -101,7 +99,7 @@ window.electronAPI?.protocolAction?.onAction(({ action, params }) => {
 });
 
 const app = createApp(App);
-app.provide(Symbol.for('@apackdev/state/vue/system'), stateSystemOf(applicationState));
+provideHostState(app, applicationState.system);
 
 app.config.errorHandler = (err, _instance, info) => {
   handleVueError(err, info);

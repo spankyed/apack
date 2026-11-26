@@ -3,13 +3,12 @@
 // Each pack whose frontend load finished is announced once per establishment of this window's bus
 // subscription, so its systems send their startup data.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, type Actor } from 'xstate';
 import type { ShellEvent } from '../../../../src/features/application/fe/types.ts';
 import type { Surface } from '@apackdev/sdk/fe';
-import { createShellMachine, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, surface, settle } from './fakes.ts';
 
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 let builtInNotes: Surface;
 let shell: ReturnType<typeof fakeShell>;
 // This window's pack frontend loader has nothing to load here; pack-loading.spec covers it
@@ -21,10 +20,7 @@ beforeEach(() => {
   shell = fakeShell({ surfaces: [builtInNotes] });
   fake = shell.client;
   packClientReady = fake.packClientReady;
-  app = createActor(createShellMachine(shell.options), {
-    systemId: 'host/application',
-    input: { ownsLastActiveSurface: false },
-  }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
 });
 
 afterEach(() => app.stop());
@@ -47,7 +43,7 @@ describe('pack surfaces in the application actor', () => {
   it("asks for a pack's startup data once its surface actors exist, after the connection", () => {
     connect();
     let spawnedWhenAsked = false;
-    packClientReady.mockImplementation(async () => { spawnedWhenAsked = app.system.get('ext/own') !== undefined; });
+    packClientReady.mockImplementation(async () => { spawnedWhenAsked = app.surface('ext/own') !== undefined; });
 
     loaded({ type: 'PACK_FRONTEND_LOADED', registrationId: 'runtime', packId: 'ext', surfaces: [surface('ext/own')] });
 
@@ -58,7 +54,7 @@ describe('pack surfaces in the application actor', () => {
 
   it('asks once the connection comes for a pack whose surfaces loaded before it', () => {
     loaded({ type: 'PACK_FRONTEND_LOADED', registrationId: 'runtime', packId: 'ext', surfaces: [surface('ext/own')] });
-    expect(app.system.get('ext/own')).toBeDefined();
+    expect(app.surface('ext/own')).toBeDefined();
     expect(packClientReady).not.toHaveBeenCalled();
 
     connect();
@@ -154,7 +150,7 @@ describe('pack surfaces in the application actor', () => {
   // takes only its own.
   it("removes only the surfaces the pack added, leaving a built-in surface whose feature it shares", () => {
     connect();
-    const notesActor = app.system.get('notes');
+    const notesActor = app.surface('notes');
     loaded({ type: 'PACK_FRONTEND_LOADED', registrationId: 'runtime', packId: 'ext', surfaces: [surface('ext/notes'), surface('ext/pack-own')] });
 
     app.send({ type: 'PACK_SURFACES_UNLOADED', packId: 'ext' });
@@ -162,9 +158,9 @@ describe('pack surfaces in the application actor', () => {
     const { surfaces, packsWithFrontend } = app.getSnapshot().context;
     expect(surfaces).toEqual([builtInNotes]);
     expect(packsWithFrontend).toEqual([]);
-    expect(app.system.get('ext/pack-own')).toBeUndefined();
-    expect(app.system.get('ext/notes')).toBeUndefined();
-    expect(app.system.get('notes')).toBe(notesActor);
-    expect(notesActor.getSnapshot().status).toBe('active');
+    expect(app.surface('ext/pack-own')).toBeUndefined();
+    expect(app.surface('ext/notes')).toBeUndefined();
+    expect(app.surface('notes')).toBe(notesActor);
+    expect(notesActor?.getSnapshot().status).toBe('active');
   });
 });

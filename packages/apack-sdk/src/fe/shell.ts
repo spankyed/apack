@@ -3,7 +3,7 @@ import type { PerformanceCarrier } from '../runtime/performance.ts';
 // `application` feature's surface, which lists the surfaces, holds which is open and lays out the panels. Pack code
 // uses `useShell()`; nothing outside the host holds the shell's actor.
 import { getCurrentScope, onScopeDispose, shallowReadonly, shallowRef, type Ref } from 'vue'
-import type { AnyActorRef } from 'xstate'
+import type { System } from '@apackdev/state'
 import type { Surface } from './surface.ts'
 import type { PackCommand } from '../commands/index.ts'
 import { boundFeHost } from '../runtime/fe-host.ts'
@@ -74,23 +74,42 @@ export type HostShellEvent =
   | { type: 'HOTKEYS_RECORDING_START' }
   | { type: 'HOTKEYS_RECORDING_END' };
 
+/** A snapshot of a running surface, as `useUntypedSurfaceState` and tests read it */
+export interface HostShellSurfaceSnapshot {
+  readonly status: 'active' | 'stopped';
+  readonly value: string;
+  readonly context: Record<string, unknown>;
+}
+
+/** A running surface handle, as `SurfaceScope`, `useUntypedSurfaceState`, and tests inspect it */
+export interface HostShellSurfaceRef {
+  readonly id: string;
+  readonly sessionId: string;
+  getSnapshot(): HostShellSurfaceSnapshot;
+  subscribe(observer: (snapshot: HostShellSurfaceSnapshot) => void): { unsubscribe(): void };
+  send(event: SurfaceEvent): void;
+}
+
 /** A snapshot of the shell, as frontend code reads it */
 export interface HostShellSnapshot {
+  readonly value?: string;
   context: HostShellState;
   /** `'onboarding'` while the user hasn't finished onboarding */
   hasTag(tag: string): boolean;
 }
 
 /**
- * The shell's actor as the frontend port holds it. The host's shell is checked against this contract where it is
+ * The shell as the frontend port holds it. The host's shell is checked against this contract where it is
  * defined, so a change to either side fails the typecheck rather than a pack at runtime.
  */
 export interface HostShell {
   getSnapshot(): HostShellSnapshot;
   subscribe(observer: (snapshot: HostShellSnapshot) => void): { unsubscribe(): void };
   send(event: HostShellEvent): void;
-  /** The surfaces' running actors, by ref */
-  system: { get(id: string): AnyActorRef | undefined };
+  /** The `@apackdev/state` frontend system running the shell and every surface */
+  readonly system: System;
+  /** A running surface handle by ref, if active */
+  surface(ref: string): HostShellSurfaceRef | undefined;
 }
 
 /** The shell, for a component or composable: its state as read-only refs, kept current, and what it may ask of it */

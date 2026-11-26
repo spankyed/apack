@@ -1,16 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createActor, setup, type Actor } from 'xstate';
+import { state } from '@apackdev/state';
 import type { OpenEntity } from '@apackdev/sdk/events';
-import { createShellMachine, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, surface, settle } from './fakes.ts';
 
-const running: Actor<ShellMachine>[] = [];
-afterEach(() => running.splice(0).forEach(actor => actor.stop()));
+const running: ShellRuntime[] = [];
+afterEach(() => running.splice(0).forEach((actor) => actor.stop()));
 
 async function fixture(loading = false) {
   const received = vi.fn();
-  const note = { ...surface('notes/view'), state: setup({ types: { events: {} as OpenEntity } })
-    .createMachine({ on: { OPEN_ENTITY: { actions: ({ event }) => received(event) } } }) };
+  const note = {
+    ...surface('notes/view'),
+    state: state<{}, OpenEntity>()({ on: { OPEN_ENTITY: (event) => { received(event); } } }),
+  };
   const shell = fakeShell({ surfaces: [surface('host/home'), ...(loading ? [] : [note])] });
   if (loading) shell.acceptSurface(note);
   const declaration = { ...shell.declarations.get(note.id)!, opens: ['Note'] };
@@ -20,9 +22,9 @@ async function fixture(loading = false) {
   if (loading) {
     shell.bindings.delete(note.id);
     shell.client.loadedPacks.mockResolvedValue([{ id: 'notes', feEntry: 'runtime/fe.js' }]);
-    shell.packFrontends.load.mockImplementation(() => new Promise(resolve => { finishLoad = resolve; }));
+    shell.packFrontends.load.mockImplementation(() => new Promise((resolve) => { finishLoad = resolve; }));
   }
-  const app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: false } }).start();
+  const app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
   running.push(app);
   shell.client.connect();
   shell.client.receive({ to: 'host/application', event: { type: 'CLIENT_CONNECTED', hasOnboarded: true, surfaceVisibility: {} } });
@@ -37,7 +39,7 @@ it('checks existence, opens the declared surface, delivers only the ID and relea
   expect(shell.client.entityExists).toHaveBeenCalledWith('Note-one', expect.any(AbortSignal));
   expect(shell.app.getSnapshot().context.activeSurface.id).toBe('notes/view');
   expect(shell.received).toHaveBeenCalledExactlyOnceWith({ type: 'OPEN_ENTITY', id: 'Note-one' });
-  expect(shell.app.getSnapshot().context.entityOpening.getSnapshot().context.request).toBeNull();
+  expect(shell.app.entityOpening()?.data.request).toBeNull();
   shell.publishCatalog();
   expect(shell.notify.error).not.toHaveBeenCalled();
 });
@@ -104,7 +106,7 @@ it('reports query failures and clears its request', async () => {
   const shell = await fixture(); shell.client.entityExists.mockRejectedValue(new Error('Database unavailable'));
   shell.app.send({ type: 'OPEN_ENTITY', id: 'Note-one' }); await settle();
   expect(shell.notify.error).toHaveBeenLastCalledWith("Couldn't open Note-one", 'Database unavailable');
-  expect(shell.app.getSnapshot().context.entityOpening.getSnapshot().context.request).toBeNull();
+  expect(shell.app.entityOpening()?.data.request).toBeNull();
 });
 
 it('holds an entity request until its declared frontend is ready, then delivers once', async () => {
@@ -115,7 +117,7 @@ it('holds an entity request until its declared frontend is ready, then delivers 
   expect(shell.app.getSnapshot().context.awaitingSurface).toHaveLength(1);
   shell.finishLoad([shell.note]); await settle(); await settle();
   expect(shell.received).toHaveBeenCalledExactlyOnceWith({ type: 'OPEN_ENTITY', id: 'Note-one' });
-  expect(shell.app.getSnapshot().context.entityOpening.getSnapshot().context.request).toBeNull();
+  expect(shell.app.entityOpening()?.data.request).toBeNull();
 });
 
 it('does not deliver a queued request after its declared destination changes', async () => {
@@ -127,18 +129,18 @@ it('does not deliver a queued request after its declared destination changes', a
   shell.publishCatalog();
   shell.finishLoad([shell.note]); await settle(); await settle();
   expect(shell.received).not.toHaveBeenCalled();
-  expect(shell.app.getSnapshot().context.entityOpening.getSnapshot().context.request).toBeNull();
+  expect(shell.app.entityOpening()?.data.request).toBeNull();
   expect(shell.notify.error).toHaveBeenCalledTimes(1);
 });
 
 it('refuses delivery when the admitted destination actor is absent', async () => {
   const shell = await fixture();
-  const getActor = shell.app.system.get.bind(shell.app.system);
-  const lookup = vi.spyOn(shell.app.system, 'get').mockImplementation(id => id === shell.note.id && shell.app.getSnapshot().context.activeSurface.id === shell.note.id ? undefined : getActor(id));
+  const getSurface = shell.app.surface.bind(shell.app);
+  const lookup = vi.spyOn(shell.app, 'surface').mockImplementation((id) => (id === shell.note.id && shell.app.getSnapshot().context.activeSurface.id === shell.note.id ? undefined : getSurface(id)));
   try {
     shell.app.send({ type: 'OPEN_ENTITY', id: 'Note-one' }); await settle();
     expect(shell.received).not.toHaveBeenCalled();
     expect(shell.notify.error).toHaveBeenCalledExactlyOnceWith("Couldn't open Note-one", expect.stringContaining('destination actor "notes/view"'));
-    expect(shell.app.getSnapshot().context.entityOpening.getSnapshot().context.request).toBeNull();
+    expect(shell.app.entityOpening()?.data.request).toBeNull();
   } finally { lookup.mockRestore(); }
 });

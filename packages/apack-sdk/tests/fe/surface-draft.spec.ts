@@ -17,7 +17,7 @@ function aWindow() {
   const shell = createActor(setup({}).createMachine({ on: { CHANGED: {} } })).start();
   const spawn = (ref: string) => running.set(ref, createActor(setup({}).createMachine({}), { id: ref }).start());
   bindFeHost({ catalog: {} as never, application: {
-    system: { get: (ref: string) => running.get(ref) },
+    surface: (ref: string) => running.get(ref),
     subscribe: (listener: () => void) => shell.subscribe(listener),
   } as never, secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never });
   return {

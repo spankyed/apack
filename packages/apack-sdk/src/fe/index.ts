@@ -24,7 +24,7 @@ export { makes, freshKey, type Makes, type Making, type MakingOf, type MadeEvent
 export { untypedFromView } from './view-actor.ts'
 export { viewRead, viewWrites, writeEnded, writeSent, writing, type ViewWrites } from './view-writes.ts'
 export type { ViewDiagnostics, ViewRequest, ViewUpdate } from '../framework/views.ts'
-export { useShell, type Shell, type HostShell, type HostShellEvent, type HostShellSnapshot, type HostShellState, type ShellPanelSizes } from './shell.ts'
+export { useShell, type Shell, type HostShell, type HostShellEvent, type HostShellSnapshot, type HostShellState, type HostShellSurfaceRef, type HostShellSurfaceSnapshot, type ShellPanelSizes } from './shell.ts'
 export { isAnyMenuOpen, onMenuOpenChange, useTrackedMenuOpen } from './menu-state.ts'
 export { getDslDeclaration, getDslDeclarations, onDslDeclarationsChanged, useDslDeclarations } from './dsl-reader.ts'
 export { EXTRA_BLOCK_ITEMS_KEY, textEditorExtensionsRegistry, type BlockItem, type TextEditorExtensions, type TextEditorExtensionsBinding } from './text-editor-extensions.ts'

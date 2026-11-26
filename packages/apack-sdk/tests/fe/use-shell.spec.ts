@@ -23,7 +23,8 @@ beforeEach(() => {
       return { unsubscribe: () => { observers = observers.filter((o) => o !== observer) } }
     },
     send: () => {},
-    system: { get: () => undefined },
+    system: {} as never,
+    surface: () => undefined,
   }
   bindFeHost({ catalog: {} as never, application, secrets: {} as never,
     settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never })

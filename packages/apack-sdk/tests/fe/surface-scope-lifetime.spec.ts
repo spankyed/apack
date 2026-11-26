@@ -19,7 +19,7 @@ it('remounts cached content for a replaced actor and leaves unchanged scopes mou
   const mounted = vi.fn();
   const unsubscribe = vi.fn();
   bindFeHost({ catalog: {} as never, application: {
-    system: { get: () => running },
+    surface: () => running,
     subscribe(listener: () => void) {
       const subscription = parent.subscribe(listener);
       return { unsubscribe() { unsubscribe(); subscription.unsubscribe(); } };

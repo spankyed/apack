@@ -1,7 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick, type App } from 'vue';
 import { system } from '@apackdev/state';
-import { createActor, createMachine } from 'xstate';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { SurfaceScope, type ArtifactFrontendBinding, type BlockFrontendBinding } from '@apackdev/sdk/fe';
 import type { ArtifactCatalogEntry, BlockCatalogEntry } from '@apackdev/sdk/framework';
@@ -28,9 +27,9 @@ function fixture() {
   const state = { artifacts: [artifact], blocks: [block] };
   const artifacts = new Map<string, ArtifactFrontendBinding>(); const blocks = new Map<string, BlockFrontendBinding>();
   const catalogListeners = new Set<() => void>(); const bindingListeners = new Set<() => void>();
-  const actor = createActor(createMachine({}));
+  const actor = { id: 'external/threads', sessionId: 'surface-1', getSnapshot: () => ({ status: 'active' as const, value: '', context: {} }), subscribe: () => ({ unsubscribe() {} }), send: () => {} };
   startFeTestRuntime({
-    application: { system: { get: () => actor }, subscribe: () => ({ unsubscribe() {} }) } as never,
+    application: { surface: () => actor, subscribe: () => ({ unsubscribe() {} }) } as never,
     catalog: { status: () => 'ready', problem: () => undefined, references: () => [], frontend: () => [], steps: () => [],
       artifacts: () => state.artifacts, blocks: () => state.blocks, events: () => [], dsl: () => [],
       subscribe(listener) { catalogListeners.add(listener); return () => { catalogListeners.delete(listener); }; } },

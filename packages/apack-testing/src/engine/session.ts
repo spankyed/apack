@@ -581,7 +581,8 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
      * ref or the optional chain wrong.
      */
     surface: (ref, at) => attempt('surface', () => page.evaluateExpression(`(() => {
-      const surface = window.applicationState?.getSnapshot().children?.[${JSON.stringify(ref)}];
+      const surface = window.applicationState?.surface?.(${JSON.stringify(ref)})
+        ?? window.applicationState?.getSnapshot().children?.[${JSON.stringify(ref)}];
       if (!surface) return { running: false };
       const context = surface.getSnapshot().context ?? {};
       const at = ${JSON.stringify(at ?? '')};
