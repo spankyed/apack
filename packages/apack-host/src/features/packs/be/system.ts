@@ -1,10 +1,9 @@
-import { _packEntityTypes, _packRelationTypes, _packRoles } from '@apackdev/sdk/framework';
+import type { Read } from '@apackdev/state';
+import { _packEntityTypes, _packRelationTypes, _packRoles, type HostLifecycleEvents, type StateMatchesContract } from '@apackdev/sdk/framework';
+import type { ContractAsks, IncomingOnlyEventsOf, NormalizeAsks } from '@apackdev/sdk/events';
 import type { Contract } from './contract.ts';
 import * as path from 'path';
-import { setup } from 'xstate';
 import { satisfies } from 'semver';
-import { defineSystem } from '@apackdev/sdk/framework';
-import { broadcast, tell } from '../../../events.ts';
 import { getAppVersion, resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT, parsePackDependency } from '@apackdev/pack-format';
 import { HOST_PACK_ID, PACK_ID_PATTERN, resolveName } from '@apackdev/sdk/ids';
@@ -15,19 +14,28 @@ import type { InstalledPackSummary, PackRegistry } from '../../../packs/registry
 import { PACK_LAYOUT } from '../../../packs/layout.ts';
 import { discoverPackDirectories, installedPacks } from '../../../packs/discovery.ts';
 import { checkForUpdates } from '../../../packs/updater.ts';
-import { teardownPack, activatePack, acceptInstalledPack } from '../../../packs/runtime/lifecycle.ts';
+import { teardownPack, activatePack, acceptInstalledPack, type PackBusTarget } from '../../../packs/runtime/lifecycle.ts';
 import { clearPackRequireCache } from '../../../packs/runtime/loader.ts';
 import * as fs from 'node:fs';
 import { activationProblem } from '../../../packs/runtime/activation-outcome.ts';
-import { HOST } from '../../../refs.ts';
 import { errorMessage, hasOwn } from '@apackdev/sdk/utils/pure';
 import { applyRecord, importCompiledContent, registeredContentKeys, type ContentSelection } from '@apackdev/sdk/utils';
 import { appliedContent } from '../../../app-state/index.ts';
 import { contentEntity, contentKeySelection, describeContentKey, previewPackContent, removeContentEntity } from '@apackdev/sdk/content';
+import { hostState, type HostNet } from '../../../state.ts';
 
 export type { InstalledPackSummary };
 
-export const packsSpec = defineSystem<Contract>();
+type HostBroadcast = <K extends keyof HostNet['surfaces']>(
+  to: K,
+  event: Read<HostNet['surfaces'][K]['events']>,
+) => void;
+
+type PackBusEvent = HostNet['peers']['bus']['events'];
+
+type PacksEvent =
+  | IncomingOnlyEventsOf<Contract>
+  | Extract<HostLifecycleEvents, { type: 'SEND_STATE' }>;
 
 /**
  * Convert the JSON-safe include shape from the frontend (`null = all items, [] = skip, string[] = filter`)
@@ -137,11 +145,17 @@ function toInstalledPackSummaries(registry: PackRegistry): InstalledPackSummary[
  * Sends the Packs surface the list as the catalog holds it. What publishing uses: it runs after every fact that could
  * change a system's data, and none but a pack changing can change this, which keeps the catalog current itself.
  */
-function publishPacksList(registry: PackRegistry) {
+function publishPacksList(registry: PackRegistry, broadcast: HostBroadcast) {
   const catalog = registry.catalog.getSnapshot();
-  broadcast('packs', { type: 'PACKS_LIST' as const, packs: toInstalledPackSummaries(registry),
-    appPackSources: catalog.appPackSources.map(source => ({ id: source.id, name: source.snapshot.manifest.name,
-      version: source.snapshot.manifest.version, sourceRevision: source.sourceRevision })),
+  broadcast('packs', {
+    type: 'PACKS_LIST',
+    packs: toInstalledPackSummaries(registry),
+    appPackSources: catalog.appPackSources.map(source => ({
+      id: source.id,
+      name: source.snapshot.manifest.name,
+      version: source.snapshot.manifest.version,
+      sourceRevision: source.sourceRevision,
+    })),
     appPackSourceProblems: catalog.appPackSourceProblems.map(({ id, message }) => ({ id, message })),
   });
 }
@@ -150,73 +164,169 @@ function publishPacksList(registry: PackRegistry) {
  * Reads the packs directory again, then sends the list: for someone asking, and after this system changes a pack. A
  * refresh that fails can't undo an operation that completed, so it is reported and the accepted declarations kept
  */
-function emitPacksList(registry: PackRegistry) {
+function emitPacksList(registry: PackRegistry, broadcast: HostBroadcast) {
   try { registry.refreshCatalog(resolveAppEnvironment().packsDir); }
   catch (error) { reportError({ source: 'packs', operation: 'refreshPacksList', severity: 'error', error: new Error(errorMessage(error)) }); }
-  publishPacksList(registry);
+  publishPacksList(registry, broadcast);
 }
 
-/** The host `packs` system, installing, updating and toggling the packs in `registry` */
 /** Why an operation on a pack was refused: another holds it, or the app's data is being replaced */
 function operationInProgress(key: string): string {
   return `Another operation on ${key} is in progress (an install, update, removal or app data replacement). Try again once it finishes.`;
 }
 
+/** The host `packs` system, installing, updating and toggling the packs in `registry` */
 export function createPacksSystem(registry: PackRegistry) {
   const isInstalled = (id: string) => PACK_ID_PATTERN.test(id)
     && discoverPackDirectories(resolveAppEnvironment().packsDir).some(dir => path.basename(dir) === id);
   /** Each disable whose teardown is still running, settled once the pack's operation is released */
   const teardowns = new Map<string, Promise<void>>();
-  return setup({
-    types: packsSpec.types,
-    actions: packsSpec.actions({
-    // Both answer the settings surface, which is where the content UI is drawn. The work is this system's; the
-    // view is not, and a system sends whichever surface's inbox declares the event.
-    previewPackContent: ({ event }) => {
-      const ev = packsSpec.typeOf('PREVIEW_PACK_CONTENT', event);
-      try {
-        broadcast('settings', { type: 'PACK_CONTENT_PREVIEW', preview: previewPackContent(ev.directory) });
-      } catch (err) {
-        broadcast('settings', { type: 'PACK_CONTENT_PREVIEW_FAILED', error: errorMessage(err) });
-      }
-    },
 
-    importPackContent: ({ event }) => {
-      const ev = packsSpec.typeOf('IMPORT_PACK_CONTENT', event);
-      try {
-        const include = ev.include ? toContentSelection(ev.include) : undefined;
-        // Read first: a directory that can't name its pack fails before anything is imported
-        const { packId } = previewPackContent(ev.directory);
-        /**
-         * **Write-only, which is what makes this an import and not an apply.** `before` is empty, so no
-         * verdict here can be reached from what a previous apply wrote: nothing is read as the user's
-         * deletion, nothing is read as their edit, and no item is removed for having left the content.
-         * Putting a pack's data back is the request, and the modes are the whole of the policy.
-         *
-         * **What it does write is what it wrote**, and it has to: an import that rewrote fifty entities and
-         * recorded nothing would leave the applied content describing the version before it, which the next
-         * boot's apply would read as fifty edits by the user. The revision is left where it is, so asking
-         * for the data again does not change what counts as changed.
-         */
-        const record = applyRecord();
-        const result = importCompiledContent({ compiledDir: ev.directory, include, mode: ev.mode, applied: record, verbose: true });
-        appliedContent.record(packId, { wrote: record.written });
-        // Appliers report records they couldn't write in their counts rather than throwing
-        const errors = Object.entries(result).flatMap(([key, counts]) => (counts.errors ?? []).map((error) => `${key}: ${error}`));
-        broadcast('settings', { type: 'PACK_CONTENT_IMPORTED', result, errors });
-        // The running systems read what the apply changed (the chat's slash commands, the library's documents)
-        tell('bus', { type: 'PACK_CHANGED', packId });
-        if (ev.restartBrain) tell({ role: 'brain' }, { type: 'RESTART_BRAIN' });
-      } catch (err) {
-        broadcast('settings', { type: 'PACK_CONTENT_IMPORT_FAILED', error: errorMessage(err) });
-      }
-    },
+  const busTarget = (tell: (to: { readonly peer: 'bus' }, event: Read<PackBusEvent>) => void): PackBusTarget => ({
+    send: (event) => tell({ peer: 'bus' }, event as PackBusEvent),
+  });
 
-      sendPacksList: () => {
-        emitPacksList(registry);
+  const handleInstall = (
+    ev: Extract<PacksEvent, { type: 'INSTALL_PACK' | 'REPLACE_PACK' }>,
+    broadcast: HostBroadcast,
+    bus: PackBusTarget,
+  ) => {
+    const packSlug = ev.packSlug;
+
+    // Reserve the source while downloading, then the resolved owner before publication.
+    const slugClaim = registry.claimPackOperation(packSlug);
+    if (!slugClaim) {
+      broadcast('packs', { type: 'PACK_INSTALL_FAILED', packSlug, error: operationInProgress(packSlug) });
+      return;
+    }
+    void (async () => {
+      using claims = new DisposableStack();
+      claims.use(slugClaim);
+      console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
+      broadcast('packs', { type: 'PACK_INSTALL_STARTED', packSlug });
+      const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
+      let startAccepted: (() => boolean) | undefined;
+      try {
+        const result = await runInstall(packSlug, ev.sourceKind, undefined, {
+          installedPacksFile: resolveAppEnvironment().installedPacksFile,
+          sha256: ev.sha256,
+          hostVersion: getAppVersion(),
+          packFormat: PACK_SNAPSHOT_FORMAT,
+          beforePlace: manifest => {
+            if (manifest.id === HOST_PACK_ID) throw new Error('The host is not an installable pack');
+            registry.catalog.assertPackSettings(manifest);
+            if (ev.type === 'REPLACE_PACK') {
+              if (manifest.id !== ev.packId) throw new Error(`Replacement expected pack "${ev.packId}", received "${manifest.id}"`);
+            } else {
+              registry.refreshCatalog();
+              const catalog = registry.catalog.getSnapshot();
+              if (packRecord(manifest.id).updatesWith === 'app'
+                || catalog.appPackSources.some(source => source.id === manifest.id)
+                || catalog.appPackSourceProblems.some(problem => problem.id === manifest.id)) {
+                throw new Error(`"${manifest.id}" is an app default. Use Replace to install your own version.`);
+              }
+            }
+            if (manifest.id !== packSlug) {
+              const idClaim = registry.claimPackOperation(manifest.id);
+              if (!idClaim) throw new Error(operationInProgress(manifest.id));
+              claims.use(idClaim);
+            }
+          },
+          accept: candidate => {
+            startAccepted = acceptInstalledPack(registry, candidate.id, bus);
+          },
+        });
+        let activated: boolean;
+        try {
+          if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
+            throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
+          }
+        }
+        finally { activated = startAccepted!(); }
+        const problem = activationProblem(registry, result.id, activated);
+        if (problem) {
+          broadcast('packs', {
+            type: 'PACK_INSTALL_FAILED',
+            packSlug,
+            error: `${result.name} was installed but ${problem}`,
+          });
+          emitPacksList(registry, broadcast);
+          return;
+        }
+
+        broadcast('packs', {
+          type: 'PACK_INSTALL_COMPLETE',
+          packSlug,
+          packId: result.id,
+          packName: result.name,
+          version: result.version,
+        });
+        broadcast('packs', { type: 'PACK_ACTIVATED', packId: result.id });
+        emitPacksList(registry, broadcast);
+      } catch (err) {
+        const message = errorMessage(err);
+        console.error(`[packs] Install failed for ${packSlug}:`, message);
+        broadcast('packs', {
+          type: 'PACK_INSTALL_FAILED',
+          packSlug,
+          error: message,
+        });
+      }
+    })();
+  };
+
+  return hostState<
+    {},
+    PacksEvent,
+    NormalizeAsks<ContractAsks<Contract>>
+  >()({
+    on: {
+      SEND_STATE: (_ev, { broadcast }) => {
+        publishPacksList(registry, broadcast);
       },
-      publishPacksList: () => {
-        publishPacksList(registry);
+
+      GET_INSTALLED_PACKS: (_ev, { broadcast }) => {
+        emitPacksList(registry, broadcast);
+      },
+
+      // Both answer the settings surface, which is where the content UI is drawn. The work is this system's; the
+      // view is not, and a system sends whichever surface's inbox declares the event.
+      PREVIEW_PACK_CONTENT: (ev, { broadcast }) => {
+        try {
+          broadcast('settings', { type: 'PACK_CONTENT_PREVIEW', preview: previewPackContent(ev.directory) });
+        } catch (err) {
+          broadcast('settings', { type: 'PACK_CONTENT_PREVIEW_FAILED', error: errorMessage(err) });
+        }
+      },
+
+      IMPORT_PACK_CONTENT: (ev, { broadcast, tell }) => {
+        try {
+          const include = ev.include ? toContentSelection(ev.include) : undefined;
+          // Read first: a directory that can't name its pack fails before anything is imported
+          const { packId } = previewPackContent(ev.directory);
+          /**
+           * **Write-only, which is what makes this an import and not an apply.** `before` is empty, so no
+           * verdict here can be reached from what a previous apply wrote: nothing is read as the user's
+           * deletion, nothing is read as their edit, and no item is removed for having left the content.
+           * Putting a pack's data back is the request, and the modes are the whole of the policy.
+           *
+           * **What it does write is what it wrote**, and it has to: an import that rewrote fifty entities and
+           * recorded nothing would leave the applied content describing the version before it, which the next
+           * boot's apply would read as fifty edits by the user. The revision is left where it is, so asking
+           * for the data again does not change what counts as changed.
+           */
+          const record = applyRecord();
+          const result = importCompiledContent({ compiledDir: ev.directory, include, mode: ev.mode, applied: record, verbose: true });
+          appliedContent.record(packId, { wrote: record.written });
+          // Appliers report records they couldn't write in their counts rather than throwing
+          const errors = Object.entries(result).flatMap(([key, counts]) => (counts.errors ?? []).map((error) => `${key}: ${error}`));
+          broadcast('settings', { type: 'PACK_CONTENT_IMPORTED', result, errors });
+          // The running systems read what the apply changed (the chat's slash commands, the library's documents)
+          tell({ peer: 'bus' }, { type: 'PACK_CHANGED', packId });
+          if (ev.restartBrain) tell({ peer: 'role:brain' }, { type: 'RESTART_BRAIN' });
+        } catch (err) {
+          broadcast('settings', { type: 'PACK_CONTENT_IMPORT_FAILED', error: errorMessage(err) });
+        }
       },
 
       /**
@@ -229,8 +339,7 @@ export function createPacksSystem(registry: PackRegistry) {
        * refuses `force` beside anything the last apply wrote). The write re-stamps the item's entry, so the
        * offer is answered by the write rather than by a second bookkeeping step.
        */
-      restoreContentItem: ({ event }) => {
-        const ev = packsSpec.typeOf('RESTORE_CONTENT_ITEM', event);
+      RESTORE_CONTENT_ITEM: (ev, { broadcast, tell }) => {
         const selection = contentKeySelection(ev.key);
         if (!selection) {
           reportError({ source: 'packs', operation: 'restoreContentItem', severity: 'error', error: new Error(`Can't restore "${ev.key}": it doesn't name an item of a pack's content`) });
@@ -274,30 +383,28 @@ export function createPacksSystem(registry: PackRegistry) {
            */
           if (record.written.has(ev.key)) appliedContent.resolveOffer(ev.packId, ev.key, { choice: 'taken' });
           // The running systems read what the write changed (the brain's flows, the chat's slash commands)
-          tell('bus', { type: 'PACK_CHANGED', packId: ev.packId });
+          tell({ peer: 'bus' }, { type: 'PACK_CHANGED', packId: ev.packId });
         } catch (err) {
           reportError({ source: 'packs', operation: 'restoreContentItem', severity: 'error', error: err });
         }
-        emitPacksList(registry);
+        emitPacksList(registry, broadcast);
       },
 
       /** "Keep mine": the item stays as the user wrote it, and this version is not offered again */
-      dismissContentOffer: ({ event }) => {
-        const ev = packsSpec.typeOf('DISMISS_CONTENT_OFFER', event);
+      DISMISS_CONTENT_OFFER: (ev, { broadcast }) => {
         const offer = appliedContent.get(ev.packId).items[ev.key]?.offer;
         appliedContent.resolveOffer(ev.packId, ev.key, {
           choice: 'dismissed',
           ...(offer?.contentHash !== undefined && { contentHash: offer.contentHash }),
         });
-        emitPacksList(registry);
+        emitPacksList(registry, broadcast);
       },
 
       /**
        * "Delete it": the other answer to an item the pack stopped shipping. The entity goes and so does its
        * entry, which is what makes the decision final — there is nothing left for a later apply to describe.
        */
-      deleteContentItem: ({ event }) => {
-        const ev = packsSpec.typeOf('DELETE_CONTENT_ITEM', event);
+      DELETE_CONTENT_ITEM: (ev, { broadcast, tell }) => {
         try {
           const item = appliedContent.get(ev.packId).items[ev.key];
           const entity = contentEntity(item?.entityType, ev.key);
@@ -305,103 +412,29 @@ export function createPacksSystem(registry: PackRegistry) {
           // pack registered a `remove` writer is removed the way that pack removes one
           if (entity) removeContentEntity(item!.entityType!, entity.id);
           appliedContent.resolveOffer(ev.packId, ev.key, { choice: 'deleted' });
-          tell('bus', { type: 'PACK_CHANGED', packId: ev.packId });
+          tell({ peer: 'bus' }, { type: 'PACK_CHANGED', packId: ev.packId });
         } catch (err) {
           reportError({ source: 'packs', operation: 'deleteContentItem', severity: 'error', error: err });
         }
-        emitPacksList(registry);
+        emitPacksList(registry, broadcast);
       },
 
-      installPack: ({ system, event }) => {
-        const ev = event.type === 'REPLACE_PACK' ? packsSpec.typeOf('REPLACE_PACK', event) : packsSpec.typeOf('INSTALL_PACK', event);
-        const packSlug = ev.packSlug;
-
-        // Reserve the source while downloading, then the resolved owner before publication.
-        const slugClaim = registry.claimPackOperation(packSlug);
-        if (!slugClaim) {
-          broadcast('packs', { type: 'PACK_INSTALL_FAILED' as const, packSlug, error: operationInProgress(packSlug) });
-          return;
-        }
-        void (async () => {
-          using claims = new DisposableStack();
-          claims.use(slugClaim);
-          console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
-          broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
-          const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
-          let startAccepted: (() => boolean) | undefined;
-          try {
-            const result = await runInstall(packSlug, ev.sourceKind, undefined, {
-              installedPacksFile: resolveAppEnvironment().installedPacksFile,
-              sha256: ev.sha256,
-              hostVersion: getAppVersion(),
-              packFormat: PACK_SNAPSHOT_FORMAT,
-              beforePlace: manifest => {
-                if (manifest.id === HOST_PACK_ID) throw new Error('The host is not an installable pack');
-                registry.catalog.assertPackSettings(manifest);
-                if (ev.type === 'REPLACE_PACK') {
-                  if (manifest.id !== ev.packId) throw new Error(`Replacement expected pack "${ev.packId}", received "${manifest.id}"`);
-                } else {
-                  registry.refreshCatalog();
-                  const catalog = registry.catalog.getSnapshot();
-                  if (packRecord(manifest.id).updatesWith === 'app'
-                    || catalog.appPackSources.some(source => source.id === manifest.id)
-                    || catalog.appPackSourceProblems.some(problem => problem.id === manifest.id)) {
-                    throw new Error(`"${manifest.id}" is an app default. Use Replace to install your own version.`);
-                  }
-                }
-                if (manifest.id !== packSlug) {
-                  const idClaim = registry.claimPackOperation(manifest.id);
-                  if (!idClaim) throw new Error(operationInProgress(manifest.id));
-                  claims.use(idClaim);
-                }
-              },
-              accept: candidate => {
-                startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
-              },
-            });
-            let activated: boolean;
-            try {
-              if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
-                throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
-              }
-            }
-            finally { activated = startAccepted!(); }
-            const problem = activationProblem(registry, result.id, activated);
-            if (problem) {
-              broadcast('packs', {
-                type: 'PACK_INSTALL_FAILED' as const,
-                packSlug,
-                error: `${result.name} was installed but ${problem}`,
-              });
-              emitPacksList(registry);
-              return;
-            }
-
-            broadcast('packs', {
-              type: 'PACK_INSTALL_COMPLETE' as const,
-              packSlug,
-              packId: result.id,
-              packName: result.name,
-              version: result.version,
-            });
-            broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId: result.id });
-            emitPacksList(registry);
-          } catch (err) {
-            const message = errorMessage(err);
-            console.error(`[packs] Install failed for ${packSlug}:`, message);
-            broadcast('packs', {
-              type: 'PACK_INSTALL_FAILED' as const,
-              packSlug,
-              error: message,
-            });
-          }
-        })();
+      // A pack activated, reloaded or torn down changes this list, and a reload is the one that
+      // reaches here no other way: it comes from `apack pack dev`, not from an action of this system
+      INSTALL_PACK: (ev, { broadcast, tell }) => {
+        handleInstall(ev, broadcast, busTarget(tell));
       },
 
-      restorePack: ({ system, event }) => {
-        const { packId, sourceRevision } = packsSpec.typeOf('RESTORE_PACK', event);
+      REPLACE_PACK: (ev, { broadcast, tell }) => {
+        handleInstall(ev, broadcast, busTarget(tell));
+      },
+
+      RESTORE_PACK: ({ packId, sourceRevision }, { broadcast, tell }) => {
+        const bus = busTarget(tell);
         const fail = (error: unknown) => broadcast('packs', {
-          type: 'PACK_INSTALL_FAILED' as const, packSlug: packId, error: errorMessage(error),
+          type: 'PACK_INSTALL_FAILED',
+          packSlug: packId,
+          error: errorMessage(error),
         });
         if (packId === HOST_PACK_ID || !PACK_ID_PATTERN.test(packId)) {
           fail(new Error('Select an installable app default'));
@@ -412,7 +445,7 @@ export function createPacksSystem(registry: PackRegistry) {
           fail(new Error(operationInProgress(packId)));
           return;
         }
-        broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug: packId });
+        broadcast('packs', { type: 'PACK_INSTALL_STARTED', packSlug: packId });
         let startAccepted: (() => boolean) | undefined;
         Promise.resolve().then(() => {
           registry.refreshCatalog();
@@ -426,40 +459,46 @@ export function createPacksSystem(registry: PackRegistry) {
           }
           const { packsDir, installedPacksFile } = resolveAppEnvironment();
           return restoreShippedPack(packId, source.dir, packsDir, {
-            installedPacksFile, expectedSourceRevision: sourceRevision,
-            hostVersion: getAppVersion(), packFormat: PACK_SNAPSHOT_FORMAT,
+            installedPacksFile,
+            expectedSourceRevision: sourceRevision,
+            hostVersion: getAppVersion(),
+            packFormat: PACK_SNAPSHOT_FORMAT,
             beforePlace: manifest => registry.catalog.assertPackSettings(manifest),
-            accept: candidate => { startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus)); },
+            accept: candidate => { startAccepted = acceptInstalledPack(registry, candidate.id, bus); },
           });
         }).then(result => {
           const activated = startAccepted!();
           const problem = activationProblem(registry, packId, activated);
           if (problem) fail(new Error(`${result.name} was restored but ${problem}`));
           else {
-            broadcast('packs', { type: 'PACK_INSTALL_COMPLETE' as const, packSlug: packId,
-              packId, packName: result.name, version: result.version });
-            broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
+            broadcast('packs', {
+              type: 'PACK_INSTALL_COMPLETE',
+              packSlug: packId,
+              packId,
+              packName: result.name,
+              version: result.version,
+            });
+            broadcast('packs', { type: 'PACK_ACTIVATED', packId });
           }
-          emitPacksList(registry);
+          emitPacksList(registry, broadcast);
         }).catch(fail).finally(() => { claim.release(); });
       },
 
-      uninstallPack: ({ system, event }) => {
-        const ev = packsSpec.typeOf('UNINSTALL_PACK', event);
-        const packId = ev.packId;
+      UNINSTALL_PACK: ({ packId }, { broadcast, tell }) => {
+        const bus = busTarget(tell);
         if (packId === HOST_PACK_ID) {
-          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: `"${packId}" is part of apack, so it can't be uninstalled` });
+          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED', packId, error: `"${packId}" is part of apack, so it can't be uninstalled` });
           return;
         }
         // The id names the directory the uninstall deletes, so only an installed pack's own is taken
         if (!isInstalled(packId)) {
-          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: `"${packId}" is not an installed pack` });
+          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED', packId, error: `"${packId}" is not an installed pack` });
           return;
         }
 
         const claim = registry.claimPackOperation(packId);
         if (!claim) {
-          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: operationInProgress(packId) });
+          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED', packId, error: operationInProgress(packId) });
           return;
         }
         console.log(`[packs] Uninstall requested: ${packId}`);
@@ -468,20 +507,16 @@ export function createPacksSystem(registry: PackRegistry) {
         Promise.resolve().then(() => {
           cacheDir = fs.realpathSync(path.join(resolveAppEnvironment().packsDir, packId));
           return runUninstall(packId, undefined, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
-        }).then(() => teardownPack(registry, packId, system.get(HOST.bus))).then(() => {
+        }).then(() => teardownPack(registry, packId, bus)).then(() => {
           clearPackRequireCache(cacheDir);
-          broadcast('packs', { type: 'PACK_DEACTIVATED' as const, packId });
-
-          broadcast('packs', {
-            type: 'PACK_UNINSTALL_COMPLETE' as const,
-            packId,
-          });
-          emitPacksList(registry);
+          broadcast('packs', { type: 'PACK_DEACTIVATED', packId });
+          broadcast('packs', { type: 'PACK_UNINSTALL_COMPLETE', packId });
+          emitPacksList(registry, broadcast);
         }).catch(err => {
           const message = errorMessage(err);
           console.error(`[packs] Uninstall failed for ${packId}:`, message);
           broadcast('packs', {
-            type: 'PACK_UNINSTALL_FAILED' as const,
+            type: 'PACK_UNINSTALL_FAILED',
             packId,
             error: message,
           });
@@ -490,10 +525,12 @@ export function createPacksSystem(registry: PackRegistry) {
         });
       },
 
-      updateAppPack: ({ system, event }) => {
-        const { packId, sourceRevision } = packsSpec.typeOf('UPDATE_APP_PACK', event);
+      UPDATE_APP_PACK: ({ packId, sourceRevision }, { broadcast, tell }) => {
+        const bus = busTarget(tell);
         const fail = (error: unknown) => broadcast('packs', {
-          type: 'PACK_UPDATE_FAILED' as const, packId, error: errorMessage(error),
+          type: 'PACK_UPDATE_FAILED',
+          packId,
+          error: errorMessage(error),
         });
         const claim = registry.claimPackOperation(packId);
         if (!claim) {
@@ -510,12 +547,14 @@ export function createPacksSystem(registry: PackRegistry) {
           if (source.sourceRevision !== sourceRevision) throw new Error(`App source "${packId}" changed; refresh before updating`);
           const { packsDir, installedPacksFile } = resolveAppEnvironment();
           return updateShippedPack(packId, source.dir, packsDir, {
-            installedPacksFile, expectedSourceRevision: sourceRevision,
-            hostVersion: getAppVersion(), packFormat: PACK_SNAPSHOT_FORMAT,
+            installedPacksFile,
+            expectedSourceRevision: sourceRevision,
+            hostVersion: getAppVersion(),
+            packFormat: PACK_SNAPSHOT_FORMAT,
             beforePlace: manifest => registry.catalog.assertPackSettings(manifest),
             accept: candidate => {
               enabled = packRecord(packId).enabled;
-              if (enabled) startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
+              if (enabled) startAccepted = acceptInstalledPack(registry, candidate.id, bus);
             },
           });
         }).then(result => {
@@ -524,20 +563,19 @@ export function createPacksSystem(registry: PackRegistry) {
           const problem = enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) fail(new Error(`${result.name} was updated but ${problem}`));
           else {
-            broadcast('packs', { type: 'PACK_UPDATE_COMPLETE' as const, packId, version: result.version });
-            if (activated) broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
+            broadcast('packs', { type: 'PACK_UPDATE_COMPLETE', packId, version: result.version });
+            if (activated) broadcast('packs', { type: 'PACK_ACTIVATED', packId });
           }
-          emitPacksList(registry);
-        }).catch(error => { fail(error); emitPacksList(registry); }).finally(() => { claim.release(); });
+          emitPacksList(registry, broadcast);
+        }).catch(error => { fail(error); emitPacksList(registry, broadcast); }).finally(() => { claim.release(); });
       },
 
-      updatePack: ({ system, event }) => {
-        const ev = packsSpec.typeOf('UPDATE_PACK', event);
-        const packId = ev.packId;
+      UPDATE_PACK: ({ packId }, { broadcast, tell }) => {
+        const bus = busTarget(tell);
         const entry = packRecord(packId);
         if (entry.updatesWith === 'app' || !entry.installedFrom) {
           broadcast('packs', {
-            type: 'PACK_UPDATE_FAILED' as const,
+            type: 'PACK_UPDATE_FAILED',
             packId,
             error: entry.updatesWith === 'app' ? 'Use the selected app-source update for an app-managed pack' : 'Pack has no update source',
           });
@@ -546,7 +584,7 @@ export function createPacksSystem(registry: PackRegistry) {
 
         const claim = registry.claimPackOperation(packId);
         if (!claim) {
-          broadcast('packs', { type: 'PACK_UPDATE_FAILED' as const, packId, error: operationInProgress(packId) });
+          broadcast('packs', { type: 'PACK_UPDATE_FAILED', packId, error: operationInProgress(packId) });
           return;
         }
 
@@ -565,7 +603,7 @@ export function createPacksSystem(registry: PackRegistry) {
             registry.catalog.assertPackSettings(manifest);
           },
           accept: candidate => {
-            if (entry.enabled) startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
+            if (entry.enabled) startAccepted = acceptInstalledPack(registry, candidate.id, bus);
           },
         }).then(result => {
           let activated: boolean;
@@ -579,45 +617,45 @@ export function createPacksSystem(registry: PackRegistry) {
           const problem = entry.enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) {
             broadcast('packs', {
-              type: 'PACK_UPDATE_FAILED' as const,
+              type: 'PACK_UPDATE_FAILED',
               packId,
               error: `Updated to ${result.version} but ${problem}`,
             });
-            emitPacksList(registry);
+            emitPacksList(registry, broadcast);
             return;
           }
 
           broadcast('packs', {
-            type: 'PACK_UPDATE_COMPLETE' as const,
+            type: 'PACK_UPDATE_COMPLETE',
             packId,
             version: result.version,
           });
-          if (activated) broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
-          emitPacksList(registry);
+          if (activated) broadcast('packs', { type: 'PACK_ACTIVATED', packId });
+          emitPacksList(registry, broadcast);
         }).catch(err => {
           const message = errorMessage(err);
           console.error(`[packs] Update failed for ${packId}:`, message);
           broadcast('packs', {
-            type: 'PACK_UPDATE_FAILED' as const,
+            type: 'PACK_UPDATE_FAILED',
             packId,
             error: message,
           });
-          emitPacksList(registry);
+          emitPacksList(registry, broadcast);
         }).finally(() => {
           claim.release();
         });
       },
 
-      checkForPackUpdates: () => {
+      CHECK_FOR_UPDATES: (_ev, { broadcast }) => {
         checkForUpdates({ hostVersion: getAppVersion() }).then(() => {
-          emitPacksList(registry);
+          emitPacksList(registry, broadcast);
         }).catch(err => {
           console.error('[packs] Update check failed:', err);
         });
       },
 
-      togglePackEnabled: ({ system, event, self }) => {
-        const ev = packsSpec.typeOf('TOGGLE_PACK_ENABLED', event);
+      TOGGLE_PACK_ENABLED: (ev, { broadcast, tell, send }) => {
+        const bus = busTarget(tell);
         const packId = ev.packId;
 
         if (packId === HOST_PACK_ID) return;
@@ -627,13 +665,13 @@ export function createPacksSystem(registry: PackRegistry) {
           // The pack's own disable is still tearing down: turning it back on is what was asked, once that ends
           const teardown = teardowns.get(packId);
           if (teardown) {
-            void teardown.then(() => self.send(event));
+            void teardown.then(() => send(ev));
             return;
           }
           // Refused as every operation on a busy pack is, and said so: each window shows the state that holds
           reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(operationInProgress(packId)) });
           if (isInstalled(packId)) {
-            broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: packRecord(packId).enabled });
+            broadcast('packs', { type: 'PACK_ENABLED_CHANGED', packId, enabled: packRecord(packId).enabled });
           }
           return;
         }
@@ -655,20 +693,23 @@ export function createPacksSystem(registry: PackRegistry) {
           }
         } catch (error) {
           reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(errorMessage(error)) });
-          broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
+          broadcast('packs', { type: 'PACK_ENABLED_CHANGED', packId, enabled: entry.enabled });
           return;
         }
 
         if (!setPackEnabled(packId, newEnabled)) {
-          reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error',
+          reportError({
+            source: 'packs',
+            operation: 'setPackEnabled',
+            severity: 'error',
             error: new Error(`Couldn't save that ${packId} is ${newEnabled ? 'enabled' : 'disabled'}; the current state is unchanged.`),
           });
-          broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
+          broadcast('packs', { type: 'PACK_ENABLED_CHANGED', packId, enabled: entry.enabled });
           return;
         }
 
         if (!newEnabled) {
-          const tearingDown = teardownPack(registry, packId, system.get(HOST.bus));
+          const tearingDown = teardownPack(registry, packId, bus);
           const held = claims.move();
           const settled = tearingDown.finally(() => {
             held.dispose();
@@ -676,71 +717,23 @@ export function createPacksSystem(registry: PackRegistry) {
           });
           teardowns.set(packId, settled);
           void settled;
-          broadcast('packs', { type: 'PACK_DEACTIVATED' as const, packId });
+          broadcast('packs', { type: 'PACK_DEACTIVATED', packId });
         } else {
-          if (activatePack(registry, packId, system.get(HOST.bus))) {
-            broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
+          if (activatePack(registry, packId, bus)) {
+            broadcast('packs', { type: 'PACK_ACTIVATED', packId });
           }
         }
 
         broadcast('packs', {
-          type: 'PACK_ENABLED_CHANGED' as const,
+          type: 'PACK_ENABLED_CHANGED',
           packId,
           enabled: newEnabled,
         });
-        emitPacksList(registry);
-      },
-    }),
-  }).createMachine({
-    id: HOST.packs,
-    initial: 'idle',
-    context: {},
-    states: {
-      idle: {
-        on: {
-          SEND_STATE: {
-            actions: 'publishPacksList',
-          },
-          GET_INSTALLED_PACKS: {
-            actions: 'sendPacksList',
-          },
-          // A pack activated, reloaded or torn down changes this list, and a reload is the one that
-          // reaches here no other way: it comes from `apack pack dev`, not from an action of this system
-          INSTALL_PACK: {
-            actions: 'installPack',
-          },
-          REPLACE_PACK: { actions: 'installPack' },
-          RESTORE_PACK: { actions: 'restorePack' },
-          UNINSTALL_PACK: {
-            actions: 'uninstallPack',
-          },
-          TOGGLE_PACK_ENABLED: {
-            actions: 'togglePackEnabled',
-          },
-          UPDATE_APP_PACK: { actions: 'updateAppPack' },
-          UPDATE_PACK: {
-            actions: 'updatePack',
-          },
-          PREVIEW_PACK_CONTENT: {
-            actions: 'previewPackContent',
-          },
-          IMPORT_PACK_CONTENT: {
-            actions: 'importPackContent',
-          },
-          RESTORE_CONTENT_ITEM: {
-            actions: 'restoreContentItem',
-          },
-          DISMISS_CONTENT_OFFER: {
-            actions: 'dismissContentOffer',
-          },
-          DELETE_CONTENT_ITEM: {
-            actions: 'deleteContentItem',
-          },
-          CHECK_FOR_UPDATES: {
-            actions: 'checkForPackUpdates',
-          },
-        },
+        emitPacksList(registry, broadcast);
       },
     },
   });
 }
+
+const _contractMatches: StateMatchesContract<ReturnType<typeof createPacksSystem>, Contract> = true;
+void _contractMatches;

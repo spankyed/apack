@@ -135,7 +135,12 @@ function spawnSystems(
             if (busSelf.getSnapshot().status === 'active') busSelf.send({ type: 'OUTGOING', message });
           },
           onTellPeer: (peer, event) => {
-            if (!peer.startsWith('role:') || busSelf.getSnapshot().status !== 'active') return;
+            if (busSelf.getSnapshot().status !== 'active') return;
+            if (peer === 'bus') {
+              busSelf.send(event);
+              return;
+            }
+            if (!peer.startsWith('role:')) return;
             const role = peer.slice('role:'.length);
             const target = registry.designation?.(role);
             if (!target) return;

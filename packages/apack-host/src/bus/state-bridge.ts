@@ -19,10 +19,11 @@ import {
 import { splitRef } from '@apackdev/sdk/ids';
 import { reportError } from '@apackdev/sdk/logger';
 import { deliverAs } from './delivery.ts';
+import { carrySettingsRequest } from '../features/settings/be/access.ts';
 
 const XSTATE_STOP = 'xstate.stop';
 const STATE_SYNC_EVENT = '__apack_state_sync__';
-const ROLE_PEERS = ['role:brain', 'role:code'] as const;
+const BRIDGE_PEERS = ['bus', 'role:brain', 'role:code'] as const;
 
 type StateEvent = { type: string; [key: string]: unknown };
 
@@ -143,7 +144,7 @@ export function createStateSystemActor(
       });
 
       const peerDetaches = options.onTellPeer
-        ? ROLE_PEERS.map((peer) => sys.attach(peer, {
+        ? BRIDGE_PEERS.map((peer) => sys.attach(peer, {
             tell: (name, event) => options.onTellPeer!(name, event as StateEvent),
           }))
         : [];
@@ -214,6 +215,7 @@ export function createStateSystemActor(
       const delivered = _CALL_KEY in event
         ? Object.fromEntries(Object.entries(event).filter(([key]) => key !== _CALL_KEY)) as StateEvent
         : event;
+      if (delivered !== event) carrySettingsRequest(event, delivered);
 
       instance.inTransition = true;
       try {
@@ -239,6 +241,7 @@ export function dispatchStateAsk(
 ): void {
   const { to, event: incoming, sender, client, call, diagnostics } = message;
   const { type: asked, [_CALL_KEY]: _ignoredCall, ...args } = incoming;
+  carrySettingsRequest(incoming, args);
   const ask = { kinds, taken: false };
 
   deliverAs({ to, sender, client, call, diagnostics }, incoming, () => {
