@@ -1552,7 +1552,7 @@
 - threads): add missing fields to all message query whitelists
 - threads): preserve block response state when forking threads
 - threads): sync forkable state in real-time without page refresh
-- chat-state): init chatState on startup, guard sendToPlugin behind artifact existence
+- chat-state): init chatState on startup, guard sendToSurface behind artifact existence
 - ndjson): honor "never throws" contract on buffer overflow
 - chat-input): clear prefillText after consumption so identical reverts retrigger
 - project-select): derive display string from response to avoid [object Object]
@@ -3230,7 +3230,7 @@
 -  remove redundant LIST_FILES call that caused error flash on directory open
 -  move 'New Project' component to the correct position in the template
 -  update label from 'Create Project' to 'New Project' for clarity
--  type-safe sendToPlugin with DistributiveOmit to eliminate as any casts
+-  type-safe sendToSurface with DistributiveOmit to eliminate as any casts
 -  update onboarding task completion logic and add SET_MODE event type
 -  set chat mode to 'chat' upon finishing onboarding
 -  reset mode to default when switching threads without forcedMode
@@ -3626,8 +3626,8 @@
 -  enhance introduction and features sections for clarity and detail
 -  update system architecture diagram to include flows and clarify interactions
 -  ensure finishReason is awaited before sending LLM_DONE event
--  move sendToPlugin call inside the streaming loop for real-time updates
--  correct function name from emitToPlugin to sendToPlugin in event emitter documentation
+-  move sendToSurface call inside the streaming loop for real-time updates
+-  correct function name from emitToPlugin to sendToSurface in event emitter documentation
 -  add missing await for streamText in Stream to FE action
 -  update border color for tab bar in canvas component
 -  reorganize layout and root styling of inbox components
@@ -4030,7 +4030,7 @@
 -  reorganize database query editor header layout
 -  rename applyFieldMappings to mapTemplateFields for clarity
 -  remove unused context properties and input types across systems
--  rename usePlugin to useState composable
+-  rename useSurface to useState composable
 -  use full EntityIds throughout library system
 -  adjust padding and spacing in chat message component for improved layout
 -  simplify chat message component structure with minimalist styling
@@ -5430,7 +5430,7 @@
 - Consolidate plugin event types into type-helpers and remove safe-events
 - Code cleanup
 - Reorder generic type inference in fromPlugin helper
-- Decentralize PluginEvents definitions
+- Decentralize SurfaceEvents definitions
 - BusEvents code cleanup
 - Add MergeReceivable for simplified event handling
 - Add fromPlugin helper for better dx ergonomics
@@ -6654,7 +6654,7 @@
 -  remove redundant LIST_FILES call that caused error flash on directory open
 -  move 'New Project' component to the correct position in the template
 -  update label from 'Create Project' to 'New Project' for clarity
--  type-safe sendToPlugin with DistributiveOmit to eliminate as any casts
+-  type-safe sendToSurface with DistributiveOmit to eliminate as any casts
 -  update onboarding task completion logic and add SET_MODE event type
 -  set chat mode to 'chat' upon finishing onboarding
 -  reset mode to default when switching threads without forcedMode
@@ -7050,8 +7050,8 @@
 -  enhance introduction and features sections for clarity and detail
 -  update system architecture diagram to include flows and clarify interactions
 -  ensure finishReason is awaited before sending LLM_DONE event
--  move sendToPlugin call inside the streaming loop for real-time updates
--  correct function name from emitToPlugin to sendToPlugin in event emitter documentation
+-  move sendToSurface call inside the streaming loop for real-time updates
+-  correct function name from emitToPlugin to sendToSurface in event emitter documentation
 -  add missing await for streamText in Stream to FE action
 -  update border color for tab bar in canvas component
 -  reorganize layout and root styling of inbox components
@@ -7454,7 +7454,7 @@
 -  reorganize database query editor header layout
 -  rename applyFieldMappings to mapTemplateFields for clarity
 -  remove unused context properties and input types across systems
--  rename usePlugin to useState composable
+-  rename useSurface to useState composable
 -  use full EntityIds throughout library system
 -  adjust padding and spacing in chat message component for improved layout
 -  simplify chat message component structure with minimalist styling
@@ -8853,7 +8853,7 @@
 - Consolidate plugin event types into type-helpers and remove safe-events
 - Code cleanup
 - Reorder generic type inference in fromPlugin helper
-- Decentralize PluginEvents definitions
+- Decentralize SurfaceEvents definitions
 - BusEvents code cleanup
 - Add MergeReceivable for simplified event handling
 - Add fromPlugin helper for better dx ergonomics
@@ -10074,7 +10074,7 @@
 -  remove redundant LIST_FILES call that caused error flash on directory open
 -  move 'New Project' component to the correct position in the template
 -  update label from 'Create Project' to 'New Project' for clarity
--  type-safe sendToPlugin with DistributiveOmit to eliminate as any casts
+-  type-safe sendToSurface with DistributiveOmit to eliminate as any casts
 -  update onboarding task completion logic and add SET_MODE event type
 -  set chat mode to 'chat' upon finishing onboarding
 -  reset mode to default when switching threads without forcedMode
@@ -10470,8 +10470,8 @@
 -  enhance introduction and features sections for clarity and detail
 -  update system architecture diagram to include flows and clarify interactions
 -  ensure finishReason is awaited before sending LLM_DONE event
--  move sendToPlugin call inside the streaming loop for real-time updates
--  correct function name from emitToPlugin to sendToPlugin in event emitter documentation
+-  move sendToSurface call inside the streaming loop for real-time updates
+-  correct function name from emitToPlugin to sendToSurface in event emitter documentation
 -  add missing await for streamText in Stream to FE action
 -  update border color for tab bar in canvas component
 -  reorganize layout and root styling of inbox components
@@ -10874,7 +10874,7 @@
 -  reorganize database query editor header layout
 -  rename applyFieldMappings to mapTemplateFields for clarity
 -  remove unused context properties and input types across systems
--  rename usePlugin to useState composable
+-  rename useSurface to useState composable
 -  use full EntityIds throughout library system
 -  adjust padding and spacing in chat message component for improved layout
 -  simplify chat message component structure with minimalist styling
@@ -12273,7 +12273,7 @@
 - Consolidate plugin event types into type-helpers and remove safe-events
 - Code cleanup
 - Reorder generic type inference in fromPlugin helper
-- Decentralize PluginEvents definitions
+- Decentralize SurfaceEvents definitions
 - BusEvents code cleanup
 - Add MergeReceivable for simplified event handling
 - Add fromPlugin helper for better dx ergonomics
@@ -13486,7 +13486,7 @@
 -  remove redundant LIST_FILES call that caused error flash on directory open
 -  move 'New Project' component to the correct position in the template
 -  update label from 'Create Project' to 'New Project' for clarity
--  type-safe sendToPlugin with DistributiveOmit to eliminate as any casts
+-  type-safe sendToSurface with DistributiveOmit to eliminate as any casts
 -  update onboarding task completion logic and add SET_MODE event type
 -  set chat mode to 'chat' upon finishing onboarding
 -  reset mode to default when switching threads without forcedMode
@@ -13882,8 +13882,8 @@
 -  enhance introduction and features sections for clarity and detail
 -  update system architecture diagram to include flows and clarify interactions
 -  ensure finishReason is awaited before sending LLM_DONE event
--  move sendToPlugin call inside the streaming loop for real-time updates
--  correct function name from emitToPlugin to sendToPlugin in event emitter documentation
+-  move sendToSurface call inside the streaming loop for real-time updates
+-  correct function name from emitToPlugin to sendToSurface in event emitter documentation
 -  add missing await for streamText in Stream to FE action
 -  update border color for tab bar in canvas component
 -  reorganize layout and root styling of inbox components
@@ -14286,7 +14286,7 @@
 -  reorganize database query editor header layout
 -  rename applyFieldMappings to mapTemplateFields for clarity
 -  remove unused context properties and input types across systems
--  rename usePlugin to useState composable
+-  rename useSurface to useState composable
 -  use full EntityIds throughout library system
 -  adjust padding and spacing in chat message component for improved layout
 -  simplify chat message component structure with minimalist styling
@@ -15672,7 +15672,7 @@
 - Consolidate plugin event types into type-helpers and remove safe-events
 - Code cleanup
 - Reorder generic type inference in fromPlugin helper
-- Decentralize PluginEvents definitions
+- Decentralize SurfaceEvents definitions
 - BusEvents code cleanup
 - Add MergeReceivable for simplified event handling
 - Add fromPlugin helper for better dx ergonomics
@@ -16879,7 +16879,7 @@
 -  remove redundant LIST_FILES call that caused error flash on directory open
 -  move 'New Project' component to the correct position in the template
 -  update label from 'Create Project' to 'New Project' for clarity
--  type-safe sendToPlugin with DistributiveOmit to eliminate as any casts
+-  type-safe sendToSurface with DistributiveOmit to eliminate as any casts
 -  update onboarding task completion logic and add SET_MODE event type
 -  set chat mode to 'chat' upon finishing onboarding
 -  reset mode to default when switching threads without forcedMode
@@ -17275,8 +17275,8 @@
 -  enhance introduction and features sections for clarity and detail
 -  update system architecture diagram to include flows and clarify interactions
 -  ensure finishReason is awaited before sending LLM_DONE event
--  move sendToPlugin call inside the streaming loop for real-time updates
--  correct function name from emitToPlugin to sendToPlugin in event emitter documentation
+-  move sendToSurface call inside the streaming loop for real-time updates
+-  correct function name from emitToPlugin to sendToSurface in event emitter documentation
 -  add missing await for streamText in Stream to FE action
 -  update border color for tab bar in canvas component
 -  reorganize layout and root styling of inbox components
@@ -17679,7 +17679,7 @@
 -  reorganize database query editor header layout
 -  rename applyFieldMappings to mapTemplateFields for clarity
 -  remove unused context properties and input types across systems
--  rename usePlugin to useState composable
+-  rename useSurface to useState composable
 -  use full EntityIds throughout library system
 -  adjust padding and spacing in chat message component for improved layout
 -  simplify chat message component structure with minimalist styling
@@ -19060,7 +19060,7 @@
 - Consolidate plugin event types into type-helpers and remove safe-events
 - Code cleanup
 - Reorder generic type inference in fromPlugin helper
-- Decentralize PluginEvents definitions
+- Decentralize SurfaceEvents definitions
 - BusEvents code cleanup
 - Add MergeReceivable for simplified event handling
 - Add fromPlugin helper for better dx ergonomics
