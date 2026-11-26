@@ -46,6 +46,7 @@ export interface LifecycleBridge {
   powerState(): PowerState;
   registerPowerState(handler: (state: PowerState) => void): () => void;
   registerWindowPortHandler(handler: (port: UtilityMessagePort, info: WindowPortInfo) => void): () => void;
+  registerWindowGoneHandler(handler: (windowId: number) => void): () => void;
   notifyServerReady(port: number): void;
 }
 
@@ -61,6 +62,8 @@ export function createLifecycleBridge(
   let powerHandler: ((state: PowerState) => void) | undefined;
   let windowPortHandler: ((port: UtilityMessagePort, info: WindowPortInfo) => void) | undefined;
   const pendingWindowPorts: Array<{ port: UtilityMessagePort; info: WindowPortInfo }> = [];
+  let windowGoneHandler: ((windowId: number) => void) | undefined;
+  const pendingWindowGone: number[] = [];
 
   function closePendingWindowPorts(): void {
     for (const entry of pendingWindowPorts.splice(0)) {
@@ -71,6 +74,7 @@ export function createLifecycleBridge(
   function triggerShutdown(): void {
     shutdownRequested = true;
     closePendingWindowPorts();
+    pendingWindowGone.length = 0;
     if (!shutdownHandler || shutdownTriggered) return;
     shutdownTriggered = true;
     shutdownHandler();
@@ -99,6 +103,15 @@ export function createLifecycleBridge(
     });
   }
 
+  function handleWindowGone(windowId: number): void {
+    if (shutdownRequested) return;
+    if (windowGoneHandler) {
+      windowGoneHandler(windowId);
+      return;
+    }
+    pendingWindowGone.push(windowId);
+  }
+
   function installShutdownBridge(): void {
     if (installed) return;
     installed = true;
@@ -120,6 +133,12 @@ export function createLifecycleBridge(
           && event.ports?.[0]
         ) {
           handleWindowPort(event.ports[0], { windowId: payload.windowId, generation: payload.generation });
+        } else if (
+          payload.type === 'window-gone'
+          && typeof payload.windowId === 'number'
+          && Number.isFinite(payload.windowId)
+        ) {
+          handleWindowGone(payload.windowId);
         }
       });
     }
@@ -174,6 +193,21 @@ export function createLifecycleBridge(
     };
   }
 
+  function registerWindowGoneHandler(handler: (windowId: number) => void): () => void {
+    installShutdownBridge();
+    windowGoneHandler = handler;
+    for (const windowId of pendingWindowGone.splice(0)) {
+      if (windowGoneHandler !== handler) {
+        pendingWindowGone.push(windowId);
+        continue;
+      }
+      handler(windowId);
+    }
+    return () => {
+      if (windowGoneHandler === handler) windowGoneHandler = undefined;
+    };
+  }
+
   function notifyServerReady(port: number): void {
     proc.parentPort?.postMessage({ type: 'ready', port });
   }
@@ -185,6 +219,7 @@ export function createLifecycleBridge(
     powerState,
     registerPowerState,
     registerWindowPortHandler,
+    registerWindowGoneHandler,
     notifyServerReady,
   };
 }
@@ -206,6 +241,11 @@ export const registerPowerState = (handler: (state: PowerState) => void): (() =>
 export const registerWindowPortHandler = (
   handler: (port: UtilityMessagePort, info: WindowPortInfo) => void,
 ): (() => void) => defaultBridge.registerWindowPortHandler(handler);
+
+/** Binds the handler for window teardown signals (`destroyed` / `render-process-gone`) from main; drains any queued during boot. */
+export const registerWindowGoneHandler = (
+  handler: (windowId: number) => void,
+): (() => void) => defaultBridge.registerWindowGoneHandler(handler);
 
 /** Notifies Electron main over `parentPort` once the WebSocket server is listening (chunk-proof structured signal). */
 export const notifyServerReady = (port: number): void => defaultBridge.notifyServerReady(port);

@@ -83,10 +83,13 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
     const isNew = !this.windows.has(sender.id);
     this.windows.set(sender.id, sender);
     if (isNew) {
+      let released = false;
       const release = () => {
-        if (this.windows.get(sender.id) === sender) {
-          this.windows.delete(sender.id);
-        }
+        if (released) return;
+        released = true;
+        if (this.windows.get(sender.id) !== sender) return;
+        this.windows.delete(sender.id);
+        this.notifyWindowGone(sender.id);
       };
       sender.once('destroyed', release);
       sender.once('render-process-gone', release);
@@ -143,6 +146,15 @@ export class PortBroker<P extends BrokerMessagePort = MessagePortMain> {
   /** Number of live registered windows currently tracked by this broker. */
   windowCount(): number {
     return this.windows.size;
+  }
+
+  private notifyWindowGone(windowId: number): void {
+    if (!this.backend) return;
+    try {
+      this.backend.postMessage({ type: 'window-gone', windowId });
+    } catch (error) {
+      logWarn('[MAIN] Failed to notify backend of window teardown:', error);
+    }
   }
 
   private handoff(sender: PortWebContents<P>, backend: PortBackend<P>, generation: number): boolean {
