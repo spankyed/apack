@@ -6,7 +6,7 @@
 //
 // Plain Node, importing nothing outside `node:`: `deps.mjs` runs it before anything is installed, and the janitor
 // runs under launchd with no npm.
-import { existsSync, lstatSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -71,10 +71,62 @@ export function repositoryOf(name) {
   return Object.keys(REPOSITORIES).find((repo) => name in REPOSITORIES[repo].packages);
 }
 
+/** @param {string} root @returns {string[]} */
+function workspaceNodeModulesDirs(root) {
+  const packagesDir = path.join(root, 'packages');
+  if (!existsSync(packagesDir)) return [];
+  /** @type {string[]} */
+  const dirs = [];
+  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const nodeModules = path.join(packagesDir, entry.name, 'node_modules');
+    if (existsSync(nodeModules)) dirs.push(nodeModules);
+  }
+  return dirs;
+}
+
+/** @param {string} target @returns {import('node:fs').Stats | undefined} */
+function lstatOrUndefined(target) {
+  try {
+    return lstatSync(target);
+  } catch {
+    return undefined;
+  }
+}
+
+/** @param {string} target @returns {string | undefined} */
+function realpathOrUndefined(target) {
+  try {
+    return realpathSync(target);
+  } catch {
+    return undefined;
+  }
+}
+
+/** @param {string} root @param {string} nodeModules @param {string} name @param {boolean} onlySymlinks @returns {string | undefined} */
+function removePackageEntry(root, nodeModules, name, onlySymlinks) {
+  const segments = name.split('/');
+  const target = path.join(nodeModules, ...segments);
+  const stat = lstatOrUndefined(target);
+  if (stat === undefined || (onlySymlinks && !stat.isSymbolicLink())) return undefined;
+  rmSync(target, { recursive: true, force: true });
+  // Remove now-empty @scope folder so stale empty scope directories do not linger
+  if (segments.length === 2) {
+    const scopeDir = path.join(nodeModules, segments[0]);
+    try {
+      if (readdirSync(scopeDir).length === 0) rmSync(scopeDir, { recursive: true, force: true });
+    } catch {
+      // Scope directory already gone
+    }
+  }
+  return path.relative(root, target).split(path.sep).join('/');
+}
+
 /**
  * Removes stale nested workspace `packages/<ws>/node_modules/<pkg>` copies/symlinks and stale root `node_modules/<pkg>`
  * symlinks for `packageNames` before reinstalling after an override switch (`deps:local` <-> `deps:pin` /
- * `deps:released`), so npm hoists a single clean copy into root `node_modules` instead of leaving stale links behind.
+ * `deps:released`), so npm hoists a single clean copy into root `node_modules` without wiping a working real root
+ * directory if `npm install` fails.
  *
  * @param {string} root
  * @param {readonly string[]} packageNames
@@ -86,60 +138,68 @@ export function pruneNestedOverrides(root, packageNames) {
   const rootNodeModules = path.join(root, 'node_modules');
   if (existsSync(rootNodeModules)) {
     for (const name of packageNames) {
-      const segments = name.split('/');
-      const target = path.join(rootNodeModules, ...segments);
-      let isLink = false;
-      try {
-        isLink = lstatSync(target).isSymbolicLink();
-      } catch {
-        isLink = false;
-      }
-      if (!isLink) continue;
-      rmSync(target, { recursive: true, force: true });
-      removed.push(path.relative(root, target).split(path.sep).join('/'));
+      const rel = removePackageEntry(root, rootNodeModules, name, true);
+      if (rel !== undefined) removed.push(rel);
     }
   }
-  const packagesDir = path.join(root, 'packages');
-  if (!existsSync(packagesDir)) return removed;
-  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const nodeModules = path.join(packagesDir, entry.name, 'node_modules');
-    if (!existsSync(nodeModules)) continue;
+  for (const nodeModules of workspaceNodeModulesDirs(root)) {
     for (const name of packageNames) {
-      const segments = name.split('/');
-      const target = path.join(nodeModules, ...segments);
-      let present = false;
-      try {
-        lstatSync(target);
-        present = true;
-      } catch {
-        present = false;
-      }
-      if (!present) continue;
-      rmSync(target, { recursive: true, force: true });
-      removed.push(path.relative(root, target).split(path.sep).join('/'));
-      // Remove now-empty @scope folder so stale empty scope directories do not linger
-      if (segments.length === 2) {
-        const scopeDir = path.join(nodeModules, segments[0]);
-        try {
-          if (readdirSync(scopeDir).length === 0) rmSync(scopeDir, { recursive: true, force: true });
-        } catch {
-          // Scope directory already gone
-        }
-      }
+      const rel = removePackageEntry(root, nodeModules, name, false);
+      if (rel !== undefined) removed.push(rel);
     }
   }
   return removed;
 }
 
 /**
- * Returns any package in `packageNames` missing a readable `package.json` in root `node_modules` after install (for
- * example, when a `file:` override was not hoisted, points at a missing directory, or left an empty folder).
+ * Verifies every switched override in `specs` after `npm install`:
+ * - present in root `node_modules` with a readable `package.json`,
+ * - installed with the right kind (`file:` -> symlink resolving to the requested directory; release URL -> real
+ *   directory, not a leftover symlink), and
+ * - no duplicate nested copy under `packages/<ws>/node_modules/<pkg>` (nested symlinks resolving to the same
+ *   `realpath` as root are allowed, since npm can link both root and a workspace to the same `file:` checkout).
  *
  * @param {string} root
- * @param {readonly string[]} packageNames
- * @returns {string[]}
+ * @param {Readonly<Record<string, string>>} specs
+ * @returns {string[]} human-readable problems; empty when clean
  */
-export function missingHoistedOverrides(root, packageNames) {
-  return packageNames.filter((name) => !existsSync(path.join(root, 'node_modules', ...name.split('/'), 'package.json')));
+export function verifyHoistedOverrides(root, specs) {
+  /** @type {string[]} */
+  const problems = [];
+  const nestedDirs = workspaceNodeModulesDirs(root);
+  for (const [name, spec] of Object.entries(specs)) {
+    const segments = name.split('/');
+    const rootTarget = path.join(root, 'node_modules', ...segments);
+    /** @type {string | undefined} */
+    let rootReal;
+    if (!existsSync(path.join(rootTarget, 'package.json'))) {
+      problems.push(`${name}: missing from root node_modules (no package.json)`);
+    } else {
+      const isLink = lstatSync(rootTarget).isSymbolicLink();
+      rootReal = realpathOrUndefined(rootTarget);
+      if (spec.startsWith('file:')) {
+        if (!isLink) {
+          problems.push(`${name}: expected symlink to ${spec} in root node_modules, found a real directory`);
+        } else {
+          const expectedPath = path.resolve(root, spec.slice('file:'.length));
+          const expectedReal = realpathOrUndefined(expectedPath) ?? expectedPath;
+          if (rootReal !== expectedReal) {
+            problems.push(`${name}: root node_modules symlink resolves to ${rootReal ?? rootTarget}, expected ${expectedReal}`);
+          }
+        }
+      } else if (isLink) {
+        problems.push(`${name}: expected installed package in root node_modules for ${spec}, found a symlink`);
+      }
+    }
+    for (const nodeModules of nestedDirs) {
+      const nestedTarget = path.join(nodeModules, ...segments);
+      const nestedStat = lstatOrUndefined(nestedTarget);
+      if (nestedStat === undefined) continue;
+      if (nestedStat.isSymbolicLink() && rootReal !== undefined && realpathOrUndefined(nestedTarget) === rootReal) {
+        continue;
+      }
+      problems.push(`${name}: duplicate nested install at ${path.relative(root, nestedTarget).split(path.sep).join('/')}`);
+    }
+  }
+  return problems;
 }
