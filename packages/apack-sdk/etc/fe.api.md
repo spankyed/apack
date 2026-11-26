@@ -42,6 +42,18 @@ export const ALL_COLORS: readonly ["blue", "orange", "purple", "green", "red", "
 // @public (undocumented)
 export type ArtifactFrontendBinding = ViewerFrontendBinding<ArtifactDeclaration, ArtifactDefinition>;
 
+// @internal
+export interface _BackendPortTransport {
+    // (undocumented)
+    close(): void;
+    // (undocumented)
+    onClose(listener: () => void): void;
+    // (undocumented)
+    onData(listener: (message: string | Uint8Array) => void): void;
+    // (undocumented)
+    send(message: string | Uint8Array): void;
+}
+
 // @public (undocumented)
 export type BlockFrontendBinding = ViewerFrontendBinding<BlockDeclaration, BlockDefinition>;
 
@@ -295,6 +307,11 @@ export interface _HostBridge {
         }) => void) => () => void;
     };
     apiToken: string;
+    backendPort: {
+        connect: (onPort: (transport: _BackendPortTransport, info: {
+            generation: number;
+        }) => void) => () => void;
+    };
     // (undocumented)
     browser: {
         createTab: (url?: string, options?: {

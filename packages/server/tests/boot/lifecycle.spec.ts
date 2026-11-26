@@ -1,6 +1,38 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { createLifecycleBridge, type LifecycleProcess, type UtilityParentPort } from '../../src/boot/lifecycle.ts';
+import {
+  createLifecycleBridge,
+  type LifecycleProcess,
+  type UtilityMessagePort,
+  type UtilityParentPort,
+  type WindowPortInfo,
+} from '../../src/boot/lifecycle.ts';
+
+function fakeMessagePort() {
+  const emitter = new EventEmitter();
+  let closed = false;
+  const posted: unknown[] = [];
+  const port: UtilityMessagePort = {
+    on(event, listener) {
+      emitter.on(event, listener);
+    },
+    postMessage(message) {
+      posted.push(message);
+    },
+    start() {},
+    close() {
+      if (closed) return;
+      closed = true;
+      emitter.emit('close');
+    },
+  };
+  return {
+    port,
+    posted,
+    isClosed: () => closed,
+    emitClose: () => { closed = true; emitter.emit('close'); },
+  };
+}
 
 function fakeEnv(options: { withParentPort?: boolean; connected?: boolean } = {}) {
   const procEmitter = new EventEmitter();
@@ -115,5 +147,46 @@ describe('boot lifecycle bridge', () => {
     portEmitter.emit('message', { data: { type: 'power', state: 'suspended' } });
     expect(seen).toEqual(['suspended', 'active']);
     expect(bridge.powerState()).toBe('suspended');
+  });
+
+  it('queues early window ports, drops ones that close before registration, and delivers live ones on register', () => {
+    const { proc, portEmitter } = fakeEnv();
+    const bridge = createLifecycleBridge(proc);
+    bridge.installShutdownBridge();
+
+    const alive = fakeMessagePort();
+    const stale = fakeMessagePort();
+    const later = fakeMessagePort();
+
+    portEmitter.emit('message', { data: { type: 'window-port', windowId: 1, generation: 1 }, ports: [alive.port] });
+    portEmitter.emit('message', { data: { type: 'window-port', windowId: 2, generation: 1 }, ports: [stale.port] });
+    stale.emitClose();
+
+    const received: Array<{ port: UtilityMessagePort; info: WindowPortInfo }> = [];
+    const unsubscribe = bridge.registerWindowPortHandler((port, info) => {
+      received.push({ port, info });
+    });
+
+    expect(received).toEqual([{ port: alive.port, info: { windowId: 1, generation: 1 } }]);
+
+    portEmitter.emit('message', { data: { type: 'window-port', windowId: 3, generation: 1 }, ports: [later.port] });
+    expect(received).toEqual([
+      { port: alive.port, info: { windowId: 1, generation: 1 } },
+      { port: later.port, info: { windowId: 3, generation: 1 } },
+    ]);
+
+    unsubscribe();
+    const queuedAfterUnsub = fakeMessagePort();
+    portEmitter.emit('message', { data: { type: 'window-port', windowId: 4, generation: 1 }, ports: [queuedAfterUnsub.port] });
+    expect(received).toHaveLength(2);
+    expect(queuedAfterUnsub.isClosed()).toBe(false);
+
+    // Shutdown closes any queued unclaimed ports and rejects subsequent arrivals
+    portEmitter.emit('message', { data: { type: 'shutdown' } });
+    expect(queuedAfterUnsub.isClosed()).toBe(true);
+
+    const afterShutdown = fakeMessagePort();
+    portEmitter.emit('message', { data: { type: 'window-port', windowId: 5, generation: 1 }, ports: [afterShutdown.port] });
+    expect(afterShutdown.isClosed()).toBe(true);
   });
 });

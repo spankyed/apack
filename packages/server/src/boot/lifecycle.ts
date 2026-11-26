@@ -9,8 +9,25 @@
  * `electron`. Note: Electron's `ParentPort` only defines `'message'` and `postMessage()` (no `'close'` event);
  * Chromium's `UtilityProcessHost` tears down the utility process automatically if the main browser process dies.
  */
+/**
+ * Structural slice of Electron's `MessagePortMain` received from main over `process.parentPort`.
+ * Matches `@apackdev/link`'s `MessagePortLike` (`EmitterPort`) directly so Wave 0 can pass it straight to `port()`.
+ */
+export interface UtilityMessagePort {
+  on(event: 'message', listener: (event: { readonly data: unknown }) => void): void;
+  on(event: 'close', listener: () => void): void;
+  postMessage(message: unknown): void;
+  start(): void;
+  close(): void;
+}
+
+export interface WindowPortInfo {
+  readonly windowId: number;
+  readonly generation: number;
+}
+
 export interface UtilityParentPort {
-  on(event: 'message', listener: (event: { data: unknown }) => void): void;
+  on(event: 'message', listener: (event: { data: unknown; ports?: readonly UtilityMessagePort[] }) => void): void;
   postMessage(message: unknown): void;
 }
 
@@ -28,6 +45,7 @@ export interface LifecycleBridge {
   registerGracefulShutdown(handler: () => void): void;
   powerState(): PowerState;
   registerPowerState(handler: (state: PowerState) => void): () => void;
+  registerWindowPortHandler(handler: (port: UtilityMessagePort, info: WindowPortInfo) => void): () => void;
   notifyServerReady(port: number): void;
 }
 
@@ -41,9 +59,18 @@ export function createLifecycleBridge(
   let shutdownHandler: (() => void) | undefined;
   let currentPowerState: PowerState = 'active';
   let powerHandler: ((state: PowerState) => void) | undefined;
+  let windowPortHandler: ((port: UtilityMessagePort, info: WindowPortInfo) => void) | undefined;
+  const pendingWindowPorts: Array<{ port: UtilityMessagePort; info: WindowPortInfo }> = [];
+
+  function closePendingWindowPorts(): void {
+    for (const entry of pendingWindowPorts.splice(0)) {
+      try { entry.port.close(); } catch { /* already closed */ }
+    }
+  }
 
   function triggerShutdown(): void {
     shutdownRequested = true;
+    closePendingWindowPorts();
     if (!shutdownHandler || shutdownTriggered) return;
     shutdownTriggered = true;
     shutdownHandler();
@@ -55,6 +82,23 @@ export function createLifecycleBridge(
     powerHandler?.(next);
   }
 
+  function handleWindowPort(port: UtilityMessagePort, info: WindowPortInfo): void {
+    if (shutdownRequested) {
+      try { port.close(); } catch { /* already closed */ }
+      return;
+    }
+    if (windowPortHandler) {
+      windowPortHandler(port, info);
+      return;
+    }
+    const entry = { port, info };
+    pendingWindowPorts.push(entry);
+    port.on('close', () => {
+      const index = pendingWindowPorts.indexOf(entry);
+      if (index !== -1) pendingWindowPorts.splice(index, 1);
+    });
+  }
+
   function installShutdownBridge(): void {
     if (installed) return;
     installed = true;
@@ -64,11 +108,18 @@ export function createLifecycleBridge(
     if (proc.parentPort) {
       proc.parentPort.on('message', (event) => {
         if (!event.data || typeof event.data !== 'object') return;
-        const payload = event.data as { type?: unknown; state?: unknown };
+        const payload = event.data as { type?: unknown; state?: unknown; windowId?: unknown; generation?: unknown };
         if (payload.type === 'shutdown') {
           triggerShutdown();
         } else if (payload.type === 'power' && (payload.state === 'suspended' || payload.state === 'active')) {
           setPowerState(payload.state);
+        } else if (
+          payload.type === 'window-port'
+          && typeof payload.windowId === 'number'
+          && typeof payload.generation === 'number'
+          && event.ports?.[0]
+        ) {
+          handleWindowPort(event.ports[0], { windowId: payload.windowId, generation: payload.generation });
         }
       });
     }
@@ -108,11 +159,34 @@ export function createLifecycleBridge(
     };
   }
 
+  function registerWindowPortHandler(handler: (port: UtilityMessagePort, info: WindowPortInfo) => void): () => void {
+    installShutdownBridge();
+    windowPortHandler = handler;
+    for (const entry of pendingWindowPorts.splice(0)) {
+      if (windowPortHandler !== handler) {
+        pendingWindowPorts.push(entry);
+        continue;
+      }
+      handler(entry.port, entry.info);
+    }
+    return () => {
+      if (windowPortHandler === handler) windowPortHandler = undefined;
+    };
+  }
+
   function notifyServerReady(port: number): void {
     proc.parentPort?.postMessage({ type: 'ready', port });
   }
 
-  return { installShutdownBridge, isShutdownRequested, registerGracefulShutdown, powerState, registerPowerState, notifyServerReady };
+  return {
+    installShutdownBridge,
+    isShutdownRequested,
+    registerGracefulShutdown,
+    powerState,
+    registerPowerState,
+    registerWindowPortHandler,
+    notifyServerReady,
+  };
 }
 
 const defaultBridge = createLifecycleBridge();
@@ -127,6 +201,11 @@ export const registerGracefulShutdown = (handler: () => void): void => defaultBr
 
 /** Binds the active server's OS power-state handler; replays `'suspended'` immediately if suspend arrived during boot. */
 export const registerPowerState = (handler: (state: PowerState) => void): (() => void) => defaultBridge.registerPowerState(handler);
+
+/** Binds the handler for direct `MessagePortMain` channels brokered from main for app windows; drains any queued during boot. */
+export const registerWindowPortHandler = (
+  handler: (port: UtilityMessagePort, info: WindowPortInfo) => void,
+): (() => void) => defaultBridge.registerWindowPortHandler(handler);
 
 /** Notifies Electron main over `parentPort` once the WebSocket server is listening (chunk-proof structured signal). */
 export const notifyServerReady = (port: number): void => defaultBridge.notifyServerReady(port);
