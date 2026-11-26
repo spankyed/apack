@@ -101,8 +101,6 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed } from 'vue';
 import { X, SquarePen, Pin } from 'lucide-vue-next';
 import {
@@ -112,7 +110,7 @@ import {
 import ThreadContextMenu from '#features/threads/fe/canvas/components/thread-context-menu.vue';
 import type { Tab } from '#generated/types.ts';
 import type { ThreadTabGroup } from './types.ts';
-import type { ThreadsState } from '#features/threads/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 
 const props = defineProps<{
   tab: Tab;
@@ -138,8 +136,7 @@ defineEmits<{
   'create-group': [];
 }>();
 
-const threadsActor: ThreadsState = useSurface();
-const { state: threads, send } = useState(threadsActor);
+const { state: threads, send } = useState('threads');
 
 function getThreadStateConfig(threadId: string) {
   const override = threads.value.data.chatStateOverrides[threadId];

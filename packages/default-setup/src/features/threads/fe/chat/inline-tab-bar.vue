@@ -18,10 +18,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { X } from 'lucide-vue-next';
-import type { ThreadsState } from '#features/threads/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 import TabBar from '#features/threads/fe/canvas/agent/tabs/tab-bar.vue';
 
 defineProps<{
@@ -32,9 +30,7 @@ defineEmits<{
   close: [];
 }>();
 
-const actor: ThreadsState = useSurface();
-
-const { state: threads } = useState(actor);
+const { state: threads } = useState('threads');
 </script>
 
 <style module>

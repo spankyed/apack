@@ -27,7 +27,7 @@ let stop: () => void
 beforeEach(() => {
   sent = []
   stop?.()
-  stop = testRootEvents.onSurfaceSend((message) => {
+  stop = testRootEvents.onOutgoing((message) => {
     if (message.to === THREADS) sent.push({ type: message.event.type, client: message.client })
   })
 })

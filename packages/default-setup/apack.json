@@ -498,6 +498,7 @@
         "label": "Threads",
         "icon": "BotMessageSquare",
         "state": "src/features/threads/fe/state.ts",
+        "chrome": "src/features/threads/fe/state.ts#threadsChrome",
         "canvas": {
           "routes": {
             "list": "src/features/threads/fe/canvas/list.vue",

@@ -1,6 +1,6 @@
 import { afterAll, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { system, type AnyState, type State } from '@apackdev/state';
+import { system, type AnyState, type State, type ViewHost, type ViewUpdate } from '@apackdev/state';
 import { defectGuard } from '@apackdev/state/testing';
 import { startFeTestRuntime } from '@apackdev/sdk/testing';
 import type { OpenEntity } from '@apackdev/sdk/events';
@@ -54,7 +54,7 @@ const destinations: Array<[string, () => DestinationActor]> = [
   ['actions', () => startStateSurface('default-setup/actions', actions)],
   ['prompts', () => startStateSurface('default-setup/prompts', prompts)],
   ['notes', () => createActor(notes).start()],
-  ['threads', () => createActor(threads).start()],
+  ['threads', () => startStateSurface('default-setup/threads', threads)],
   ['flows', () => createActor(flows).start()],
   ['library', () => createActor(library).start()],
 ];
@@ -105,20 +105,38 @@ it('opens a note selected in the tree and one reached through a link', () => {
 });
 
 it('opens an unlisted thread and fills only the current target without replaying navigation', () => {
-  const actor = createActor(threads).start();
+  const detailSubs = new Map<string, (update: ViewUpdate<unknown>) => void>();
+  const views: ViewHost = (_feature, view, args, updated) => {
+    if (view === 'detail') {
+      const targetId = (args as { id: string }).id;
+      detailSubs.set(targetId, updated);
+    }
+    return () => {};
+  };
+  const guard = defectGuard();
+  const sys = system({ side: 'window', views, onDefect: guard.onDefect });
+  sys.attach({
+    tell: (to, event) => { tell(to, event); },
+    ask: () => () => {},
+    follow: () => ({ stop: () => {} }),
+  });
+  const handle = sys.start('default-setup/threads', threads);
   try {
-    actor.send({ type: 'SHOW_CREATE_FORM' });
-    actor.send({ type: 'OPEN_ENTITY', id: 'Thread-first' });
-    expect(tell).toHaveBeenLastCalledWith('threads', { type: 'VIEW_THREAD', threadId: 'Thread-first' });
-    actor.send({ type: 'OPEN_ENTITY', id: 'Thread-second' });
-    const detail = (id: string, topic: string) => ({ type: 'DETAIL.READ' as const, id, detail: { id: id as never, topic, messageIds: [] } });
-    actor.send(detail('Thread-first', 'Abandoned'));
-    expect(actor.getSnapshot().context.view.id).toBe('Thread-second');
-    expect(actor.getSnapshot().context.view.topic).not.toBe('Abandoned');
-    actor.send(detail('Thread-second', 'Current'));
-    expect(actor.getSnapshot().context.view.topic).toBe('Current');
-    actor.send({ type: 'VIEW_LIST' });
-    actor.send(detail('Thread-second', 'Updated'));
-    expect(actor.getSnapshot().matches('list')).toBe(true);
-  } finally { actor.stop(); }
+    sys.send(handle, { type: 'SHOW_CREATE_FORM' });
+    sys.send(handle, { type: 'OPEN_ENTITY', id: 'Thread-first' });
+    expect(tell).toHaveBeenLastCalledWith('default-setup/threads', { type: 'VIEW_THREAD', threadId: 'Thread-first' });
+    sys.send(handle, { type: 'OPEN_ENTITY', id: 'Thread-second' });
+    detailSubs.get('Thread-first')?.({ ok: true, value: { id: 'Thread-first', topic: 'Abandoned', messageIds: [] } });
+    expect(sys.read(handle).data.view.id).toBe('Thread-second');
+    expect(sys.read(handle).data.view.topic).not.toBe('Abandoned');
+    detailSubs.get('Thread-second')?.({ ok: true, value: { id: 'Thread-second', topic: 'Current', messageIds: [] } });
+    expect(sys.read(handle).data.view.topic).toBe('Current');
+    sys.send(handle, { type: 'VIEW_LIST' });
+    detailSubs.get('Thread-second')?.({ ok: true, value: { id: 'Thread-second', topic: 'Updated', messageIds: [] } });
+    expect(sys.read(handle).at).toBe('list');
+  } finally {
+    guard.assertNone();
+    sys.stop();
+    guard[Symbol.dispose]();
+  }
 });

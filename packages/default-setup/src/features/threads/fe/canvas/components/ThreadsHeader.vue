@@ -114,17 +114,14 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed, watch } from 'vue'
 import { Search, Filter, List, Columns3, PanelLeft, History, Archive, X } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
 import FilterPopover from './FilterPopover.vue'
-import { type ThreadsState } from '#features/threads/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import type { ThreadTagOption } from '#generated/types.ts'
 
-const actor: ThreadsState = useSurface()
-const { state: threads, send } = useState(actor)
+const { state: threads, send } = useState('threads')
 const isDashboardView = computed(() => threads.value.at === 'dashboard')
 const isListView = computed(() => threads.value.at === 'list')
 const isKanbanView = computed(() => threads.value.at === 'kanban')
