@@ -159,8 +159,8 @@
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^11.0.1"
     },
-    "elmdb": "https://github.com/spankyed/elmdb/releases/download/pkg-5aed97b7146778f70ceb05542d9a566d2c5e6458/elmdb-0.1.0.tgz",
-    "@elmdb/ears": "https://github.com/spankyed/elmdb/releases/download/pkg-5aed97b7146778f70ceb05542d9a566d2c5e6458/elmdb-ears-0.1.0.tgz",
+    "elmdb": "https://github.com/spankyed/elmdb/releases/download/pkg-693b21e1013d44e760e64a08656c10e39b0e5439/elmdb-0.1.0.tgz",
+    "@elmdb/ears": "https://github.com/spankyed/elmdb/releases/download/pkg-693b21e1013d44e760e64a08656c10e39b0e5439/elmdb-ears-0.1.0.tgz",
     "@apackdev/clock": "https://github.com/spankyed/apack-clock/releases/download/pkg-84a3b2b11d9a045d8bad4c4713e0c4abc6387c9f/apackdev-clock-0.1.0.tgz",
     "@apackdev/git": "https://github.com/spankyed/apack-git/releases/download/pkg-90e5881747d4adb4ac8690d1e23932b3df68d7b3/apackdev-git-0.1.0.tgz",
     "@apackdev/terminal": "https://github.com/spankyed/apack-terminal/releases/download/bin-cfc498ff12c91af8e19858a9fd69fd4303e7a69a/apackdev-terminal-0.1.0.tgz",
