@@ -195,22 +195,22 @@ import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import ConfirmationDialog from '@apackdev/ui/design/ConfirmationDialog'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
-import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
+import { useShell } from '@apackdev/sdk/fe'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { openSurface } from '#generated/fe.ts'
-import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
+import { threadsFromStore } from '#features/threads/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { tell } from '#generated/events.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
 const threadsSettings = useSettings('threads')
 const shell = useShell()
-const actor: ThreadsState = useSurface();
 
 // A message, command or fork of this window's that was not done is told here, where it was sent from. Telling and
 // saying so are one step, run once the toast is drawn: the machine drops exactly the failures told
 const toast = ref<InstanceType<typeof ToastNotification>>()
-const { state: threads, send } = useState(actor)
+const { state: threads, send } = useState('threads')
 watchPostEffect(() => {
   const told = threads.value.data.sendFailures
   if (!toast.value || told.length === 0) return

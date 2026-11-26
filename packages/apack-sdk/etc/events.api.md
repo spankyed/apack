@@ -221,6 +221,9 @@ export function createSends(input?: SendBinding): {
     fromAsk(to: SystemTarget, type: string): PromiseActorLogic<UntypedAskOutcome, object | undefined>;
 };
 
+// @public
+export function currentClient(): string | undefined;
+
 // @internal
 export function _currentDelivery(): _Delivery | undefined;
 

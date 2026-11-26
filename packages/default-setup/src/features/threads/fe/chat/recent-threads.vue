@@ -264,8 +264,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
 import { useAppSettings } from '#generated/settings-fe.ts'
+import { useState } from '#generated/state-fe.ts'
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, type CSSProperties } from 'vue'
 import { Archive, History, ChevronUp, ChevronRight, Plus, PanelLeft, FileText, Pin, Trash2, FolderOpen, GitBranchPlus } from 'lucide-vue-next'
 import type { ThreadEntity } from '#generated/types.ts';
@@ -281,7 +281,6 @@ import {
   ContextMenuSubTrigger,
   ContextMenuSubContent,
 } from 'reka-ui'
-import type { ThreadsState } from '#features/threads/fe/state.ts'
 import ThreadContextMenu from '#features/threads/fe/canvas/components/thread-context-menu.vue'
 import { getThreadDotColor, isThreadBusy } from './thread-status.ts'
 
@@ -321,8 +320,7 @@ watch(isOpen, async (open) => {
 })
 
 // Get threads from the threads surface state
-const threadsActor: ThreadsState = useSurface()
-const { state: threads, send } = useState(threadsActor)
+const { state: threads, send } = useState('threads')
 
 function getThreadDotColorLocal(threadId: string): string | undefined {
   return getThreadDotColor(threadId, threads.value.data.chatStates, threads.value.data.chatStateOverrides, threads.value.data.settings)

@@ -178,12 +178,11 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed, nextTick } from 'vue'
 import { Plus, MessageSquare, Link } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
-import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts'
+import { threadsFromStore } from '#features/threads/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import type { ThreadEditFields } from '#generated/types.ts'
 import type { Ref } from 'vue'
 import NameSaveHeader from '@apackdev/ui/design/NameSaveHeader'
@@ -193,11 +192,10 @@ import ThreadLinkInput from '#features/threads/fe/canvas/components/link-thread-
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 
-const actor: ThreadsState = useSurface();
 const mediaEntityId = crypto.randomUUID();
 
 // Mode derivation from state machine
-const { state: threads, send } = useState(actor);
+const { state: threads, send } = useState('threads');
 const isViewMode = computed(() => threads.value.at === 'view');
 const mode = computed<'view' | 'create'>(() => isViewMode.value ? 'view' : 'create');
 

@@ -206,13 +206,12 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed, reactive, ref, watchEffect } from 'vue'
 import { X, ChevronDown, ChevronRight, ChevronLeft, Archive, Search } from 'lucide-vue-next'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
 import type { MessageSearchResult } from '#generated/types.ts'
-import type { ThreadsState, ThreadListItem } from '#features/threads/fe/state.ts'
+import type { ThreadListItem } from '#features/threads/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import { getThreadDotColor, isThreadBusy } from './thread-status.ts'
 import { ContextMenuRoot, ContextMenuTrigger } from 'reka-ui'
 import ThreadContextMenu from '#features/threads/fe/canvas/components/thread-context-menu.vue'
@@ -224,9 +223,8 @@ const emit = defineEmits<{
   'close': []
 }>()
 
-// State from threads actor
-const actor: ThreadsState = useSurface()
-const { state: threads, send } = useState(actor)
+// State from threads surface
+const { state: threads, send } = useState('threads')
 
 // The message search box: what is typed is sent once typing pauses, and its results are the surface's
 const searchText = ref(threads.value.data.messageSearch.query)

@@ -938,6 +938,17 @@ export function _clientOf(delivery: _Delivery | undefined): string | undefined {
 }
 
 /**
+ * The connection the currently handled message arrived on, or `undefined` when no window sent it
+ * (e.g. a flow, schedule, or another backend system).
+ *
+ * For `@apackdev/state` backend handlers, which read the active delivery scope directly rather than
+ * receiving XState's `defineHandlers` `{ client }` parameter.
+ */
+export function currentClient(): string | undefined {
+  return _clientOf(_currentDelivery());
+}
+
+/**
  * Sends an event to a backend system, by ref or by the role it plays. Untyped: packs use the `tell` from
  * their `#generated/events`, which takes names and checks the event against what the system declares.
  */

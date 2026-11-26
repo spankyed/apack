@@ -685,7 +685,7 @@
 <script setup lang="ts">
 import { TooltipProvider, TooltipRoot, TooltipTrigger, TooltipPortal, TooltipContent } from 'reka-ui'
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-vue-next'
-import { useSettingsDraft, useState, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsDraft } from '@apackdev/sdk/fe'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
 import { ref, computed, nextTick, type Directive } from 'vue'
@@ -695,7 +695,7 @@ import KeyboardShortcutInput from '@apackdev/ui/components/KeyboardShortcutInput
 import ColorPicker, { DEFAULT_COLORS } from '@apackdev/ui/design/ColorPicker'
 
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
-import type { ThreadsState } from './state.ts'
+import { useState } from '#generated/state-fe.ts'
 import type { ThreadStatusOption, ThreadTagOption, AgentPhase } from '#generated/types.ts'
 
 interface Props {
@@ -1005,9 +1005,8 @@ const removeTag = (index: number) => {
   }
 }
 
-// Get threads actor for import/export state
-const threadsActor: ThreadsState = useSurface()
-const { state: threads, send } = useState(threadsActor)
+// Get threads state for import/export
+const { state: threads, send } = useState('threads')
 
 // Import state
 const isImporting = computed(() => threads.value.data.threadsImport.status === 'importing')

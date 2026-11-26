@@ -30,18 +30,15 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed, ref } from 'vue'
-import { type ThreadsState } from '#features/threads/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 import { useAnchorTracking } from './composables/useAnchorTracking.ts'
 
 const props = defineProps<{
   anchor?: HTMLElement | null
 }>()
 
-const actor: ThreadsState = useSurface();
-const { state: threads } = useState(actor);
+const { state: threads } = useState('threads');
 
 const chatState = computed(() => threads.value.data.chatStates[threads.value.data.currentThread?.id ?? ''] || 'idle');
 
