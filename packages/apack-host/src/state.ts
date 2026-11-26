@@ -12,9 +12,10 @@ import type {
   NormalizeAsks,
 } from '@apackdev/sdk/events';
 import { HOST_PACK_ID, resolveName } from '@apackdev/sdk/ids';
+import type { ActivatePackEvent, PackChangedEvent, ReloadPackEvent, TeardownPackEvent } from './bus/machine.ts';
+import type { Contract as ApplicationContract } from './features/application/be/contract.ts';
 import type { ApplicationSurfaceEvents } from './features/application/events.ts';
 import type {
-  ApplicationClientEvent,
   HelpOutgoing,
   OutgoingPacksEvents,
   SettingsSurfaceEvents,
@@ -23,6 +24,7 @@ import type { Contract as HelpContract } from './features/help/be/system.ts';
 import type { Contract as PacksContract } from './features/packs/be/contract.ts';
 import type { Contract as SettingsContract } from './features/settings/be/contract.ts';
 
+type __host_asks_application = NormalizeAsks<ContractAsks<ApplicationContract>>;
 type __host_asks_packs = NormalizeAsks<ContractAsks<PacksContract>>;
 type __host_asks_settings = NormalizeAsks<ContractAsks<SettingsContract>>;
 
@@ -34,8 +36,8 @@ export interface HostNet {
       asks: {};
     };
     application: {
-      events: ApplicationClientEvent;
-      asks: {};
+      events: IncomingOnlyEventsOf<ApplicationContract>;
+      asks: __host_asks_application;
     };
     packs: {
       events: IncomingOnlyEventsOf<PacksContract>;
@@ -63,6 +65,9 @@ export interface HostNet {
   };
   views: {};
   peers: {
+    bus: {
+      events: ReloadPackEvent | TeardownPackEvent | ActivatePackEvent | PackChangedEvent;
+    };
     'role:brain': {
       events: { type: 'RESTART_BRAIN' };
     };

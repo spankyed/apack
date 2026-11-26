@@ -1,14 +1,16 @@
-import { _packEntityTypes } from '@apackdev/sdk/framework';
+import { _packEntityTypes, isState } from '@apackdev/sdk/framework';
 import { writeInstalledPackFixture, sealPack, sealBuild, eventContractsFixture } from '../../../packs/runtime/build-fixture.ts';
 import { _declarationRevision } from '@apackdev/pack-format';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { system as createStateSystem } from '@apackdev/state';
+import { defectGuard } from '@apackdev/state/testing';
 import { createActor, setup, type AnyEventObject } from 'xstate';
 import { HOST } from '../../../../src/refs.ts';
 import { _appDirOf, resolveAppEnvironment } from '@apackdev/sdk/env';
-import { startTestRuntime, resetTestData, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
+import { startTestRuntime, resetTestData, takeSystemErrors } from '@apackdev/sdk/testing';
 import { readInstalledPacks, recordUserInstall, setPackEnabled } from '../../../../src/packs/installed.ts';
 import { registry } from '../../../packs/runtime/test-host.ts';
 import { appliedContent, appState } from '../../../../src/app-state/index.ts';
@@ -100,28 +102,41 @@ async function stubRelease(source: string) {
 function runPacksSystem({ deferStops = false } = {}) {
   const sent: AnyEventObject[] = [];
   const stops: Array<() => void> = [];
-  const busStub = setup({ types: {} as { events: AnyEventObject } }).createMachine({
-    on: { '*': { actions: ({ event }) => {
-      sent.push(event);
-      if (typeof event.afterStop === 'function') {
-        if (deferStops) stops.push(event.afterStop);
-        else event.afterStop();
+  const guard = defectGuard();
+  const sys = createStateSystem({ side: 'backend', onDefect: guard.onDefect });
+  sys.attach({
+    tell: (to, event) => { sent.push({ type: 'OUTGOING', message: { to, event } }); },
+    ask: (_to, _name, _args, _progress, done) => {
+      done({ ok: false, failure: { kind: 'unavailable', message: 'unused' } });
+      return () => {};
+    },
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'unused' });
+      return { stop: () => {} };
+    },
+  });
+  sys.attach('bus', {
+    tell: (_peer, event) => {
+      const ev = event as AnyEventObject;
+      sent.push(ev);
+      if (typeof ev.afterStop === 'function') {
+        if (deferStops) stops.push(ev.afterStop);
+        else ev.afterStop();
       }
-    } } },
+    },
   });
-  const stopListening = testRootEvents.onSurfaceSend((message) => void sent.push({ type: 'OUTGOING', message }));
-  const root = setup({ actors: { bus: busStub, packs: createPacksSystem(registry) } }).createMachine({
-    invoke: [
-      { src: 'bus', systemId: HOST.bus },
-      { src: 'packs', systemId: HOST.packs },
-    ],
+  sys.attach('role:brain', {
+    tell: (_peer, event) => { sent.push(event as AnyEventObject); },
   });
-  const actor = createActor(root).start();
+  const stateDef = createPacksSystem(registry);
+  expect(isState(stateDef)).toBe(true);
+  const handle = sys.start(HOST.packs, stateDef);
   const stop = () => {
-    actor.stop();
-    stopListening();
+    sys.stop();
+    guard.assertNone();
+    guard[Symbol.dispose]();
   };
-  return { sent, stops, send: (event: AnyEventObject) => actor.system.get(HOST.packs).send(event), stop };
+  return { sent, stops, send: (event: AnyEventObject) => sys.send(handle, event as never), stop };
 }
 
 /** The pack-scoped events the system emitted, unwrapped from the bus envelope */
