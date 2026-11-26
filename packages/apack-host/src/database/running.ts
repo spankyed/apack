@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { _appDirOf, type AppEnvironment } from '@apackdev/sdk/env';
-import { lockIsHeld, readApiEndpoint, sameWriter, type WriterRecord } from '../process-liveness.ts';
+import { lockIsHeld, sameWriter, type WriterRecord } from '../process-liveness.ts';
 import { readApiRuntimeFile } from '../transport/tool-socket.ts';
 
 /** What the app process publishes in the data dir for as long as it runs */
@@ -70,12 +70,6 @@ function liveRuntime(userDataDir: string): RunningApp | null {
   return runtime ? { why: `its API is running (pid ${runtime.pid})`, pid: runtime.pid } : null;
 }
 
-/** The API this data dir's port file names, while its process is running */
-function liveApi(apiPortFile: string): RunningApp | null {
-  const endpoint = readApiEndpoint(apiPortFile);
-  return endpoint && { why: `its API is running on port ${endpoint.port} (pid ${endpoint.pid})`, pid: endpoint.pid };
-}
-
 /**
  * The app process that published itself here, when it is still running.
  *
@@ -101,9 +95,9 @@ function liveApp(userDataDir: string): RunningApp | null {
 }
 
 /**
- * Why an app is running on the data dir, or `null` when none is: a file or a port file left behind by a
- * process that has exited doesn't count
+ * Why an app is running on the data dir, or `null` when none is: an `app.lock` or `api-runtime.json`
+ * left behind by a process that has exited doesn't count.
  */
-export function findRunningApp(context: Pick<AppEnvironment, 'userDataDir' | 'apiPortFile'>): RunningApp | null {
-  return liveApp(context.userDataDir) ?? liveRuntime(context.userDataDir) ?? liveApi(context.apiPortFile);
+export function findRunningApp(context: Pick<AppEnvironment, 'userDataDir'>): RunningApp | null {
+  return liveApp(context.userDataDir) ?? liveRuntime(context.userDataDir);
 }

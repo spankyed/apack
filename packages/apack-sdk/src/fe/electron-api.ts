@@ -112,7 +112,6 @@ export interface _HostBridge {
   apiStatus: {
     getStatus: () => Promise<{
       running: boolean;
-      port?: number;
       error?: { message: string; stack?: string };
       restartAttempts: number;
       startupId: string;
@@ -130,10 +129,9 @@ export interface _HostBridge {
     reload: () => Promise<void>;
     /**
      * `reloaded` marks an `api:started` whose predecessor was replaced on purpose — a development rebuild
-     * rather than a crash — so a window may tear its subscription down at once instead of waiting out its
-     * client's reconnect backoff.
+     * rather than a crash.
      */
-    onEvent: (callback: (event: { type: string; error?: string; attempt?: number; maxAttempts?: number; port?: number; reloaded?: boolean }) => void) => () => void;
+    onEvent: (callback: (event: { type: string; error?: string; attempt?: number; maxAttempts?: number; reloaded?: boolean }) => void) => () => void;
   };
   rendererLog: {
     write: (entry: {
@@ -190,32 +188,16 @@ export interface _HostBridge {
     connect: (onPort: (transport: _BackendPortTransport, info: { generation: number }) => void) => () => void;
   };
   rendererReady: () => void;
-  apiPort: number;
   startupId?: string;
-  /**
-   * The token the API requires for this app run, read from main as the preload loads rather than taken
-   * from the command line, where every process on the machine could read it. Host-only.
-   */
-  apiToken: string;
 }
 
 /**
  * The bridge as pack code sees it, which is what `window.electronAPI` is declared as.
  *
- * The two omissions are the whole difference, and the `Omit`s are the only place they are written — a
- * parallel list of member names beside them would be the same declaration twice:
- *
- * - **`apiToken`**, the token the API requires for this app run. The renderer's client is its one reader.
- * - **`apiStatus.openLogFile`**, which opens the app's own log file; the error page is its one caller.
- *
- * **Leaving a member out does not hide it**, and that is worth being plain about rather than implying a
- * boundary: a pack's frontend runs in the app window, loaded with `import()` from `pack://`, so it can
- * read every member of `window.electronAPI` at runtime whatever this says. What the omission does is stop
- * advertising them. Closing it for real means isolating pack frontends from the window
- * (`docs/goals/goal-pack-security-isolation.md`), and until that exists this is a signpost — which
- * is why it drops members no pack has a reason to want.
+ * Host-only members (`performance`, `backendPort`, and `apiStatus.openLogFile`) are omitted so pack
+ * authors are not pointed at internal host transport or diagnostics APIs.
  */
-type PackFacingBridge = Omit<_HostBridge, 'apiToken' | 'performance' | 'backendPort'> & {
+type PackFacingBridge = Omit<_HostBridge, 'performance' | 'backendPort'> & {
   apiStatus: Omit<_HostBridge['apiStatus'], 'openLogFile'>;
 };
 

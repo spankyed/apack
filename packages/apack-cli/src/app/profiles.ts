@@ -7,7 +7,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { APP_ENVS, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
-import { lockIsHeld, readApiEndpoint } from '@apackdev/host/process-liveness';
+import { lockIsHeld } from '@apackdev/host/process-liveness';
+import { readApiRuntime } from '@apackdev/host/transport/tool-client';
 import { describeRefusal, fromNow, processWork, watchWork } from '@apackdev/sdk/progress';
 import { _pathSegmentProblem, randomId } from '@apackdev/sdk/utils/pure';
 import type { CliDirs } from './pack-host';
@@ -109,7 +110,7 @@ const writeRecord = (dir: string, record: ProfileRecord): void => {
  * the dir open.
  */
 export function dataDirInUse(dir: string): boolean {
-  return readApiEndpoint(resolveAppEnvironment({ env: 'development', userDataDir: dir }).apiPortFile) !== null
+  return readApiRuntime(resolveAppEnvironment({ env: 'development', userDataDir: dir }).appDir) !== undefined
     || chromiumLockHeld(dir);
 }
 

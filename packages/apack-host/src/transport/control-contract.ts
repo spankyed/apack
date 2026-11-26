@@ -6,7 +6,8 @@
  * into browser bundles.
  */
 import type { PerformanceRecordingReport, RecordingMode } from '../diagnostics/index.ts';
-import type { LoadedPackEntry, PackCatalogFrame } from '../packs/index.ts';
+import type { LoadedPackEntry } from '../packs/layout-types.ts';
+import type { PackCatalogFrame } from '../packs/catalog-types.ts';
 import type { SecretProvider, SecretsSnapshot } from '@apackdev/sdk/services';
 import {
   createControlClient,
@@ -55,7 +56,13 @@ export interface HostControlContract extends ControlContract {
     };
     readonly 'settings.close': { readonly input: { readonly credential: string }; readonly output: void };
     readonly 'settings.mutate': {
-      readonly input: { readonly credential: string; readonly event: SettingsMutationEvent };
+      readonly input: {
+        readonly credential: string;
+        readonly event: SettingsMutationEvent;
+        readonly sender?: string;
+        readonly call?: string;
+        readonly from?: string;
+      };
       readonly output: void;
     };
     readonly 'packs.loaded': { readonly input: void; readonly output: LoadedPackEntry[] };

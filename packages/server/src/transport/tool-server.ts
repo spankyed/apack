@@ -1,16 +1,16 @@
 /**
- * Server-side Wave 0 host transport wiring:
+ * Server-side host transport wiring:
  * - Always publishes `<appDir>/api-runtime.json` (`0600`) with `{ pid }`.
  * - In `development`, `test`, or `APACK_TOOL_SOCKET=1`, also binds the user-private local tool socket
- *   server (`{ pid, socket, token }`) and wires each authenticated socket through
- *   `muxTransport(stream(socket))` into `createHostControlServer`.
+ *   server (`{ pid, socket, token }`) and wires each authenticated socket through `muxTransport(stream(socket))`
+ *   into both `createHostControlServer` (`mux.control`) and `createLinkBus` (`mux.link`).
  * - Wires `registerWindowPortHandler` and `registerWindowGoneHandler` so Electron `MessagePortMain`
- *   window channels attach to `createHostControlServer` and release per-window resources atomically
- *   when a window is destroyed or crashes.
+ *   window channels attach to `createHostControlServer` and `createLinkBus`, releasing per-window resources
+ *   and `@apackdev/link` sessions atomically when a window reloads, closes, or crashes.
  */
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
-import { port as wrapMessagePort } from '@apackdev/link';
+import { port as wrapMessagePort, type Accepting } from '@apackdev/link';
 import { HOST, receiveClientEvent, UnknownClientEventError } from '@apackdev/host/bus';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { secretsSnapshot, secretsStore } from '@apackdev/host/secrets';
@@ -32,7 +32,6 @@ import {
 } from '@apackdev/host/transport/tool-socket';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import { createLogger } from '@apackdev/sdk/logger';
-import { apiToken } from '../boot/config.ts';
 import {
   registerWindowGoneHandler,
   registerWindowPortHandler,
@@ -41,10 +40,12 @@ import {
   type WindowPortInfo,
 } from '../boot/lifecycle.ts';
 import {
+  appClaims,
   appPacks,
   appPerformance,
   appSettingsAccess,
   appStartupPerformance,
+  appViews,
   backendActor,
 } from '../runtime/index.ts';
 import {
@@ -55,6 +56,7 @@ import {
   type HostControlServerDeps,
 } from './control-rpc.ts';
 import { rootEvents } from './emitter.ts';
+import { createLinkBus, isAddressableRef, type LinkBusDeps } from './link-bus.ts';
 import { getLoadedPacks, getPackCatalogFrame } from './packs.ts';
 
 const logger = createLogger('backend');
@@ -71,6 +73,8 @@ export interface StartHostTransportOptions {
   readonly socket?: string;
   readonly lifecycle?: Pick<LifecycleBridge, 'registerWindowPortHandler' | 'registerWindowGoneHandler'>;
   readonly createControlDeps?: HostControlDepsFactory;
+  /** Optional override for the `@apackdev/link` acceptor (defaults to the runtime backend bus & views). */
+  readonly linkBus?: Accepting<string> | LinkBusDeps;
   readonly onWindowGone?: (windowId: number) => void;
 }
 
@@ -122,15 +126,28 @@ export function createRuntimeControlDepsFactory(appEnv: AppEnv): HostControlDeps
       openHost: (id) => appSettingsAccess.issueHost(id),
       openPack: (id, expected) => appSettingsAccess.issuePack(id, expected),
       close: (id, credential) => appSettingsAccess.revoke(id, credential),
-      mutate: (id, credential, event) => {
+      mutate: (id, credential, event, meta) => {
         if (!SETTINGS_MUTATIONS.has(event.type)) {
           throw new ControlRpcError('BAD_REQUEST', `Unsupported settings mutation event: ${event.type}`);
+        }
+        if (meta?.sender !== undefined && !isAddressableRef(appPacks, appClaims, meta.sender)) {
+          throw new ControlRpcError(
+            'BAD_REQUEST',
+            `"${meta.sender}" can't be a sender: it names no registered system, no registered surface and no claimed participant.`,
+          );
         }
         const access = appSettingsAccess;
         access.resolve(id, credential);
         bindSettingsRequest(event, () => access.resolve(id, credential));
         try {
-          receiveClientEvent(appPacks, { to: HOST.settings, event, client: id });
+          receiveClientEvent(appPacks, {
+            to: HOST.settings,
+            event,
+            client: id,
+            ...(meta?.sender !== undefined ? { sender: meta.sender } : {}),
+            ...(meta?.call !== undefined ? { call: meta.call } : {}),
+            ...(meta?.from !== undefined ? { from: meta.from } : {}),
+          });
         } catch (error) {
           if (error instanceof UnknownClientEventError) {
             throw new ControlRpcError('BAD_REQUEST', error.message);
@@ -155,14 +172,31 @@ export function createRuntimeControlDepsFactory(appEnv: AppEnv): HostControlDeps
   });
 }
 
+function createRuntimeLinkBus(): Accepting<string> {
+  return createLinkBus({
+    packs: () => appPacks,
+    bus: () => backendActor,
+    views: () => appViews,
+    claims: appClaims,
+    rootEvents,
+  });
+}
+
+function isAccepting(value: Accepting<string> | LinkBusDeps): value is Accepting<string> {
+  return typeof (value as Accepting<string>).take === 'function'
+    && typeof (value as Accepting<string>).gone === 'function'
+    && typeof (value as Accepting<string>).close === 'function';
+}
+
 interface ActiveSession {
+  readonly connectionId: string;
   readonly mux: MuxedTransport;
   readonly control: ControlServer;
 }
 
 /**
- * Starts the server's Wave 0 host transport: `api-runtime.json`, optional local tool socket server,
- * and Electron window `MessagePort` / `window-gone` lifecycle wiring.
+ * Starts the server's host transport: `api-runtime.json`, optional local tool socket server,
+ * Electron window `MessagePort` / `window-gone` lifecycle wiring, Control RPC, and `@apackdev/link` bus.
  */
 export async function startHostTransport(options: StartHostTransportOptions = {}): Promise<HostTransport> {
   const environment = options.appDir === undefined || options.appEnv === undefined
@@ -171,8 +205,13 @@ export async function startHostTransport(options: StartHostTransportOptions = {}
   const appDir = options.appDir ?? environment!.appDir;
   const appEnv = options.appEnv ?? environment!.env;
   const env = options.env ?? process.env;
-  const token = options.token ?? apiToken();
+  const token = options.token ?? randomBytes(32).toString('base64url');
   const createControlDeps = options.createControlDeps ?? createRuntimeControlDepsFactory(appEnv);
+  const linkBus: Accepting<string> = options.linkBus === undefined
+    ? createRuntimeLinkBus()
+    : isAccepting(options.linkBus)
+      ? options.linkBus
+      : createLinkBus(options.linkBus);
   const registerPort = options.lifecycle?.registerWindowPortHandler ?? registerWindowPortHandler;
   const registerGone = options.lifecycle?.registerWindowGoneHandler ?? registerWindowGoneHandler;
 
@@ -186,6 +225,11 @@ export async function startHostTransport(options: StartHostTransportOptions = {}
   let closePromise: Promise<void> | undefined;
 
   const disposeSession = (session: ActiveSession): void => {
+    try {
+      linkBus.gone(session.connectionId);
+    } catch {
+      /* best-effort teardown */
+    }
     try {
       session.control.dispose();
     } catch {
@@ -214,10 +258,13 @@ export async function startHostTransport(options: StartHostTransportOptions = {}
         const raw = toolSocketTransport(socket, initialBytes);
         const mux = muxTransport(raw);
         const control = createHostControlServer(mux.control, createControlDeps(connectionId));
-        const session: ActiveSession = { mux, control };
+        const session: ActiveSession = { connectionId, mux, control };
         activeTools.add(session);
+        linkBus.take(mux.link, connectionId);
         mux.control.onClose(() => {
-          activeTools.delete(session);
+          if (activeTools.delete(session)) {
+            disposeSession(session);
+          }
         });
       },
     });
@@ -240,11 +287,13 @@ export async function startHostTransport(options: StartHostTransportOptions = {}
     const raw = wrapMessagePort(messagePort);
     const mux = muxTransport(raw);
     const control = createHostControlServer(mux.control, createControlDeps(connectionId));
-    const session: ActiveSession = { mux, control };
+    const session: ActiveSession = { connectionId, mux, control };
     activeWindows.set(info.windowId, session);
+    linkBus.take(mux.link, connectionId);
     mux.control.onClose(() => {
       if (activeWindows.get(info.windowId) === session) {
         activeWindows.delete(info.windowId);
+        disposeSession(session);
       }
     });
   };
@@ -267,6 +316,12 @@ export async function startHostTransport(options: StartHostTransportOptions = {}
 
     unsubscribePort();
     unsubscribeGone();
+
+    try {
+      linkBus.close('ended');
+    } catch {
+      /* best-effort teardown */
+    }
 
     for (const session of Array.from(activeWindows.values())) {
       disposeSession(session);

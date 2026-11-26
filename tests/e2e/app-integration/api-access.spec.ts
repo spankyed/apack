@@ -1,25 +1,18 @@
-// The API takes calls only with the token Electron main creates for each app run: the app's window connects with it
-// (a WebSocket subprotocol, never the URL), and a WebSocket or /dev/reload call without it (a web page's, say) is
-// refused. A malformed request doesn't take the API down.
+// The API opens no TCP port and exposes neither port nor token to renderer windows: windows talk
+// to the backend exclusively over brokered Electron MessagePorts, and local tools authenticate to
+// the user-private local tool socket discovered through `apack/api-runtime.json`. A client with a
+// missing, wrong, or malformed handshake is refused without taking the API down.
 import * as net from 'node:net';
-import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
+import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { connectToolClient } from '@apackdev/host/transport/tool-client';
+import { connectToolSocket, readApiRuntimeFile } from '@apackdev/host/transport/tool-socket';
 import { test, expect } from '@apackdev/testing';
 
-/** Whether a WebSocket to `url` offering `protocols` opens, and the subprotocol the server chose */
-function connects(url: string, protocols: string[]): Promise<{ open: boolean; protocol?: string }> {
+/** Sends a malformed non-JSON handshake line to the local tool socket and waits for it to close. */
+function sendMalformedHandshake(socketPath: string): Promise<void> {
   return new Promise((resolve) => {
-    const socket = new WebSocket(url, protocols);
-    socket.addEventListener('open', () => { resolve({ open: true, protocol: socket.protocol }); socket.close(); });
-    socket.addEventListener('error', () => resolve({ open: false }));
-  });
-}
-
-/** Sends a raw WebSocket upgrade whose path no URL parser accepts, and waits for the server to answer or hang up */
-function sendMalformedUpgrade(port: number): Promise<void> {
-  return new Promise((resolve) => {
-    const socket = net.connect(port, '127.0.0.1', () => {
-      socket.write('GET //[ HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
-        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n');
+    const socket = net.connect(socketPath, () => {
+      socket.write('not-valid-json\n');
     });
     socket.on('data', () => socket.destroy());
     socket.on('close', () => resolve());
@@ -27,33 +20,42 @@ function sendMalformedUpgrade(port: number): Promise<void> {
   });
 }
 
-test('refuses API connections and reloads without the run token', async ({ appPage }) => {
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
+test('exposes no TCP port/token to the renderer and enforces token auth on the local tool socket', async ({ appPage, electronApp }) => {
+  const bridgeCheck = await appPage.evaluate(() => {
+    const api = (window as { electronAPI?: Record<string, unknown> }).electronAPI;
+    return {
+      hasBackendPort: typeof (api?.backendPort as { connect?: unknown } | undefined)?.connect === 'function',
+      hasApiPort: api !== undefined && 'apiPort' in api,
+      hasApiToken: api !== undefined && 'apiToken' in api,
+    };
   });
-  expect(apiPort, 'the renderer knows the API port').toBeTruthy();
-  expect(apiToken, 'the renderer knows the API token').toBeTruthy();
-  const base = `127.0.0.1:${apiPort}`;
+  expect(bridgeCheck).toEqual({ hasBackendPort: true, hasApiPort: false, hasApiToken: false });
 
-  expect(await connects(`ws://${base}`, [])).toEqual({ open: false });
-  expect(await connects(`ws://${base}`, ['apack', 'apack-token.guess'])).toEqual({ open: false });
-  expect(await connects(`ws://${base}/?token=${encodeURIComponent(apiToken)}`, ['apack'])).toEqual({ open: false });
-  // The server answers with the app's protocol, never the token one
-  expect(await connects(`ws://${base}`, ['apack', `apack-token.${apiToken}`])).toEqual({ open: true, protocol: 'apack' });
-  expect(await connects(`ws://${base}`, [`apack-token.${apiToken}`, 'apack'])).toEqual({ open: true, protocol: 'apack' });
+  const userDataDir = await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR);
+  expect(userDataDir, 'the app knows its data dir').toBeTruthy();
+  const { appDir } = resolveAppEnvironment({ env: 'test', userDataDir });
+  const runtime = readApiRuntimeFile(appDir);
+  expect(runtime?.socket, 'the test API publishes a local tool socket').toBeTruthy();
+  expect(runtime?.token, 'the test API publishes a local tool token').toBeTruthy();
 
-  const reload = (headers: Record<string, string>) => fetch(`http://${base}/dev/reload`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify({ packId: 'no-such-pack' }),
-  });
-  expect((await reload({})).status).toBe(403);
-  expect((await reload({ [API_TOKEN_HEADER]: 'guess' })).status).toBe(403);
-  // With the token, the request reaches the reload itself, which fails for an unknown pack
-  expect((await reload({ [API_TOKEN_HEADER]: apiToken })).status).not.toBe(403);
+  await expect(connectToolSocket({ socket: runtime!.socket!, token: '' })).rejects.toThrow();
+  await expect(connectToolSocket({ socket: runtime!.socket!, token: 'wrong-guess' })).rejects.toThrow();
 
-  // The API is still up after a request no URL parser accepts
-  await sendMalformedUpgrade(Number(apiPort));
-  expect(await connects(`ws://${base}`, ['apack', `apack-token.${apiToken}`])).toEqual({ open: true, protocol: 'apack' });
+  // With the run's token, the Control RPC reaches dev.reload (which rejects with NOT_FOUND/BAD_REQUEST for an unknown pack)
+  const client = await connectToolClient({ appDir });
+  try {
+    await expect(client.control.call('dev.reload', { packId: 'no-such-pack' })).rejects.toThrow();
+  } finally {
+    await client.close();
+  }
+
+  // The API stays healthy after a malformed handshake line
+  await sendMalformedHandshake(runtime!.socket!);
+  const recovered = await connectToolClient({ appDir });
+  try {
+    const loaded = await recovered.control.call('packs.loaded', undefined);
+    expect(Array.isArray(loaded)).toBe(true);
+  } finally {
+    await recovered.close();
+  }
 });

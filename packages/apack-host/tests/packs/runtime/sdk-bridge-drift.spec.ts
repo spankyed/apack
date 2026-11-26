@@ -113,6 +113,7 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   ['@apackdev/host/logs', "the app's log files, appended to by main and the API"],
   // Host transport primitives (multiplexer, control RPC contract, local tool socket & client): composed by API, renderer, CLI, and testing; packs never require them
   ['@apackdev/host/transport/control-contract', 'host off-bus control RPC contract and client, used by the API, renderer, CLI, and testing'],
+  ['@apackdev/host/transport/link-protocol', 'host @apackdev/link wire envelope and diagnostic cause helpers, used by the API, renderer, and testing'],
   ['@apackdev/host/transport/mux', 'host window-to-API transport multiplexer, used by the API and preload'],
   ['@apackdev/host/transport/tool-client', 'host local-tool socket client, used by the API, CLI, and testing'],
   ['@apackdev/host/transport/tool-socket', 'host local-tool socket server and api-runtime.json discovery, used by the API, CLI, and testing'],

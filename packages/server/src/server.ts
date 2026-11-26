@@ -1,24 +1,35 @@
 import './boot/env';
 import { installFatalErrorHandling, writeFatalError } from './boot/errors';
-import { captureApiToken } from './boot/config';
-import { installShutdownBridge, isShutdownRequested } from './boot/lifecycle';
-import { appClock, appDatabase, appPacks, appRunHistory, setupBackend } from './runtime';
+import {
+  installShutdownBridge,
+  isShutdownRequested,
+  notifyServerReady,
+  registerGracefulShutdown,
+} from './boot/lifecycle';
+import { appClock, appDatabase, appPacks, appRunHistory, backendActor, setupBackend } from './runtime';
 import { startHostTransport, type HostTransport } from './transport/tool-server';
-import { createWebSocketServer } from './transport/websocket';
 
 installFatalErrorHandling();
 installShutdownBridge();
-// Before the app exists, and so before any pack can spawn a process that would inherit the token
-captureApiToken();
 
 function closeRuntimeSync(): void {
   appPacks?.runShutdownHooks();
-  try { appDatabase?.close(); } catch {}
-  try { appRunHistory?.database.close(); } catch {}
-  try { appClock?.close(); } catch {}
+  try {
+    appDatabase?.close();
+  } catch (error) {
+    console.error('[backend] Closing the database failed', error);
+  }
+  try {
+    appRunHistory?.database.close();
+  } catch (error) {
+    console.error('[backend] Closing the run history failed', error);
+  }
+  try {
+    appClock?.close();
+  } catch {}
 }
 
-// Initialize backend systems, then start host transport (api-runtime.json + optional tool socket) and WebSocket server
+// Initialize backend systems, then start host transport (`api-runtime.json`, Electron window ports, and optional local tool socket)
 (async () => {
   try {
     await setupBackend();
@@ -27,7 +38,7 @@ function closeRuntimeSync(): void {
     process.exit(1);
   }
 
-  // A quit or dev reload arrived while `setupBackend()` was running: tear down cleanly without binding a port.
+  // A quit or dev reload arrived while `setupBackend()` was running: tear down cleanly without publishing transport.
   if (isShutdownRequested()) {
     closeRuntimeSync();
     process.exit(0);
@@ -48,15 +59,26 @@ function closeRuntimeSync(): void {
     process.exit(0);
   }
 
-  try {
-    createWebSocketServer({
-      toolSocket: hostTransport.socket,
-      onShutdown: () => hostTransport[Symbol.dispose](),
-    });
-  } catch (error) {
-    await hostTransport.close();
-    writeFatalError(error, 'createWebSocketServer');
+  process.on('exit', () => {
+    try {
+      hostTransport[Symbol.dispose]();
+    } catch {}
     closeRuntimeSync();
-    process.exit(1);
-  }
+  });
+
+  registerGracefulShutdown(() => {
+    try {
+      hostTransport[Symbol.dispose]();
+    } catch {}
+    backendActor?.stop();
+    // Exit explicitly so the 'exit' handler fires before Electron force-kills us
+    process.exit(0);
+  });
+
+  console.log(
+    hostTransport.socket
+      ? `✅ API Server ready (tool socket: ${hostTransport.socket})`
+      : '✅ API Server ready',
+  );
+  notifyServerReady(hostTransport.socket);
 })();

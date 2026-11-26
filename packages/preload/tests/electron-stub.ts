@@ -17,8 +17,8 @@ export const ipcRenderer = {
   invoked: [] as { channel: string; args: unknown[] }[],
   /** The listeners `on` registered, by channel, so a case can see an unsubscribe remove one */
   listeners: new Map<string, ((...args: unknown[]) => void)[]>(),
-  /** What a synchronous read answers with; `api:token` is the one the bridge makes */
-  syncAnswers: new Map<string, unknown>([['api:token', 'a-token-from-main']]),
+  /** What a synchronous read answers with */
+  syncAnswers: new Map<string, unknown>(),
 
   send(channel: string, ...args: unknown[]) {
     ipcRenderer.sent.push({ channel, args });

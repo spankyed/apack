@@ -61,9 +61,6 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
     'the timer *is* the subject: what the case asserts is that a send made from one carries no sender, '
     + 'because the delivery it was scheduled in has ended. Awaiting an event instead would remove the only '
     + 'thing being tested',
-  'packages/apack-testing/tests/engine/api-client.spec.ts > after':
-    'the keep-alive case has to let several ping/terminate windows come and go while the client sits idle: the '
-    + 'elapsed time is the assertion, not a proxy for an event',
   'packages/apack-host/tests/database/write-lock.spec.ts > waitFor':
     'polls a file lock, which has no event to subscribe to, and already deadlines naming what it waited for — '
     + 'the poll half of the rule, done properly',

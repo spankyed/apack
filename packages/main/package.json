@@ -20,8 +20,7 @@
     "@app/preload": "*",
     "@app/renderer": "*",
     "electron-context-menu": "^4.1.2",
-    "electron-log": "^5.4.4",
-    "get-port": "^7.1.0"
+    "electron-log": "^5.4.4"
   },
   "devDependencies": {
     "@app/internal-electron-versions": "*",

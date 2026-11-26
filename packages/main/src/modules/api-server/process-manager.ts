@@ -16,7 +16,7 @@ export interface ManagedProcess extends EventEmitter {
 }
 
 export interface ProcessHandlers {
-  onReady?: (port: number, socket?: string) => void;
+  onReady?: (socket?: string) => void;
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
   onError?: (error: Error) => void;
   onStdout?: (data: string) => void;
@@ -67,11 +67,11 @@ export class ProcessManager {
     } catch { /* child exited before taking the message */ }
   }
 
-  private markReady(port: number, socket?: string): void {
+  private markReady(socket?: string): void {
     if (this.serverReady) return;
     this.serverReady = true;
     this.toolSocket = socket;
-    this.handlers.onReady?.(port, socket);
+    this.handlers.onReady?.(socket);
   }
 
   private parseFatalLine(line: string): void {
@@ -100,10 +100,10 @@ export class ProcessManager {
     // Structured control messages from the utility process's `parentPort`
     this.process.on('message', (message: unknown) => {
       if (!message || typeof message !== 'object') return;
-      const payload = message as { type?: unknown; port?: unknown; socket?: unknown };
-      if (payload.type === 'ready' && typeof payload.port === 'number' && Number.isInteger(payload.port) && payload.port > 0) {
+      const payload = message as { type?: unknown; socket?: unknown };
+      if (payload.type === 'ready') {
         const socket = typeof payload.socket === 'string' && payload.socket.length > 0 ? payload.socket : undefined;
-        this.markReady(payload.port, socket);
+        this.markReady(socket);
       }
     });
 
@@ -130,14 +130,6 @@ export class ProcessManager {
           });
         }
         
-        // Fallback readiness detection if the child did not send `{ type: 'ready', port }` over `parentPort`
-        if (!this.serverReady && message.includes('WebSocket Server listening')) {
-          const portMatch = message.match(/ws:\/\/localhost:(\d+)/);
-          if (portMatch) {
-            this.markReady(parseInt(portMatch[1], 10));
-          }
-        }
-
         this.handlers.onStdout?.(message);
       });
 

@@ -1,13 +1,13 @@
 import type { SecretsClient } from '@apackdev/sdk/fe';
-import { trpc } from '@/transport';
+import { windowTransport } from '@/transport';
 
-/** `secretsClient` in `@apackdev/sdk/fe`: the API's secrets procedures, the only ones pack frontends call directly */
+/** `secretsClient` in `@apackdev/sdk/fe`: off-bus Control Lane RPCs so secret values never enter `@apackdev/link`. */
 export const secretsClient: SecretsClient = {
-  list: () => trpc.secrets.list.query(),
-  add: (provider, label, value) => trpc.secrets.add.mutate({ provider, label, value }),
-  replaceValue: (id, value) => trpc.secrets.replaceValue.mutate({ id, value }),
-  select: (id) => trpc.secrets.select.mutate({ id }),
-  rename: (id, label) => trpc.secrets.rename.mutate({ id, label }),
-  delete: (id) => trpc.secrets.delete.mutate({ id }),
-  allowUnprotected: () => trpc.secrets.allowUnprotected.mutate(),
+  list: () => windowTransport.controlCall('secrets.list'),
+  add: (provider, label, value) => windowTransport.controlCall('secrets.add', { provider, label, value }),
+  replaceValue: (id, value) => windowTransport.controlCall('secrets.replaceValue', { id, value }),
+  select: (id) => windowTransport.controlCall('secrets.select', { id }),
+  rename: (id, label) => windowTransport.controlCall('secrets.rename', { id, label }),
+  delete: (id) => windowTransport.controlCall('secrets.delete', { id }),
+  allowUnprotected: () => windowTransport.controlCall('secrets.allowUnprotected'),
 };

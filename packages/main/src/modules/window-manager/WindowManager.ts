@@ -420,10 +420,7 @@ class WindowManager implements AppModule {
     // Determine icon path based on platform (use dev icon in development)
     const iconPath = getWindowIcon();
 
-    // Get the API port before creating the window
-    const apiPort = this.#apiServer?.getStatus().port || 3001;
     const startupId = this.#apiServer?.getStatus().startupId;
-    console.log(`[MAIN] Creating window with API port: ${apiPort}`);
 
     const browserWindow = new BrowserWindow({
       show: false,
@@ -447,10 +444,7 @@ class WindowManager implements AppModule {
         sandbox: false,
         webviewTag: false, // The webview tag is not recommended. Consider alternatives like an iframe or Electron's BrowserView. @see https://www.electronjs.org/docs/latest/api/webview-tag#warning
         preload: this.#preload.path,
-        additionalArguments: [
-          `--api-port=${apiPort}`,
-          ...(startupId ? [`--startup-id=${startupId}`] : []),
-        ],
+        additionalArguments: startupId ? [`--startup-id=${startupId}`] : [],
       },
     });
 
@@ -497,7 +491,6 @@ class WindowManager implements AppModule {
 
   async createPopoutWindow(surfaceId: string, surfaceTitle?: string): Promise<BrowserWindow> {
     const iconPath = getWindowIcon();
-    const apiPort = this.#apiServer?.getStatus().port || 3001;
     const startupId = this.#apiServer?.getStatus().startupId;
     const title = `${WINDOW_CONFIG.POPOUT_TITLE_PREFIX}-${surfaceId}`;
 
@@ -521,10 +514,7 @@ class WindowManager implements AppModule {
         sandbox: false,
         webviewTag: false,
         preload: this.#preload.path,
-        additionalArguments: [
-          `--api-port=${apiPort}`,
-          ...(startupId ? [`--startup-id=${startupId}`] : []),
-        ],
+        additionalArguments: startupId ? [`--startup-id=${startupId}`] : [],
       },
     });
 

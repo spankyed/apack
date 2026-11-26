@@ -6,7 +6,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
-import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { test, expect } from '@apackdev/testing';
 
 interface Received { surface: string; type: string; data?: unknown; asked?: string; answer?: { savedBookmarks?: Array<{ url: string }> } }
@@ -89,27 +88,16 @@ test("the code system's file watcher and a terminal's news reach the code surfac
   }
 });
 
-test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ app, appPage }) => {
+test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ app, appPage, connection }) => {
   const url = `https://example.com/e2e-surface-sends-${Date.now()}`;
   await recordSurfaceEvents(appPage);
   await app.send(builtIn('browser'), { type: 'SYNC_BOOKMARKS', bookmarks: [{ url, title: 'E2E bookmark', displayOrder: 0 }] });
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
-  });
-  expect(apiPort, 'the renderer knows the API port').toBeTruthy();
-  expect(apiToken, 'the renderer knows the API token').toBeTruthy();
 
   try {
     // The reload restarts the pack's systems and replaces its frontend's actors, each of which the shell starts
     // Asked once and awaited to its answer: a reload loads the pack's runtime from disk, which a busy disk makes
     // slow, and an assertion's backstop around the request would give up on one still in flight
-    const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
-      body: JSON.stringify({ packId: 'default-setup' }),
-    });
-    expect(response.status, await response.text()).toBe(200);
+    await connection.reloadPack('default-setup');
 
     // The answer is no event of the surface's: it is the output of the ask its machine invoked, so what shows it
     // arrived is the surface holding the bookmark

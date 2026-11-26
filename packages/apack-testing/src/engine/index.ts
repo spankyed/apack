@@ -13,6 +13,7 @@
  */
 import * as fs from 'node:fs';
 import type { Page } from '@playwright/test';
+import { _appDirOf } from '@apackdev/sdk/env';
 import { DRIVE_REF, createSession, type EngineSession, type SessionPage } from './session.ts';
 import { createAppDriver, waitForAppReady } from '../index.ts';
 import { CLAIM_CONFLICT, connectApiClient, type ApiClient } from './api-client.ts';
@@ -90,29 +91,6 @@ export const asSessionPage = (page: Page, app: EngineAppDriver, window?: EngineW
 });
 
 /**
- * Where the API is, asked of the app window rather than read off disk.
- *
- * The port file would do, but the **token file is not always written**: `publishApiFiles` skips it unless
- * `NODE_ENV` is development or the API invented its own token, and a packaged app satisfies neither. So reading
- * from disk would work in a checkout and fail against `apack pack drive --channel beta`, which is the worst split to
- * ship. The window has both from the preload, which is also how `tests/e2e/app-integration/api-access.spec.ts`
- * gets them.
- */
-async function apiAddressFromWindow(page: SessionPage): Promise<{ port: number; token: string }> {
-  const found = await page.evaluateExpression(
-    '(() => { const api = window.electronAPI; return { port: api?.apiPort, token: api?.apiToken }; })()',
-  ) as { port?: number; token?: string };
-  if (typeof found?.port !== 'number' || !found.token) {
-    throw new Error(
-      "The app window didn't offer the API's port and token (window.electronAPI), so the drive session has no way "
-      + 'to reach the bus. That bridge is the preload\'s (packages/preload), and without it only the page verbs '
-      + '(/eval, /state, /wait, /navigate, /screenshot) could work.',
-    );
-  }
-  return { port: found.port, token: found.token };
-}
-
-/**
  * Runs `work` with an unwind stack, closing any registered handles in reverse order if it throws.
  *
  * **A handle left open does not fail, it hangs.** Node keeps running while one is, so a refused claim left
@@ -187,7 +165,7 @@ export async function attachedSession(options: AttachedSessionOptions): Promise<
 
     const sessionPage = asSessionPage(page, createAppDriver(page, options.screenshotDir));
 
-    const api = await connectApiClient(await apiAddressFromWindow(sessionPage));
+    const api = await connectApiClient({ appDir: _appDirOf(options.dataDir) });
     deferClose(() => api.close());
     await _claimDrive(api);
 
@@ -206,7 +184,7 @@ export async function attachedSession(options: AttachedSessionOptions): Promise<
       session,
       // Lets go without closing: the app was not this connection's to open and is not its to end
       detach: async () => {
-        api.close();
+        await api.close();
         await detach();
       },
     };
@@ -216,6 +194,8 @@ export async function attachedSession(options: AttachedSessionOptions): Promise<
 export interface AttachedSessionOptions {
   /** From the app's session file — the port it published */
   readonly debugPort: number;
+  /** The running app's userData directory (where `apack/api-runtime.json` lives). */
+  readonly dataDir: string;
   /** Where `/screenshot` writes */
   readonly screenshotDir: string;
   /** The app's log, which `/logs` reads. Absent means `/logs` answers empty rather than guessing */

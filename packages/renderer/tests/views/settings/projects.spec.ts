@@ -5,10 +5,12 @@ import type { SettingUpdate } from '@apackdev/sdk/fe';
 import type { Message } from '@apackdev/sdk/events';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 const { send } = vi.hoisted(() => ({ send: vi.fn(async (_message: Message) => {}) }));
-vi.mock('@/transport', () => ({ trpc: {
-  bus: { send: { mutate: send } },
-  settings: { openHost: { mutate: async () => 'host-access' }, close: { mutate: async () => {} } },
-} }));
+vi.mock('@/transport', () => ({
+  windowTransport: {
+    linkSend: send,
+    controlCall: (method: string) => (method === 'settings.openHost' ? Promise.resolve({ credential: 'host-access' }) : Promise.resolve()),
+  },
+}));
 import { windowSettings, connectWindowSettings, disconnectWindowSettings } from '@/runtime/settings';
 import Projects from '@/views/settings/canvas/components/GeneralSettings/Projects.vue';
 

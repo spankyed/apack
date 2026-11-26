@@ -14,7 +14,7 @@
 // **A wait lasts as long as the app works**, as `app.ask`'s does: an answer on a loaded machine comes late and is
 // never failed for it. A wait also ends, saying why, the moment the connection does, rather than at the test's
 // timeout.
-import type { Page } from '@playwright/test';
+import { _appDirOf } from '@apackdev/sdk/env';
 import { HOST } from '@apackdev/host/bus';
 import { newCall } from '@apackdev/sdk/events';
 import { answerWhileWorking, fromNow, processWork } from '@apackdev/sdk/progress';
@@ -57,6 +57,8 @@ export interface AppConnection {
    * to `host/settings` carry. Refused for a runtime the app no longer runs.
    */
   openPackSettings(runtime: PackRuntime): Promise<string>;
+  /** Triggers a dev/test reload of `packId` over the local tool socket's Control RPC lane. */
+  reloadPack(packId: string): Promise<void>;
 }
 
 export interface ConnectToAppOptions {
@@ -66,22 +68,9 @@ export interface ConnectToAppOptions {
   readonly appPid?: number;
 }
 
-/** The API's address, which the window has from the preload; a packaged app writes no token file to read instead */
-async function apiAddressOf(page: Page): Promise<{ port: number; token: string }> {
-  const found = await page.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { port: api?.apiPort, token: api?.apiToken };
-  });
-  if (typeof found.port !== 'number' || !found.token) {
-    throw new Error("The app window didn't offer the API's port and token (window.electronAPI), so a spec's connection "
-      + 'has no way to reach the API. That bridge is the preload\'s (packages/preload).');
-  }
-  return { port: found.port, token: found.token };
-}
-
-/** Opens a connection to the API the window at `page` uses, and claims `HOST.e2eConnection` on it */
-export async function connectToApp(page: Page, options: ConnectToAppOptions): Promise<AppConnection & { close(): Promise<void> }> {
-  const api = await connectApiClient(await apiAddressOf(page));
+/** Opens a connection to the API serving `userDataDir`, and claims `HOST.e2eConnection` on it. */
+export async function connectToApp(userDataDir: string, options: ConnectToAppOptions): Promise<AppConnection & { close(): Promise<void> }> {
+  const api = await connectApiClient({ appDir: _appDirOf(userDataDir) });
   try {
     return await withClaim(api, options);
   } catch (error) {
@@ -154,6 +143,7 @@ export async function withClaim(api: ApiClient, { resolve, appPid }: ConnectToAp
       waitFor(what, (message) => (match(message.event) ? message.event : undefined)).answer,
     loadedPacks: () => api.loadedPacks(),
     openPackSettings: (runtime) => api.openPackSettings(runtime),
+    reloadPack: (packId) => api.reloadPack(packId),
     close: () => api.close(),
   };
 }

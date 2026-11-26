@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const rpc = vi.hoisted(() => ({ start: vi.fn(async () => {}), stop: vi.fn(async () => ({ complete: true })) }));
-vi.mock('@/transport', () => ({ trpc: { performance: { start: { mutate: rpc.start }, stop: { mutate: rpc.stop } } } }));
+const rpc = vi.hoisted(() => ({ start: vi.fn(async (_input?: unknown) => {}), stop: vi.fn(async () => ({ complete: true })) }));
+vi.mock('@/transport', () => ({
+  windowTransport: {
+    controlCall: (method: string, input?: unknown) => (method === 'performance.start' ? rpc.start(input) : rpc.stop()),
+  },
+}));
 const { windowPerformance, notifyPerformanceView } = await import('@/runtime/performance');
 const bridge = { start: vi.fn(async () => ({ id: 'lease' })), stop: vi.fn(async () => ({ complete: true, profileFailures: 0,
   statistics: { source: 'chromium-cdp', pid: 42, metrics: [], unavailable: [], failures: 0 } })) };

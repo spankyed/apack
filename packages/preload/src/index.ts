@@ -3,24 +3,6 @@ import {connect} from 'node:net';
 import type {_HostBridge, SpeechEvent, TerminalViewStream} from '@apackdev/sdk/fe';
 import {createBackendPortBridge, type BackendPortIpc} from './backend-port.ts';
 
-const DEFAULT_API_PORT = 3001;
-
-/**
- * The port main gave this window, from `--api-port=<n>`.
- *
- * **A port or the default, never whatever `parseInt` made of the value.** Main builds this argument from a
- * number it already holds, so nothing reachable from the UI produces a malformed one — which makes the
- * guard an assertion rather than a gate. Without it an empty or non-numeric value answers `NaN`, and the
- * window then connects to `ws://localhost:NaN` and fails with a message about the URL rather than about the
- * argument, two layers from the mistake.
- */
-function getApiPort(): number {
-  const portArg = process.argv.find(arg => arg.startsWith('--api-port='));
-  if (portArg === undefined) return DEFAULT_API_PORT;
-  const port = Number(portArg.slice('--api-port='.length));
-  return Number.isInteger(port) && port > 0 ? port : DEFAULT_API_PORT;
-}
-
 function getStartupId(): string | undefined {
   const startupArg = process.argv.find(arg => arg.startsWith('--startup-id='));
   return startupArg?.split('=')[1];
@@ -49,9 +31,6 @@ const fileUtils = {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 } satisfies _HostBridge['fileUtils'];
 
-// Get the API port, and the token the API requires (from main, never on the command line)
-const apiPort = getApiPort();
-const apiToken = ipcRenderer.sendSync('api:token') as string;
 const startupId = getStartupId();
 
 // Clipboard: the main process writes it, so no focus is needed (see packages/main/src/modules/clipboard-access.ts)
@@ -105,7 +84,6 @@ const zoom = {
 const apiStatus = {
   getStatus: () => ipcRenderer.invoke('api:get-status') as Promise<{
     running: boolean;
-    port?: number;
     error?: { message: string; stack?: string };
     restartAttempts: number;
     startupId: string;
@@ -116,7 +94,7 @@ const apiStatus = {
   relaunch: () => ipcRenderer.invoke('app:relaunch'),
   reload: () => ipcRenderer.invoke('app:reload'),
   openLogFile: () => ipcRenderer.invoke('api:open-log-file'),
-  onEvent: (callback: (event: { type: string; error?: string; attempt?: number; maxAttempts?: number; port?: number; reloaded?: boolean }) => void) => {
+  onEvent: (callback: (event: { type: string; error?: string; attempt?: number; maxAttempts?: number; reloaded?: boolean }) => void) => {
     const channels = ['api:stopped', 'api:error', 'api:restarting', 'api:started', 'api:fatal'];
     const handlers = channels.map(channel => {
       const handler = (_: Electron.IpcRendererEvent, data?: any) => {
@@ -350,8 +328,6 @@ const electronAPI = {
   zoom,
   apiStatus,
   rendererLog,
-  apiPort,
-  apiToken,
   startupId,
   browser,
   protocolAction,
