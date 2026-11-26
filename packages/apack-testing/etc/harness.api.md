@@ -6,7 +6,6 @@
 
 import { addTestSecret } from '@apackdev/sdk/testing';
 import { AnyActorRef } from 'xstate';
-import { AnyStateMachine } from 'xstate';
 import { ContentApplier } from '@apackdev/sdk/utils';
 import { ContentRuntime } from '@apackdev/sdk/framework';
 import { EarsClock } from '@apackdev/sdk/ears';
@@ -21,6 +20,7 @@ import { PackRegistration } from '@apackdev/sdk/framework';
 import { SettingsAdmin } from '@apackdev/sdk/services';
 import type { SettingsService } from '@apackdev/sdk/services';
 import type { SurfaceDefinition } from '@apackdev/sdk/fe';
+import type { System } from '@apackdev/state';
 import { takeSystemErrors } from '@apackdev/sdk/testing';
 import { UntypedAskOutcome } from '@apackdev/sdk/events';
 import type { ViewUpdate } from '@apackdev/sdk/framework';
@@ -169,13 +169,14 @@ export interface TestShell {
         detail?: string;
     }>;
     opened(): string;
+    readonly stateSystem: System;
     stop(): void;
     surface(name: string): AnyActorRef;
 }
 
 // @public
 export type TestSurface = {
-    state: AnyStateMachine;
+    state: SurfaceDefinition['state'];
 } & Partial<Omit<SurfaceDefinition, 'state'>>;
 
 // @public

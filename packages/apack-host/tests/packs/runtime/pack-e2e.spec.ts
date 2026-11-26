@@ -11,6 +11,7 @@ import { _declarationRevision } from '@apackdev/pack-format';
  * Cleans up after itself.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { isState } from '@apackdev/sdk/framework';
 import { registry } from './test-host.ts';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -140,7 +141,9 @@ describe('E2E: pack loading pipeline', () => {
 
     const system = systemOf(testPack, 'hello');
     expect(system?.machine).toBeDefined();
-    expect(system?.machine.id).toBe('e2e-hello');
+    expect(isState(system!.machine)).toBe(false);
+    if (isState(system!.machine)) throw new Error('expected XState machine');
+    expect(system!.machine.id).toBe('e2e-hello');
   });
 
   it('registers no system for a feature that has only a surface', () => {
@@ -158,6 +161,7 @@ describe('E2E: pack loading pipeline', () => {
   it('xstate machine from pack is functional (can create states)', () => {
     const testPack = packs.find(p => p.origin.id === TEST_PACK_ID)!;
     const machine = systemOf(testPack, 'hello')!.machine;
+    if (isState(machine)) throw new Error('expected XState machine');
 
     // Verify the machine has the expected structure
     expect(machine.config.initial).toBe('idle');

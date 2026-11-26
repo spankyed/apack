@@ -1129,20 +1129,20 @@ ${items.join('\n')}
     // nothing in either file says so: this asserts it where both are in scope.
     const contracted = systemFeatures.filter(f => contractTarget(f, 'system'));
     const contractCheck = contracted.length === 0 ? '' : `
-// Each system's machine is typed by the contract apack.json names for its feature — the one its facade publishes.
-// A machine built from some other contract compiles on its own, so a mismatch reads here as the sentence
-// \`MachineMatchesContract\` returns, in place of the \`true\` the constraint asks for. Type-only: it leaves
+// Each system's machine or @apackdev/state State is typed by the contract apack.json names for its feature — the one
+// its facade publishes. A system built from some other contract compiles on its own, so a mismatch reads here as the
+// sentence \`SystemMatchesContract\` returns, in place of the \`true\` the constraint asks for. Type-only: it leaves
 // nothing behind in the pack's bundle. Exported because a local type nobody reads is what noUnusedLocals
 // reports, and the assertion is the same either way.
 type __ContractMatches<T extends true> = T;
 export type __ContractChecks = {
-${contracted.map(f => `  '${f.id}': __ContractMatches<MachineMatchesContract<typeof ${systemBinding(f.id)}, __SystemContracts['${f.id}']>>;`).join('\n')}
+${contracted.map(f => `  '${f.id}': __ContractMatches<SystemMatchesContract<typeof ${systemBinding(f.id)}, __SystemContracts['${f.id}']>>;`).join('\n')}
 };
 `;
 
     return `${HEADER}
 import type { PackRegistration } from '@apackdev/sdk/framework';
-${contracted.length ? "import type { MachineMatchesContract } from '@apackdev/sdk/framework';\nimport type { SystemContracts as __SystemContracts } from './system-specs.ts';\n" : ''}${systemFeatures.length ? "import { packSystem } from '@apackdev/sdk/framework';\n" : ''}${hasRepositories() ? "import { repositories } from './repositories.ts';\n" : ''}
+${contracted.length ? "import type { SystemMatchesContract } from '@apackdev/sdk/framework';\nimport type { SystemContracts as __SystemContracts } from './system-specs.ts';\n" : ''}${systemFeatures.length ? "import { packSystem } from '@apackdev/sdk/framework';\n" : ''}${hasRepositories() ? "import { repositories } from './repositories.ts';\n" : ''}
 ${systemImports}
 import { featureServices, bindServices } from './services.ts';
 ${hooksImport}

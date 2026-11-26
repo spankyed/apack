@@ -134,6 +134,14 @@ export interface AskOptions<P = unknown> {
 // @public
 export type AskOutcome<D> = Outcome<AnswerPayload<D>, AskFailure<D>>;
 
+// @internal
+export function _askOverClient(client: {
+    send(message: Message, refused?: () => void): void;
+}, to: string, event: {
+    type: string;
+    [key: string]: unknown;
+}, options?: AskOptions): Promise<UntypedAskOutcome>;
+
 // @public
 export type AskPayload<D> = D extends {
     args: infer Payload;

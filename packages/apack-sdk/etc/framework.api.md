@@ -523,6 +523,9 @@ export type HostLifecycleEvents =
 };
 
 // @public
+export function isState(value: unknown): value is AnyState;
+
+// @public
 export const LIFECYCLE_HOOK_NAMES: readonly ["onInit", "onShutdown"];
 
 // @public
@@ -858,7 +861,7 @@ export interface PackFeatureSurface {
 export interface PackFeatureSystem {
     asks?: Readonly<Record<string, readonly string[]>>;
     // (undocumented)
-    machine: AnyStateMachine;
+    machine: PackSystemLogic;
     receives: readonly string[];
 }
 
@@ -1100,7 +1103,7 @@ export interface PackSnapshot {
 export type PackSurfaceEntry = SurfaceDeclaration;
 
 // @public
-export function packSystem(entry: SystemEntry, options: {
+export function packSystem(entry: SystemEntry | AnyState, options: {
     incoming: readonly string[];
 }): PackFeatureSystem;
 
@@ -1115,6 +1118,9 @@ export interface PackSystemEntry {
         incoming?: string[];
     };
 }
+
+// @public
+export type PackSystemLogic = AnyStateMachine | AnyState;
 
 // @public (undocumented)
 export interface PackTypeManifest {
@@ -1572,6 +1578,11 @@ export type SystemEvents = HostLifecycleEvents
 | {
     type: typeof ASK_CANCELLED;
 };
+
+// @public
+export type SystemMatchesContract<Entry, C extends SystemContract> = [
+Entry
+] extends [AnyState] ? StateMatchesContract<Entry, C> : MachineMatchesContract<Entry, C>;
 
 // @public
 export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {

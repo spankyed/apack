@@ -1,17 +1,16 @@
 // The breadcrumbs and context menu of the surface open: read off its state machine's `meta` (`breadcrumb`,
-// `contextMenu`) each time its state changes, by a child actor that follows whichever surface is open.
+// `contextMenu`) or a `@apackdev/state` surface's `chrome` table each time its state changes, by a child actor
+// that follows whichever surface is open.
 import { fromCallback, type AnyActorRef, type AnyMachineSnapshot } from 'xstate';
-import type { ContextMenuItem, ContextMenuMeta } from '@apackdev/sdk/fe';
+import type { BreadcrumbItem, ContextMenuItem, ContextMenuMeta } from '@apackdev/sdk/fe';
+import { splitRef } from '@apackdev/sdk/ids';
+import type { StateSurfaceMeta } from '../../../fe/state-bridge.ts';
 import { HOST } from '../../../refs.ts';
+import { computeTrail } from './chrome.ts';
 
 const capitalizeFirstLetter = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export interface BreadcrumbItem {
-  label: string;
-  target: string;
-  /** What a click on the crumb hands the surface with its target */
-  info?: unknown;
-}
+export type { BreadcrumbItem };
 
 export type BreadcrumbMeta = BreadcrumbItem | BreadcrumbItem[] | ((context: unknown) => BreadcrumbItem | BreadcrumbItem[]);
 
@@ -28,6 +27,20 @@ function resolveMenuItems(meta: ContextMenuMeta | undefined, ctx: unknown): Cont
 }
 
 export function computeCrumbs(state: AnyMachineSnapshot): UpdateData {
+  const stateSurface = (state as { _stateSurface?: StateSurfaceMeta })._stateSurface;
+  if (stateSurface || !Array.isArray(state._nodes)) {
+    const at = typeof state.value === 'string' && state.value !== '' ? state.value : undefined;
+    const computed = computeTrail(stateSurface?.chrome, { ...(at !== undefined ? { at } : {}), data: state.context });
+    const fallbackLabel = stateSurface
+      ? capitalizeFirstLetter(splitRef(stateSurface.id)?.featureId ?? stateSurface.id)
+      : '';
+    const crumbs = computed.breadcrumbs.length > 0
+      ? [...computed.breadcrumbs]
+      : (fallbackLabel ? [{ label: fallbackLabel, target: computed.target ?? '' }] : []);
+    const target = computed.target ?? crumbs[crumbs.length - 1]?.target;
+    return { crumbs, target, menuItems: [...computed.contextMenu] };
+  }
+
   const allCrumbs: BreadcrumbItem[] = [];
 
   // Process nodes starting from index 1 (skip root) (top level states only)

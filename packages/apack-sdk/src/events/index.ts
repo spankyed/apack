@@ -655,19 +655,26 @@ const pendingAsks = new Map<string, { settle(outcome: UntypedAskOutcome): void; 
  */
 const ASK_RETURN_ADDRESS = { window: 'host/application', backend: 'host/bus' } as const;
 
-function askVia(to: string, event: { type: string; [key: string]: unknown }, labels: Pick<Message, 'from' | 'via'>, options?: AskOptions, client?: string): Promise<UntypedAskOutcome> {
+function askVia(
+  to: string,
+  event: { type: string; [key: string]: unknown },
+  labels: Pick<Message, 'from' | 'via'>,
+  options?: AskOptions,
+  client?: string,
+  feClient?: { send(message: Message, refused?: () => void): void },
+): Promise<UntypedAskOutcome> {
   const call = newCall();
   const asked = event.type;
   const signal = options?.signal;
   return new Promise<UntypedAskOutcome>((resolve, reject) => {
     if (signal?.aborted) { reject(signal.reason); return; }
-    const inWindow = _isFeHostBound();
+    const sendClient = feClient ?? (_isFeHostBound() ? boundFeHost().client : undefined);
     const abort = () => {
       pendingAsks.delete(call);
       reject(signal!.reason);
       // Told to the system that is answering, under the call it answers, so that one handler stops and no other
       const cancel = { to, event: { type: ASK_CANCELLED }, call: newCall(), answering: call, ...labels };
-      if (inWindow) boundFeHost().client.send(cancel, () => {});
+      if (sendClient) sendClient.send(cancel, () => {});
       else sendIncoming(cancel);
     };
     pendingAsks.set(call, {
@@ -675,13 +682,26 @@ function askVia(to: string, event: { type: string; [key: string]: unknown }, lab
       ...(options?.heard === undefined ? {} : { heard: options.heard as (update: unknown) => void }),
     });
     signal?.addEventListener('abort', abort, { once: true });
-    const sender = _currentDelivery()?.receiver ?? (inWindow || client !== undefined ? ASK_RETURN_ADDRESS.window : ASK_RETURN_ADDRESS.backend);
+    const sender = _currentDelivery()?.receiver ?? (sendClient !== undefined || client !== undefined ? ASK_RETURN_ADDRESS.window : ASK_RETURN_ADDRESS.backend);
     const message = _performanceEnvelope({ to, event, call, ...labels, sender, ...(client === undefined ? {} : { client }) });
     // A send the API refuses is an ask nothing will answer: no system of that name runs. Answered here as the bus
     // answers one that runs and takes nothing, so the asker has its answer either way
-    if (inWindow) boundFeHost().client.send(message, () => _settleAsk({ answering: call, event: _unavailable(asked, `No "${to}" system is running to answer "${asked}"`) }));
+    if (sendClient) sendClient.send(message, () => _settleAsk({ answering: call, event: _unavailable(asked, `No "${to}" system is running to answer "${asked}"`) }));
     else sendIncoming(message);
   });
+}
+
+/**
+ * @internal Asks over an explicit window client, for the host's frontend state bridge (which owns its `ShellClient`
+ * directly and runs in tests that may not bind a global frontend host).
+ */
+export function _askOverClient(
+  client: { send(message: Message, refused?: () => void): void },
+  to: string,
+  event: { type: string; [key: string]: unknown },
+  options?: AskOptions,
+): Promise<UntypedAskOutcome> {
+  return askVia(to, event, {}, options, undefined, client);
 }
 
 /**
