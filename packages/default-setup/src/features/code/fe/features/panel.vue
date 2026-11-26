@@ -42,10 +42,9 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 
 import { ref } from 'vue'
-import type { CodeState } from '#features/code/fe/state.ts'
 import ExplorerPanel from '#features/code/fe/features/explorer/ExplorerPanel.vue'
 import SearchPanel from '#features/code/fe/features/search/SearchPanel.vue'
 import CommitPanel from '#features/code/fe/features/commit/CommitPanel.vue'
@@ -55,8 +54,7 @@ import PromptsPanel from '#features/code/fe/features/prompts/PromptsPanel.vue'
 import PanelTerminalSection from '#features/code/fe/features/terminal/PanelTerminalSection.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 
-const actor: CodeState = useSurface()
-const { state: code, send } = useState(actor)
+const { state: code, send } = useState('code')
 
 const MIN_TERMINAL_HEIGHT = 100
 const MAX_TERMINAL_HEIGHT = 600

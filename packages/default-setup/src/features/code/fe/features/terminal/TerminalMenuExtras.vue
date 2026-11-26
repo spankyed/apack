@@ -34,14 +34,12 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ContextMenuItem, ContextMenuSeparator } from 'reka-ui'
 import { ClipboardCopy, History, Pin, PinOff, Search } from 'lucide-vue-next'
 import { MENU_ITEM_CLASS, MENU_SEPARATOR_CLASS } from '#features/code/fe/features/explorer/constants.ts'
-import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
-import { panelChild } from '../children.ts'
+import { useState } from '#generated/state-fe.ts'
 
 const props = defineProps<{
   terminalId: string
@@ -49,11 +47,10 @@ const props = defineProps<{
   attachment: () => TerminalAttachment | null
 }>()
 
-const codeActor: CodeState = useSurface()
-const terminalActor = panelChild(codeActor, 'terminal')!
-const { state: terminals, send } = useState(terminalActor)
+const { child } = useState('code')
+const { state: terminals, send } = useState(() => child('terminal'))
 /** The terminal as the list has it now, which a tab's copy of it is not */
-const live = computed(() => terminals.value.data.terminals.find(terminal => terminal.id === props.terminalId))
+const live = computed(() => terminals.value?.data.terminals.find(terminal => terminal.id === props.terminalId))
 
 // This is mounted when the menu opens, which is the moment the question is about
 const hasCommands = ref(false)

@@ -1,83 +1,70 @@
 // The code surface's actions and prompts panels open an entity's code in a tab and save the tab back into it. Each
 // is an ask of the code system, several of which run at once (a restore opens every tab it had), so each ask's
 // outcome is its own: the one that ends is the one whose tab opens.
-import { beforeEach, expect, it, vi } from 'vitest';
-import { createActor, type AnyActorRef } from 'xstate';
+import { afterEach, expect, it } from 'vitest';
+import { actionsState } from '#features/code/fe/features/actions/state.ts';
+import { promptsState } from '#features/code/fe/features/prompts/state.ts';
+import { startMachine } from '../../_support/asks.ts';
 
-type Outcome = { ok: true; value: object } | { ok: false; failure: { kind: string; message: string } };
-const asks = vi.hoisted(() => [] as { type: string; input: unknown; end(outcome: unknown): void }[]);
-const parent = vi.hoisted(() => ({ tabs: [] as { path: string }[], updates: [] as { openFiles?: { modified: boolean; actionEntity?: { actionFn: string } }[] }[] }));
-vi.mock('#generated/events.ts', async () => {
-  const { fromPromise } = await import('xstate');
-  return {
-    sendToSurface: vi.fn(),
-    // An ask a machine spawns: recorded as it is made, and ended by the case
-    fromAsk: (_to: string, type: string) => fromPromise(({ input }) => new Promise((end) => { asks.push({ type, input, end }); })),
-  };
+const running: Array<{ stop(): void }> = [];
+afterEach(() => {
+  for (const h of running.splice(0)) h.stop();
 });
-vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
-  getParentContext: () => ({ openFiles: parent.tabs }),
-  addTabToParent: (_self: AnyActorRef, tab: { path: string }) => { parent.tabs.push(tab); },
-  updateParentState: (_self: AnyActorRef, updates: object) => { parent.updates.push(updates); },
-}));
-
-const { actionsState } = await import('#features/code/fe/features/actions/state.ts');
-const { promptsState } = await import('#features/code/fe/features/prompts/state.ts');
-
-const end = (ask: (typeof asks)[number], outcome: Outcome) => ask.end(outcome);
-const childIds = (actor: AnyActorRef) => Object.keys((actor.getSnapshot() as { children: object }).children);
-
-beforeEach(() => { asks.length = 0; parent.tabs = []; parent.updates = []; });
 
 it('opens a tab for each action a restore asks for, whichever answer comes first, and none for one that is not there', async () => {
-  const actor = createActor(actionsState).start();
-  actor.send({ type: 'codeActions.OPEN_TABS', actionIds: ['a', 'b', 'gone'] });
-  expect(asks.map(ask => [ask.type, ask.input])).toEqual([
-    ['codeActions.OPEN_ACTION', { actionId: 'a' }], ['codeActions.OPEN_ACTION', { actionId: 'b' }], ['codeActions.OPEN_ACTION', { actionId: 'gone' }],
+  const h = startMachine(actionsState, { reports: ['CODE_ACTIONS_SHOW_TAB', 'CODE_ACTIONS_ACTION_SAVED'] });
+  running.push(h);
+
+  h.send({ type: 'codeActions.OPEN_TABS', actionIds: ['a', 'b', 'gone'] });
+  expect(h.made.map((ask) => [ask.event.type, ask.event.actionId])).toEqual([
+    ['codeActions.OPEN_ACTION', 'a'],
+    ['codeActions.OPEN_ACTION', 'b'],
+    ['codeActions.OPEN_ACTION', 'gone'],
   ]);
 
-  end(asks[2]!, { ok: false, failure: { kind: 'not-found', message: 'Action gone not found' } });
-  end(asks[1]!, { ok: true, value: { id: 'b', actionFn: 'return "b"' } });
-  end(asks[0]!, { ok: true, value: { id: 'a', actionFn: 'return "a"', actionFnContent: 'return "a!"' } });
+  await h.made[2]!.refuse('Action gone not found', { kind: 'not-found' });
+  await h.made[1]!.answer({ id: 'b', actionFn: 'return "b"' });
+  await h.made[0]!.answer({ id: 'a', actionFn: 'return "a"', actionFnContent: 'return "a!"' });
 
-  await vi.waitFor(() => expect(parent.tabs).toHaveLength(2));
-  expect(parent.tabs).toMatchObject([
-    { path: 'action:b', content: 'return "b"', isAction: true, modified: false },
-    { path: 'action:a', content: 'return "a!"', isAction: true, modified: false },
+  expect(h.reportsOf('CODE_ACTIONS_SHOW_TAB')).toMatchObject([
+    { type: 'CODE_ACTIONS_SHOW_TAB', tab: { path: 'action:b', content: 'return "b"', isAction: true, modified: false } },
+    { type: 'CODE_ACTIONS_SHOW_TAB', tab: { path: 'action:a', content: 'return "a!"', isAction: true, modified: false } },
   ]);
-  await vi.waitFor(() => expect(childIds(actor), 'an ask that ended is let go').toEqual([]));
-  actor.stop();
+  expect(h.read().pending.open, 'an ask that ended is let go').toBe(0);
 });
 
 it('puts the saved action in its tab, unmodified, and leaves the tab as it was when the save is refused', async () => {
-  parent.tabs = [{ path: 'action:a', isAction: true, modified: true, actionEntity: { id: 'a', actionFn: 'old' } } as never];
-  const actor = createActor(actionsState).start();
+  const h = startMachine(actionsState, { reports: ['CODE_ACTIONS_SHOW_TAB', 'CODE_ACTIONS_ACTION_SAVED'] });
+  running.push(h);
 
-  actor.send({ type: 'codeActions.SAVE_ACTION', actionId: 'a', content: 'new' });
-  expect(asks.map(ask => [ask.type, ask.input])).toEqual([['codeActions.SAVE_ACTION', { actionId: 'a', actionFn: 'new' }]]);
-  end(asks[0]!, { ok: false, failure: { kind: 'not-found', message: 'Action a not found' } });
-  await vi.waitFor(() => expect(childIds(actor), 'the refused save ended').toEqual([]));
-  expect(parent.updates, 'a refused save changes no tab').toEqual([]);
+  h.send({ type: 'codeActions.SAVE_ACTION', actionId: 'a', content: 'new' });
+  expect(h.made.map((ask) => ask.event)).toEqual([{ type: 'codeActions.SAVE_ACTION', actionId: 'a', actionFn: 'new' }]);
+  await h.made[0]!.refuse('Action a not found', { kind: 'not-found' });
+  expect(h.read().pending.save, 'the refused save ended').toBe(0);
+  expect(h.reportsOf('CODE_ACTIONS_ACTION_SAVED'), 'a refused save changes no tab').toEqual([]);
 
-  actor.send({ type: 'codeActions.SAVE_ACTION', actionId: 'a', content: 'new' });
-  end(asks[1]!, { ok: true, value: { id: 'a', actionFn: 'new' } });
-  await vi.waitFor(() => expect(parent.updates).toHaveLength(1));
-  expect(parent.updates[0]!.openFiles).toMatchObject([{ modified: false, actionEntity: { actionFn: 'new' } }]);
-  actor.stop();
+  h.send({ type: 'codeActions.SAVE_ACTION', actionId: 'a', content: 'new' });
+  await h.made[1]!.answer({ id: 'a', actionFn: 'new' });
+  expect(h.reportsOf('CODE_ACTIONS_ACTION_SAVED')).toMatchObject([
+    { type: 'CODE_ACTIONS_ACTION_SAVED', action: { id: 'a', actionFn: 'new' } },
+  ]);
 });
 
 it("opens a prompt's template in a tab and puts the saved prompt back in it", async () => {
-  const actor = createActor(promptsState).start();
-  actor.send({ type: 'codePrompts.OPEN_PROMPT', promptId: 'p' });
-  expect(asks.map(ask => [ask.type, ask.input])).toEqual([['codePrompts.OPEN_PROMPT', { promptId: 'p' }]]);
-  end(asks[0]!, { ok: true, value: { id: 'p', templateFn: 'hi' } });
-  await vi.waitFor(() => expect(parent.tabs).toMatchObject([{ path: 'prompt:p', content: 'hi', isPrompt: true }]));
+  const h = startMachine(promptsState, { reports: ['CODE_PROMPTS_SHOW_TAB', 'CODE_PROMPTS_PROMPT_SAVED'] });
+  running.push(h);
 
-  parent.tabs = [{ path: 'prompt:p', isPrompt: true, modified: true, promptEntity: { id: 'p', templateFn: 'hi' } } as never];
-  actor.send({ type: 'codePrompts.SAVE_PROMPT', promptId: 'p', content: 'yo' });
-  expect(asks[1]).toMatchObject({ type: 'codePrompts.SAVE_PROMPT', input: { promptId: 'p', templateFn: 'yo' } });
-  end(asks[1]!, { ok: true, value: { id: 'p', templateFn: 'yo' } });
-  await vi.waitFor(() => expect(parent.updates).toHaveLength(1));
-  expect(parent.updates[0]!.openFiles).toMatchObject([{ modified: false, promptEntity: { templateFn: 'yo' } }]);
-  actor.stop();
+  h.send({ type: 'codePrompts.OPEN_PROMPT', promptId: 'p' });
+  expect(h.made.map((ask) => ask.event)).toEqual([{ type: 'codePrompts.OPEN_PROMPT', promptId: 'p' }]);
+  await h.made[0]!.answer({ id: 'p', templateFn: 'hi' });
+  expect(h.reportsOf('CODE_PROMPTS_SHOW_TAB')).toMatchObject([
+    { type: 'CODE_PROMPTS_SHOW_TAB', tab: { path: 'prompt:p', content: 'hi', isPrompt: true } },
+  ]);
+
+  h.send({ type: 'codePrompts.SAVE_PROMPT', promptId: 'p', content: 'yo' });
+  expect(h.made[1]!.event).toEqual({ type: 'codePrompts.SAVE_PROMPT', promptId: 'p', templateFn: 'yo' });
+  await h.made[1]!.answer({ id: 'p', templateFn: 'yo' });
+  expect(h.reportsOf('CODE_PROMPTS_PROMPT_SAVED')).toMatchObject([
+    { type: 'CODE_PROMPTS_PROMPT_SAVED', prompt: { id: 'p', templateFn: 'yo' } },
+  ]);
 });

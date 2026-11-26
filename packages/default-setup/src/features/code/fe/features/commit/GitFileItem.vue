@@ -56,10 +56,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed } from 'vue'
-import type { CodeState } from '#features/code/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import { File, Copy } from 'lucide-vue-next'
 import { ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuSeparator } from 'reka-ui'
@@ -78,8 +76,7 @@ defineEmits<{
   openFile: [file: GitStatusFile]
 }>()
 
-const codeActor: CodeState = useSurface()
-const { state: code } = useState(codeActor)
+const { state: code } = useState('code')
 
 const fileDisplay = computed(() => {
   // A folder's row is named by the folder, with the `/` git ends it with

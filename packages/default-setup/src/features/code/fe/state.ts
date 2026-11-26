@@ -1,40 +1,64 @@
-import { makes, surfaceStorage, type MadeEvent, type Making } from '@apackdev/sdk/fe'
-import { ref as featureRef } from '#generated/ref.ts'
+import type { Read, Value } from '@apackdev/state';
+import {
+  canGoBack,
+  canGoForward,
+  createNavHistory,
+  getNextAvailableColor,
+  goBack,
+  goForward,
+  loadTabGroups,
+  processHotkeys,
+  pushNavHistory,
+  saveTabGroups,
+  surfaceStorage,
+  type HotkeyEvent,
+  type HotkeysMap,
+  type SurfaceChrome,
+  type TabGroup,
+  type TabGroupColor,
+} from '@apackdev/sdk/fe';
+import type { KeyboardShortcut } from '@apackdev/sdk/types';
+import { ref as featureRef } from '#generated/ref.ts';
+import { state } from '#generated/state.ts';
+import type { CodeSettings } from '#generated/types.ts';
+import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
+import type {
+  ActionTab,
+  CodeContext,
+  CodeInboxEvent,
+  OpenFile,
+  PanelType,
+  PromptTab,
+  TerminalTab,
+} from './contract.ts';
+export type { OpenFile, TerminalTab, QuickOpenResult, PanelType, CodeContext } from './contract.ts';
+export type { TabGroupColor, TabGroup };
 
-/** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
-const storage = surfaceStorage(featureRef('code'))
-import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions, fromCallback } from 'xstate';
-
-import breadcrumb from '@apackdev/sdk/fe';
-import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
 import { saveOpenTabs, loadPersistedTabs, sortTabsByPinned } from './utils/persisted-tabs.ts';
 import { terminalNameFor } from './utils/terminal-name.ts';
 import { loadRecentFiles, addRecentFile } from './utils/recent-files.ts';
-import { pushTabViewHistory, nextActiveFromHistory } from './utils/tab-management.ts';
-import { diffTabPath, refreshedDiffTab } from './utils/diff-tabs.ts';
-import { saveTabGroups, loadTabGroups, getNextAvailableColor, type TabGroupColor, type TabGroup } from '@apackdev/sdk/fe';
-import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
-import type { CodeSettings } from '#generated/types.ts';
-import type { ActionTab, CodeContext, CodeInboxEvent, OpenFile, PanelType, PromptTab, TerminalTab } from './contract.ts';
-export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contract.ts';
-export type { CodeContext } from './contract.ts';
-import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
-import type { CodeConnectedData, GitDiff } from '#features/code/be/types.ts';
-import { fromAsk, tell } from '#generated/events.ts';
-import { safeEvents } from '@apackdev/sdk/helpers';
-
-// Import child state machines
-import { explorerState } from './features/explorer/state.ts';
-import { searchState } from './features/search/state.ts';
-import { commitState } from './features/commit/state.ts';
-import { pullRequestState } from './features/pull-request/state.ts';
-import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
+import {
+  pushTabViewHistory,
+  nextActiveFromHistory,
+  removeTabs,
+  renameInTabViewHistory,
+} from './utils/tab-management.ts';
+import { diffTab, diffTabPath, refreshedDiffTab } from './utils/diff-tabs.ts';
+import { imageExtensions, videoExtensions } from './utils/file-icons.ts';
 import { terminalPool, viewSettingsOf } from './utils/terminal-pool.ts';
-import { actionsState } from './features/actions/state.ts';
-import { promptsState } from './features/prompts/state.ts';
+
+// Child state machines
+import { explorerState, type CodeExplorerReport } from './features/explorer/state.ts';
+import { searchState } from './features/search/state.ts';
+import { commitState, type CommitReport, type OpenDiffRef } from './features/commit/state.ts';
+import { pullRequestState, type CodePullRequestReport } from './features/pull-request/state.ts';
+import { terminalState, type CodeTerminalReport, type TerminalInfo } from './features/terminal/state.ts';
+import { actionsState, type CodeActionsReport } from './features/actions/state.ts';
+import { promptsState, type CodePromptsReport } from './features/prompts/state.ts';
 import { githubState } from './features/github/state.ts';
-import type { KeyboardShortcut } from '@apackdev/sdk/types';
-import { codeChild, routeToCodeChild, CODE_CHILD_IDS } from './features/children.ts';
+
+/** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
+const storage = surfaceStorage(featureRef('code'));
 
 export const id = 'code' as const;
 
@@ -47,44 +71,313 @@ export function setEditorSelectionGetter(getter: (() => string) | null) {
 
 const ALL_PANELS: PanelType[] = ['explorer', 'search', 'commit', 'pr', 'actions', 'prompts'];
 
+type CodeTab = OpenFile | TerminalTab | ActionTab | PromptTab;
+
 /** IDs of terminals currently open as canvas tabs */
-function getTabbedTerminalIds(openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[]): Set<string> {
-  return new Set(
-    openFiles.filter((f: any) => f.isTerminal).map((f: any) => f.terminalInfo.id)
-  )
+function getTabbedTerminalIds(openFiles: readonly Read<CodeTab>[]): Set<string> {
+  return new Set(openFiles.filter((f: any) => f.isTerminal).map((f: any) => f.terminalInfo.id));
 }
 
 /** Unstaged diff tabs are editable (right side = working tree). PR diffs are read-only. */
-export function isEditableDiff(file: OpenFile | { isDiff?: boolean; isPrDiff?: boolean; gitFile?: { staged: boolean } }): boolean {
-  if ('isPrDiff' in file && file.isPrDiff) return false
-  return file.isDiff === true && file.gitFile?.staged === false
+export function isEditableDiff(
+  file: OpenFile | { isDiff?: boolean; isPrDiff?: boolean; gitFile?: { staged: boolean } },
+): boolean {
+  if ('isPrDiff' in file && file.isPrDiff) return false;
+  return file.isDiff === true && file.gitFile?.staged === false;
 }
 
-export type { TabGroupColor, TabGroup };
+function openDiffRefsOf(openFiles: readonly Read<CodeTab>[]): OpenDiffRef[] {
+  return openFiles
+    .filter(
+      (f): f is Read<OpenFile> =>
+        Boolean(f.isDiff && 'gitFile' in f && f.gitFile && !('isPrDiff' in f && f.isPrDiff)),
+    )
+    .map((f) => ({ tab: f.path, path: f.gitFile!.path, staged: f.gitFile!.staged }));
+}
 
-/** The asks the surface makes of the code system: what it starts from, one at a time, the one made last being the one heard */
-const made = makes(({ one }) => ({ codeStart: one(fromAsk('code', 'GET_CODE_START')) }));
+function createTerminalTab(info: Read<TerminalInfo>): TerminalTab {
+  return {
+    path: `terminal:${info.id}`,
+    content: '',
+    originalContent: '',
+    modified: false,
+    isTerminal: true,
+    terminalInfo: info as TerminalInfo,
+  };
+}
 
-/** The surface's state as its machine holds it: what it publishes, and which of its asks are under way */
-type MachineContext = CodeContext & { making: Making<typeof made> };
+// Insert a newly-restored tab into its persisted slot. Non-persisted tabs go to the end.
+function insertByPersistedOrder<T extends { path: string }>(
+  openFiles: T[],
+  newTab: T,
+  pendingOrder: ReadonlyArray<{ path: string; order: number }>,
+): T[] {
+  const orderMap = new Map(pendingOrder.map((t) => [t.path, t.order]));
+  const newOrder = orderMap.get(newTab.path);
 
-export type Event =
+  if (newOrder === undefined) {
+    return [...openFiles, newTab];
+  }
+
+  const insertAt = openFiles.findIndex((f) => {
+    const o = orderMap.get(f.path);
+    return o !== undefined && o > newOrder;
+  });
+
+  if (insertAt === -1) {
+    return [...openFiles, newTab];
+  }
+
+  return [...openFiles.slice(0, insertAt), newTab, ...openFiles.slice(insertAt)];
+}
+
+function deleteEmptyGroups(
+  openFiles: readonly Read<CodeTab>[],
+  tabGroups: readonly Read<TabGroup>[],
+  targetGroupId?: string,
+): TabGroup[] {
+  if (!targetGroupId) return tabGroups as TabGroup[];
+  const remaining = openFiles.filter((f) => 'groupId' in f && f.groupId === targetGroupId);
+  if (remaining.length === 0) {
+    return (tabGroups as TabGroup[]).filter((g) => g.id !== targetGroupId);
+  }
+  return tabGroups as TabGroup[];
+}
+
+function groupIdsForOpenTabs(openFiles: readonly Read<CodeTab>[]): Set<string> {
+  return new Set(
+    openFiles
+      .map((file) => ('groupId' in file ? file.groupId : undefined))
+      .filter((groupId): groupId is string => typeof groupId === 'string' && groupId.length > 0),
+  );
+}
+
+/**
+ * The groups still named by a tab: one that is open, **or one a restore is still expecting**.
+ */
+function pruneEmptyTabGroups(
+  openFiles: readonly Read<CodeTab>[],
+  tabGroups: readonly Read<TabGroup>[],
+  stillExpected: Read<CodeContext['pendingPersistedMetadata']>,
+): TabGroup[] {
+  const groupIds = groupIdsForOpenTabs(openFiles);
+  for (const metadata of stillExpected?.values() ?? []) {
+    if (metadata.groupId) groupIds.add(metadata.groupId);
+  }
+  return (tabGroups as TabGroup[]).filter((group) => groupIds.has(group.id));
+}
+
+function prunePersistedTabGroups(groups: TabGroup[], tabs: Array<{ groupId?: string }>): TabGroup[] {
+  const groupIds = new Set(
+    tabs
+      .map((tab) => tab.groupId)
+      .filter((groupId): groupId is string => typeof groupId === 'string' && groupId.length > 0),
+  );
+  return groups.filter((group) => groupIds.has(group.id));
+}
+
+function unarrivedPaths(data: Read<CodeContext>): ReadonlySet<string> {
+  const expected = data.pendingPersistedMetadata;
+  if (!expected || expected.size === 0) return new Set();
+  const open = new Set(data.openFiles.map((file) => file.path));
+  return new Set([...expected.keys()].filter((path) => !open.has(path)));
+}
+
+/**
+ * Writes this window's tab layout, **if this window is the one that keeps it** (M5).
+ */
+function persistCodeTabs(data: Read<CodeContext>): void {
+  if (!data.ownsAppLayout) return;
+  const stillExpected = unarrivedPaths(data);
+  const tabGroups = pruneEmptyTabGroups(data.openFiles, data.tabGroups, data.pendingPersistedMetadata);
+  saveOpenTabs(
+    data.openFiles as CodeTab[],
+    data.activeFilePath,
+    data.panelTerminalId,
+    data.panelTerminalExpanded,
+    stillExpected,
+  );
+  saveTabGroups(storage, 'tab-groups', tabGroups);
+}
+
+function saveTabs(data: Read<CodeContext>, force = false): void {
+  if (!data.tabsRestored) return;
+  if (!force && data.pendingTabOrder !== undefined) return;
+  persistCodeTabs(data);
+}
+
+function finalizeRestoreState(data: Read<CodeContext>): Partial<CodeContext> {
+  if (
+    data.pendingTabOrder === undefined &&
+    data.pendingPersistedMetadata === undefined &&
+    data.pendingTerminalTabIds === undefined
+  ) {
+    return {};
+  }
+
+  const openPaths = new Set(data.openFiles.map((file) => file.path));
+  const stillExpected = new Map(
+    [...(data.pendingPersistedMetadata ?? [])].filter(([path]) => !openPaths.has(path)),
+  ) as Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }>;
+  const activeFilePath =
+    data.activeFilePath && openPaths.has(data.activeFilePath)
+      ? data.activeFilePath
+      : (data.openFiles[0]?.path ?? null);
+
+  return {
+    pendingTabOrder: undefined,
+    pendingPersistedMetadata: stillExpected.size > 0 ? stillExpected : undefined,
+    pendingTerminalTabIds: undefined,
+    tabGroups: pruneEmptyTabGroups(data.openFiles, data.tabGroups, stillExpected),
+    activeFilePath,
+  };
+}
+
+function addTabPatch(
+  data: Read<CodeContext>,
+  tab: any,
+  replacePreview?: boolean,
+  extraUpdates?: Partial<CodeContext>,
+): Partial<CodeContext> {
+  const enablePreview = data.settings?.enablePreview ?? true;
+  let openFiles: any[] = [...data.openFiles];
+
+  const persistedMetadata = data.pendingPersistedMetadata?.get(tab.path);
+  const incomingTab = persistedMetadata
+    ? {
+        ...tab,
+        groupId: persistedMetadata.groupId,
+        isPinned: persistedMetadata.isPinned,
+        isPreview: persistedMetadata.isPreview,
+      }
+    : tab;
+  const isRestoring = persistedMetadata !== undefined;
+
+  const existingIndex = openFiles.findIndex((f: any) => f.path === incomingTab.path);
+
+  if (existingIndex >= 0) {
+    openFiles[existingIndex] = { ...openFiles[existingIndex], ...incomingTab };
+  } else {
+    const isSpecialTab = incomingTab.isTerminal || incomingTab.isAction || incomingTab.isPrompt;
+    const shouldPreview = !isRestoring && enablePreview && !isSpecialTab && !replacePreview;
+
+    if (shouldPreview || replacePreview) {
+      openFiles = openFiles.filter((f: any) => !f.isPreview);
+    }
+
+    const newTab = shouldPreview ? { ...incomingTab, isPreview: true } : incomingTab;
+    openFiles = data.pendingTabOrder
+      ? insertByPersistedOrder(openFiles, newTab, data.pendingTabOrder)
+      : sortTabsByPinned([...openFiles, newTab]);
+  }
+
+  let pendingPersistedMetadata = data.pendingPersistedMetadata
+    ? (new Map(data.pendingPersistedMetadata) as Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }>)
+    : undefined;
+  if (persistedMetadata && pendingPersistedMetadata) {
+    pendingPersistedMetadata.delete(incomingTab.path);
+    if (pendingPersistedMetadata.size === 0) pendingPersistedMetadata = undefined;
+  }
+
+  let pendingTabOrder = data.pendingTabOrder ? [...data.pendingTabOrder] : undefined;
+  if (pendingTabOrder) {
+    const openPaths = new Set(openFiles.map((f) => f.path));
+    if (pendingTabOrder.every((t) => openPaths.has(t.path))) {
+      pendingTabOrder = undefined;
+    }
+  }
+
+  let activeFilePath = isRestoring
+    ? data.activeFilePath
+    : (extraUpdates && 'activeFilePath' in extraUpdates ? extraUpdates.activeFilePath! : incomingTab.path);
+
+  const justFinishedRestore = pendingTabOrder === undefined && data.pendingTabOrder !== undefined;
+  if (justFinishedRestore && openFiles.length > 0 && !openFiles.some((f) => f.path === activeFilePath)) {
+    activeFilePath = openFiles[0].path;
+  }
+
+  const tabGroups =
+    pendingTabOrder === undefined
+      ? pruneEmptyTabGroups(openFiles, data.tabGroups, pendingPersistedMetadata)
+      : (data.tabGroups as TabGroup[]);
+
+  return {
+    ...extraUpdates,
+    openFiles,
+    activeFilePath,
+    pendingPersistedMetadata,
+    pendingTabOrder,
+    tabGroups,
+    tabViewHistory: activeFilePath
+      ? pushTabViewHistory(data.tabViewHistory as string[], activeFilePath)
+      : (data.tabViewHistory as string[]),
+  };
+}
+
+function removeTabPatch(data: Read<CodeContext>, path: string): Partial<CodeContext> {
+  const file = data.openFiles.find((f) => f.path === path);
+  const newOpenFiles = (data.openFiles as CodeTab[]).filter((f) => f.path !== path);
+  const newActiveFilePath =
+    data.activeFilePath === path
+      ? nextActiveFromHistory(data.tabViewHistory as string[], newOpenFiles)
+      : data.activeFilePath;
+
+  const groupId = file && 'groupId' in file ? (file as any).groupId : undefined;
+  let newTabGroups = data.tabGroups as TabGroup[];
+  if (groupId) {
+    const remaining = newOpenFiles.filter((f) => 'groupId' in f && (f as any).groupId === groupId);
+    if (remaining.length === 0) newTabGroups = newTabGroups.filter((g) => g.id !== groupId);
+  }
+
+  const pendingTabOrder = data.pendingTabOrder?.filter((tab) => tab.path !== path);
+  let pendingPersistedMetadata = data.pendingPersistedMetadata
+    ? (new Map(data.pendingPersistedMetadata) as Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }>)
+    : undefined;
+  if (pendingPersistedMetadata?.has(path)) {
+    pendingPersistedMetadata.delete(path);
+    if (pendingPersistedMetadata.size === 0) pendingPersistedMetadata = undefined;
+  }
+
+  const openPaths = new Set(newOpenFiles.map((f) => f.path));
+  const tabViewHistory = (data.tabViewHistory as string[]).filter((p) => openPaths.has(p));
+
+  return {
+    openFiles: newOpenFiles,
+    activeFilePath: newActiveFilePath,
+    tabGroups: newTabGroups,
+    tabViewHistory,
+    pendingTabOrder: pendingTabOrder && pendingTabOrder.length > 0 ? pendingTabOrder : undefined,
+    pendingPersistedMetadata,
+  };
+}
+
+function extractHotkeys(settings: CodeSettings | undefined, fallback: Read<HotkeysMap>): HotkeysMap {
+  const hotkeys: HotkeysMap = {};
+  if (settings?.hotkeys) {
+    for (const [key, value] of Object.entries(settings.hotkeys)) {
+      if (value) hotkeys[key] = value as KeyboardShortcut;
+    }
+  }
+  return Object.keys(hotkeys).length > 0 ? hotkeys : ({ ...fallback } as HotkeysMap);
+}
+
+type CodeChildReports =
+  | (CodeActionsReport & { from?: string })
+  | (CodePromptsReport & { from?: string })
+  | (CodeExplorerReport & { from?: string })
+  | (CodeTerminalReport & { from?: string })
+  | (CommitReport & { from?: string })
+  | (CodePullRequestReport & { from?: string });
+
+export type CodeEvent =
   | OutgoingCodeEvents
-  // What the surface starts from, which it hands every panel as it starts over a folder
-  | { type: 'CODE_STARTED'; data: CodeConnectedData }
-  // How the ask for what the surface starts from ended
-  | MadeEvent<typeof made>
-  // The app's, when the code surface's settings change
-  | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
-  // Generic update event for child actors to update parent state
   | CodeInboxEvent
+  | CodeChildReports
+  | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
-  // An open diff read again, from the child that asked for it
-  | { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
   | { type: 'SURFACE_ACTIVATED' }
   | { type: 'SURFACE_DEACTIVATED' }
-  // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
-  | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
+  | { type: 'SURFACE_STARTED'; ownsAppLayout?: boolean }
   | { type: 'SELECT_PANEL'; panel: PanelType }
   // Tab pinning events
   | { type: 'PIN_TAB'; path: string }
@@ -128,498 +421,158 @@ export type Event =
   | { type: 'OPEN_TERMINAL_IN_TAB'; terminalId: string }
   | { type: 'MOVE_TERMINAL_TO_PANEL'; path: string }
   | { type: 'TOGGLE_PANEL_TERMINAL' }
-  | { type: 'TERMINAL_TAB_INFO_CHANGED'; terminalId: string; changes: Record<string, any> }
   | { type: 'RESTORE_PERSISTED_TABS_SETTLED' }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' };
 
-const typeOf = safeEvents<Event>();
+type CodeShape = {
+  data: CodeContext;
+  calls: {
+    codeStart: 'one';
+  };
+  starts: {
+    explorer: typeof explorerState;
+    terminal: typeof terminalState;
+    search: typeof searchState;
+    commit: typeof commitState;
+    pr: typeof pullRequestState;
+    codeActions: typeof actionsState;
+    codePrompts: typeof promptsState;
+    github: typeof githubState;
+  };
+  states: {
+    canvas: {};
+  };
+};
 
-/** What the surface starts from, off the ask for it that ended with an answer */
-function startOf(event: Event): CodeConnectedData {
-  const { outcome } = typeOf('made.codeStart', event);
-  if (!outcome.ok) throw new Error(outcome.failure.message);
-  return outcome.value;
-}
+export const codeChrome: SurfaceChrome<Value<CodeShape>> = {
+  default: { label: 'Code', target: 'canvas' },
+  states: {
+    canvas: {
+      breadcrumb: { label: 'Code', target: 'canvas' },
+    },
+  },
+};
 
-export type CodeState = ActorRefFrom<typeof codeState>;
-
-// Shared tab removal logic (tab removal + group cleanup + explorer notify)
-function removeTabLogic(context: CodeContext, self: AnyActorRef, path: string) {
-  const file = context.openFiles.find(f => f.path === path)
-  const newOpenFiles = context.openFiles.filter(f => f.path !== path)
-  const newActiveFilePath = context.activeFilePath === path
-    ? nextActiveFromHistory(context.tabViewHistory, newOpenFiles)
-    : context.activeFilePath
-
-  const groupId = file && 'groupId' in file ? (file as any).groupId : undefined
-  let newTabGroups = context.tabGroups
-  if (groupId) {
-    const remaining = newOpenFiles.filter(f => 'groupId' in f && (f as any).groupId === groupId)
-    if (remaining.length === 0) newTabGroups = context.tabGroups.filter(g => g.id !== groupId)
-  }
-
-  const pendingTabOrder = context.pendingTabOrder
-    ?.filter(tab => tab.path !== path)
-  let pendingPersistedMetadata = context.pendingPersistedMetadata
-  if (pendingPersistedMetadata?.has(path)) {
-    const next = new Map(pendingPersistedMetadata)
-    next.delete(path)
-    pendingPersistedMetadata = next.size > 0 ? next : undefined
-  }
-
-  codeChild(self, 'explorer')?.send({ type: 'explorer.CLOSE_FILE', path })
-
-  return {
-    openFiles: newOpenFiles,
-    activeFilePath: newActiveFilePath,
-    tabGroups: newTabGroups,
-    pendingTabOrder: pendingTabOrder && pendingTabOrder.length > 0 ? pendingTabOrder : undefined,
-    pendingPersistedMetadata,
-  }
-}
-
-// Close tab with terminal confirmation, then remove
-function closeTabWithConfirmation(context: CodeContext, self: AnyActorRef, path: string) {
-  const file = context.openFiles.find(f => f.path === path)
-
-  if (file && 'isTerminal' in file && (file as any).isTerminal) {
-    const confirmClose = context.settings?.confirmTerminalClose ?? true
-    if (confirmClose) {
-      const terminalInfo = (file as any).terminalInfo
-      const name = terminalInfo.customTitle || terminalNameFor(terminalInfo.cwd) || terminalInfo.title
-      if (!confirm(`Close terminal "${name}"?`)) return {}
-    }
-    if (context.settings?.closeTerminalOnTabClose ?? true) {
-      codeChild(self, 'terminal')?.send({ type: 'terminal.CLOSE', terminalId: (file as any).terminalInfo.id })
-    }
-  }
-
-  return removeTabLogic(context, self, path)
-}
-
-// Directory will be loaded from backend EARS store
-
-// Insert a newly-restored tab into its persisted slot. Non-persisted tabs (or
-// tabs appearing after all persisted ones have been placed) go to the end.
-function insertByPersistedOrder<T extends { path: string }>(
-  openFiles: T[],
-  newTab: T,
-  pendingOrder: Array<{ path: string; order: number }>
-): T[] {
-  const orderMap = new Map(pendingOrder.map(t => [t.path, t.order]))
-  const newOrder = orderMap.get(newTab.path)
-
-  // Not a persisted tab — append at the end (unpinned section).
-  if (newOrder === undefined) {
-    return [...openFiles, newTab]
-  }
-
-  // Find the first existing tab whose persisted order is greater than newTab's.
-  const insertAt = openFiles.findIndex(f => {
-    const o = orderMap.get(f.path)
-    return o !== undefined && o > newOrder
-  })
-
-  if (insertAt === -1) {
-    return [...openFiles, newTab]
-  }
-
-  return [...openFiles.slice(0, insertAt), newTab, ...openFiles.slice(insertAt)]
-}
-
-// Helper to check and delete empty groups
-function deleteEmptyGroups(
-  openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[],
-  tabGroups: TabGroup[],
-  targetGroupId?: string
-): TabGroup[] {
-  if (!targetGroupId) return tabGroups
-
-  const remainingTabsInGroup = openFiles.filter(
-    f => 'groupId' in f && f.groupId === targetGroupId
-  )
-
-  if (remainingTabsInGroup.length === 0) {
-    return tabGroups.filter(g => g.id !== targetGroupId)
-  }
-
-  return tabGroups
-}
-
-function groupIdsForOpenTabs(openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[]): Set<string> {
-  return new Set(
-    openFiles
-      .map(file => ('groupId' in file ? file.groupId : undefined))
-      .filter((groupId): groupId is string => typeof groupId === 'string' && groupId.length > 0)
-  )
-}
-
-/**
- * The groups still named by a tab: one that is open, **or one a restore is still expecting**.
- *
- * `stillExpected` is required rather than optional because forgetting it is the whole defect. A restore
- * arrives tab by tab, so between the first arrival and the last there are open tabs and expected ones, and a
- * prune that counts only the open ones removes the group of a tab that is still coming. That tab then
- * hydrates naming a group nothing holds and loses its name, its colour and its place — and because
- * `persistCodeTabs` prunes too, the loss is written to storage and survives the next launch.
- */
-function pruneEmptyTabGroups(
-  openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[],
-  tabGroups: TabGroup[],
-  stillExpected: CodeContext['pendingPersistedMetadata']
-): TabGroup[] {
-  const groupIds = groupIdsForOpenTabs(openFiles)
-  for (const metadata of stillExpected?.values() ?? []) {
-    if (metadata.groupId) groupIds.add(metadata.groupId)
-  }
-  return tabGroups.filter(group => groupIds.has(group.id))
-}
-
-function prunePersistedTabGroups(
-  groups: TabGroup[],
-  tabs: Array<{ groupId?: string }>
-): TabGroup[] {
-  const groupIds = new Set(
-    tabs
-      .map(tab => tab.groupId)
-      .filter((groupId): groupId is string => typeof groupId === 'string' && groupId.length > 0)
-  )
-  return groups.filter(group => groupIds.has(group.id))
-}
-
-/**
- * Writes this window's tab layout, **if this window is the one that keeps it** (M5).
- *
- * Every window has its own copy of the window storage but they share its names, so two windows showing this
- * surface kept their layouts under one key: each restored the other's tabs and each rewrote them, and which
- * one you got was whichever had most recently changed something. The shell already decides which window
- * records app-wide layout — it is how the last-open surface is recorded — and this is the same question, so
- * it is the same answer rather than a second one. A popout reads the layout and writes none.
- */
-function persistCodeTabs(context: CodeContext): void {
-  if (!context.ownsAppLayout) return
-  const stillExpected = unarrivedPaths(context)
-  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups, context.pendingPersistedMetadata)
-  saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded, stillExpected)
-  saveTabGroups(storage, 'tab-groups', tabGroups)
-}
-
-/**
- * The paths a restore is still waiting for: expected, and not yet open.
- *
- * **One notion of "still expected" for both halves of a save.** The groups are pruned against the same
- * record (`pendingPersistedMetadata`, which the restore fills for every persisted tab), so the tab list and
- * the group list cannot disagree about which tabs are still coming — a disagreement being how a group came
- * to be removed from under a tab that then arrived.
- */
-function unarrivedPaths(context: CodeContext): ReadonlySet<string> {
-  const expected = context.pendingPersistedMetadata
-  if (!expected || expected.size === 0) return new Set()
-  const open = new Set(context.openFiles.map(file => file.path))
-  return new Set([...expected.keys()].filter(path => !open.has(path)))
-}
-
-/**
- * What the surface stops waiting for once the restore deadline passes.
- *
- * **The deadline is the give-up, not the answer.** A restore that completes settles itself: the arrival path
- * clears each metadata entry as its tab lands and clears the order once every persisted path is present. So
- * this runs only over what never arrived — in practice a terminal whose shell took longer than the deadline
- * to spawn, which the backend does one at a time.
- *
- * Which is why **it keeps the metadata for a path that is still missing**: a tab landing after the deadline
- * is hydrated from that entry, and dropping it cost the tab its pin, its group and its position. The groups
- * are pruned against what is still expected as well as what is open, so a group is not removed from under a
- * tab that is still coming.
- */
-function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
-  if (context.pendingTabOrder === undefined && context.pendingPersistedMetadata === undefined && context.pendingTerminalTabIds === undefined) {
-    return {}
-  }
-
-  const openPaths = new Set(context.openFiles.map(file => file.path))
-  const stillExpected = new Map(
-    [...(context.pendingPersistedMetadata ?? [])].filter(([path]) => !openPaths.has(path))
-  )
-  const activeFilePath = context.activeFilePath && openPaths.has(context.activeFilePath)
-    ? context.activeFilePath
-    : context.openFiles[0]?.path ?? null
-
-  return {
+const codeState = state<CodeShape, CodeEvent>()({
+  initial: 'canvas',
+  data: {
+    ownsAppLayout: true,
+    baseDirectory: '',
+    openFiles: [],
+    activeFilePath: null,
+    isLoading: false,
+    error: null,
+    selectedPanel: 'explorer' as PanelType,
+    tabsRestored: false,
     pendingTabOrder: undefined,
-    pendingPersistedMetadata: stillExpected.size > 0 ? stillExpected : undefined,
+    pendingPersistedMetadata: undefined,
+    tabGroups: [],
+    isQuickOpenVisible: false,
+    quickOpenQuery: '',
+    quickOpenResults: [],
+    quickOpenSelectedIndex: 0,
+    quickOpenLoading: false,
+    recentlyOpenedFiles: [],
+    tabViewHistory: [],
+    hotkeys: {},
+    settings: undefined,
+    pendingRevealLine: null,
+    searchFocusTrigger: 0,
+    searchPrefillText: '',
+    panelTerminalId: null,
+    panelTerminalExpanded: false,
     pendingTerminalTabIds: undefined,
-    tabGroups: pruneEmptyTabGroups(context.openFiles, context.tabGroups, stillExpected),
-    activeFilePath,
-  }
-}
-
-const codeState = setup({
-  types: {
-    context: {} as MachineContext,
-    events: {} as Event
+    panelNavHistory: createNavHistory('explorer' as PanelType),
   },
-  actors: {
-    explorerState,
-    searchState,
-    commitState,
-    pullRequestState,
-    terminalState,
-    actionsState,
-    promptsState,
-    githubState,
-    ...made.actors,
-    /**
-     * **The owner of the terminal pool, which is a module singleton and so has no other.**
-     *
-     * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
-     * the same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
-     * replaces this pack's frontend by importing a fresh module, whose pool is fresh, and the last one's
-     * emulators, their canvases and their WebAssembly state stay alive in the window with nothing left that
-     * could reach them.
-     *
-     * A child actor rather than an `exit` action, because **XState 5 runs no `exit` action on
-     * `actor.stop()`** — an exit here would be dead code that read as cleanup. An invoked actor's cleanup
-     * does run, which is why this repo's rule is that a concern owning a listener or a resource is a child.
-     *
-     * It ends no shell: a session lives in the broker and outlives the window that drew it, so this disposes
-     * the drawing and never the terminal.
-     */
-    poolOwner: fromCallback(() => () => terminalPool.disposeAll()),
-    /**
-     * Asks for the repository and the open files to be read again when the window gains focus: what changed
-     * while the user was in another program is what they came back to look at, and a file event the platform
-     * never delivered is made up for here.
-     */
-    externalChanges: fromCallback(() => {
-      const check = () => { tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
-      window.addEventListener('focus', check);
-      return () => window.removeEventListener('focus', check);
-    }),
+  starts: () => ({
+    explorer: explorerState,
+    terminal: terminalState,
+    search: searchState,
+    commit: commitState,
+    pr: pullRequestState,
+    codeActions: actionsState,
+    codePrompts: promptsState,
+    github: githubState,
+  }),
+  /**
+   * Owns the terminal pool lifecycle, window focus external-change checks, and the persisted-tab restore settle timer.
+   * Stopping the surface disposes every pooled emulator and removes every listener and timer cleanly.
+   */
+  listen: ({ send, tell }) => {
+    const checkExternal = () => {
+      tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' });
+    };
+    const hasWindow = typeof window !== 'undefined';
+    if (hasWindow) window.addEventListener('focus', checkExternal);
+
+    const settleTimer = hasWindow
+      ? window.setTimeout(() => {
+          send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
+        }, 2500)
+      : undefined;
+
+    return () => {
+      if (hasWindow) window.removeEventListener('focus', checkExternal);
+      if (settleTimer !== undefined) clearTimeout(settleTimer);
+      terminalPool.disposeAll();
+    };
   },
-  actions: {
-    spawnFeatureActors: enqueueActions(({ enqueue }) => {
-      // Only spawn if not already
-        enqueue.spawnChild('explorerState', { id: 'explorer' });
-        enqueue.spawnChild('terminalState', { id: 'terminal' });
-        enqueue.spawnChild('searchState', { id: 'search' });
-        enqueue.spawnChild('commitState', { id: 'commit' });
-        enqueue.spawnChild('pullRequestState', { id: 'pr' });
-        enqueue.spawnChild('actionsState', { id: 'codeActions' });
-        enqueue.spawnChild('promptsState', { id: 'codePrompts' });
-        enqueue.spawnChild('githubState', { id: 'github' });
-    }),
+  /** Restores persisted tabs on surface startup */
+  run: ({ tell, child }) => {
+    const {
+      tabs: persistedTabs,
+      activeFilePath: persistedActive,
+      panelTerminalId: persistedPanelTerminal,
+      panelTerminalExpanded: persistedExpanded,
+    } = loadPersistedTabs();
+    const persistedGroups = prunePersistedTabGroups(loadTabGroups(storage, 'tab-groups'), persistedTabs);
 
-    // Asks for what the surface starts from. An ask still under way is given up: the one made last is the one heard
-    askForStart: enqueueActions(({ enqueue }) => made.make(enqueue, 'codeStart', {})),
+    const tabOrder = persistedTabs.map((tab) => ({ path: tab.path, order: tab.order }));
+    const metadataMap = new Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }>();
+    for (const tab of persistedTabs) {
+      metadataMap.set(tab.path, {
+        groupId: tab.groupId,
+        isPinned: tab.isPinned,
+        isPreview: tab.isPreview,
+      });
+    }
 
-    notifyDirectoryChange: ({ event, context, self }) => {
-      const ev = typeOf('UPDATE_STATE', event)
-      if (ev.updates.baseDirectory && ev.updates.baseDirectory !== context.baseDirectory) {
-        // Swap in the new project's recent files, so Quick Open ranks its files and not
-        // the previous project's. Sent as its own event: this action runs before
-        // updateState, so assigning here would be overwritten by the same UPDATE_STATE.
-        const recentlyOpenedFiles = loadRecentFiles(ev.updates.baseDirectory)
-        self.send({ type: 'UPDATE_STATE', updates: { recentlyOpenedFiles } })
+    const persistedPaths = new Set(persistedTabs.map((t) => t.path));
+    const restoredActive =
+      persistedActive && persistedPaths.has(persistedActive) ? persistedActive : (persistedTabs[0]?.path ?? null);
 
-        // Don't send commit.REFRESH_STATUS or pr.REFRESH_STATUS here.
-        // The backend handles refresh via notifyChildSystemsOfBaseChange after
-        // SET_BASE_DIRECTORY is processed, avoiding a race condition where these
-        // frontend-initiated refreshes hit the backend before the directory update.
-        codeChild(self, 'search')?.send({ type: 'search.DIRECTORY_CHANGED', baseDirectory: ev.updates.baseDirectory });
+    const terminalTabIds = persistedTabs.filter((t) => t.type === 'terminal').map((t) => t.terminalId!);
+    const restoredPanelTerminal =
+      persistedPanelTerminal && terminalTabIds.includes(persistedPanelTerminal) ? null : persistedPanelTerminal;
+
+    if (persistedTabs.length > 0) {
+      const fileTabs = persistedTabs.filter((tab) => tab.type === 'file');
+      const terminalTabs = persistedTabs.filter((tab) => tab.type === 'terminal');
+      const actionTabs = persistedTabs.filter((tab) => tab.type === 'action');
+      const promptTabs = persistedTabs.filter((tab) => tab.type === 'prompt');
+
+      console.log('[Code Surface] tabs to restore:', {
+        actionCount: actionTabs.length,
+        fileCount: fileTabs.length,
+        terminalCount: terminalTabs.length,
+        promptCount: promptTabs.length,
+        totalCount: persistedTabs.length,
+      });
+
+      if (fileTabs.length > 0) {
+        tell(child('explorer'), { type: 'explorer.OPEN_FILES', paths: fileTabs.map((t) => t.path) });
       }
-    },
-    saveTabsAction: ({ context }) => {
-      // Don't save tabs until they've been restored (to avoid overwriting with empty array)
-      if (!context.tabsRestored) {
-        return
+      if (actionTabs.length > 0) {
+        tell(child('codeActions'), { type: 'codeActions.OPEN_TABS', actionIds: actionTabs.map((t) => t.actionId!) });
       }
-      // Skip noisy per-tab saves while a restoration batch is still in flight,
-      // and avoid persisting an incomplete tab list if the app exits mid-restore.
-      // The save fires naturally on the LAST restoration arrival because addTab
-      // clears pendingTabOrder when the final expected path lands.
-      if (context.pendingTabOrder !== undefined) {
-        return
+      if (promptTabs.length > 0) {
+        tell(child('codePrompts'), { type: 'codePrompts.OPEN_TABS', promptIds: promptTabs.map((t) => t.promptId!) });
       }
-      persistCodeTabs(context)
-    },
-    forceSaveTabsAction: ({ context }) => {
-      if (!context.tabsRestored) {
-        return
-      }
-      persistCodeTabs(context)
-    },
-    addTab: assign(({ event, context }) => {
-      const ev = typeOf('ADD_TAB', event)
-      const enablePreview = context.settings?.enablePreview ?? true
-      let openFiles = [...context.openFiles]
+    }
 
-      // If this tab has persisted metadata waiting, this is a restore insertion.
-      // Hydrate isPinned/groupId onto the incoming tab BEFORE it lands in openFiles.
-      const persistedMetadata = context.pendingPersistedMetadata?.get(ev.tab.path)
-      const incomingTab = persistedMetadata
-        ? { ...ev.tab, groupId: persistedMetadata.groupId, isPinned: persistedMetadata.isPinned, isPreview: persistedMetadata.isPreview }
-        : ev.tab
-      const isRestoring = persistedMetadata !== undefined
-
-      // Check if tab already exists
-      const existingIndex = openFiles.findIndex((f: any) => f.path === incomingTab.path)
-
-      if (existingIndex >= 0) {
-        // Tab exists — update content, KEEP preview state unchanged
-        openFiles[existingIndex] = { ...openFiles[existingIndex], ...incomingTab }
-      } else {
-        // New tab — parent decides preview state based on tab type.
-        // Restored tabs must never come back as ephemeral previews.
-        const isSpecialTab = incomingTab.isTerminal || incomingTab.isAction || incomingTab.isPrompt
-        const shouldPreview = !isRestoring && enablePreview && !isSpecialTab && !ev.replacePreview
-
-        // Remove old preview tab (only one preview at a time)
-        if (shouldPreview || ev.replacePreview) {
-          openFiles = openFiles.filter((f: any) => !f.isPreview)
-        }
-
-        const newTab = shouldPreview ? { ...incomingTab, isPreview: true } : incomingTab
-        // During restore, place the tab in its persisted slot. Otherwise keep
-        // the pinned-first invariant via sortTabsByPinned.
-        openFiles = context.pendingTabOrder
-          ? insertByPersistedOrder(openFiles, newTab, context.pendingTabOrder)
-          : sortTabsByPinned([...openFiles, newTab])
-      }
-
-      // Consume the pending-metadata entry for this tab, if any. Treat the map
-      // as immutable — clone before mutating.
-      let pendingPersistedMetadata = context.pendingPersistedMetadata
-      if (persistedMetadata && pendingPersistedMetadata) {
-        const next = new Map(pendingPersistedMetadata)
-        next.delete(incomingTab.path)
-        pendingPersistedMetadata = next.size > 0 ? next : undefined
-      }
-
-      // Clear pendingTabOrder once every persisted path is now present in openFiles.
-      let pendingTabOrder = context.pendingTabOrder
-      if (pendingTabOrder) {
-        const openPaths = new Set(openFiles.map(f => f.path))
-        const allPlaced = pendingTabOrder.every(t => openPaths.has(t.path))
-        if (allPlaced) pendingTabOrder = undefined
-      }
-
-      // During restore, don't bounce activeFilePath as tabs stream in — leave
-      // the previously-active tab focused. A user-initiated open focuses the new tab.
-      let activeFilePath = isRestoring
-        ? context.activeFilePath
-        : (ev.extraUpdates?.activeFilePath ?? incomingTab.path)
-
-      // Restore-completion fallback: if the persisted active path's tab failed to
-      // restore (file deleted, terminal rejected by backend), repoint to the first
-      // open tab so the editor isn't left blank with a phantom selection.
-      const justFinishedRestore = pendingTabOrder === undefined && context.pendingTabOrder !== undefined
-      if (justFinishedRestore && openFiles.length > 0
-          && !openFiles.some(f => f.path === activeFilePath)) {
-        activeFilePath = openFiles[0].path
-      }
-
-      const tabGroups = pendingTabOrder === undefined
-        ? pruneEmptyTabGroups(openFiles, context.tabGroups, pendingPersistedMetadata)
-        : context.tabGroups
-
-      return {
-        ...context,
-        ...ev.extraUpdates,
-        openFiles,
-        activeFilePath,
-        pendingPersistedMetadata,
-        pendingTabOrder,
-        tabGroups,
-        tabViewHistory: activeFilePath
-          ? pushTabViewHistory(context.tabViewHistory, activeFilePath)
-          : context.tabViewHistory
-      }
-    }),
-    /** Brings an open diff up to date with its file, where it is: a tab closed since is not opened again */
-    refreshDiffTab: assign(({ event, context }) => {
-      const { diff } = typeOf('REFRESH_DIFF_TAB', event)
-      const tabPath = diffTabPath(diff)
-      return { openFiles: context.openFiles.map(file => file.path === tabPath ? refreshedDiffTab(file as OpenFile, diff) : file) }
-    }),
-    updateState: assign(({ event, context }) => {
-      const ev = typeOf('UPDATE_STATE', event)
-      const updates = { ...context, ...ev.updates }
-
-      // Auto-clean history when tabs are removed
-      if (ev.updates.openFiles && ev.updates.openFiles.length < context.openFiles.length) {
-        const openPaths = new Set(updates.openFiles.map((f: any) => f.path))
-        updates.tabViewHistory = (updates.tabViewHistory ?? context.tabViewHistory)
-          .filter((p: string) => openPaths.has(p))
-      }
-
-      // Auto-push to history when active tab changes
-      if (updates.activeFilePath && updates.activeFilePath !== context.activeFilePath) {
-        if (!ev.updates.tabViewHistory) {
-          updates.tabViewHistory = pushTabViewHistory(
-            updates.tabViewHistory ?? context.tabViewHistory,
-            updates.activeFilePath
-          )
-        }
-      }
-
-      if (updates.tabsRestored && updates.pendingTabOrder === undefined) {
-        updates.tabGroups = pruneEmptyTabGroups(updates.openFiles, updates.tabGroups, updates.pendingPersistedMetadata)
-      }
-
-      return updates
-    }),
-    assignFiles: assign({
-      isLoading: false,
-      error: null
-    }),
-    initializeSurface: ({ self }) => {
-      // The explorer starts from the start the surface hands it — no re-init needed here.
-      codeChild(self, 'terminal')?.send({ type: 'terminal.REFRESH_LIST' });
-      // The window shows the repository from here on, which is when it follows what changes in it
-      codeChild(self, 'commit')?.send({ type: 'commit.SHOWN' });
-    },
-
-    restorePersistedTabs: enqueueActions(({ enqueue, self }) => {
-      const { tabs: persistedTabs, activeFilePath: persistedActive, panelTerminalId: persistedPanelTerminal, panelTerminalExpanded: persistedExpanded } = loadPersistedTabs()
-      const persistedGroups = prunePersistedTabGroups(
-        loadTabGroups(storage, 'tab-groups'),
-        persistedTabs
-      )
-
-      // Store the desired tab order
-      const tabOrder = persistedTabs.map(tab => ({ path: tab.path, order: tab.order }))
-
-      // Create a map of path -> metadata to apply after tabs are created.
-      // Populate for ALL persisted tabs so the addTab action can detect restoration
-      // and preserve their preview/permanent state.
-      const metadataMap = new Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }>()
-      persistedTabs.forEach(tab => {
-        metadataMap.set(tab.path, {
-          groupId: tab.groupId,
-          isPinned: tab.isPinned,
-          isPreview: tab.isPreview
-        })
-      })
-
-      // Restore activeFilePath from persistence so addTab's "preserve context.activeFilePath
-      // during restore" branch keeps the previously-active tab focused. If the persisted
-      // active path no longer matches a tab (corrupt or stale storage),
-      // fall back to the first persisted tab so the editor isn't blank on load.
-      const persistedPaths = new Set(persistedTabs.map(t => t.path))
-      const restoredActive = persistedActive && persistedPaths.has(persistedActive)
-        ? persistedActive
-        : persistedTabs[0]?.path ?? null
-
-      // Mark tabs as restored immediately (even if empty)
-      // Collect terminal tab IDs to restore later (when the terminal list, `terminal.REFRESH_LIST`'s answer, arrives)
-      const terminalTabIds = persistedTabs.filter(t => t.type === 'terminal').map(t => t.terminalId!)
-      const restoredPanelTerminal = persistedPanelTerminal && terminalTabIds.includes(persistedPanelTerminal)
-        ? null
-        : persistedPanelTerminal
-
-      enqueue.assign({
+    return {
+      data: {
         tabsRestored: true,
         pendingTabOrder: tabOrder.length > 0 ? tabOrder : undefined,
         pendingPersistedMetadata: metadataMap.size > 0 ? metadataMap : undefined,
@@ -627,1013 +580,1037 @@ const codeState = setup({
         activeFilePath: restoredActive,
         panelTerminalId: restoredPanelTerminal,
         panelTerminalExpanded: restoredPanelTerminal ? persistedExpanded : false,
-        pendingTerminalTabIds: terminalTabIds.length > 0 ? terminalTabIds : undefined
-      })
+        pendingTerminalTabIds: terminalTabIds.length > 0 ? terminalTabIds : undefined,
+      },
+    };
+  },
+  calls: ({ one }) => ({
+    codeStart: one('code', 'GET_CODE_START', {
+      done: (outcome, { data, tell, child }) => {
+        if (!outcome.ok) return;
+        const started = outcome.value;
+        const baseDirectory = started.baseDirectory || '';
+        const hotkeys = extractHotkeys(started.settings, data.hotkeys);
 
-      // If no persisted tabs, we're done
-      if (persistedTabs.length === 0) {
-        return
-      }
+        terminalPool.setCopyOnSelect(started.settings?.copyOnSelect === true);
+        terminalPool.setViewSettings(viewSettingsOf(started.settings));
 
-      // Restore tabs
-      enqueue(() => {
-        const explorerActor = codeChild(self, 'explorer')
-        const actionsActor = codeChild(self, 'codeActions')
-        const promptsActor = codeChild(self, 'codePrompts')
+        // Hand the start to every child panel
+        tell(child('explorer'), { type: 'CODE_STARTED', data: { baseDirectory: started.baseDirectory ?? null } });
+        tell(child('terminal'), { type: 'CODE_STARTED', baseDirectory, settings: started.settings });
+        tell(child('search'), { type: 'CODE_STARTED', baseDirectory });
+        tell(child('commit'), { type: 'CODE_STARTED', directory: baseDirectory });
+        tell(child('pr'), { type: 'CODE_STARTED', baseDirectory });
 
-        // Filter tabs by type
-        const fileTabs = persistedTabs.filter(tab => tab.type === 'file')
-        const terminalTabs = persistedTabs.filter(tab => tab.type === 'terminal')
-        const actionTabs = persistedTabs.filter(tab => tab.type === 'action')
-        const promptTabs = persistedTabs.filter(tab => tab.type === 'prompt')
-
-        console.log('[Code Surface] tabs to restore:', {
-          actionCount: actionTabs.length,
-          fileCount: fileTabs.length,
-          terminalCount: terminalTabs.length,
-          promptCount: promptTabs.length,
-          totalCount: persistedTabs.length,
-        })
-
-        // Send file paths to restore
-        if (fileTabs.length > 0 && explorerActor) {
-          const filePaths = fileTabs.map(tab => tab.path)
-          explorerActor.send({
-            type: 'explorer.OPEN_FILES',
-            paths: filePaths
-          })
-        }
-
-        // Terminal tabs are NOT sent here — they're deferred to assignTerminals
-        // (when the terminal list arrives) to avoid racing with backend restore.
-        // See pendingTerminalTabIds in context.
-
-        // Send action IDs to restore
-        if (actionTabs.length > 0 && actionsActor) {
-          const actionIds = actionTabs.map(tab => tab.actionId!)
-          actionsActor.send({
-            type: 'codeActions.OPEN_TABS',
-            actionIds
-          })
-        }
-
-        // Send prompt IDs to restore
-        if (promptTabs.length > 0 && promptsActor) {
-          const promptIds = promptTabs.map(tab => tab.promptId!)
-          promptsActor.send({
-            type: 'codePrompts.OPEN_TABS',
-            promptIds
-          })
-        }
-      })
-
-      enqueue(() => {
-        window.setTimeout(() => {
-          self.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
-        }, 2500)
-      })
+        return {
+          data: {
+            baseDirectory,
+            recentlyOpenedFiles: loadRecentFiles(baseDirectory),
+            settings: started.settings,
+            hotkeys,
+          },
+        };
+      },
     }),
-    // Hands every child whatever arrived and lets each ignore what it doesn't handle. That is routing rather than
-    // addressing one child, so there is no single event union to check against and the children stay untyped here —
-    // as in `routeEvent`. Every call that names one child names its type.
-    //
-    // It is sent with `sendTo`, which XState delivers once this transition's context is the surface's: a child
-    // handling the start reads the folder the start just set (`getParentContext`), where a send made from inside
-    // the transition would be handled first and read the folder before it.
-    broadcastToAllFeatures: enqueueActions(({ enqueue, event, self }) => {
-      const started = { type: 'CODE_STARTED' as const, data: startOf(event) }
-      for (const id of CODE_CHILD_IDS) {
-        const child = self.getSnapshot().children[id] as AnyActorRef | undefined
-        if (child) enqueue.sendTo(child, started)
-      }
-    }),
-
-    routeEvent: ({ event, self }) => {
-      const eventType = event.type;
-
-      // An event's prefix names the child that handles it. The one call whose child isn't known here: which
-      // machine `prefix` stands for is the event's to say at runtime, so this is the routing itself and there is
-      // no actor type to name — every other call names one.
-      if (eventType.includes('.')) {
-        const [prefix] = eventType.split('.');
-        routeToCodeChild(self, prefix, event);
-      }
+  }),
+  on: {
+    // ── Lifecycle & settings ───────────────────────────────────────────────────────────
+    SURFACE_STARTED: (event, { cancel, call }) => {
+      cancel('codeStart');
+      call('codeStart');
+      return { data: { ownsAppLayout: event.ownsAppLayout !== false } };
+    },
+    BASE_DIRECTORY_CHANGED: (_event, { cancel, call }) => {
+      cancel('codeStart');
+      call('codeStart');
+    },
+    CLI_TEST_RESULT: () => {},
+    FEATURE_SETTINGS_UPDATED: ({ settings }, { data, tell, child }) => {
+      const hotkeys = extractHotkeys(settings, data.hotkeys);
+      terminalPool.setCopyOnSelect(settings?.copyOnSelect === true);
+      terminalPool.setViewSettings(viewSettingsOf(settings));
+      tell(child('terminal'), { type: 'SYNC_SETTINGS', settings });
+      return { data: { settings, hotkeys } };
+    },
+    SURFACE_ACTIVATED: (_event, { tell, child }) => {
+      tell(child('terminal'), { type: 'terminal.REFRESH_LIST' });
+      tell(child('commit'), { type: 'commit.SHOWN' });
+    },
+    SURFACE_DEACTIVATED: (_event, { tell, child }) => {
+      tell(child('commit'), { type: 'commit.HIDDEN' });
     },
 
-    selectPanel: assign(({
-      event,
-      context,
-      self
-    }) => {
-      const ev = typeOf('SELECT_PANEL', event)
-
-      // Guard against invalid panel types (e.g. persisted 'terminal' from before removal)
-      if (!ALL_PANELS.includes(ev.panel)) {
-        return { ...context, selectedPanel: 'explorer' as PanelType };
-      }
-
-      // Notify child machines if needed
-      if (ev.panel === 'commit') {
-        codeChild(self, 'commit')?.send({ type: 'commit.REFRESH_STATUS' });
-      } else if (ev.panel === 'pr') {
-        codeChild(self, 'pr')?.send({ type: 'pr.REFRESH_STATUS' });
-      }
-      // Actions and prompts are loaded by their respective main surface actors
-      return {
-        ...context,
-        selectedPanel: ev.panel,
-        panelNavHistory: pushNavHistory(context.panelNavHistory, ev.panel),
-      };
-    }),
-
-    // Quick open actions
-    showQuickOpen: assign({
-      isQuickOpenVisible: true,
-      quickOpenQuery: '',
-      quickOpenResults: [],
-      quickOpenSelectedIndex: 0,
-      quickOpenLoading: true
-    }),
-
-    hideQuickOpen: assign({
-      isQuickOpenVisible: false,
-      quickOpenQuery: '',
-      quickOpenResults: [],
-      quickOpenSelectedIndex: 0,
-      quickOpenLoading: false
-    }),
-
-    toggleQuickOpen: assign(({ context }) => ({
-      ...context,
-      isQuickOpenVisible: !context.isQuickOpenVisible,
-      quickOpenQuery: context.isQuickOpenVisible ? '' : context.quickOpenQuery,
-      quickOpenResults: context.isQuickOpenVisible ? [] : context.quickOpenResults,
-      quickOpenSelectedIndex: 0,
-      quickOpenLoading: context.isQuickOpenVisible ? false : true
-    })),
-
-    updateQuickOpenQuery: assign(({ event }) => {
-      const ev = typeOf('UPDATE_QUICK_OPEN_QUERY', event)
-      return {
-        quickOpenQuery: ev.query,
-        quickOpenSelectedIndex: 0
-      };
-    }),
-
-    selectQuickOpenResult: assign(({ event, context }) => {
-      const ev = typeOf('SELECT_QUICK_OPEN_RESULT', event)
-      const maxIndex = Math.max(0, context.quickOpenResults.length - 1);
-      return {
-        quickOpenSelectedIndex: Math.max(0, Math.min(ev.index, maxIndex))
-      };
-    }),
-
-    openQuickOpenResult: ({ context, self, event }) => {
-      const ev = typeOf('OPEN_QUICK_OPEN_RESULT', event)
-
-      // Track the file as recently opened
-      const updatedRecentFiles = addRecentFile(context.recentlyOpenedFiles, ev.path, context.baseDirectory);
-      self.send({
-        type: 'UPDATE_STATE',
-        updates: { recentlyOpenedFiles: updatedRecentFiles }
-      });
-
-      // Open file through explorer
-      codeChild(self, 'explorer')?.send({
-        type: 'explorer.OPEN_FILE',
-        path: ev.path
-      });
+    // ── Routed inbox & backend events to children ─────────────────────────────────────
+    'terminal.CREATE': (event, { tell, child }) => {
+      tell(child('terminal'), event);
     },
-
-    requestQuickOpenFiles: ({ context, self }) => {
-      codeChild(self, 'explorer')?.send({
-        type: 'explorer.QUICK_OPEN_SEARCH',
-        baseDirectory: context.baseDirectory
-      });
+    'explorer.SET_BASE_DIRECTORY': (event, { tell, child }) => {
+      tell(child('explorer'), event);
     },
-
-    handleCodeConnected: assign(({ event, context }) => {
-      const ev = { data: startOf(event) }
-
-      // Extract hotkeys from settings - filter out undefined values
-      const hotkeys: HotkeysMap = {};
-      if (ev.data.settings?.hotkeys) {
-        Object.entries(ev.data.settings.hotkeys).forEach(([key, value]) => {
-          if (value) {
-            hotkeys[key] = value as KeyboardShortcut;
-          }
-        });
-      }
-
-      // Update directory state from backend
-      // Each panel is handed the start (`broadcastToAllFeatures`) and asks for what it shows
-      const baseDirectory = ev.data.baseDirectory || ''
-
-      return {
-        ...context,
-        baseDirectory,
-        recentlyOpenedFiles: loadRecentFiles(baseDirectory),
-        settings: ev.data.settings,
-        hotkeys: Object.keys(hotkeys).length > 0 ? hotkeys : context.hotkeys
-      }
-    }),
-
-    // The terminal views are the pool's, so the setting reaches them through it, as it changes
-    applyCopyOnSelect: ({ context }) => {
-      terminalPool.setCopyOnSelect(context.settings?.copyOnSelect === true)
+    'codeActions.OPEN_ACTION': (event, { tell, child }) => {
+      tell(child('codeActions'), event);
     },
-
-    // The views take their cursor and link settings when they are made, so a change makes them again
-    applyViewSettings: ({ context }) => {
-      terminalPool.setViewSettings(viewSettingsOf(context.settings))
+    'codePrompts.OPEN_PROMPT': (event, { tell, child }) => {
+      tell(child('codePrompts'), event);
     },
+    'explorer.FILE_CHANGED_EXTERNALLY': (ev, { data, tell, child }) => {
+      const file = data.openFiles.find((f) => f.path === ev.data.path);
+      if (!file || file.isDiff || ev.data.changeType === 'unlink') return;
 
-    handleSettingsUpdate: assign(({ event, context }) => {
-      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event)
-
-      // Extract hotkeys from settings - filter out undefined values
-      const hotkeys: HotkeysMap = {};
-      if (ev.settings?.hotkeys) {
-        Object.entries(ev.settings.hotkeys).forEach(([key, value]) => {
-          if (value) {
-            hotkeys[key] = value as KeyboardShortcut;
-          }
-        });
-      }
-
-      return {
-        ...context,
-        settings: ev.settings,
-        hotkeys: Object.keys(hotkeys).length > 0 ? hotkeys : context.hotkeys
-      }
-    }),
-
-    handleHotkey: createHotkeyProcessor({
-      openTerminal: 'OPEN_TERMINAL',
-      openTerminalTab: 'OPEN_TERMINAL_TAB',
-      navigatePrevPanel: 'NAVIGATE_PREV_PANEL',
-      navigateNextPanel: 'NAVIGATE_NEXT_PANEL',
-      focusSearch: 'FOCUS_SEARCH',
-      quickOpen: 'SHOW_QUICK_OPEN',
-      saveFile: 'SAVE_ACTIVE_FILE',
-      closeTab: 'CLOSE_ACTIVE_TAB',
-    }),
-
-    saveActiveFile: ({ context, self }) => {
-      const activeFile = context.openFiles.find(f => f.path === context.activeFilePath)
-      if (!activeFile) return
-
-      if (activeFile.isDiff) {
-        const file = activeFile as OpenFile
-        if (!isEditableDiff(file)) return
-        codeChild(self, 'explorer')?.send({ type: 'explorer.WRITE_FILE', path: file.gitFile!.path, content: file.content })
-        return
-      }
-
-      if ('isAction' in activeFile && (activeFile as any).isAction) {
-        const actionId = activeFile.path.replace('action:', '')
-        codeChild(self, 'codeActions')?.send({ type: 'codeActions.SAVE_ACTION', actionId, content: activeFile.content })
-      } else if ('isPrompt' in activeFile && (activeFile as any).isPrompt) {
-        const promptId = activeFile.path.replace('prompt:', '')
-        codeChild(self, 'codePrompts')?.send({ type: 'codePrompts.SAVE_PROMPT', promptId, content: activeFile.content })
-      } else {
-        codeChild(self, 'explorer')?.send({ type: 'explorer.WRITE_FILE', path: activeFile.path, content: activeFile.content })
-      }
-    },
-    closeActiveTab: assign(({ context, self }) => {
-      if (!context.activeFilePath) return {}
-      return closeTabWithConfirmation(context, self, context.activeFilePath)
-    }),
-    closeTab: assign(({ context, self, event }) => {
-      const { path } = typeOf('CLOSE_TAB', event)
-      return closeTabWithConfirmation(context, self, path)
-    }),
-    killTerminal: enqueueActions(({ enqueue, context, self, event }) => {
-      const { path } = typeOf('KILL_TERMINAL', event)
-      const file = context.openFiles.find(f => f.path === path)
-      if (!file || !('isTerminal' in file)) return
-      enqueue(() => {
-        codeChild(self, 'terminal')?.send({ type: 'terminal.CLOSE', terminalId: (file as any).terminalInfo.id })
-      })
-      enqueue(assign(() => removeTabLogic(context, self, path)))
-    }),
-    openTerminal: enqueueActions(({ enqueue, context, self }) => {
-      const terminals: TerminalInfo[] = codeChild(self, 'terminal')?.getSnapshot()?.context?.terminals || []
-      const tabbedIds = getTabbedTerminalIds(context.openFiles)
-
-      if (terminals.length === 0) {
-        // No terminals — create one (will be routed to panel by child actor)
-        enqueue(() => {
-          codeChild(self, 'terminal')?.send({ type: 'terminal.CREATE', cwd: context.baseDirectory })
-        })
-        enqueue(assign({ panelTerminalExpanded: true }))
-        return
-      }
-
-      if (!context.panelTerminalId) {
-        // Terminals exist but none selected for panel — pick first non-tabbed
-        const available = terminals.find(t => !tabbedIds.has(t.id))
-        if (available) {
-          enqueue(assign({ panelTerminalId: available.id, panelTerminalExpanded: true }))
-          return
-        }
-        // All terminals are in tabs — create a new one
-        enqueue(() => {
-          codeChild(self, 'terminal')?.send({ type: 'terminal.CREATE', cwd: context.baseDirectory })
-        })
-        enqueue(assign({ panelTerminalExpanded: true }))
-        return
-      }
-
-      // Panel terminal already set — toggle expand/collapse
-      enqueue(assign({ panelTerminalExpanded: !context.panelTerminalExpanded }))
-    }),
-
-    openTerminalTab: enqueueActions(({ enqueue, context, self }) => {
-      enqueue(() => {
-        codeChild(self, 'terminal')?.send({ type: 'terminal.CREATE', cwd: context.baseDirectory, target: 'tab' })
-      })
-    }),
-
-    selectPanelTerminal: assign(({ event }) => {
-      const ev = typeOf('SELECT_PANEL_TERMINAL', event)
-      return { panelTerminalId: ev.terminalId };
-    }),
-
-    closePanelTerminal: enqueueActions(({ enqueue, context, self }) => {
-      const terminalId = context.panelTerminalId;
-      if (terminalId) {
-        enqueue(() => {
-          codeChild(self, 'terminal')?.send({ type: 'terminal.CLOSE', terminalId })
-        })
-      }
-      enqueue(assign({ panelTerminalId: null, panelTerminalExpanded: false }))
-    }),
-
-    togglePanelTerminal: assign(({ context }) => {
-      return { panelTerminalExpanded: !context.panelTerminalExpanded }
-    }),
-
-    updateTerminalTabInfo: assign(({ event, context }) => {
-      const ev = typeOf('TERMINAL_TAB_INFO_CHANGED', event)
-      const terminalPath = `terminal:${ev.terminalId}`
-      let changed = false
-      const updatedOpenFiles = context.openFiles.map((file: any) => {
-        if (file.path === terminalPath && file.isTerminal) {
-          changed = true
+      const updatedFiles = (data.openFiles as CodeTab[]).map((f) => {
+        if (f.path === ev.data.path && !f.isDiff) {
           return {
-            ...file,
-            terminalInfo: { ...file.terminalInfo, ...ev.changes }
+            ...f,
+            externallyModified: true,
+            externalModificationTime: ev.data.modifiedAt,
+            pendingSaveConflict: f.modified,
+          };
+        }
+        return f;
+      });
+
+      if (!file.modified) {
+        tell(child('explorer'), { type: 'explorer.OPEN_FILE', path: ev.data.path });
+      }
+      const nextData = { ...data, openFiles: updatedFiles };
+      saveTabs(nextData);
+      return { data: { openFiles: updatedFiles } };
+    },
+    'commit.REPOSITORY_CHANGED': (event, { tell, child }) => {
+      tell(child('commit'), event);
+    },
+    'commit.GENERATING_MESSAGE': (event, { tell, child }) => {
+      tell(child('commit'), event);
+    },
+    'commit.MESSAGE_GENERATED': (event, { tell, child }) => {
+      tell(child('commit'), event);
+    },
+    'commit.MESSAGE_NOT_GENERATED': (event, { tell, child }) => {
+      tell(child('commit'), event);
+    },
+    'pr.GIT_STATUS_REFRESHED': (event, { tell, child }) => {
+      tell(child('pr'), event);
+    },
+    'terminal.CREATED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.CLIPBOARD': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.BELL': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.NOTIFIED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.PROGRESS': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.TITLED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.CLOSED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.CRASHED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.RESIZED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.RESTARTED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.RENAMED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.CWD_CHANGED': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.KEPT': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.STATUS': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'github.ACCOUNT_CHANGED': (event, { tell, child }) => {
+      tell(child('github'), event);
+    },
+
+    // ── Reports from children ─────────────────────────────────────────────────────────
+    CODE_ACTIONS_SHOW_TAB: ({ tab }, { data }) => {
+      if (data.openFiles.some((f) => f.path === tab.path)) {
+        const next: Partial<CodeContext> = {
+          activeFilePath: tab.path,
+          tabViewHistory: pushTabViewHistory(data.tabViewHistory as string[], tab.path),
+        };
+        saveTabs({ ...data, ...next });
+        return { data: next };
+      }
+      const patch = addTabPatch(data, tab, true);
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    CODE_ACTIONS_ACTION_SAVED: ({ action }, { data }) => {
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        'isAction' in file && file.isAction && file.actionEntity.id === action.id
+          ? { ...file, actionEntity: action, modified: false }
+          : file,
+      );
+      saveTabs({ ...data, openFiles });
+      return { data: { openFiles } };
+    },
+    CODE_PROMPTS_SHOW_TAB: ({ tab }, { data }) => {
+      if (data.openFiles.some((f) => f.path === tab.path)) {
+        const next: Partial<CodeContext> = {
+          activeFilePath: tab.path,
+          tabViewHistory: pushTabViewHistory(data.tabViewHistory as string[], tab.path),
+        };
+        saveTabs({ ...data, ...next });
+        return { data: next };
+      }
+      const patch = addTabPatch(data, tab, true);
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    CODE_PROMPTS_PROMPT_SAVED: ({ prompt }, { data }) => {
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        'isPrompt' in file && file.isPrompt && file.promptEntity.id === prompt.id
+          ? { ...file, promptEntity: prompt, modified: false }
+          : file,
+      );
+      saveTabs({ ...data, openFiles });
+      return { data: { openFiles } };
+    },
+    EXPLORER_LOADING: () => ({ data: { isLoading: true, error: null } }),
+    EXPLORER_LISTED: () => ({ data: { isLoading: false, error: null } }),
+    EXPLORER_FILE_READ: ({ file, editorMode }, { data, tell, child }) => {
+      const existingFile = data.openFiles.find((f) => f.path === file.path);
+      const MAX_RICH_TEXT_SIZE = 300 * 1024;
+      const ext = file.path.split('.').pop()?.toLowerCase() || '';
+      const mdEditorDefault = data.settings?.mdEditorDefault ?? false;
+      const isRichText =
+        editorMode === 'plainText'
+          ? false
+          : (editorMode === 'richText' || (mdEditorDefault && ext === 'md')) &&
+            (file.size ?? 0) < MAX_RICH_TEXT_SIZE;
+
+      const updatedRecentFiles = addRecentFile(data.recentlyOpenedFiles as string[], file.path, data.baseDirectory);
+      const isImageFile = !existingFile && imageExtensions.includes(ext);
+      const isVideoFile = !existingFile && videoExtensions.includes(ext);
+      const tab = {
+        path: file.path,
+        content: file.content,
+        originalContent: file.content,
+        modified: false,
+        isRichText,
+        _richTextBaselineSet: false,
+        ...(existingFile
+          ? {
+              externallyModified: false,
+              externalModificationTime: undefined,
+              pendingSaveConflict: false,
+            }
+          : {}),
+        ...(isImageFile ? { isImage: true } : {}),
+        ...(isVideoFile ? { isVideo: true } : {}),
+        ...(file.isBinary ? { isBinary: true } : {}),
+      };
+
+      const patch = addTabPatch(data, tab, false, {
+        isLoading: false,
+        recentlyOpenedFiles: updatedRecentFiles,
+      });
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next);
+      return { data: patch };
+    },
+    EXPLORER_FILE_SAVED: ({ path }, { data }) => {
+      const openFiles = (data.openFiles as CodeTab[]).map((f: any) => {
+        const matchesPath = f.path === path || (f.isDiff && f.gitFile?.path === path);
+        if (!matchesPath) return f;
+        return {
+          ...f,
+          originalContent: f.content,
+          modified: false,
+          pendingSaveConflict: false,
+          externallyModified: false,
+          externalModificationTime: undefined,
+        };
+      });
+      saveTabs({ ...data, openFiles });
+      return { data: { openFiles } };
+    },
+    EXPLORER_FILE_DELETED: ({ path }, { data, tell, child }) => {
+      if (!data.openFiles.some((f) => f.path === path)) return;
+      const result = removeTabs(data.openFiles as CodeTab[], path, data.activeFilePath);
+      const openPaths = new Set(result.openFiles.map((f) => f.path));
+      const tabViewHistory = (data.tabViewHistory as string[]).filter((p) => openPaths.has(p));
+      const tabGroups =
+        data.tabsRestored && data.pendingTabOrder === undefined
+          ? pruneEmptyTabGroups(result.openFiles, data.tabGroups, data.pendingPersistedMetadata)
+          : (data.tabGroups as TabGroup[]);
+      const patch: Partial<CodeContext> = { ...result, tabViewHistory, tabGroups };
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next);
+      return { data: patch };
+    },
+    EXPLORER_FILE_RENAMED: ({ oldPath, newPath }, { data }) => {
+      if (!data.openFiles.some((f) => f.path === oldPath)) return;
+      const openFiles = (data.openFiles as CodeTab[]).map((f) => (f.path === oldPath ? { ...f, path: newPath } : f));
+      const activeFilePath = data.activeFilePath === oldPath ? newPath : data.activeFilePath;
+      const tabViewHistory = renameInTabViewHistory(data.tabViewHistory as string[], oldPath, newPath);
+      const patch: Partial<CodeContext> = { openFiles, activeFilePath, tabViewHistory };
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    EXPLORER_ERROR: ({ message, notFoundPath }, { data, tell, child }) => {
+      if (notFoundPath && data.openFiles.some((f) => f.path === notFoundPath)) {
+        const result = removeTabs(data.openFiles as CodeTab[], notFoundPath, data.activeFilePath);
+        const openPaths = new Set(result.openFiles.map((f) => f.path));
+        const tabViewHistory = (data.tabViewHistory as string[]).filter((p) => openPaths.has(p));
+        const tabGroups =
+          data.tabsRestored && data.pendingTabOrder === undefined
+            ? pruneEmptyTabGroups(result.openFiles, data.tabGroups, data.pendingPersistedMetadata)
+            : (data.tabGroups as TabGroup[]);
+        const patch: Partial<CodeContext> = { ...result, tabViewHistory, tabGroups, error: null, isLoading: false };
+        const next = { ...data, ...patch };
+        tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+        saveTabs(next);
+        return { data: patch };
+      }
+      return { data: { error: message, isLoading: false } };
+    },
+    EXPLORER_BASE_DIRECTORY_SET: ({ path }, { data, tell, child }) => {
+      const changed = path && path !== data.baseDirectory;
+      if (changed) {
+        tell(child('search'), { type: 'search.DIRECTORY_CHANGED', baseDirectory: path });
+        tell(child('terminal'), { type: 'SYNC_BASE_DIRECTORY', baseDirectory: path });
+        tell(child('pr'), { type: 'SYNC_BASE_DIRECTORY', baseDirectory: path });
+      }
+      return {
+        data: {
+          baseDirectory: path,
+          ...(changed ? { recentlyOpenedFiles: loadRecentFiles(path) } : {}),
+        },
+      };
+    },
+    EXPLORER_QUICK_OPEN_RESULTS: ({ results }) => ({
+      data: { quickOpenResults: results, quickOpenLoading: false },
+    }),
+    EXPLORER_QUICK_OPEN_ERROR: ({ message }) => ({
+      data: { error: message, quickOpenLoading: false },
+    }),
+
+    TERMINAL_LIST_LOADED: ({ terminals }, { data }) => {
+      const pendingTabIds = data.pendingTerminalTabIds;
+      let current: Read<CodeContext> = data;
+      let patch: Partial<CodeContext> = {};
+
+      if (pendingTabIds && pendingTabIds.length > 0 && terminals.length > 0) {
+        const staleTabPaths: string[] = [];
+        for (const terminalId of pendingTabIds) {
+          const info = terminals.find((t) => t.id === terminalId);
+          if (info) {
+            const added = addTabPatch(current, createTerminalTab(info), false, {
+              activeFilePath: current.activeFilePath,
+            });
+            patch = { ...patch, ...added };
+            current = { ...current, ...added };
+          } else {
+            staleTabPaths.push(`terminal:${terminalId}`);
           }
         }
-        return file
-      })
-      return changed ? { openFiles: updatedOpenFiles } : {}
-    }),
-
-    openTerminalInTab: enqueueActions(({ enqueue, context, event, self }) => {
-      const ev = typeOf('OPEN_TERMINAL_IN_TAB', event)
-      const terminals: TerminalInfo[] = codeChild(self, 'terminal')?.getSnapshot()?.context?.terminals || []
-      const terminalInfo = terminals.find(t => t.id === ev.terminalId)
-
-      if (!terminalInfo) return
-
-      // Open as canvas tab
-      enqueue(() => {
-        codeChild(self, 'terminal')?.send({ type: 'terminal.OPEN_TAB', terminalInfo })
-      })
-
-      // If this was the panel terminal, auto-select next available
-      if (context.panelTerminalId === ev.terminalId) {
-        const tabbedIds = new Set(
-          context.openFiles.filter((f: any) => f.isTerminal).map((f: any) => f.terminalInfo.id)
-        )
-        tabbedIds.add(ev.terminalId)
-        const next = terminals.find(t => !tabbedIds.has(t.id))
-        enqueue(assign({ panelTerminalId: next?.id ?? null }))
+        if (staleTabPaths.length > 0 && current.pendingTabOrder) {
+          const filtered = current.pendingTabOrder.filter((t) => !staleTabPaths.includes(t.path));
+          patch.pendingTabOrder = filtered.length > 0 ? filtered : undefined;
+          current = { ...current, pendingTabOrder: patch.pendingTabOrder };
+        }
+        patch.pendingTerminalTabIds = undefined;
       }
-    }),
 
-    moveTerminalToPanel: assign(({ context, event }) => {
-      const { path } = typeOf('MOVE_TERMINAL_TO_PANEL', event)
-      const file = context.openFiles.find(f => f.path === path)
-      if (!file || !('isTerminal' in file)) return {}
-      const terminalId = (file as any).terminalInfo.id
-      // Remove tab without killing the process, set as panel terminal
-      const newOpenFiles = context.openFiles.filter(f => f.path !== path)
-      const newActiveFilePath = context.activeFilePath === path
-        ? nextActiveFromHistory(context.tabViewHistory, newOpenFiles)
-        : context.activeFilePath
-      return {
-        openFiles: newOpenFiles,
-        activeFilePath: newActiveFilePath,
-        // The group the moved tab was the last member of, which every other removal here prunes
-        tabGroups: pruneEmptyTabGroups(newOpenFiles, context.tabGroups, context.pendingPersistedMetadata),
-        panelTerminalId: terminalId,
-        panelTerminalExpanded: true
+      const tabbedIds = getTabbedTerminalIds(current.openFiles);
+      if (pendingTabIds) {
+        for (const tid of pendingTabIds) tabbedIds.add(tid);
       }
-    }),
 
-    navigatePrevPanel: ({ context, self }) => {
-      const currentIndex = ALL_PANELS.indexOf(context.selectedPanel);
-      const newIndex = currentIndex === 0 ? ALL_PANELS.length - 1 : currentIndex - 1;
-      self.send({ type: 'SELECT_PANEL', panel: ALL_PANELS[newIndex] });
+      const currentPanelId = current.panelTerminalId;
+      const panelTerminalExists = currentPanelId && terminals.some((t) => t.id === currentPanelId);
+      const panelTerminalIsTabbed = currentPanelId ? tabbedIds.has(currentPanelId) : false;
+
+      if ((!currentPanelId || !panelTerminalExists || panelTerminalIsTabbed) && terminals.length > 0) {
+        const available = terminals.find((t) => !tabbedIds.has(t.id));
+        if (available) {
+          patch.panelTerminalId = available.id;
+        } else if (!panelTerminalExists || panelTerminalIsTabbed) {
+          patch.panelTerminalId = null;
+        }
+      }
+
+      if (Object.keys(patch).length === 0) return;
+      saveTabs({ ...current, ...patch });
+      return { data: patch };
     },
-
-    navigateNextPanel: ({ context, self }) => {
-      const currentIndex = ALL_PANELS.indexOf(context.selectedPanel);
-      const newIndex = currentIndex === ALL_PANELS.length - 1 ? 0 : currentIndex + 1;
-      self.send({ type: 'SELECT_PANEL', panel: ALL_PANELS[newIndex] });
-    },
-
-    focusSearch: assign(({ context, self }) => {
-      const selectedText = _editorSelectionGetter?.() || '';
-      self.send({ type: 'SELECT_PANEL', panel: 'search' });
-      return {
-        ...context,
-        searchFocusTrigger: context.searchFocusTrigger + 1,
-        searchPrefillText: selectedText,
+    TERMINAL_CREATED_FOR_WINDOW: ({ terminalInfo, target }, { data }) => {
+      if (target === 'tab') {
+        const patch = addTabPatch(data, createTerminalTab(terminalInfo));
+        saveTabs({ ...data, ...patch });
+        return { data: patch };
+      }
+      const patch: Partial<CodeContext> = {
+        panelTerminalId: terminalInfo.id,
+        panelTerminalExpanded: true,
       };
-    }),
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    TERMINAL_CLOSED_REPORT: ({ terminalId, remainingTerminals }, { data }) => {
+      const terminalPath = `terminal:${terminalId}`;
+      const result = removeTabs(data.openFiles as CodeTab[], terminalPath, data.activeFilePath);
+      if (data.activeFilePath === terminalPath && result.openFiles.length > 0) {
+        result.activeFilePath = nextActiveFromHistory(data.tabViewHistory as string[], result.openFiles);
+      }
+      const openPaths = new Set(result.openFiles.map((f) => f.path));
+      const tabViewHistory = (data.tabViewHistory as string[]).filter((p) => openPaths.has(p));
+      const tabGroups =
+        data.tabsRestored && data.pendingTabOrder === undefined
+          ? pruneEmptyTabGroups(result.openFiles, data.tabGroups, data.pendingPersistedMetadata)
+          : (data.tabGroups as TabGroup[]);
 
-    searchInFolder: ({ event, context, self }) => {
-      const ev = typeOf('SEARCH_IN_FOLDER', event)
-      // Compute relative path and set as include pattern glob
-      const relativePath = ev.folder.startsWith(context.baseDirectory)
-        ? ev.folder.slice(context.baseDirectory.length + 1)
-        : ev.folder
-      codeChild(self, 'search')?.send({
-        type: 'search.UPDATE_OPTIONS',
-        options: { includePattern: `${relativePath}/**` }
-      })
-      self.send({ type: 'SELECT_PANEL', panel: 'search' })
+      let panelUpdate: Partial<CodeContext> = {};
+      if (data.panelTerminalId === terminalId) {
+        const tabbedIds = getTabbedTerminalIds(result.openFiles);
+        const next = remainingTerminals.find((t) => t.id !== terminalId && !tabbedIds.has(t.id));
+        panelUpdate = { panelTerminalId: next?.id ?? null };
+      }
+
+      const patch: Partial<CodeContext> = { ...result, tabViewHistory, tabGroups, ...panelUpdate };
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    TERMINAL_TAB_INFO_CHANGED: ({ terminalId, changes }, { data }) => {
+      const terminalPath = `terminal:${terminalId}`;
+      let changed = false;
+      const openFiles = (data.openFiles as CodeTab[]).map((file: any) => {
+        if (file.path === terminalPath && file.isTerminal) {
+          changed = true;
+          return { ...file, terminalInfo: { ...file.terminalInfo, ...changes } };
+        }
+        return file;
+      });
+      if (!changed) return;
+      saveTabs({ ...data, openFiles });
+      return { data: { openFiles } };
+    },
+    TERMINAL_OPEN_TAB_REQUEST: ({ terminalInfo, preserveActive }, { data }) => {
+      const terminalPath = `terminal:${terminalInfo.id}`;
+      const exists = data.openFiles.some((f) => f.path === terminalPath);
+      if (exists) {
+        if (preserveActive) return;
+        const next: Partial<CodeContext> = {
+          activeFilePath: terminalPath,
+          tabViewHistory: pushTabViewHistory(data.tabViewHistory as string[], terminalPath),
+        };
+        saveTabs({ ...data, ...next });
+        return { data: next };
+      }
+      const patch = addTabPatch(
+        data,
+        createTerminalTab(terminalInfo),
+        false,
+        preserveActive ? { activeFilePath: data.activeFilePath } : undefined,
+      );
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
     },
 
-    promotePreviewTab: assign(({ event, context }) => {
-      const ev = typeOf('PROMOTE_PREVIEW_TAB', event)
+    OPEN_DIFF_TAB: ({ diff }, { data, tell, child }) => {
+      const patch = addTabPatch(data, diffTab(diff));
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next);
+      return { data: patch };
+    },
+    ACTIVATE_DIFF_TAB: ({ tab }, { data }) => {
+      const next: Partial<CodeContext> = {
+        activeFilePath: tab,
+        tabViewHistory: pushTabViewHistory(data.tabViewHistory as string[], tab),
+      };
+      saveTabs({ ...data, ...next });
+      return { data: next };
+    },
+    REFRESH_DIFF_TAB: ({ diff }, { data }) => {
+      const tabPath = diffTabPath(diff);
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        file.path === tabPath ? refreshedDiffTab(file as OpenFile, diff) : file,
+      );
+      return { data: { openFiles } };
+    },
+    OPEN_FILE_TAB: ({ file }, { data, tell, child }) => {
+      if (file.status === 'deleted') {
+        const deletedTab = {
+          path: `deleted:${file.path}`,
+          content: '',
+          originalContent: '',
+          modified: false,
+          isDeleted: true,
+          deletedFilePath: file.path,
+        };
+        const patch = addTabPatch(data, deletedTab);
+        saveTabs({ ...data, ...patch });
+        return { data: patch };
+      }
+      const baseDirectory = data.baseDirectory;
+      const fullPath = file.path.startsWith('/')
+        ? file.path
+        : baseDirectory.endsWith('/')
+          ? baseDirectory + file.path
+          : baseDirectory + '/' + file.path;
+      tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: false });
+      tell(child('explorer'), { type: 'explorer.OPEN_FILE', path: fullPath });
+      return { data: { selectedPanel: 'explorer' } };
+    },
+
+    PR_OPEN_DIFF_TAB: ({ tab }, { data }) => {
+      const patch = addTabPatch(data, tab);
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    PR_OPEN_FILE: ({ path }, { tell, child }) => {
+      tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: false });
+      tell(child('explorer'), { type: 'explorer.OPEN_FILE', path });
+      return { data: { selectedPanel: 'explorer' } };
+    },
+    PR_SELECT_PANEL: ({ panel }, { tell, child }) => {
+      tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: panel === 'pr' });
+      return { data: { selectedPanel: panel } };
+    },
+
+    // ── Surface UI events ─────────────────────────────────────────────────────────────
+    ADD_TAB: ({ tab, replacePreview, extraUpdates }, { data, tell, child }) => {
+      const patch = addTabPatch(data, tab, replacePreview, extraUpdates);
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next);
+      return { data: patch };
+    },
+    UPDATE_STATE: ({ updates }, { data, tell, child }) => {
+      const merged: Record<string, any> = { ...data, ...updates };
+
+      if (updates.baseDirectory && updates.baseDirectory !== data.baseDirectory) {
+        merged.recentlyOpenedFiles = loadRecentFiles(updates.baseDirectory);
+        tell(child('search'), { type: 'search.DIRECTORY_CHANGED', baseDirectory: updates.baseDirectory });
+        tell(child('terminal'), { type: 'SYNC_BASE_DIRECTORY', baseDirectory: updates.baseDirectory });
+        tell(child('pr'), { type: 'SYNC_BASE_DIRECTORY', baseDirectory: updates.baseDirectory });
+      }
+
+      if (updates.selectedPanel !== undefined && updates.selectedPanel !== data.selectedPanel) {
+        tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: updates.selectedPanel === 'pr' });
+      }
+
+      if (updates.openFiles && updates.openFiles.length < data.openFiles.length) {
+        const openPaths = new Set(merged.openFiles.map((f: any) => f.path));
+        merged.tabViewHistory = (merged.tabViewHistory ?? data.tabViewHistory).filter((p: string) =>
+          openPaths.has(p),
+        );
+      }
+
+      if (merged.activeFilePath && merged.activeFilePath !== data.activeFilePath) {
+        if (!updates.tabViewHistory) {
+          merged.tabViewHistory = pushTabViewHistory(
+            merged.tabViewHistory ?? data.tabViewHistory,
+            merged.activeFilePath,
+          );
+        }
+      }
+
+      if (merged.tabsRestored && merged.pendingTabOrder === undefined) {
+        merged.tabGroups = pruneEmptyTabGroups(merged.openFiles, merged.tabGroups, merged.pendingPersistedMetadata);
+      }
+
+      if (updates.openFiles !== undefined) {
+        tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(merged.openFiles) });
+      }
+
+      saveTabs(merged as Read<CodeContext>);
+      return { data: merged as CodeContext };
+    },
+
+    SELECT_PANEL: ({ panel }, { data, tell, child }) => {
+      if (!ALL_PANELS.includes(panel)) {
+        tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: false });
+        return { data: { selectedPanel: 'explorer' } };
+      }
+      tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: panel === 'pr' });
+      if (panel === 'commit') tell(child('commit'), { type: 'commit.REFRESH_STATUS' });
+      else if (panel === 'pr') tell(child('pr'), { type: 'pr.REFRESH_STATUS' });
+
       return {
-        ...context,
-        openFiles: context.openFiles.map(file =>
-          file.path === ev.path ? { ...file, isPreview: false } : file
-        )
+        data: {
+          selectedPanel: panel,
+          panelNavHistory: pushNavHistory(data.panelNavHistory, panel),
+        },
+      };
+    },
+    NAVIGATE_BACK: (_event, { data, tell, child }) => {
+      if (!canGoBack(data.panelNavHistory)) return;
+      const result = goBack(data.panelNavHistory)!;
+      tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: result.entry === 'pr' });
+      if (result.entry === 'commit') tell(child('commit'), { type: 'commit.REFRESH_STATUS' });
+      else if (result.entry === 'pr') tell(child('pr'), { type: 'pr.REFRESH_STATUS' });
+      return { data: { panelNavHistory: result.history, selectedPanel: result.entry } };
+    },
+    NAVIGATE_FORWARD: (_event, { data, tell, child }) => {
+      if (!canGoForward(data.panelNavHistory)) return;
+      const result = goForward(data.panelNavHistory)!;
+      tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: result.entry === 'pr' });
+      if (result.entry === 'commit') tell(child('commit'), { type: 'commit.REFRESH_STATUS' });
+      else if (result.entry === 'pr') tell(child('pr'), { type: 'pr.REFRESH_STATUS' });
+      return { data: { panelNavHistory: result.history, selectedPanel: result.entry } };
+    },
+
+    // ── Tab pinning & groups ──────────────────────────────────────────────────────────
+    PROMOTE_PREVIEW_TAB: ({ path }, { data }) => {
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        file.path === path ? { ...file, isPreview: false } : file,
+      );
+      saveTabs({ ...data, openFiles });
+      return { data: { openFiles } };
+    },
+    PIN_TAB: ({ path }, { data }) => {
+      const tab = data.openFiles.find((f) => f.path === path);
+      const groupId = tab && 'groupId' in tab ? tab.groupId : undefined;
+      const updatedFiles = (data.openFiles as CodeTab[]).map((file) =>
+        file.path === path ? { ...file, isPinned: true, groupId: undefined, isPreview: false } : file,
+      );
+      const tabGroups = deleteEmptyGroups(updatedFiles, data.tabGroups, groupId);
+      const openFiles = [...updatedFiles.filter((t) => t.isPinned), ...updatedFiles.filter((t) => !t.isPinned)];
+      saveTabs({ ...data, openFiles, tabGroups });
+      return { data: { openFiles, tabGroups } };
+    },
+    UNPIN_TAB: ({ path }, { data }) => {
+      const tab = data.openFiles.find((f) => f.path === path);
+      const groupId = tab && 'groupId' in tab ? tab.groupId : undefined;
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        file.path === path ? { ...file, isPinned: false, groupId: undefined } : file,
+      );
+      const tabGroups = deleteEmptyGroups(openFiles, data.tabGroups, groupId);
+      saveTabs({ ...data, openFiles, tabGroups });
+      return { data: { openFiles, tabGroups } };
+    },
+    PIN_TAB_AT: ({ path, targetPath, side }, { data }) => {
+      const tab = data.openFiles.find((f) => f.path === path);
+      if (!tab) return;
+      const groupId = 'groupId' in tab ? tab.groupId : undefined;
+      const remaining = (data.openFiles as CodeTab[]).filter((f) => f.path !== path);
+      const movedTab = { ...tab, isPinned: true, groupId: undefined, isPreview: false } as CodeTab;
+      const targetIndex = remaining.findIndex((f) => f.path === targetPath);
+      const insertAt =
+        targetIndex === -1
+          ? remaining.filter((t) => t.isPinned).length
+          : side === 'right'
+            ? targetIndex + 1
+            : targetIndex;
+      remaining.splice(insertAt, 0, movedTab);
+      const tabGroups = deleteEmptyGroups(remaining, data.tabGroups, groupId);
+      saveTabs({ ...data, openFiles: remaining, tabGroups });
+      return { data: { openFiles: remaining, tabGroups } };
+    },
+    UNPIN_TAB_AT: ({ path, targetPath, side }, { data }) => {
+      const tab = data.openFiles.find((f) => f.path === path);
+      if (!tab) return;
+      const groupId = 'groupId' in tab ? tab.groupId : undefined;
+      const remaining = (data.openFiles as CodeTab[]).filter((f) => f.path !== path);
+      const movedTab = { ...tab, isPinned: false, groupId: undefined } as CodeTab;
+      const targetIndex = remaining.findIndex((f) => f.path === targetPath);
+      const insertAt = targetIndex === -1 ? remaining.length : side === 'right' ? targetIndex + 1 : targetIndex;
+      remaining.splice(insertAt, 0, movedTab);
+      const tabGroups = deleteEmptyGroups(remaining, data.tabGroups, groupId);
+      saveTabs({ ...data, openFiles: remaining, tabGroups });
+      return { data: { openFiles: remaining, tabGroups } };
+    },
+    PIN_GROUP: ({ groupId }, { data }) => {
+      const tabGroups = (data.tabGroups as TabGroup[]).map((g) => (g.id === groupId ? { ...g, isPinned: true } : g));
+      const updatedFiles = (data.openFiles as CodeTab[]).map((file) =>
+        'groupId' in file && file.groupId === groupId ? { ...file, isPinned: true } : file,
+      );
+      const openFiles = [...updatedFiles.filter((t) => t.isPinned), ...updatedFiles.filter((t) => !t.isPinned)];
+      saveTabs({ ...data, openFiles, tabGroups });
+      return { data: { openFiles, tabGroups } };
+    },
+    UNPIN_GROUP: ({ groupId }, { data }) => {
+      const tabGroups = (data.tabGroups as TabGroup[]).map((g) => (g.id === groupId ? { ...g, isPinned: false } : g));
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        'groupId' in file && file.groupId === groupId ? { ...file, isPinned: false } : file,
+      );
+      saveTabs({ ...data, openFiles, tabGroups });
+      return { data: { openFiles, tabGroups } };
+    },
+    CREATE_GROUP: ({ name, tabPaths }, { data }) => {
+      let shouldPinGroup = false;
+      if (tabPaths && tabPaths.length > 0) {
+        const tabsToAdd = data.openFiles.filter((f) => tabPaths.includes(f.path));
+        shouldPinGroup = tabsToAdd.some((tab) => tab.isPinned);
       }
-    }),
-
-    pinTab: assign(({ event, context }) => {
-      const ev = typeOf('PIN_TAB', event)
-
-      // Get groupId before modifying
-      const tab = context.openFiles.find(f => f.path === ev.path)
-      const groupId = tab && 'groupId' in tab ? tab.groupId : undefined
-
-      const updatedFiles = context.openFiles.map(file =>
-        file.path === ev.path ? { ...file, isPinned: true, groupId: undefined, isPreview: false } : file
-      )
-
-      // Delete group if now empty
-      const updatedGroups = deleteEmptyGroups(updatedFiles, context.tabGroups, groupId)
-
-      // Sort tabs to put pinned tabs first
-      const pinnedTabs = updatedFiles.filter(tab => tab.isPinned)
-      const unpinnedTabs = updatedFiles.filter(tab => !tab.isPinned)
-
-      return {
-        ...context,
-        openFiles: [...pinnedTabs, ...unpinnedTabs],
-        tabGroups: updatedGroups
-      }
-    }),
-
-    unpinTab: assign(({ event, context }) => {
-      const ev = typeOf('UNPIN_TAB', event)
-
-      // Get groupId before modifying
-      const tab = context.openFiles.find(f => f.path === ev.path)
-      const groupId = tab && 'groupId' in tab ? tab.groupId : undefined
-
-      const updatedFiles = context.openFiles.map(file =>
-        file.path === ev.path ? { ...file, isPinned: false, groupId: undefined } : file
-      )
-
-      // Delete group if now empty
-      const updatedGroups = deleteEmptyGroups(updatedFiles, context.tabGroups, groupId)
-
-      return {
-        ...context,
-        openFiles: updatedFiles,
-        tabGroups: updatedGroups
-      }
-    }),
-
-    pinTabAt: assign(({ event, context }) => {
-      const ev = typeOf('PIN_TAB_AT', event)
-      const tab = context.openFiles.find(f => f.path === ev.path)
-      if (!tab) return context
-      const groupId = 'groupId' in tab ? tab.groupId : undefined
-
-      const remaining = context.openFiles.filter(f => f.path !== ev.path)
-      const movedTab = { ...tab, isPinned: true, groupId: undefined, isPreview: false }
-
-      const targetIndex = remaining.findIndex(f => f.path === ev.targetPath)
-      const insertAt = targetIndex === -1
-        ? remaining.filter(t => t.isPinned).length
-        : ev.side === 'right' ? targetIndex + 1 : targetIndex
-
-      remaining.splice(insertAt, 0, movedTab)
-
-      const tabGroups = deleteEmptyGroups(remaining, context.tabGroups, groupId as string | undefined)
-      return { ...context, openFiles: remaining, tabGroups }
-    }),
-
-    unpinTabAt: assign(({ event, context }) => {
-      const ev = typeOf('UNPIN_TAB_AT', event)
-      const tab = context.openFiles.find(f => f.path === ev.path)
-      if (!tab) return context
-      const groupId = 'groupId' in tab ? tab.groupId : undefined
-
-      const remaining = context.openFiles.filter(f => f.path !== ev.path)
-      const movedTab = { ...tab, isPinned: false, groupId: undefined }
-
-      const targetIndex = remaining.findIndex(f => f.path === ev.targetPath)
-      const insertAt = targetIndex === -1
-        ? remaining.length
-        : ev.side === 'right' ? targetIndex + 1 : targetIndex
-
-      remaining.splice(insertAt, 0, movedTab)
-
-      const tabGroups = deleteEmptyGroups(remaining, context.tabGroups, groupId as string | undefined)
-      return { ...context, openFiles: remaining, tabGroups }
-    }),
-
-    pinGroup: assign(({ event, context }) => {
-      const ev = typeOf('PIN_GROUP', event)
-      const updatedGroups = context.tabGroups.map(group =>
-        group.id === ev.groupId ? { ...group, isPinned: true } : group
-      )
-      // Also pin all tabs in this group
-      const updatedFiles = context.openFiles.map(file =>
-        'groupId' in file && file.groupId === ev.groupId
-          ? { ...file, isPinned: true }
-          : file
-      )
-      // Sort tabs to put pinned tabs first
-      const pinnedTabs = updatedFiles.filter(tab => tab.isPinned)
-      const unpinnedTabs = updatedFiles.filter(tab => !tab.isPinned)
-      return {
-        ...context,
-        tabGroups: updatedGroups,
-        openFiles: [...pinnedTabs, ...unpinnedTabs]
-      }
-    }),
-
-    unpinGroup: assign(({ event, context }) => {
-      const ev = typeOf('UNPIN_GROUP', event)
-      const updatedGroups = context.tabGroups.map(group =>
-        group.id === ev.groupId ? { ...group, isPinned: false } : group
-      )
-      // Also unpin all tabs in this group
-      const updatedFiles = context.openFiles.map(file =>
-        'groupId' in file && file.groupId === ev.groupId
-          ? { ...file, isPinned: false }
-          : file
-      )
-      return {
-        ...context,
-        tabGroups: updatedGroups,
-        openFiles: updatedFiles
-      }
-    }),
-
-    createGroup: assign(({ event, context }) => {
-      const ev = typeOf('CREATE_GROUP', event)
-
-      // Determine if group should be pinned based on tabs being added
-      let shouldPinGroup = false
-      if (ev.tabPaths && ev.tabPaths.length > 0) {
-        const tabsToAdd = context.openFiles.filter(f => ev.tabPaths!.includes(f.path))
-        // Group is pinned if any of its tabs are pinned
-        shouldPinGroup = tabsToAdd.some(tab => tab.isPinned)
-      }
-
-      const color = getNextAvailableColor(context.tabGroups, shouldPinGroup)
-
+      const color = getNextAvailableColor(data.tabGroups as TabGroup[], shouldPinGroup);
       const newGroup: TabGroup = {
         id: `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: ev.name,
+        name,
         color,
         isCollapsed: false,
         isPinned: shouldPinGroup,
-        order: context.tabGroups.length
-      }
-
-      // Update files if tabPaths provided - set isPinned to match group
-      const updatedFiles = ev.tabPaths
-        ? context.openFiles.map(file =>
-            ev.tabPaths!.includes(file.path)
+        order: data.tabGroups.length,
+      };
+      const updatedFiles = tabPaths
+        ? (data.openFiles as CodeTab[]).map((file) =>
+            tabPaths.includes(file.path)
               ? { ...file, groupId: newGroup.id, isPinned: shouldPinGroup, isPreview: false }
-              : file
+              : file,
           )
-        : context.openFiles
+        : (data.openFiles as CodeTab[]);
+      const openFiles = [...updatedFiles.filter((t) => t.isPinned), ...updatedFiles.filter((t) => !t.isPinned)];
+      const tabGroups = [...(data.tabGroups as TabGroup[]), newGroup];
+      saveTabs({ ...data, openFiles, tabGroups });
+      return { data: { openFiles, tabGroups } };
+    },
+    RENAME_GROUP: ({ groupId, name }, { data }) => {
+      const tabGroups = (data.tabGroups as TabGroup[]).map((g) => (g.id === groupId ? { ...g, name } : g));
+      saveTabs({ ...data, tabGroups });
+      return { data: { tabGroups } };
+    },
+    CHANGE_GROUP_COLOR: ({ groupId, color }, { data }) => {
+      const tabGroups = (data.tabGroups as TabGroup[]).map((g) => (g.id === groupId ? { ...g, color } : g));
+      saveTabs({ ...data, tabGroups });
+      return { data: { tabGroups } };
+    },
+    DELETE_GROUP: ({ groupId, closeTabsInGroup }, { data, tell, child }) => {
+      const tabGroups = (data.tabGroups as TabGroup[]).filter((g) => g.id !== groupId);
+      const openFiles = closeTabsInGroup
+        ? (data.openFiles as CodeTab[]).filter((file) => !('groupId' in file) || file.groupId !== groupId)
+        : (data.openFiles as CodeTab[]).map((file) =>
+            'groupId' in file && file.groupId === groupId ? { ...file, groupId: undefined } : file,
+          );
+      const openPaths = new Set(openFiles.map((f) => f.path));
+      const tabViewHistory = (data.tabViewHistory as string[]).filter((p) => openPaths.has(p));
+      const activeWasRemoved = closeTabsInGroup && data.activeFilePath && !openPaths.has(data.activeFilePath);
+      const activeFilePath = activeWasRemoved ? nextActiveFromHistory(tabViewHistory, openFiles) : data.activeFilePath;
+      const next = { ...data, tabGroups, openFiles, activeFilePath, tabViewHistory };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(openFiles) });
+      saveTabs(next, true);
+      return { data: { tabGroups, openFiles, activeFilePath, tabViewHistory } };
+    },
+    TOGGLE_GROUP_COLLAPSE: ({ groupId }, { data }) => {
+      const tabGroups = (data.tabGroups as TabGroup[]).map((g) =>
+        g.id === groupId ? { ...g, isCollapsed: !g.isCollapsed } : g,
+      );
+      saveTabs({ ...data, tabGroups });
+      return { data: { tabGroups } };
+    },
+    ADD_TAB_TO_GROUP: ({ path, groupId }, { data }) => {
+      const targetGroup = data.tabGroups.find((g) => g.id === groupId);
+      const shouldPin = targetGroup?.isPinned || false;
+      const updatedFiles = (data.openFiles as CodeTab[]).map((file) =>
+        file.path === path ? { ...file, groupId, isPinned: shouldPin, isPreview: false } : file,
+      );
+      const openFiles = [...updatedFiles.filter((t) => t.isPinned), ...updatedFiles.filter((t) => !t.isPinned)];
+      saveTabs({ ...data, openFiles });
+      return { data: { openFiles } };
+    },
+    REMOVE_TAB_FROM_GROUP: ({ path }, { data }) => {
+      const tab = data.openFiles.find((f) => f.path === path);
+      const groupId = tab && 'groupId' in tab ? tab.groupId : undefined;
+      const openFiles = (data.openFiles as CodeTab[]).map((file) =>
+        file.path === path ? { ...file, groupId: undefined } : file,
+      );
+      const tabGroups = deleteEmptyGroups(openFiles, data.tabGroups, groupId);
+      saveTabs({ ...data, openFiles, tabGroups });
+      return { data: { openFiles, tabGroups } };
+    },
+    REORDER_GROUPS: ({ fromIndex, toIndex }, { data }) => {
+      const groups = [...(data.tabGroups as TabGroup[])];
+      const [movedGroup] = groups.splice(fromIndex, 1);
+      groups.splice(toIndex, 0, movedGroup);
+      const tabGroups = groups.map((group, index) => ({ ...group, order: index }));
+      saveTabs({ ...data, tabGroups });
+      return { data: { tabGroups } };
+    },
 
-      // Sort tabs to put pinned tabs first (consistent with other actions)
-      const pinnedTabs = updatedFiles.filter(tab => tab.isPinned)
-      const unpinnedTabs = updatedFiles.filter(tab => !tab.isPinned)
-
+    // ── Hotkeys & Navigation ──────────────────────────────────────────────────────────
+    HOTKEY_PRESSED: (event, { data, send }) => {
+      const actionType = processHotkeys(event, data.hotkeys as HotkeysMap, {
+        openTerminal: 'OPEN_TERMINAL',
+        openTerminalTab: 'OPEN_TERMINAL_TAB',
+        navigatePrevPanel: 'NAVIGATE_PREV_PANEL',
+        navigateNextPanel: 'NAVIGATE_NEXT_PANEL',
+        focusSearch: 'FOCUS_SEARCH',
+        quickOpen: 'SHOW_QUICK_OPEN',
+        saveFile: 'SAVE_ACTIVE_FILE',
+        closeTab: 'CLOSE_ACTIVE_TAB',
+      });
+      if (actionType) send({ type: actionType });
+    },
+    NAVIGATE_PREV_PANEL: (_event, { data, send }) => {
+      const currentIndex = ALL_PANELS.indexOf(data.selectedPanel);
+      const newIndex = currentIndex === 0 ? ALL_PANELS.length - 1 : currentIndex - 1;
+      send({ type: 'SELECT_PANEL', panel: ALL_PANELS[newIndex] });
+    },
+    NAVIGATE_NEXT_PANEL: (_event, { data, send }) => {
+      const currentIndex = ALL_PANELS.indexOf(data.selectedPanel);
+      const newIndex = currentIndex === ALL_PANELS.length - 1 ? 0 : currentIndex + 1;
+      send({ type: 'SELECT_PANEL', panel: ALL_PANELS[newIndex] });
+    },
+    FOCUS_SEARCH: (_event, { data, send }) => {
+      const selectedText = _editorSelectionGetter?.() || '';
+      send({ type: 'SELECT_PANEL', panel: 'search' });
       return {
-        ...context,
-        tabGroups: [...context.tabGroups, newGroup],
-        openFiles: [...pinnedTabs, ...unpinnedTabs]
-      }
-    }),
+        data: {
+          searchFocusTrigger: data.searchFocusTrigger + 1,
+          searchPrefillText: selectedText,
+        },
+      };
+    },
+    SEARCH_IN_FOLDER: ({ folder }, { data, tell, child, send }) => {
+      const relativePath = folder.startsWith(data.baseDirectory)
+        ? folder.slice(data.baseDirectory.length + 1)
+        : folder;
+      tell(child('search'), {
+        type: 'search.UPDATE_OPTIONS',
+        options: { includePattern: `${relativePath}/**` },
+      });
+      send({ type: 'SELECT_PANEL', panel: 'search' });
+    },
 
-    renameGroup: assign(({ event, context }) => {
-      const ev = typeOf('RENAME_GROUP', event)
+    // ── Terminal panel / tab actions ──────────────────────────────────────────────────
+    OPEN_TERMINAL: (_event, { data, read, tell, child }) => {
+      const terminals = read(child('terminal'))?.data.terminals ?? [];
+      const tabbedIds = getTabbedTerminalIds(data.openFiles);
+
+      if (terminals.length === 0) {
+        tell(child('terminal'), { type: 'terminal.CREATE', cwd: data.baseDirectory });
+        return { data: { panelTerminalExpanded: true } };
+      }
+
+      if (!data.panelTerminalId) {
+        const available = terminals.find((t) => !tabbedIds.has(t.id));
+        if (available) {
+          return { data: { panelTerminalId: available.id, panelTerminalExpanded: true } };
+        }
+        tell(child('terminal'), { type: 'terminal.CREATE', cwd: data.baseDirectory });
+        return { data: { panelTerminalExpanded: true } };
+      }
+
+      return { data: { panelTerminalExpanded: !data.panelTerminalExpanded } };
+    },
+    OPEN_TERMINAL_TAB: (_event, { data, tell, child }) => {
+      tell(child('terminal'), { type: 'terminal.CREATE', cwd: data.baseDirectory, target: 'tab' });
+      saveTabs(data);
+    },
+    SELECT_PANEL_TERMINAL: ({ terminalId }, { data }) => {
+      saveTabs({ ...data, panelTerminalId: terminalId });
+      return { data: { panelTerminalId: terminalId } };
+    },
+    CLOSE_PANEL_TERMINAL: (_event, { data, tell, child }) => {
+      if (data.panelTerminalId) {
+        tell(child('terminal'), { type: 'terminal.CLOSE', terminalId: data.panelTerminalId });
+      }
+      const patch = { panelTerminalId: null, panelTerminalExpanded: false };
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+    TOGGLE_PANEL_TERMINAL: (_event, { data }) => {
+      const panelTerminalExpanded = !data.panelTerminalExpanded;
+      saveTabs({ ...data, panelTerminalExpanded });
+      return { data: { panelTerminalExpanded } };
+    },
+    OPEN_TERMINAL_IN_TAB: ({ terminalId }, { data, read, tell, child }) => {
+      const terminals = read(child('terminal'))?.data.terminals ?? [];
+      const terminalInfo = terminals.find((t) => t.id === terminalId);
+      if (!terminalInfo) return;
+
+      tell(child('terminal'), { type: 'terminal.OPEN_TAB', terminalInfo });
+
+      if (data.panelTerminalId === terminalId) {
+        const tabbedIds = getTabbedTerminalIds(data.openFiles);
+        tabbedIds.add(terminalId);
+        const next = terminals.find((t) => !tabbedIds.has(t.id));
+        const panelTerminalId = next?.id ?? null;
+        saveTabs({ ...data, panelTerminalId });
+        return { data: { panelTerminalId } };
+      }
+      saveTabs(data);
+    },
+    MOVE_TERMINAL_TO_PANEL: ({ path }, { data }) => {
+      const file = data.openFiles.find((f) => f.path === path);
+      if (!file || !('isTerminal' in file)) return;
+      const terminalId = (file as Read<TerminalTab>).terminalInfo.id;
+      const openFiles = (data.openFiles as CodeTab[]).filter((f) => f.path !== path);
+      const activeFilePath =
+        data.activeFilePath === path ? nextActiveFromHistory(data.tabViewHistory as string[], openFiles) : data.activeFilePath;
+      const tabGroups = pruneEmptyTabGroups(openFiles, data.tabGroups, data.pendingPersistedMetadata);
+      const patch: Partial<CodeContext> = {
+        openFiles,
+        activeFilePath,
+        tabGroups,
+        panelTerminalId: terminalId,
+        panelTerminalExpanded: true,
+      };
+      saveTabs({ ...data, ...patch });
+      return { data: patch };
+    },
+
+    // ── Quick Open ────────────────────────────────────────────────────────────────────
+    TOGGLE_QUICK_OPEN: (_event, { data, tell, child }) => {
+      const opening = !data.isQuickOpenVisible;
+      tell(child('explorer'), { type: 'explorer.QUICK_OPEN_SEARCH', baseDirectory: data.baseDirectory });
       return {
-        ...context,
-        tabGroups: context.tabGroups.map(group =>
-          group.id === ev.groupId ? { ...group, name: ev.name } : group
-        )
-      }
-    }),
-
-    changeGroupColor: assign(({ event, context }) => {
-      const ev = typeOf('CHANGE_GROUP_COLOR', event)
+        data: {
+          isQuickOpenVisible: opening,
+          quickOpenQuery: opening ? data.quickOpenQuery : '',
+          quickOpenResults: opening ? (data.quickOpenResults as any[]) : [],
+          quickOpenSelectedIndex: 0,
+          quickOpenLoading: opening,
+        },
+      };
+    },
+    SHOW_QUICK_OPEN: (_event, { data, tell, child }) => {
+      tell(child('explorer'), { type: 'explorer.QUICK_OPEN_SEARCH', baseDirectory: data.baseDirectory });
       return {
-        ...context,
-        tabGroups: context.tabGroups.map(group =>
-          group.id === ev.groupId ? { ...group, color: ev.color } : group
-        )
-      }
+        data: {
+          isQuickOpenVisible: true,
+          quickOpenQuery: '',
+          quickOpenResults: [],
+          quickOpenSelectedIndex: 0,
+          quickOpenLoading: true,
+        },
+      };
+    },
+    HIDE_QUICK_OPEN: () => ({
+      data: {
+        isQuickOpenVisible: false,
+        quickOpenQuery: '',
+        quickOpenResults: [],
+        quickOpenSelectedIndex: 0,
+        quickOpenLoading: false,
+      },
     }),
-
-    deleteGroup: assign(({ event, context }) => {
-      const ev = typeOf('DELETE_GROUP', event)
-
-      // Remove group
-      const updatedGroups = context.tabGroups.filter(g => g.id !== ev.groupId)
-
-      // Either close tabs or ungroup them
-      const updatedFiles = ev.closeTabsInGroup
-        ? context.openFiles.filter(file => !('groupId' in file) || file.groupId !== ev.groupId)
-        : context.openFiles.map(file =>
-            ('groupId' in file && file.groupId === ev.groupId) ? { ...file, groupId: undefined } : file
-          )
-
-      // Clean history and select next active tab if tabs were closed
-      const openPaths = new Set(updatedFiles.map(f => f.path))
-      const updatedHistory = context.tabViewHistory.filter(p => openPaths.has(p))
-
-      const activeWasRemoved = ev.closeTabsInGroup && context.activeFilePath
-        && !openPaths.has(context.activeFilePath)
-
-      const newActiveFilePath = activeWasRemoved
-        ? nextActiveFromHistory(updatedHistory, updatedFiles)
-        : context.activeFilePath
-
+    UPDATE_QUICK_OPEN_QUERY: ({ query }) => ({
+      data: { quickOpenQuery: query, quickOpenSelectedIndex: 0 },
+    }),
+    SELECT_QUICK_OPEN_RESULT: ({ index }, { data }) => {
+      const maxIndex = Math.max(0, data.quickOpenResults.length - 1);
+      return { data: { quickOpenSelectedIndex: Math.max(0, Math.min(index, maxIndex)) } };
+    },
+    OPEN_QUICK_OPEN_RESULT: ({ path }, { data, tell, child }) => {
+      const recentlyOpenedFiles = addRecentFile(data.recentlyOpenedFiles as string[], path, data.baseDirectory);
+      tell(child('explorer'), { type: 'explorer.OPEN_FILE', path });
       return {
-        ...context,
-        tabGroups: updatedGroups,
-        openFiles: updatedFiles,
-        activeFilePath: newActiveFilePath,
-        tabViewHistory: updatedHistory
+        data: {
+          recentlyOpenedFiles,
+          isQuickOpenVisible: false,
+          quickOpenQuery: '',
+          quickOpenResults: [],
+          quickOpenSelectedIndex: 0,
+          quickOpenLoading: false,
+        },
+      };
+    },
+
+    // ── File actions ──────────────────────────────────────────────────────────────────
+    SAVE_ACTIVE_FILE: (_event, { data, tell, child }) => {
+      const activeFile = data.openFiles.find((f) => f.path === data.activeFilePath);
+      if (!activeFile) return;
+
+      if (activeFile.isDiff) {
+        const file = activeFile as Read<OpenFile>;
+        if (!isEditableDiff(file as OpenFile)) return;
+        tell(child('explorer'), { type: 'explorer.WRITE_FILE', path: file.gitFile!.path, content: file.content });
+        return;
       }
-    }),
 
-    toggleGroupCollapse: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_GROUP_COLLAPSE', event)
-      return {
-        ...context,
-        tabGroups: context.tabGroups.map(group =>
-          group.id === ev.groupId ? { ...group, isCollapsed: !group.isCollapsed } : group
-        )
+      if ('isAction' in activeFile && activeFile.isAction) {
+        const actionId = activeFile.path.replace('action:', '');
+        tell(child('codeActions'), { type: 'codeActions.SAVE_ACTION', actionId, content: activeFile.content });
+      } else if ('isPrompt' in activeFile && activeFile.isPrompt) {
+        const promptId = activeFile.path.replace('prompt:', '');
+        tell(child('codePrompts'), { type: 'codePrompts.SAVE_PROMPT', promptId, content: activeFile.content });
+      } else {
+        tell(child('explorer'), { type: 'explorer.WRITE_FILE', path: activeFile.path, content: activeFile.content });
       }
-    }),
-
-    addTabToGroup: assign(({ event, context }) => {
-      const ev = typeOf('ADD_TAB_TO_GROUP', event)
-
-      // Find the target group to check if it's pinned
-      const targetGroup = context.tabGroups.find(g => g.id === ev.groupId)
-      const shouldPin = targetGroup?.isPinned || false
-
-      // Set tab's isPinned to match the group's pinned status
-      const updatedFiles = context.openFiles.map(file =>
-        file.path === ev.path
-          ? { ...file, groupId: ev.groupId, isPinned: shouldPin, isPreview: false }
-          : file
-      )
-
-      // Sort tabs to put pinned tabs first (consistent with pinGroup/unpinGroup)
-      const pinnedTabs = updatedFiles.filter(tab => tab.isPinned)
-      const unpinnedTabs = updatedFiles.filter(tab => !tab.isPinned)
-
-      return {
-        ...context,
-        openFiles: [...pinnedTabs, ...unpinnedTabs]
-      }
-    }),
-
-    removeTabFromGroup: assign(({ event, context }) => {
-      const ev = typeOf('REMOVE_TAB_FROM_GROUP', event)
-
-      // Find the group this tab belongs to
-      const tab = context.openFiles.find(f => f.path === ev.path)
-      const groupId = tab && 'groupId' in tab ? tab.groupId : undefined
-
-      // Remove tab from group
-      const updatedFiles = context.openFiles.map(file =>
-        file.path === ev.path ? { ...file, groupId: undefined } : file
-      )
-
-      // Delete group if now empty
-      const updatedGroups = deleteEmptyGroups(updatedFiles, context.tabGroups, groupId)
-
-      return {
-        ...context,
-        openFiles: updatedFiles,
-        tabGroups: updatedGroups
-      }
-    }),
-
-    /**
-     * **Settling writes nothing to storage.** It used to persist the list it had just pruned, which turned a
-     * slow restore into a permanent one: a terminal that had not come back inside the deadline was dropped
-     * from storage as well as from the surface, so the next launch had nothing left to ask for. Every real
-     * change persists through `saveTabsAction`, so leaving storage alone means a tab that is still missing is
-     * still there to try again — and the log says so rather than announcing a settle on every startup.
-     */
-    settlePersistedTabsRestore: assign(({ context }) => {
-      const updates = finalizeRestoreState(context)
-      if (Object.keys(updates).length === 0) return {}
-
-      const openPaths = new Set(context.openFiles.map(file => file.path))
-      const missing = context.pendingTabOrder?.filter(tab => !openPaths.has(tab.path)) ?? []
-      if (missing.length > 0) {
-        console.info(`[Code Surface] ${missing.length} restored tab(s) have not arrived; they stay in storage for the next launch`)
-      }
-      return updates
-    }),
-
-    reorderGroups: assign(({ event, context }) => {
-      const ev = typeOf('REORDER_GROUPS', event)
-      const groups = [...context.tabGroups]
-      const [movedGroup] = groups.splice(ev.fromIndex, 1)
-      groups.splice(ev.toIndex, 0, movedGroup)
-
-      // Update order values
-      const reorderedGroups = groups.map((group, index) => ({
-        ...group,
-        order: index
-      }))
-
-      return {
-        ...context,
-        tabGroups: reorderedGroups
-      }
-    }),
-  }
-}).createMachine({
-  id,
-  initial: 'canvas',
-  // Invoked at the root, so it is running for exactly as long as this surface is and its cleanup is what
-  // the shell stopping this actor runs
-  invoke: [{ src: 'poolOwner', id: 'poolOwner' }, { src: 'externalChanges', id: 'externalChanges' }],
-  entry: ['spawnFeatureActors', 'restorePersistedTabs'],
-  context: {
-    making: made.none(),
-    // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no
-    // answer is the only window there is
-    ownsAppLayout: true,
-    baseDirectory: '', // Will be loaded from backend EARS store
-    openFiles: [], // Don't load tabs here - wait for SURFACE_ACTIVATED
-    activeFilePath: null,
-    isLoading: false,
-    error: null,
-    selectedPanel: 'explorer' as PanelType,
-    // Tab groups state
-    tabGroups: [],
-    // Quick open state
-    isQuickOpenVisible: false,
-    quickOpenQuery: '',
-    quickOpenResults: [],
-    quickOpenSelectedIndex: 0,
-    quickOpenLoading: false,
-    recentlyOpenedFiles: [], // loaded per project once the backend reports baseDirectory
-    tabViewHistory: [],
-    // Default hotkeys for code surface (will be overridden by settings)
-    hotkeys: {},
-    pendingRevealLine: null,
-    searchFocusTrigger: 0,
-    searchPrefillText: '',
-    panelTerminalId: null,
-    panelTerminalExpanded: false,
-    panelNavHistory: createNavHistory('explorer' as PanelType),
-  },
-  states: {
-    canvas: {
-      meta: breadcrumb('canvas', 'Code', true),
-      on: {
-        // What the surface starts from, asked as the shell starts it, in a delivery naming the surface
-        SURFACE_STARTED: {
-          actions: [
-            // Which window this is, as the shell starts the surface: a popout writes no layout (M5)
-            assign(({ event }) => ({ ownsAppLayout: event.ownsAppLayout !== false })),
-            'askForStart',
-          ],
-        },
-        // The directory moved, in every window: ask again for what the surface starts from
-        BASE_DIRECTORY_CHANGED: {
-          actions: 'askForStart',
-        },
-        // The start, handed to every feature, each of which asks for what its panel shows. The saved settings reach
-        // the terminals at start, as they do when they change. A start that could not be read changes nothing
-        'made.codeStart': {
-          guard: ({ event }) => event.outcome.ok,
-          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
-        },
-        // How an ask ended. Taken here, beside the route to the children, which would otherwise take it
-        [made.done]: { actions: made.settle() },
-        // Handle settings updates
-        FEATURE_SETTINGS_UPDATED: {
-          actions: ['handleSettingsUpdate', 'applyCopyOnSelect', 'applyViewSettings']
-        },
-        // Route events to child machines
-        '*': {
-          actions: ['routeEvent']
-        },
-        // Simple state update from child machines
-        UPDATE_STATE: {
-          actions: ['notifyDirectoryChange', 'updateState', 'saveTabsAction']
-        },
-        // Add a new tab (race-free: always uses current parent state)
-        ADD_TAB: {
-          actions: ['addTab', 'saveTabsAction']
-        },
-        REFRESH_DIFF_TAB: {
-          actions: ['refreshDiffTab']
-        },
-        // Surface initialization
-        SURFACE_ACTIVATED: {
-          actions: ['initializeSurface']
-        },
-        // The window shows another surface: the repository's changes are caught up with when it is shown again
-        SURFACE_DEACTIVATED: {
-          actions: ({ self }) => { codeChild(self, 'commit')?.send({ type: 'commit.HIDDEN' }) }
-        },
-        // Panel selection
-        SELECT_PANEL: {
-          actions: ['selectPanel']
-        },
-        NAVIGATE_BACK: {
-          guard: ({ context }) => canGoBack(context.panelNavHistory),
-          actions: assign(({ context, self }) => {
-            const result = goBack(context.panelNavHistory)!;
-            if (result.entry === 'commit') codeChild(self, 'commit')?.send({ type: 'commit.REFRESH_STATUS' });
-            else if (result.entry === 'pr') codeChild(self, 'pr')?.send({ type: 'pr.REFRESH_STATUS' });
-            return { panelNavHistory: result.history, selectedPanel: result.entry };
-          }),
-        },
-        NAVIGATE_FORWARD: {
-          guard: ({ context }) => canGoForward(context.panelNavHistory),
-          actions: assign(({ context, self }) => {
-            const result = goForward(context.panelNavHistory)!;
-            if (result.entry === 'commit') codeChild(self, 'commit')?.send({ type: 'commit.REFRESH_STATUS' });
-            else if (result.entry === 'pr') codeChild(self, 'pr')?.send({ type: 'pr.REFRESH_STATUS' });
-            return { panelNavHistory: result.history, selectedPanel: result.entry };
-          }),
-        },
-        // Tab pinning
-        PIN_TAB: {
-          actions: ['pinTab', 'saveTabsAction']
-        },
-        UNPIN_TAB: {
-          actions: ['unpinTab', 'saveTabsAction']
-        },
-        PIN_TAB_AT: {
-          actions: ['pinTabAt', 'saveTabsAction']
-        },
-        UNPIN_TAB_AT: {
-          actions: ['unpinTabAt', 'saveTabsAction']
-        },
-        // Tab groups
-        CREATE_GROUP: {
-          actions: ['createGroup', 'saveTabsAction']
-        },
-        RENAME_GROUP: {
-          actions: ['renameGroup', 'saveTabsAction']
-        },
-        CHANGE_GROUP_COLOR: {
-          actions: ['changeGroupColor', 'saveTabsAction']
-        },
-        DELETE_GROUP: {
-          actions: ['deleteGroup', 'forceSaveTabsAction']
-        },
-        TOGGLE_GROUP_COLLAPSE: {
-          actions: ['toggleGroupCollapse', 'saveTabsAction']
-        },
-        ADD_TAB_TO_GROUP: {
-          actions: ['addTabToGroup', 'saveTabsAction']
-        },
-        REMOVE_TAB_FROM_GROUP: {
-          actions: ['removeTabFromGroup', 'saveTabsAction']
-        },
-        REORDER_GROUPS: {
-          actions: ['reorderGroups', 'saveTabsAction']
-        },
-        PIN_GROUP: {
-          actions: ['pinGroup', 'saveTabsAction']
-        },
-        UNPIN_GROUP: {
-          actions: ['unpinGroup', 'saveTabsAction']
-        },
-        // Hotkey handling
-        HOTKEY_PRESSED: {
-          actions: ['handleHotkey']
-        },
-        OPEN_TERMINAL: {
-          actions: 'openTerminal'
-        },
-        OPEN_TERMINAL_TAB: {
-          actions: ['openTerminalTab', 'saveTabsAction']
-        },
-        SELECT_PANEL_TERMINAL: {
-          actions: ['selectPanelTerminal', 'saveTabsAction']
-        },
-        CLOSE_PANEL_TERMINAL: {
-          actions: ['closePanelTerminal', 'saveTabsAction']
-        },
-        OPEN_TERMINAL_IN_TAB: {
-          actions: ['openTerminalInTab', 'saveTabsAction']
-        },
-        MOVE_TERMINAL_TO_PANEL: {
-          actions: ['moveTerminalToPanel', 'saveTabsAction']
-        },
-        TOGGLE_PANEL_TERMINAL: {
-          actions: ['togglePanelTerminal', 'saveTabsAction']
-        },
-        // Surgical update from terminal child — avoids stale openFiles snapshots
-        TERMINAL_TAB_INFO_CHANGED: {
-          actions: ['updateTerminalTabInfo', 'saveTabsAction']
-        },
-        NAVIGATE_PREV_PANEL: {
-          actions: 'navigatePrevPanel'
-        },
-        NAVIGATE_NEXT_PANEL: {
-          actions: 'navigateNextPanel'
-        },
-        FOCUS_SEARCH: {
-          actions: 'focusSearch'
-        },
-        SEARCH_IN_FOLDER: {
-          actions: 'searchInFolder'
-        },
-        // Quick open events
-        TOGGLE_QUICK_OPEN: {
-          actions: ['toggleQuickOpen', 'requestQuickOpenFiles']
-        },
-        SHOW_QUICK_OPEN: {
-          actions: ['showQuickOpen', 'requestQuickOpenFiles']
-        },
-        HIDE_QUICK_OPEN: {
-          actions: ['hideQuickOpen']
-        },
-        UPDATE_QUICK_OPEN_QUERY: {
-          actions: ['updateQuickOpenQuery']
-        },
-        SELECT_QUICK_OPEN_RESULT: {
-          actions: ['selectQuickOpenResult']
-        },
-        OPEN_QUICK_OPEN_RESULT: {
-          actions: ['openQuickOpenResult', 'hideQuickOpen']
-        },
-        // File actions (hotkeys + UI)
-        SAVE_ACTIVE_FILE: {
-          actions: 'saveActiveFile'
-        },
-        CLOSE_ACTIVE_TAB: {
-          actions: ['closeActiveTab', 'forceSaveTabsAction']
-        },
-        CLOSE_TAB: {
-          actions: ['closeTab', 'forceSaveTabsAction']
-        },
-        KILL_TERMINAL: {
-          actions: ['killTerminal', 'forceSaveTabsAction']
-        },
-        RESTORE_PERSISTED_TABS_SETTLED: {
-          actions: ['settlePersistedTabsRestore']
-        },
-        PROMOTE_PREVIEW_TAB: {
-          actions: ['promotePreviewTab', 'saveTabsAction']
+    },
+    CLOSE_ACTIVE_TAB: (_event, { data, tell, child }) => {
+      const path = data.activeFilePath;
+      if (!path) return;
+      const file = data.openFiles.find((f) => f.path === path);
+      if (file && 'isTerminal' in file && file.isTerminal) {
+        if (data.settings?.confirmTerminalClose ?? true) {
+          const terminalInfo = (file as Read<TerminalTab>).terminalInfo;
+          const name = terminalInfo.customTitle || terminalNameFor(terminalInfo.cwd) || terminalInfo.title;
+          if (!confirm(`Close terminal "${name}"?`)) return;
+        }
+        if (data.settings?.closeTerminalOnTabClose ?? true) {
+          tell(child('terminal'), { type: 'terminal.CLOSE', terminalId: (file as Read<TerminalTab>).terminalInfo.id });
         }
       }
-    }
-  }
+      tell(child('explorer'), { type: 'explorer.CLOSE_FILE', path });
+      const patch = removeTabPatch(data, path);
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next, true);
+      return { data: patch };
+    },
+    CLOSE_TAB: ({ path }, { data, tell, child }) => {
+      const file = data.openFiles.find((f) => f.path === path);
+      if (file && 'isTerminal' in file && file.isTerminal) {
+        if (data.settings?.confirmTerminalClose ?? true) {
+          const terminalInfo = (file as Read<TerminalTab>).terminalInfo;
+          const name = terminalInfo.customTitle || terminalNameFor(terminalInfo.cwd) || terminalInfo.title;
+          if (!confirm(`Close terminal "${name}"?`)) return;
+        }
+        if (data.settings?.closeTerminalOnTabClose ?? true) {
+          tell(child('terminal'), { type: 'terminal.CLOSE', terminalId: (file as Read<TerminalTab>).terminalInfo.id });
+        }
+      }
+      tell(child('explorer'), { type: 'explorer.CLOSE_FILE', path });
+      const patch = removeTabPatch(data, path);
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next, true);
+      return { data: patch };
+    },
+    KILL_TERMINAL: ({ path }, { data, tell, child }) => {
+      const file = data.openFiles.find((f) => f.path === path);
+      if (!file || !('isTerminal' in file)) return;
+      tell(child('terminal'), { type: 'terminal.CLOSE', terminalId: (file as Read<TerminalTab>).terminalInfo.id });
+      tell(child('explorer'), { type: 'explorer.CLOSE_FILE', path });
+      const patch = removeTabPatch(data, path);
+      const next = { ...data, ...patch };
+      tell(child('commit'), { type: 'OPEN_DIFFS_CHANGED', openDiffs: openDiffRefsOf(next.openFiles) });
+      saveTabs(next, true);
+      return { data: patch };
+    },
+    /**
+     * **Settling writes nothing to storage.** Every real change persists through `saveTabs`, so leaving storage
+     * alone means a tab that is still missing is still there to try again.
+     */
+    RESTORE_PERSISTED_TABS_SETTLED: (_event, { data }) => {
+      const updates = finalizeRestoreState(data);
+      if (Object.keys(updates).length === 0) return;
+
+      const openPaths = new Set(data.openFiles.map((file) => file.path));
+      const missing = data.pendingTabOrder?.filter((tab) => !openPaths.has(tab.path)) ?? [];
+      if (missing.length > 0) {
+        console.info(
+          `[Code Surface] ${missing.length} restored tab(s) have not arrived; they stay in storage for the next launch`,
+        );
+      }
+      return { data: updates };
+    },
+  },
+  states: {
+    canvas: {},
+  },
 });
 
 export default codeState;
-
-// Type definitions for parent-child communication
-export interface StateUpdate {
-  type: 'UPDATE_STATE'
-  updates: Partial<CodeContext>
-}

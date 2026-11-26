@@ -87,11 +87,9 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { useSettings } from '#generated/settings-fe.ts'
+import { useState } from '#generated/state-fe.ts'
 import { ref, computed, provide, nextTick } from 'vue'
-import type { CodeState } from '#features/code/fe/state.ts'
 import Dialog from '@apackdev/ui/design/dialog'
 import ExplorerTreeItem from '#features/code/fe/features/explorer/ExplorerTreeItem.vue'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
@@ -101,21 +99,16 @@ import { FolderOpen, FolderPlus, RefreshCw, AlertCircle, X } from 'lucide-vue-ne
 import { useExplorerSelection } from './composables/useExplorerSelection.ts'
 import { useExplorerDragDrop } from './composables/useExplorerDragDrop.ts'
 import type { FileInfo } from './state.ts'
-import { panelChild } from '../children.ts';
-
-// Get actors
-const codeActor: CodeState = useSurface()
-const explorerActor = panelChild(codeActor, 'explorer')!
-const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
-const { state: code, send: sendCode } = useState(codeActor)
-const { state: explorer, send } = useState(explorerActor)
+const { state: code, send: sendCode, child } = useState('code')
+const { state: explorer, send } = useState(() => child('explorer'))
+const { send: sendTerminal } = useState(() => child('terminal'))
 const baseDirectory = computed(() => code.value.data.baseDirectory)
-const rootFiles = computed(() => explorer.value.data.rootFiles)
-const expandedDirs = computed(() => explorer.value.data.expandedDirs)
-const dirContents = computed(() => explorer.value.data.dirContents)
-const selectedPaths = computed(() => explorer.value.data.selectedPaths)
+const rootFiles = computed(() => explorer.value?.data.rootFiles ?? [])
+const expandedDirs = computed(() => explorer.value?.data.expandedDirs ?? new Set<string>())
+const dirContents = computed(() => explorer.value?.data.dirContents ?? {})
+const selectedPaths = computed(() => explorer.value?.data.selectedPaths ?? [])
 
 // Error dismissal
 const dismissedError = ref<string | null>(null)
@@ -211,7 +204,7 @@ provide('explorer-delete', (file: FileInfo) => {
   showDeleteDialog.value = true
 })
 provide('explorer-open-terminal', (path: string) => {
-  terminalActor?.send({ type: 'terminal.CREATE', cwd: path, target: 'tab' })
+  sendTerminal({ type: 'terminal.CREATE', cwd: path, target: 'tab' })
 })
 provide('explorer-search-in-folder', (path: string) => {
   sendCode({ type: 'SEARCH_IN_FOLDER', folder: path })
@@ -222,7 +215,7 @@ provide('explorer-promote-preview', (path: string) => {
 provide('explorer-selected-paths', () => selectedPaths.value)
 provide('explorer-expanded-dirs', () => expandedDirs.value)
 provide('explorer-dir-contents', () => dirContents.value)
-provide('explorer-loading-dirs', () => explorer.value.data.loadingDirs)
+provide('explorer-loading-dirs', () => explorer.value?.data.loadingDirs ?? new Set<string>())
 provide('explorer-base-directory', () => baseDirectory.value || '')
 provide('explorer-check-auto-rename', (itemPath: string): boolean => {
   if (pendingRenamePath.value === itemPath) {
@@ -235,7 +228,7 @@ provide('explorer-rename-trigger', {
   get: () => renameTriggerPath.value,
   clear: () => { renameTriggerPath.value = null }
 })
-provide('explorer-reveal-path', () => explorer.value.data.revealPath)
+provide('explorer-reveal-path', () => explorer.value?.data.revealPath ?? null)
 provide('explorer-clear-reveal', () => {
   send({ type: 'explorer.CLEAR_REVEAL' })
 })

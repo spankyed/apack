@@ -140,8 +140,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
-import type { CodeState, QuickOpenResult } from '#features/code/fe/state.ts'
+import { useShell } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
+import type { QuickOpenResult } from '#features/code/fe/state.ts'
 import { fuzzySearch, highlightMatches } from '#features/code/fe/utils/fuzzy-search.ts'
 import { getRecencyScore } from '#features/code/fe/utils/recent-files.ts'
 import { 
@@ -161,9 +162,7 @@ interface EnhancedSearchResult {
 
 // Get state
 const shell = useShell()
-const codeActor: CodeState = useSurface()
-
-const { state: code, send } = useState(codeActor)
+const { state: code, send } = useState('code')
 const panelSizes = shell.panelSizes
 
 // Local state

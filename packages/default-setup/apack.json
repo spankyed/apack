@@ -925,6 +925,7 @@
         "label": "Code",
         "icon": "Code2",
         "state": "src/features/code/fe/state.ts",
+        "chrome": "src/features/code/fe/state.ts#codeChrome",
         "canvas": {
           "entry": "src/features/code/fe/canvas/canvas.vue",
           "load": "lazy"

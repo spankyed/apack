@@ -97,9 +97,9 @@ export type CodeContext = {
   isLoading: boolean
   error: string | null
   selectedPanel: PanelType
-  tabsRestored?: boolean
-  pendingTabOrder?: Array<{ path: string; order: number }>  // Track desired tab order during restoration
-  pendingPersistedMetadata?: Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }>  // Track metadata to apply after restoration
+  tabsRestored: boolean
+  pendingTabOrder: Array<{ path: string; order: number }> | undefined  // Track desired tab order during restoration
+  pendingPersistedMetadata: Map<string, { groupId?: string; isPinned?: boolean; isPreview?: boolean }> | undefined  // Track metadata to apply after restoration
   // Tab groups state
   tabGroups: TabGroup[]
   // Quick open state
@@ -111,13 +111,13 @@ export type CodeContext = {
   recentlyOpenedFiles: string[]
   tabViewHistory: string[]
   hotkeys: HotkeysMap
-  settings?: CodeSettings
+  settings: CodeSettings | undefined
   pendingRevealLine: { filePath: string; line: number; column: number; lineText?: string } | null
   searchFocusTrigger: number
   searchPrefillText: string
   panelTerminalId: string | null
   panelTerminalExpanded: boolean
-  pendingTerminalTabIds?: string[]
+  pendingTerminalTabIds: string[] | undefined
   panelNavHistory: NavHistory<PanelType>
 }
 
