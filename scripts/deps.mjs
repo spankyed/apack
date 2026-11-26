@@ -13,7 +13,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPOSITORIES, missingHoistedOverrides, pruneNestedOverrides, releaseOf, releaseUrl } from './lib/external-packages.mjs';
+import { REPOSITORIES, pruneSwitchedOverrides, releaseOf, releaseUrl, verifyHoistedOverrides } from './lib/external-packages.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -57,8 +57,8 @@ function writeOverrides(specs) {
  */
 const NPM_FLOOR = [11, 21, 1];
 
-/** @param {readonly string[]} switchedPackages */
-function install(switchedPackages) {
+/** @param {Readonly<Record<string, string>>} switchedSpecs */
+function install(switchedSpecs) {
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const version = spawnSync(npmCommand, ['--version'], { encoding: 'utf8', shell: process.platform === 'win32' }).stdout.trim();
   const parts = version.split('.').map(Number);
@@ -67,44 +67,43 @@ function install(switchedPackages) {
     refuse(`npm ${version} does not apply a changed override to a locked package; this needs npm ${NPM_FLOOR.join('.')} or later `
       + `(npm install -g npm@${NPM_FLOOR.join('.')}). package.json is rewritten: run npm install with it.`);
   }
-  const pruned = pruneNestedOverrides(ROOT, switchedPackages);
-  if (pruned.length > 0) console.log(`Removed ${pruned.length} stale nested package link(s): ${pruned.join(', ')}`);
+  const pruned = pruneSwitchedOverrides(ROOT, Object.keys(switchedSpecs));
+  if (pruned.length > 0) console.log(`Removed ${pruned.length} stale override path(s): ${pruned.join(', ')}`);
   const npm = spawnSync(npmCommand, ['install', '--no-audit', '--no-fund'], {
     cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32',
   });
   if ((npm.status ?? 1) !== 0) process.exit(npm.status ?? 1);
-  const missing = missingHoistedOverrides(ROOT, switchedPackages);
-  if (missing.length > 0) {
-    refuse(`Override package(s) did not hoist to root node_modules: ${missing.join(', ')}. `
-      + 'Check that the target checkout is built or re-run `npm install` after cleaning nested node_modules.');
+  const problems = verifyHoistedOverrides(ROOT, switchedSpecs);
+  if (problems.length > 0) {
+    refuse(`Override install verification failed:\n  - ${problems.join('\n  - ')}\n`
+      + 'Check that the target checkout is built or re-run `npm install` after cleaning node_modules.');
   }
   process.exit(0);
 }
 
-/** @param {string} repo @param {string | undefined} commit @returns {string[]} */
+/** @param {string} repo @param {string | undefined} commit @returns {Record<string, string>} */
 function pin(repo, commit) {
   if (commit === undefined || !/^[0-9a-f]{40}$/.test(commit)) refuse('Name the commit by its full 40-character hash.');
-  const names = Object.keys(REPOSITORIES[repo].packages);
-  writeOverrides(Object.fromEntries(names.map((name) => [name, releaseUrl(repo, commit, name)])));
+  const specs = Object.fromEntries(Object.keys(REPOSITORIES[repo].packages).map((name) => [name, releaseUrl(repo, commit, name)]));
+  writeOverrides(specs);
   console.log(`${repo}: the release of ${commit}`);
-  return names;
+  return specs;
 }
 
-/** @param {string} repo @param {string | undefined} given @returns {string[]} */
+/** @param {string} repo @param {string | undefined} given @returns {Record<string, string>} */
 function local(repo, given) {
   const checkout = path.resolve(given ?? path.join(path.dirname(primaryWorktree(ROOT)), repo));
-  const entries = Object.entries(REPOSITORIES[repo].packages);
-  const specs = Object.fromEntries(entries.map(([name, { dir }]) => {
+  const specs = Object.fromEntries(Object.entries(REPOSITORIES[repo].packages).map(([name, { dir }]) => {
     const packageDir = path.join(checkout, dir);
     if (!existsSync(path.join(packageDir, 'package.json'))) refuse(`${packageDir} holds no package.json: is ${checkout} a checkout of ${repo}?`);
     return [name, `file:${path.relative(ROOT, packageDir).split(path.sep).join('/')}`];
   }));
   writeOverrides(specs);
   console.log(`${repo}: the checkout at ${checkout}, which has to be built (npm run deps:released undoes this)`);
-  return entries.map(([name]) => name);
+  return specs;
 }
 
-/** @param {string[]} repos @returns {string[]} */
+/** @param {string[]} repos @returns {Record<string, string>} */
 function released(repos) {
   const committed = /** @type {{ overrides?: Record<string, string> }} */ (
     JSON.parse(execFileSync('git', ['show', 'HEAD:package.json'], { cwd: ROOT, encoding: 'utf8' }))).overrides ?? {};
@@ -119,11 +118,11 @@ function released(repos) {
   }
   writeOverrides(specs);
   console.log(`${repos.join(', ')}: the releases HEAD names`);
-  return Object.keys(specs);
+  return specs;
 }
 
 const [command, repo, argument] = process.argv.slice(2);
-/** @type {string[]} */
+/** @type {Record<string, string>} */
 let switched;
 if (command === 'pin') switched = pin(repository(repo), argument);
 else if (command === 'local') switched = local(repository(repo), argument);

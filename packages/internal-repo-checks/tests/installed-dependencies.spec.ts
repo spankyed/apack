@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { duplicateCopies, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
 import { missingBroker } from '../../../scripts/lib/broker-installed.mjs';
-import { missingHoistedOverrides, pruneNestedOverrides } from '../../../scripts/lib/external-packages.mjs';
+import { pruneSwitchedOverrides, verifyHoistedOverrides } from '../../../scripts/lib/external-packages.mjs';
 
 
 let dir: string | undefined;
@@ -131,43 +131,110 @@ describe("the terminal broker's platform package", () => {
   });
 });
 
-describe('override switching cleanup and hoisting check', () => {
-  it('prunes nested workspace copies and stale root/workspace symlinks for switched packages while preserving real root and unrelated packages', () => {
-    const root = aDir('prune-nested-');
-    // Real root directory stays untouched; stale root symlink (left by deps:local) is pruned
+describe('override switching cleanup and hoisting verification', () => {
+  const dirLinkType: fs.symlink.Type = process.platform === 'win32' ? 'junction' : 'dir';
+
+  it('prunes root and nested workspace copies/symlinks for switched packages while preserving unrelated packages', () => {
+    const root = aDir('prune-switched-');
+    // Both a real root directory (previous tarball) and a root symlink (previous deps:local) are pruned,
+    // while unrelated root packages remain intact
     fs.mkdirSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true });
-    fs.symlinkSync(path.join(root, 'local-elmdb'), path.join(root, 'node_modules', 'elmdb'));
+    fs.mkdirSync(path.join(root, 'node_modules', 'other-root-pkg'), { recursive: true });
+    fs.symlinkSync(path.join(root, 'local-elmdb'), path.join(root, 'node_modules', 'elmdb'), dirLinkType);
     // Workspace A has a scoped directory + unrelated package
     fs.mkdirSync(path.join(root, 'packages', 'apack-host', 'node_modules', '@elmdb', 'ears'), { recursive: true });
     fs.mkdirSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'other-pkg'), { recursive: true });
     // Workspace B has a broken symlink for an unscoped package and a valid symlink for a scoped one
     fs.mkdirSync(path.join(root, 'packages', 'server', 'node_modules', '@elmdb'), { recursive: true });
-    fs.symlinkSync(path.join(root, 'does-not-exist'), path.join(root, 'packages', 'server', 'node_modules', 'elmdb'));
-    fs.symlinkSync(path.join(root, 'node_modules', '@elmdb', 'ears'), path.join(root, 'packages', 'server', 'node_modules', '@elmdb', 'ears'));
+    fs.symlinkSync(path.join(root, 'does-not-exist'), path.join(root, 'packages', 'server', 'node_modules', 'elmdb'), dirLinkType);
+    fs.symlinkSync(path.join(root, 'node_modules', '@elmdb', 'ears'), path.join(root, 'packages', 'server', 'node_modules', '@elmdb', 'ears'), dirLinkType);
 
-    const removed = pruneNestedOverrides(root, ['elmdb', '@elmdb/ears']).sort();
+    const removed = pruneSwitchedOverrides(root, ['elmdb', '@elmdb/ears']).sort();
     expect(removed).toEqual([
+      'node_modules/@elmdb/ears',
       'node_modules/elmdb',
       'packages/apack-host/node_modules/@elmdb/ears',
       'packages/server/node_modules/@elmdb/ears',
       'packages/server/node_modules/elmdb',
     ]);
-    // Empty @elmdb scope dirs are cleaned up too; unrelated and real root packages remain
+    // Empty @elmdb scope dirs are cleaned up in root and workspaces; unrelated packages remain
+    expect(fs.existsSync(path.join(root, 'node_modules', '@elmdb'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages', 'apack-host', 'node_modules', '@elmdb'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages', 'server', 'node_modules', '@elmdb'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'node_modules', 'other-root-pkg'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'other-pkg'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'node_modules', '@elmdb', 'ears'))).toBe(true);
   });
 
-  it('reports packages missing a readable package.json in root node_modules after install', () => {
-    const root = aDir('hoisted-check-');
-    // An empty directory without package.json still counts as missing
+  it('verifies release URL overrides are real root directories with package.json and no nested copies', () => {
+    const root = aDir('verify-release-');
+    const specs = {
+      elmdb: 'https://github.com/spankyed/elmdb/releases/download/pkg-0000000000000000000000000000000000000000/elmdb-0.1.0.tgz',
+      '@elmdb/ears': 'https://github.com/spankyed/elmdb/releases/download/pkg-0000000000000000000000000000000000000000/elmdb-ears-0.1.0.tgz',
+    };
+    // Empty directory without package.json still counts as missing
     fs.mkdirSync(path.join(root, 'node_modules', 'elmdb'), { recursive: true });
-    expect(missingHoistedOverrides(root, ['elmdb', '@elmdb/ears'])).toEqual(['elmdb', '@elmdb/ears']);
+    expect(verifyHoistedOverrides(root, specs)).toEqual([
+      'elmdb: missing from root node_modules (no package.json)',
+      '@elmdb/ears: missing from root node_modules (no package.json)',
+    ]);
+
+    // Real directory for elmdb, leftover symlink for @elmdb/ears
     fs.writeFileSync(path.join(root, 'node_modules', 'elmdb', 'package.json'), '{}');
-    expect(missingHoistedOverrides(root, ['elmdb', '@elmdb/ears'])).toEqual(['@elmdb/ears']);
+    const localEars = path.join(root, 'local-ears');
+    fs.mkdirSync(localEars, { recursive: true });
+    fs.writeFileSync(path.join(localEars, 'package.json'), '{}');
+    fs.mkdirSync(path.join(root, 'node_modules', '@elmdb'), { recursive: true });
+    fs.symlinkSync(localEars, path.join(root, 'node_modules', '@elmdb', 'ears'), dirLinkType);
+    expect(verifyHoistedOverrides(root, specs)).toEqual([
+      expect.stringContaining('@elmdb/ears: expected installed package in root node_modules'),
+    ]);
+
+    // Replace symlink with real directory, but introduce a nested workspace copy
+    fs.rmSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true, force: true });
     fs.mkdirSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true });
     fs.writeFileSync(path.join(root, 'node_modules', '@elmdb', 'ears', 'package.json'), '{}');
-    expect(missingHoistedOverrides(root, ['elmdb', '@elmdb/ears'])).toEqual([]);
+    fs.mkdirSync(path.join(root, 'packages', 'server', 'node_modules', 'elmdb'), { recursive: true });
+    expect(verifyHoistedOverrides(root, specs)).toEqual([
+      'elmdb: still nested at packages/server/node_modules/elmdb',
+    ]);
+
+    // Clean once the nested copy is gone
+    fs.rmSync(path.join(root, 'packages', 'server', 'node_modules', 'elmdb'), { recursive: true, force: true });
+    expect(verifyHoistedOverrides(root, specs)).toEqual([]);
+  });
+
+  it('verifies file: overrides are root symlinks resolving to the target checkout with no nested copies', () => {
+    const root = aDir('verify-local-');
+    const targetElmdb = path.join(root, 'sibling-elmdb', 'crates', 'elmdb-node');
+    const wrongElmdb = path.join(root, 'other-elmdb', 'crates', 'elmdb-node');
+    fs.mkdirSync(targetElmdb, { recursive: true });
+    fs.writeFileSync(path.join(targetElmdb, 'package.json'), '{}');
+    fs.mkdirSync(wrongElmdb, { recursive: true });
+    fs.writeFileSync(path.join(wrongElmdb, 'package.json'), '{}');
+
+    const specs = { elmdb: 'file:sibling-elmdb/crates/elmdb-node' };
+
+    // Real tarball directory left at root (while file: link landed nested) must fail
+    fs.mkdirSync(path.join(root, 'node_modules', 'elmdb'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules', 'elmdb', 'package.json'), '{}');
+    fs.mkdirSync(path.join(root, 'packages', 'apack-host', 'node_modules'), { recursive: true });
+    fs.symlinkSync(targetElmdb, path.join(root, 'packages', 'apack-host', 'node_modules', 'elmdb'), dirLinkType);
+    expect(verifyHoistedOverrides(root, specs)).toEqual([
+      'elmdb: expected symlink to file:sibling-elmdb/crates/elmdb-node in root node_modules, found a real directory',
+      'elmdb: still nested at packages/apack-host/node_modules/elmdb',
+    ]);
+
+    // Symlink pointing at the wrong checkout must fail
+    fs.rmSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'elmdb'), { recursive: true, force: true });
+    fs.rmSync(path.join(root, 'node_modules', 'elmdb'), { recursive: true, force: true });
+    fs.symlinkSync(wrongElmdb, path.join(root, 'node_modules', 'elmdb'), dirLinkType);
+    expect(verifyHoistedOverrides(root, specs)).toEqual([
+      expect.stringContaining('elmdb: root node_modules symlink resolves to '),
+    ]);
+
+    // Symlink pointing at the requested checkout passes
+    fs.rmSync(path.join(root, 'node_modules', 'elmdb'), { recursive: true, force: true });
+    fs.symlinkSync(targetElmdb, path.join(root, 'node_modules', 'elmdb'), dirLinkType);
+    expect(verifyHoistedOverrides(root, specs)).toEqual([]);
   });
 });
