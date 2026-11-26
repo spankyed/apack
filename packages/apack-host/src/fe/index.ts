@@ -19,6 +19,14 @@ export { withHostLast } from '../features/application/fe/surfaces.ts';
 export { surfaceNavigationItems, type SurfaceNavigationItem } from './surface-navigation.ts';
 export { notifySurfaceActor, sendToSurfaceActor } from './surface-delivery.ts';
 export { computeCrumbs, type BreadcrumbItem } from '../features/application/fe/trail.ts';
+export {
+  computeTrail,
+  topLevelState,
+  type ComputedTrail,
+  type SurfaceChrome,
+  type SurfaceStateChrome,
+  type SurfaceStateValue,
+} from '../features/application/fe/chrome.ts';
 export type { ShellNotify, ShellOptions, ShellStorage } from '../features/application/fe/types.ts';
 
 // The Packs surface, the pack-frontend loader the shell is given, and the install a deep link asks for
