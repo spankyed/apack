@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { ClockController } from '@apackdev/clock';
 import { TestClock } from '@apackdev/clock/testing';
 import { defineEars, type UntypedSchema } from '@elmdb/ears';
+import { _createRunHistory } from '@apackdev/sdk/services';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabaseStore, openRunHistory } from '../../src/database/open.ts';
 import { removeTempDirs, tempDir } from './fixtures.ts';
@@ -134,18 +135,27 @@ describe('driving EARS with @apackdev/clock', () => {
     expect(() => testClock.close()).not.toThrow();
   });
 
-  it('drives openRunHistory with the supplied clock', () => {
-    const testClock = new TestClock({ wall: 1_700_123_456_000 });
+  it('drives openRunHistory and _createRunHistory timestamps and ids with the supplied clock', async () => {
+    const startWall = 1_700_123_456_000;
+    const testClock = new TestClock({ wall: startWall });
     const runs = openRunHistory(path.join(tempDir('runs-clock-'), 'runs'), { clock: testClock.clock });
     try {
-      const id = runs.engine.create('RunNode', {
-        kind: 'flow',
-        label: 'test-flow',
-        status: 'running',
-        startedAt: testClock.clock.now(),
-        rootId: 'root-1',
-      }).id();
-      expect(runs.engine.getRow(id)?.createdAt).toBe(1_700_123_456_000);
+      const history = _createRunHistory(runs.engine);
+      const first = history.start({ kind: 'flow', label: 'first-flow', flowId: 'Flow-1' });
+      expect(first.startedAt).toBe(startWall);
+      expect(first.id).toBe(`RunNode-${startWall.toString(36).padStart(9, '0')}0000`);
+      expect(runs.engine.getRow(first.id as never)?.createdAt).toBe(startWall);
+
+      await testClock.advance(2_500);
+      history.finish(first.id, 'completed');
+      expect(history.get(first.id)?.completedAt).toBe(startWall + 2_500);
+
+      const second = history.start({ kind: 'flow', label: 'second-flow', flowId: 'Flow-2' });
+      expect(second.startedAt).toBe(startWall + 2_500);
+
+      await testClock.advance(5_000);
+      history.stopActive();
+      expect(history.get(second.id)).toMatchObject({ status: 'stopped', completedAt: startWall + 7_500 });
     } finally {
       runs.database.close();
       expect(testClock.waiting()).toBe(0);

@@ -7,7 +7,7 @@ import type { PackRegistryView } from '../runtime/packs-view.ts';
 import { testPacksView } from './packs.ts';
 import type { RootEvents } from '../runtime/root-events.ts';
 import type { Message } from '../events/index.ts';
-import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
+import type { EarsClock, EarsDatabase, EarsEngine } from '@elmdb/ears';
 import type { LogEvent, SystemErrorEvent } from '../logger/index.ts';
 import { _createRunHistory, type RunHistory } from '../services/run-history.ts';
 import { _openTestRunHistory } from './run-history.ts';
@@ -93,11 +93,13 @@ export function resetTestHostState(): void {
 
 /** The test runtime's run history and its database, opened at its first use */
 let testHistory: { database: EarsDatabase; history: RunHistory } | undefined;
+/** The clock passed to the bound test runtime, threaded into lazy `testRunHistory()` opens */
+let testClock: EarsClock | undefined;
 
 /** The test runtime's run history, on a temporary database: what `services.runHistory` is until `resetTestData` replaces it */
 export const testRunHistory = (): RunHistory => {
   if (!testHistory) {
-    const { database, engine } = _openTestRunHistory();
+    const { database, engine } = _openTestRunHistory({ clock: testClock });
     testHistory = { database, history: _createRunHistory(engine) };
   }
   return testHistory.history;
@@ -180,13 +182,20 @@ export interface TestRuntimeOptions {
   settings?: SettingsAdmin;
   /** Host-port doubles owned by this test runtime; settings administration remains canonical. */
   serviceOverrides?: ReadonlyMap<string, unknown>;
+  /** Clock threaded into lazily opened test services such as `testRunHistory()` */
+  clock?: EarsClock;
 }
 
 /**
  * Binds the in-memory app: `testRootEvents` as its bus, the in-memory engine, `testPacks` over `packs`, and the app's
  * services in memory.
  */
-export function bindTestRuntime({ engine, resetData, packs, appVersion = '0.0.0-test', onboarding = memoryOnboarding, settings = memorylessSettings, serviceOverrides }: TestRuntimeOptions): HostRuntime {
+export function bindTestRuntime({ engine, resetData, packs, appVersion = '0.0.0-test', onboarding = memoryOnboarding, settings = memorylessSettings, serviceOverrides, clock }: TestRuntimeOptions): HostRuntime {
+  if (testClock !== clock) {
+    testHistory?.database.close();
+    testHistory = undefined;
+  }
+  testClock = clock;
   const runtime: HostRuntime = {
     transport: { rootEvents: testRootEvents },
     // The current engine: a reset replaces it

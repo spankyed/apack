@@ -113,7 +113,9 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     appPackSourcesDir: () => process.env.SHIPPED_PACKS_DIR,
     settingsForPack: (packId) => runtime.services.settings.forPack(packId),
   });
+  using unwind = new DisposableStack();
   const clock = new ClockController();
+  unwind.defer(() => clock.close());
   const { database, engine } = openDatabaseStore({
     path: _getLmdbPath(),
     schema: packs,
@@ -121,7 +123,9 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
+  unwind.defer(() => database.close());
   const runHistory = openRunHistory(_getRunHistoryPath(), { clock: clock.clock });
+  unwind.defer(() => runHistory.database.close());
   const env = resolveAppEnvironment().env;
   appPerformance = performance ?? (env === 'development' || env === 'test' ? createNodePerformanceController() : undefined);
   appPerformance?.attach(engine, 'app');
@@ -132,6 +136,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     countCalls: resolveAppEnvironment().env === 'development',
   });
   bindHost(runtime);
+  unwind.move();
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);

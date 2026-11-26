@@ -156,12 +156,12 @@ export const _RUN_HISTORY_SCHEMA: EngineSchema = {
 };
 
 /** A clock for run node ids: base-36 time then a counter for those made in one millisecond, so ids sort as made */
-function idClock(): () => RunNodeId {
+function idClock(now: () => number): () => RunNodeId {
   let lastTime = 0;
   let sameTime = 0;
   return () => {
-    const now = Date.now();
-    if (now > lastTime) { lastTime = now; sameTime = 0; } else sameTime++;
+    const current = now();
+    if (current > lastTime) { lastTime = current; sameTime = 0; } else sameTime++;
     return `RunNode-${lastTime.toString(36).padStart(9, '0')}${sameTime.toString(36).padStart(4, '0')}`;
   };
 }
@@ -183,7 +183,7 @@ function paged(ids: readonly RunNodeId[], { reverse = false, limit, cursor }: Ru
  * user's data, so no `transact` on the app's engine reaches it
  */
 export function _createRunHistory(runs: Ears): RunHistory {
-  const newId = idClock();
+  const newId = idClock(() => runs.now());
   const node = (id: RunNodeId) => runs.getRow(id as EARS.EntityId) as unknown as RunNode | undefined;
   /** The nodes with these ids, in the order given */
   const rows = (ids: readonly RunNodeId[]): RunNode[] =>
@@ -198,7 +198,7 @@ export function _createRunHistory(runs: Ears): RunHistory {
     start(fields) {
       const id = newId();
       const parent = fields.parentId === undefined ? undefined : node(fields.parentId);
-      const started = bounded({ ...fields, id, rootId: parent?.rootId ?? id, status: 'active', startedAt: Date.now() } as RunNode);
+      const started = bounded({ ...fields, id, rootId: parent?.rootId ?? id, status: 'active', startedAt: runs.now() } as RunNode);
       if (fields.parentId !== undefined && !parent) {
         logger.warn(`Dropped run node ${id}: its parent ${fields.parentId} isn't in the run history`);
       } else {
@@ -208,7 +208,7 @@ export function _createRunHistory(runs: Ears): RunHistory {
       return started;
     },
     finish(id, status) {
-      if (node(id)) runs.write(id as unknown as EARS.EntityId).setMany({ status, completedAt: Date.now() });
+      if (node(id)) runs.write(id as unknown as EARS.EntityId).setMany({ status, completedAt: runs.now() });
     },
     update(id, patch) {
       if (node(id)) runs.write(id as unknown as EARS.EntityId).setMany(bounded(patch) as Record<string, unknown>);
@@ -242,7 +242,7 @@ export function _createRunHistory(runs: Ears): RunHistory {
       return rows(paged(flows, { reverse: true, limit, cursor }));
     },
     stopActive() {
-      const now = Date.now();
+      const now = runs.now();
       runs.transact(() => {
         for (const id of where('status', 'active')) runs.write(id as unknown as EARS.EntityId).setMany({ status: 'stopped', completedAt: now });
       });
