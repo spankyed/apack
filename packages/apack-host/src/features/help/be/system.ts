@@ -1,25 +1,42 @@
-import { setup, fromCallback } from 'xstate';
-import { defineSystem, getPackHelp, onPackCatalogChanged } from '@apackdev/sdk/framework';
-import { broadcast } from '../../../events.ts';
+import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';
+import { getPackHelp, onPackCatalogChanged } from '@apackdev/sdk/framework';
+import { hostState } from '../../../state.ts';
 
 import type { HelpOutgoing } from '../../event-contracts.ts';
+
 export type Contract = {
   context: Record<string, never>;
   incoming: { type: 'GET_HELP' } | { type: 'CLIENT_CONNECTED' };
   internal: { type: 'CATALOG_CHANGED' };
   outgoing: HelpOutgoing;
 };
-const spec = defineSystem<Contract>();
-export const helpSystem = setup({
-  types: spec.types,
-  actors: { catalog: fromCallback(({ sendBack }) => onPackCatalogChanged(() => sendBack({ type: 'CATALOG_CHANGED' }))) },
-  actions: { sendCatalog: () => broadcast('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() }) },
-}).createMachine({
-  id: 'help', context: {},
-  invoke: { src: 'catalog' },
+
+type HelpShape = {
+  internal: { type: 'CATALOG_CHANGED' };
+};
+
+export const helpSystem = hostState<
+  HelpShape,
+  IncomingOnlyEventsOf<Contract>,
+  {}
+>()({
+  run: ({ send, signal, onExit }) => new Promise<void>((resolve) => {
+    // Keep `run` active until state exit so `send` stays alive for catalog change callbacks.
+    onExit(onPackCatalogChanged(() => send({ type: 'CATALOG_CHANGED' })));
+    signal.addEventListener('abort', () => resolve(), { once: true });
+  }),
+  failed: () => {},
   on: {
-    GET_HELP: { actions: 'sendCatalog' },
-    CLIENT_CONNECTED: { actions: 'sendCatalog' },
-    CATALOG_CHANGED: { actions: 'sendCatalog' },
+    GET_HELP: (_event, { broadcast }) => {
+      broadcast('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() });
+    },
+    CLIENT_CONNECTED: (_event, { broadcast }) => {
+      broadcast('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() });
+    },
+  },
+  internal: {
+    CATALOG_CHANGED: (_event, { broadcast }) => {
+      broadcast('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() });
+    },
   },
 });

@@ -13,7 +13,7 @@ it('answers the buffer to the window that asked, and broadcasts only each entry 
   const app = await startApp({ systems: ['logs'] })
   await app.connect()
   const sent: Array<{ type: string; client?: string }> = []
-  const stop = testRootEvents.onSurfaceSend((message) => {
+  const stop = testRootEvents.onOutgoing((message) => {
     if (message.to === LOGS) sent.push({ type: message.event.type, client: message.client })
   })
   try {

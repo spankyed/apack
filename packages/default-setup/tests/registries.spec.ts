@@ -4,13 +4,12 @@
  */
 
 describe('boot exports — source modules', () => {
-  it('default-exports the logs entry (early boot system)', async () => {
-    // System modules default-export their SystemEntry, the same way surface
-    // modules default-export their Surface.
-    const { default: logsEntry } = await import('#features/logs/be/system.ts');
+  it('default-exports the logs state (early boot system)', async () => {
+    const { isState } = await import('@apackdev/sdk/framework');
+    const { default: logsSystem } = await import('#features/logs/be/system.ts');
 
-    expect(logsEntry).toBeDefined();
-    expect(typeof logsEntry.machine.id).toBe('string');
+    expect(logsSystem).toBeDefined();
+    expect(isState(logsSystem)).toBe(true);
   });
 });
 
