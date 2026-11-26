@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import { describe, expect, it } from 'vitest';
 import type { EarsClock } from '@elmdb/ears';
 import { boundEars, untypedCreate } from '../../src/ears/index.ts';
-import { resetTestData, startTestRuntime, testRunHistory } from '../../src/testing/index.ts';
+import { addTestSecret, resetTestData, startTestRuntime, testRunHistory } from '../../src/testing/index.ts';
 
 process.env.APACK_ENV ??= 'test';
 process.env.APACK_USER_DATA_DIR ??= os.tmpdir();
@@ -38,5 +38,8 @@ describe('startTestRuntime({ clock })', () => {
 
     const run2 = testRunHistory().start({ kind: 'flow', label: 'second', flowId: 'Flow-2' });
     expect(run2.startedAt).toBe(wallMs);
+
+    const secret = addTestSecret('openai', 'test-key');
+    expect(secret.createdAt).toBe(wallMs);
   });
 });

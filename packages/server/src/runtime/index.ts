@@ -24,6 +24,7 @@ import { compileSettingsCatalog, createSettingsAccess } from '@apackdev/host/set
 import { forwardSecretsChanges } from '@apackdev/host/secrets';
 import { assertSourceResolution } from '@apackdev/host/build/source-resolution';
 import { rootEvents } from '../transport/emitter.ts';
+import { registerPowerState } from '../boot/lifecycle.ts';
 import { initializeLogCapture, printLogEvents } from '../adapters/logging.ts';
 import { createRequire } from 'module';
 import pkg from '../../../../package.json';
@@ -80,6 +81,7 @@ export let appRunHistory: RunsDatabase | undefined;
 
 /** The host-owned clock driving the app's engines, closed on shutdown after both databases close */
 export let appClock: ClockController | undefined;
+let unregisterPowerState: (() => void) | undefined;
 
 /**
  * Opens the app's data and binds the app: the registered packs (`createPackRegistry()`, empty until the caller
@@ -116,6 +118,11 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   using unwind = new DisposableStack();
   const clock = new ClockController();
   unwind.defer(() => clock.close());
+  const stopPower = registerPowerState((state) => {
+    if (state === 'suspended') clock.suspend();
+    else clock.resume();
+  });
+  unwind.defer(stopPower);
   const { database, engine } = openDatabaseStore({
     path: _getLmdbPath(),
     schema: packs,
@@ -131,7 +138,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   appPerformance?.attach(engine, 'app');
   appPerformance?.attach(runHistory.engine, 'runHistory');
   runtime = createHostRuntime({
-    database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
+    database, runHistory, engine, clock: clock.clock, transport: { rootEvents }, appVersion: APP_VERSION, packs,
     performance: appPerformance?.execution,
     countCalls: resolveAppEnvironment().env === 'development',
   });
@@ -144,6 +151,9 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   appViews = createViewHost({ ears: () => engine, packs, observe: recording ? () => createViewObservation(recording) : undefined });
   appDatabase = database;
   appRunHistory = runHistory;
+  const previousUnregisterPower = unregisterPowerState;
+  unregisterPowerState = stopPower;
+  previousUnregisterPower?.();
   const previousClock = appClock;
   appClock = clock;
   previousClock?.close();

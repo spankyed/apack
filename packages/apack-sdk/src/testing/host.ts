@@ -70,7 +70,7 @@ const ownedSecrets = new Map<string, Map<string, string>>();
 /** Stores a key (no value: unit tests never reach a provider) as Settings → Secrets would; returns it */
 export function addTestSecret(provider: SecretProvider, label: string): SecretMetadata {
   const id = `Secret-test-${++testSecretCount}`;
-  testSecrets = _secretRules.add(testSecrets, { id, provider, label, createdAt: Date.now() });
+  testSecrets = _secretRules.add(testSecrets, { id, provider, label, createdAt: testNow() });
   return testSecrets.find((secret) => secret.id === id)!;
 }
 
@@ -93,8 +93,9 @@ export function resetTestHostState(): void {
 
 /** The test runtime's run history and its database, opened at its first use */
 let testHistory: { database: EarsDatabase; history: RunHistory } | undefined;
-/** The clock passed to the bound test runtime, threaded into lazy `testRunHistory()` opens */
+/** The clock passed to the bound test runtime, threaded into lazy `testRunHistory()` opens and secret timestamps */
 let testClock: EarsClock | undefined;
+const testNow = (): number => (testClock ? testClock.now() : Date.now());
 
 /** The test runtime's run history, on a temporary database: what `services.runHistory` is until `resetTestData` replaces it */
 export const testRunHistory = (): RunHistory => {
@@ -109,8 +110,8 @@ export const testRunHistory = (): RunHistory => {
 const memoryUserSecrets = {
   status: () => ({ protection: 'os-keystore', backend: 'memory' }) as const,
   list: () => testSecrets.map((secret) => ({ ...secret })),
-  select: (id: string) => { testSecrets = _secretRules.select(testSecrets, id, Date.now()); },
-  rename: (id: string, label: string) => { testSecrets = _secretRules.rename(testSecrets, id, label, Date.now()); },
+  select: (id: string) => { testSecrets = _secretRules.select(testSecrets, id, testNow()); },
+  rename: (id: string, label: string) => { testSecrets = _secretRules.rename(testSecrets, id, label, testNow()); },
   delete: (id: string) => { testSecrets = _secretRules.remove(testSecrets, id); },
 };
 const memorySecrets: SecretsAdmin = {

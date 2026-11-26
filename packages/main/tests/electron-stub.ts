@@ -33,6 +33,7 @@ export function resetElectronStub(): void {
   app.name = 'apack';
   app.paths.clear();
   app.setNameCalls.length = 0;
+  powerMonitor.listeners.clear();
 }
 
 /** The handlers a window registered, so a test invokes one as the renderer would */
@@ -100,6 +101,18 @@ export const BrowserWindow = {
     return BrowserWindow.current;
   },
   getAllWindows: () => [] as object[],
+};
+/** Electron's `powerMonitor`: records suspend/resume listeners so tests can drive OS sleep transitions. */
+export const powerMonitor = {
+  listeners: new Map<string, Set<() => void>>(),
+  on(event: string, listener: () => void): void {
+    let set = powerMonitor.listeners.get(event);
+    if (!set) powerMonitor.listeners.set(event, set = new Set());
+    set.add(listener);
+  },
+  emit(event: string): void {
+    for (const listener of powerMonitor.listeners.get(event) ?? []) listener();
+  },
 };
 /** Electron's `utilityProcess`: stubbed so main-process unit tests can import `ApiServer` without Electron. */
 export const utilityProcess = {

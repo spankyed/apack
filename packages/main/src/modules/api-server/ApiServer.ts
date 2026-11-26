@@ -1,5 +1,5 @@
 import { execFile } from 'child_process';
-import { ipcMain, shell, utilityProcess } from 'electron';
+import { ipcMain, powerMonitor, shell, utilityProcess } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { randomBytes, randomUUID } from 'crypto';
@@ -116,7 +116,11 @@ export class ApiServer implements AppModule {
       app.quit();
     });
 
-    app.whenReady().then(() => this.startApiServer());
+    app.whenReady().then(() => {
+      powerMonitor.on('suspend', () => this.processManager.setPowerState('suspended'));
+      powerMonitor.on('resume', () => this.processManager.setPowerState('active'));
+      return this.startApiServer();
+    });
     
     // The quit waits for the API to have gone, and then finishes whatever the wait ended in. Nothing asks for a
     // quit twice — not a harness, not the OS — so one cancelled for good leaves the app up and idle. An API that
