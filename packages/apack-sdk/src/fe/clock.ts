@@ -12,7 +12,7 @@ export interface FeClock {
   /** Wall-clock time in milliseconds since 1970, clamped against backward jumps. */
   now(): number;
   /** Monotonic time in milliseconds from an arbitrary origin, excluding suspended spans. */
-  monotonic?(): number;
+  monotonic(): number;
   /** Runs `run` once after `ms` milliseconds unless the returned cancel function is called first. */
   after(ms: number, run: () => void): () => void;
 }

@@ -107,6 +107,7 @@ app.config.errorHandler = (err, _instance, info) => {
 };
 
 app.mount('#app');
+onRendererDispose(() => app.unmount());
 
 window.electronAPI?.rendererReady?.();
 

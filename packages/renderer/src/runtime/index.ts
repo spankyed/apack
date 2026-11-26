@@ -74,8 +74,6 @@ export function bindRendererHost(application: () => HostShell | undefined): void
   const previousDetach = detachPagehide;
   activeLifecycle = lifecycle;
   detachPagehide = undefined;
-  previousDetach?.();
-  previousLifecycle?.dispose();
 
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     const onPageHide = () => {
@@ -84,4 +82,7 @@ export function bindRendererHost(application: () => HostShell | undefined): void
     window.addEventListener('pagehide', onPageHide, { once: true });
     detachPagehide = () => window.removeEventListener('pagehide', onPageHide);
   }
+
+  previousDetach?.();
+  previousLifecycle?.dispose();
 }

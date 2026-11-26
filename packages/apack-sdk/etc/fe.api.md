@@ -210,7 +210,7 @@ export type ExtractEvent<TEvent extends {
 // @public
 export interface FeClock {
     after(ms: number, run: () => void): () => void;
-    monotonic?(): number;
+    monotonic(): number;
     now(): number;
 }
 

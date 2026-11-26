@@ -174,3 +174,26 @@ it('runs remaining dispose hooks and closes the clock even when one hook throws'
   expect(controller.waiting()).toBe(0);
   expect(() => controller.clock.after(10, () => {})).toThrowError(/closed/i);
 });
+
+it('keeps the active runtime intact if bindRendererHost is called twice, and still wires pagehide when re-binding after a throwing teardown', () => {
+  bindRendererHost(() => application as never);
+  const firstController = rendererClock()!;
+  onHostDispose(() => {
+    throw new Error('prior teardown failed');
+  });
+
+  // Duplicate bind without unbind throws and leaves the first lifecycle running
+  expect(() => bindRendererHost(() => application as never)).toThrow(/already bound/i);
+  expect(rendererClock()).toBe(firstController);
+  expect(() => firstController.clock.after(10, () => {})()).not.toThrow();
+
+  // After unbinding, re-binding still wires pagehide on the new lifecycle even when the previous teardown throws
+  unbindFeHost();
+  expect(() => bindRendererHost(() => application as never)).toThrow('prior teardown failed');
+  const secondController = rendererClock()!;
+  expect(secondController).not.toBe(firstController);
+  expect(() => firstController.clock.after(10, () => {})).toThrowError(/closed/i);
+
+  window.dispatchEvent(new Event('pagehide'));
+  expect(() => secondController.clock.after(10, () => {})).toThrowError(/closed/i);
+});
