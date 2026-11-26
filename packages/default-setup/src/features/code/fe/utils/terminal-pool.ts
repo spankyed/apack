@@ -2,7 +2,7 @@ import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorShape
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
 export type { Command }
-import { terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
+import { hostClock, onHostDispose, terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
 import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
 
@@ -310,6 +310,8 @@ class TerminalPool {
   private retried = new Set<string>()
   /** By broker: `''` for the app's own, and a target's key for one somewhere else */
   private connections = new Map<string, BrokerConnection>()
+  /** Unregisters this pool's renderer teardown hook once all views are gone. */
+  private unregisterDispose: (() => void) | null = null
 
   /**
    * This window's connection to the broker a terminal's session is on: the app's own, or the one a
@@ -430,6 +432,7 @@ class TerminalPool {
     if (info.session === undefined) return
 
     const source = this.connection(info.target?.key).open(info.session)
+    const clock = hostClock()
     const view = new TerminalView(source, {
       font: FONT,
       theme: THEME,
@@ -437,6 +440,7 @@ class TerminalPool {
       detectors: info.target ? [] : [paths],
       // Where each command began, coloured by how it ended
       gutter: COMMAND_GUTTER,
+      ...(clock && { clock }),
       onKey: (event) => this.shortcut(entry, event),
       onFit: (fit) => entry.handlers.onResize?.({ cols: fit.columns, rows: fit.rows, cellWidth: fit.cellWidth, cellHeight: fit.cellHeight }),
       onFollowingChange: (following) => {
@@ -463,6 +467,7 @@ class TerminalPool {
     })
     view.element.dataset.apackTerminal = entry.terminalId
     entry.view = view
+    this.unregisterDispose ??= onHostDispose(() => this.disposeAll())
     this.applyFolds(entry)
     if (mounted) view.mount(entry.wrapper)
   }
@@ -771,10 +776,18 @@ class TerminalPool {
     entry.wrapper.remove()
     this.entries.delete(terminalId)
     this.latest.delete(terminalId)
+    if (this.entries.size === 0) {
+      const unregister = this.unregisterDispose
+      this.unregisterDispose = null
+      unregister?.()
+    }
   }
 
   /** The surface is going: every view, and every connection they were drawn over */
   disposeAll(): void {
+    const unregister = this.unregisterDispose
+    this.unregisterDispose = null
+    unregister?.()
     for (const id of this.entries.keys()) this.dispose(id)
     const open = [...this.connections.values()]
     // Emptied first, so a connection closing here is not one that was lost

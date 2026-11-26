@@ -90,6 +90,8 @@ export function startFeTestRuntime(options: FeTestRuntimeOptions = {}): () => vo
     client: options.client ? partClient(options.client) : noClient,
     packs: options.packs ?? noFrontends,
     ...(options.terminalViews && { terminalViews: options.terminalViews }),
+    ...(options.clock && { clock: options.clock }),
+    ...(options.onDispose && { onDispose: options.onDispose }),
   });
   return stopFeTestRuntime;
 }

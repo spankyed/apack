@@ -14,7 +14,7 @@ import { hostFrontend } from '@/views/packs/surface';
 import { createAppShell } from '@/runtime/shell';
 import { HOST, installFromProtocol, runWindowStorageMigrations } from '@apackdev/host/fe';
 import 'virtual:host-shared-modules';
-import { bindRendererHost } from '@/runtime';
+import { bindRendererHost, onRendererDispose } from '@/runtime';
 import { fePacks } from '@/runtime/packs';
 import { handleVueError, installGlobalErrorHandling, reportRendererError } from '@/boot/errors';
 import { e2eSystems, type E2eSystems } from '@/transport/e2e-door';
@@ -72,6 +72,7 @@ export const applicationState = createActor(createAppShell(), {
 
 createdApplication = applicationState;
 windowPerformance.withinStartup(() => applicationState.start());
+onRendererDispose(() => applicationState.stop());
 
 window.applicationState = applicationState;
 
