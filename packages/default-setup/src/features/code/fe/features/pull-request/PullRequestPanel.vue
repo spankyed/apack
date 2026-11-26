@@ -8,11 +8,11 @@
       <template #actions>
         <button
           @click="refreshStatus()"
-          :disabled="pullRequest.data.isPrLoading"
+          :disabled="pullRequest?.data.isPrLoading"
           class="p-0 transition-colors rounded text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
           title="Refresh PR changes"
         >
-          <RefreshCw :size="16" :class="{ 'animate-spin': pullRequest.data.isPrLoading }" />
+          <RefreshCw :size="16" :class="{ 'animate-spin': pullRequest?.data.isPrLoading }" />
         </button>
       </template>
     </CodePanelHeader>
@@ -29,7 +29,7 @@
     <NoDirectoryState v-else-if="!code.data.baseDirectory" />
 
     <!-- Main content -->
-    <template v-else>
+    <template v-else-if="pullRequest">
       <!-- Not signed in to GitHub: the sign-in itself, here where it is needed -->
       <div
         v-if="pullRequest.data.githubAccess === 'signed-out' && !pullRequest.data.isPrLoading"
@@ -165,8 +165,8 @@
           :body="pullRequest.data.createBody"
           :baseBranch="pullRequest.data.createBaseBranch"
           :defaultBaseBranch="pullRequest.data.prBaseBranch"
-          :headBranch="git.data.gitBranch"
-          :branches="git.data.availableBranches"
+          :headBranch="gitBranch ?? ''"
+          :branches="availableBranches"
           :isCreating="pullRequest.data.isCreating"
           @update-field="handleUpdateField"
           @submit="handleSubmitCreate"
@@ -178,7 +178,7 @@
           <PRInfo
             :pr="selectedPR"
             :comments="pullRequest.data.prComments"
-            :branches="git.data.availableBranches"
+            :branches="availableBranches"
             :isLoading="isLoadingDetails"
             :isUpdating="pullRequest.data.isUpdatingPR"
             :answered="pullRequest.data.lastWriteAnswer"
@@ -228,7 +228,7 @@
         v-else
         :files="prFiles"
         :baseBranch="pullRequest.data.prBaseBranch"
-        :currentBranch="displayBranch"
+        :currentBranch="displayBranch ?? undefined"
         :isLoading="pullRequest.data.isPrLoading"
         :baseDirectory="code.data.baseDirectory"
         @select-file="handleFileSelect"
@@ -275,8 +275,8 @@
 import { computed, ref, watch } from 'vue'
 import type { PRBranchCheckout } from '#generated/types.ts'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
-import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
-import type { CodeState } from '#features/code/fe/state.ts'
+import { useShell } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 import { branchDeletable, refKey } from '#features/code/fe/features/pull-request/state.ts'
 import {
   AlertCircle, AlertTriangle, GitBranch, GitPullRequest, RefreshCw,
@@ -294,50 +294,54 @@ import PRActionBar from '#features/code/fe/features/pull-request/PRActionBar.vue
 import GitHubAccount from '#features/code/fe/features/github/GitHubAccount.vue'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { TreeNode } from './types.ts'
-import { panelChild } from '../children.ts';
 
-// Get actors
+// State selectors
 const shell = useShell()
 const toast = ref<InstanceType<typeof ToastNotification>>()
-const codeActor: CodeState = useSurface()
-const prActor = panelChild(codeActor, 'pr')!
-const commitActor = panelChild(codeActor, 'commit')!
+const { state: code, child } = useState('code')
+const { state: pullRequest, send } = useState(() => child('pr'))
+const { state: git, send: sendCommit, child: commitChild } = useState(() => child('commit'))
+const { state: remotes } = useState(() => commitChild('remotes'))
+const { state: github } = useState(() => child('github'))
 
-const { state: code } = useState(codeActor)
-const { state: pullRequest, send } = useState(prActor)
-const { state: git, send: sendCommit } = useState(commitActor)
+const gitBranch = computed(() => (git.value?.at === 'open' ? git.value.data.gitBranch : null))
+const hasUpstream = computed(() => (git.value?.at === 'open' ? git.value.data.hasUpstream : false))
+const availableBranches = computed(() => remotes.value?.data.availableBranches ?? [])
 
 // The comparison this view is on, read from the slot keyed by it (`refKey`): an answer for any other PR
 // lands in its own key and is never read here, which is what replaced a staleness guard
-const prFiles = computed(() =>
-  pullRequest.value.data.diffsByRef[refKey(pullRequest.value.data.prBaseBranch, pullRequest.value.data.selectedPR?.headRefName)] ?? [])
+const prFiles = computed(() => {
+  const data = pullRequest.value?.data
+  if (!data) return []
+  return data.diffsByRef[refKey(data.prBaseBranch, data.selectedPR?.headRefName)] ?? []
+})
 // Which page of the list is being read: its first, which starts it again, or the one after those read
-const prListReading = computed(() => pullRequest.value.data.making.list ? 'first' : pullRequest.value.data.making.listMore ? 'more' : null)
-const selectedPR = computed(() => pullRequest.value.data.selectedPR)
-const isSubmittingComment = computed(() => pullRequest.value.data.inflightMutations > 0)
+const prListReading = computed(() =>
+  pullRequest.value?.pending.list ? 'first' : pullRequest.value?.pending.listMore ? 'more' : null)
+const selectedPR = computed(() => pullRequest.value?.data.selectedPR ?? null)
+const isSubmittingComment = computed(() => (pullRequest.value?.data.inflightMutations ?? 0) > 0)
 // Signing in or out anywhere changes what this repository's pull requests answer, so ask again
-const { state: github } = useState(panelChild(codeActor, 'github')!)
-watch(() => github.value.data.account, (now, before) => {
+watch(() => github.value?.data.account, (now, before) => {
   if (before === undefined) return
   send({ type: 'pr.CHECK_GITHUB_ACCESS' })
   send({ type: 'pr.REFRESH_STATUS' })
 })
-const isLoadingDetails = computed(() => pullRequest.value.data.making.details)
-const isPushing = computed(() => git.value.data.making.push)
+const isLoadingDetails = computed(() => Boolean(pullRequest.value?.pending.details))
+const isPushing = computed(() => Boolean(remotes.value?.pending.push))
 
 // Computed
 const isNoGitRepoError = computed(() =>
-  pullRequest.value.data.prError?.includes('not a git repository') ||
-  pullRequest.value.data.prError?.includes('Not a git repository')
+  pullRequest.value?.data.prError?.includes('not a git repository') ||
+  pullRequest.value?.data.prError?.includes('Not a git repository')
 )
 
 const isNoBaseBranchError = computed(() =>
-  pullRequest.value.data.prError?.includes('Could not determine PR base branch') ||
-  pullRequest.value.data.prError?.includes('Could not determine base branch')
+  pullRequest.value?.data.prError?.includes('Could not determine PR base branch') ||
+  pullRequest.value?.data.prError?.includes('Could not determine base branch')
 )
 
 const displayBranch = computed(() =>
-  selectedPR.value?.headRefName ?? git.value.data.gitBranch
+  selectedPR.value?.headRefName ?? gitBranch.value
 )
 
 /**
@@ -347,7 +351,7 @@ const displayBranch = computed(() =>
 const isOnPRBranch = computed(() => {
   const pr = selectedPR.value
   if (!pr) return false
-  return git.value.data.gitBranch === (pr.headInRemote === false ? `pr/${pr.number}` : pr.headRefName)
+  return gitBranch.value === (pr.headInRemote === false ? `pr/${pr.number}` : pr.headRefName)
 })
 
 const isViewingOtherPR = computed(() => !!selectedPR.value && !isOnPRBranch.value)
@@ -359,24 +363,26 @@ const CHECKOUT_SAID: Record<PRBranchCheckout, (branch: string) => string> = {
   'fast-forwarded': branch => `${branch} is checked out, moved forward to the pull request's head`,
   'kept': branch => `${branch} is checked out as it was: it has commits the pull request does not, so it was not moved`,
 }
-watch(() => pullRequest.value.data.lastCheckout, (done) => {
+watch(() => pullRequest.value?.data.lastCheckout, (done) => {
   if (done) toast.value?.success(`Checked out #${done.number}`, CHECKOUT_SAID[done.checkout](done.branch))
 })
 
 const isBaseBranch = computed(() => {
-  const branch = git.value.data.gitBranch
+  const branch = gitBranch.value
   if (!branch) return false
-  if (pullRequest.value.data.prBaseBranch && branch === pullRequest.value.data.prBaseBranch) return true
+  if (pullRequest.value?.data.prBaseBranch && branch === pullRequest.value.data.prBaseBranch) return true
   return ['main', 'master', 'develop'].includes(branch)
 })
 
 const topRowStatus = computed(() => {
-  if (pullRequest.value.data.isCheckingBranchPR) return 'checking' as const
-  if (pullRequest.value.data.githubAccess !== 'ok') return 'hidden' as const
+  const data = pullRequest.value?.data
+  if (!data) return 'hidden' as const
+  if (data.isCheckingBranchPR) return 'checking' as const
+  if (data.githubAccess !== 'ok') return 'hidden' as const
   if (isBaseBranch.value) return 'base-branch' as const
-  if (!git.value.data.hasUpstream) return 'publish' as const
+  if (!hasUpstream.value) return 'publish' as const
   if (selectedPR.value) return 'has-pr' as const
-  if (pullRequest.value.data.branchPRCheckFailed) return 'check-failed' as const
+  if (data.branchPRCheckFailed) return 'check-failed' as const
   return 'no-pr' as const
 })
 

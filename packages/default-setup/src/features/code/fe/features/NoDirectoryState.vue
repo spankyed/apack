@@ -42,15 +42,12 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-
 import { FolderOpen } from 'lucide-vue-next'
-import type { CodeState } from '#features/code/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import { useProjectActions } from './explorer/composables/useProjectActions.ts'
-import { panelChild } from './children.ts';
 
-const codeActor: CodeState = useSurface()
-const explorerActor = panelChild(codeActor, 'explorer')!
+const { child } = useState('code')
+const { send: sendExplorer } = useState(() => child('explorer'))
 
 const { allProjects } = useProjectActions()
 
@@ -58,7 +55,7 @@ const handleDirectorySelect = async () => {
   try {
     const directoryPath = await window.electronAPI?.fileUtils.selectDirectory()
     if (directoryPath) {
-      explorerActor?.send({ type: 'explorer.SET_BASE_DIRECTORY', path: directoryPath })
+      sendExplorer({ type: 'explorer.SET_BASE_DIRECTORY', path: directoryPath })
     }
   } catch (error) {
     console.error('Error selecting directory:', error)
@@ -66,6 +63,6 @@ const handleDirectorySelect = async () => {
 }
 
 const handleProjectOpen = (path: string) => {
-  explorerActor?.send({ type: 'explorer.SET_BASE_DIRECTORY', path })
+  sendExplorer({ type: 'explorer.SET_BASE_DIRECTORY', path })
 }
 </script>

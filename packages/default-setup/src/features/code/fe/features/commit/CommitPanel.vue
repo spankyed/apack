@@ -19,10 +19,10 @@
 
     <!-- Revert Dialog -->
     <RevertDialog
-      :show="!!git.data.revertDialogFile"
-      :file="git.data.revertDialogFile"
+      :show="!!recovery?.data.revertDialogFile"
+      :file="recovery?.data.revertDialogFile ?? null"
       undoable
-      :notKept="git.data.revertDialogFile ? notKeptOf([git.data.revertDialogFile.path]) : []"
+      :notKept="recovery?.data.revertDialogFile ? notKeptOf([recovery.data.revertDialogFile.path]) : []"
       @confirm="confirmRevert"
       @cancel="cancelRevert"
     />
@@ -53,8 +53,8 @@
     <RevertDialog
       :show="showAbortOperationDialog"
       :file="null"
-      :customTitle="`Abort the ${git.data.operation?.kind ?? 'operation'}`"
-      :customMessage="`Give up the ${git.data.operation?.kind ?? 'operation'} in progress? The repository goes back to where it was before it began, and what was settled in it so far is lost.`"
+      :customTitle="`Abort the ${openCommit?.data.operation?.kind ?? 'operation'}`"
+      :customMessage="`Give up the ${openCommit?.data.operation?.kind ?? 'operation'} in progress? The repository goes back to where it was before it began, and what was settled in it so far is lost.`"
       @confirm="confirmAbortOperation"
       @cancel="showAbortOperationDialog = false"
     />
@@ -110,7 +110,7 @@
             class="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none"
           />
           <input
-            :value="git.data.branchInput"
+            :value="remotes?.data.branchInput ?? ''"
             @input="updateBranchInput"
             @keydown.enter.prevent="handleBranchEnter"
             @keydown.arrow-down.prevent="handleBranchArrowDown"
@@ -119,7 +119,7 @@
             @focus="showBranchDropdown = true; highlightedBranchIndex = -1"
             @blur="hideBranchDropdown"
             :disabled="isCheckingOutBranch"
-            :placeholder="git.data.gitBranch || 'Select branch...'"
+            :placeholder="openCommit?.data.gitBranch || 'Select branch...'"
             class="w-full pl-7 pr-8 py-1.5 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 disabled:opacity-50"
           />
           <ChevronDown
@@ -135,22 +135,22 @@
           <GitBranchPlus :size="14" />
         </button>
         <button
-          @click="git.data.commitsAhead > 0 ? send({ type: 'commit.PUSH_BRANCH' }) : send({ type: 'commit.PULL_BRANCH' })"
-          :disabled="isPulling || isPushing || !git.data.hasUpstream"
+          @click="(openCommit?.data.commitsAhead ?? 0) > 0 ? send({ type: 'commit.PUSH_BRANCH' }) : send({ type: 'commit.PULL_BRANCH' })"
+          :disabled="isPulling || isPushing || !openCommit?.data.hasUpstream"
           class="relative p-1 rounded transition-colors text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
           :title="syncTitle"
         >
           <Loader2 v-if="isPulling || isPushing" :size="14" class="animate-spin" />
-          <ArrowUpFromLine v-else-if="git.data.commitsAhead > 0" :size="14" />
+          <ArrowUpFromLine v-else-if="(openCommit?.data.commitsAhead ?? 0) > 0" :size="14" />
           <ArrowDownToLine v-else :size="14" />
           <span
-            v-if="git.data.commitsAhead > 0"
+            v-if="(openCommit?.data.commitsAhead ?? 0) > 0"
             class="absolute -top-1 -right-1 flex items-center justify-center w-3.5 h-3.5 text-[9px] font-bold leading-none text-white bg-green-600 rounded-full"
-          >{{ git.data.commitsAhead }}</span>
+          >{{ openCommit?.data.commitsAhead }}</span>
           <span
-            v-else-if="git.data.commitsBehind > 0"
+            v-else-if="(openCommit?.data.commitsBehind ?? 0) > 0"
             class="absolute -top-1 -right-1 flex items-center justify-center w-3.5 h-3.5 text-[9px] font-bold leading-none text-white bg-blue-600 rounded-full"
-          >{{ git.data.commitsBehind }}</span>
+          >{{ openCommit?.data.commitsBehind }}</span>
         </button>
 
         <!-- Sync feedback popover -->
@@ -183,12 +183,12 @@
           >
             <GitBranch :size="12" class="text-neutral-400" />
             <span class="text-xs text-neutral-300">{{ branch }}</span>
-            <span v-if="git.data.branchStanding[branch]?.upstreamGone" class="text-[10px] text-amber-400" title="What it followed is gone from the remote">gone</span>
-            <span v-else-if="git.data.branchStanding[branch] && (git.data.branchStanding[branch].ahead || git.data.branchStanding[branch].behind)" class="text-[10px] tabular-nums text-neutral-500" :title="`Against ${git.data.branchStanding[branch].upstream}`">
-              <span v-if="git.data.branchStanding[branch].ahead">↑{{ git.data.branchStanding[branch].ahead }}</span>
-              <span v-if="git.data.branchStanding[branch].behind">↓{{ git.data.branchStanding[branch].behind }}</span>
+            <span v-if="remotes?.data.branchStanding[branch]?.upstreamGone" class="text-[10px] text-amber-400" title="What it followed is gone from the remote">gone</span>
+            <span v-else-if="remotes?.data.branchStanding[branch] && (remotes.data.branchStanding[branch].ahead || remotes.data.branchStanding[branch].behind)" class="text-[10px] tabular-nums text-neutral-500" :title="`Against ${remotes.data.branchStanding[branch].upstream}`">
+              <span v-if="remotes.data.branchStanding[branch].ahead">↑{{ remotes.data.branchStanding[branch].ahead }}</span>
+              <span v-if="remotes.data.branchStanding[branch].behind">↓{{ remotes.data.branchStanding[branch].behind }}</span>
             </span>
-            <span v-if="branch === git.data.gitBranch" class="ml-auto flex items-center gap-1">
+            <span v-if="branch === openCommit?.data.gitBranch" class="ml-auto flex items-center gap-1">
               <button
                 data-testid="rename-branch"
                 @mousedown.stop.prevent="startRenameBranch(branch)"
@@ -199,7 +199,7 @@
             </span>
             <span v-else class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
               <button
-                v-if="git.data.branchStanding[branch]"
+                v-if="remotes?.data.branchStanding[branch]"
                 data-testid="rename-branch"
                 @mousedown.stop.prevent="startRenameBranch(branch)"
                 :title="`Rename ${branch}`"
@@ -209,30 +209,30 @@
                 data-testid="merge-branch"
                 @mousedown.stop.prevent="startOperation('merge', branch)"
                 @mouseenter="send({ type: 'commit.PREVIEW_MERGE', target: branch })"
-                :disabled="isStartingOperation || !!git.data.operation"
+                :disabled="isStartingOperation || !!openCommit?.data.operation"
                 :title="mergeTitle(branch)"
                 class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"
               ><GitMerge :size="12" class="text-neutral-400" /></button>
               <button
                 data-testid="rebase-onto-branch"
                 @mousedown.stop.prevent="startOperation('rebase', branch)"
-                :disabled="isStartingOperation || !!git.data.operation"
-                :title="`Rebase ${git.data.gitBranch} onto ${branch}`"
+                :disabled="isStartingOperation || !!openCommit?.data.operation"
+                :title="`Rebase ${openCommit?.data.gitBranch} onto ${branch}`"
                 class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"
               ><GitPullRequestArrow :size="12" class="text-neutral-400" /></button>
             </span>
           </div>
-          <template v-if="git.data.tags.length > 0 && !git.data.branchInput">
+          <template v-if="(remotes?.data.tags.length ?? 0) > 0 && !remotes?.data.branchInput">
             <div class="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-neutral-500 border-t border-neutral-800">Tags</div>
-            <div v-for="tag in git.data.tags" :key="tag.name" data-testid="tag-row" class="group px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-800" @mousedown.prevent>
+            <div v-for="tag in remotes!.data.tags" :key="tag.name" data-testid="tag-row" class="group px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-800" @mousedown.prevent>
               <Tag :size="12" class="text-neutral-400" />
               <span class="text-xs text-neutral-300">{{ tag.name }}</span>
               <span class="text-[10px] text-neutral-500 font-mono">{{ tag.commit.slice(0, 7) }}</span>
               <span class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                <Loader2 v-if="git.data.tagBusy?.name === tag.name" data-testid="tag-busy" :size="12" class="animate-spin text-neutral-400" />
+                <Loader2 v-if="remotes?.data.tagBusy?.name === tag.name" data-testid="tag-busy" :size="12" class="animate-spin text-neutral-400" />
                 <template v-else>
-                  <button data-testid="push-tag" :disabled="!!git.data.tagBusy" @mousedown.stop.prevent="tagConfirmation = { name: tag.name, action: 'push' }" :title="`Push ${tag.name}`" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"><Upload :size="12" class="text-neutral-400" /></button>
-                  <button data-testid="delete-tag" :disabled="!!git.data.tagBusy" @mousedown.stop.prevent="tagConfirmation = { name: tag.name, action: 'delete' }" :title="`Delete ${tag.name} here`" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"><Trash2 :size="12" class="text-neutral-400" /></button>
+                  <button data-testid="push-tag" :disabled="!!remotes?.data.tagBusy" @mousedown.stop.prevent="tagConfirmation = { name: tag.name, action: 'push' }" :title="`Push ${tag.name}`" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"><Upload :size="12" class="text-neutral-400" /></button>
+                  <button data-testid="delete-tag" :disabled="!!remotes?.data.tagBusy" @mousedown.stop.prevent="tagConfirmation = { name: tag.name, action: 'delete' }" :title="`Delete ${tag.name} here`" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"><Trash2 :size="12" class="text-neutral-400" /></button>
                 </template>
               </span>
             </div>
@@ -243,23 +243,23 @@
 
     <!-- The repository's file watches are not open, or are open and not delivering, so what is shown may be behind -->
     <div
-      v-if="(!git.data.isWatchingRepository || git.data.isWatchSilent) && !git.data.gitError"
+      v-if="openCommit && (!openCommit.data.isWatchingRepository || openCommit.data.isWatchSilent) && !openCommit.data.gitError"
       data-testid="watch-notice"
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
-      <template v-if="!git.data.isWatchingRepository">Live updates are off for this repository.</template>
+      <template v-if="!openCommit.data.isWatchingRepository">Live updates are off for this repository.</template>
       <template v-else>Live updates are not arriving for this repository: changes keep turning up that the watch never reported, as a network drive or the system's limit on watches can cause.</template>
       It is read again when you return to this window or press Refresh.
     </div>
 
     <!-- A whole status took longer than its budget, and git has speed-ups for it that are off here -->
     <div
-      v-if="git.data.slowStatus && !git.data.gitError"
+      v-if="openCommit?.data.slowStatus && !openCommit.data.gitError"
       data-testid="slow-status"
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       <span class="flex-1">
-        Reading this repository's status took {{ (git.data.slowStatus.ms / 1000).toFixed(1) }}s.
+        Reading this repository's status took {{ (openCommit.data.slowStatus.ms / 1000).toFixed(1) }}s.
         Git can make it faster by {{ slowStatusRemedy }}, which is written to this repository's settings.
       </span>
       <button
@@ -272,22 +272,22 @@
 
     <!-- Fetching by itself has stopped, so what is shown of the remote is as old as the last fetch that worked -->
     <div
-      v-if="git.data.isFetchSuspended && !git.data.gitError"
+      v-if="openCommit?.data.isFetchSuspended && !openCommit.data.gitError"
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
-      <SignInHelp v-if="git.data.fetchSignIn" class="mt-2" :help="git.data.fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
+      <SignInHelp v-if="openCommit.data.fetchSignIn" class="mt-2" :help="openCommit.data.fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
     <!-- More than one repository under the folder: the panel works in the one chosen -->
-    <div v-if="git.data.repositories.length > 1" data-testid="repository-picker" class="flex items-center gap-2 px-3 py-1.5 text-xs border-b border-neutral-800 text-neutral-400">
+    <div v-if="(openCommit?.data.repositories.length ?? 0) > 1" data-testid="repository-picker" class="flex items-center gap-2 px-3 py-1.5 text-xs border-b border-neutral-800 text-neutral-400">
       <span class="shrink-0">Repository</span>
       <select
         class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-neutral-200"
-        :value="git.data.directory"
+        :value="openCommit!.data.directory"
         @change="send({ type: 'commit.SELECT_REPOSITORY', path: ($event.target as HTMLSelectElement).value })"
       >
-        <option v-for="repository in git.data.repositories" :key="repository.path" :value="repository.path">
+        <option v-for="repository in openCommit!.data.repositories" :key="repository.path" :value="repository.path">
           {{ repository.relative || 'This folder' }}{{ repository.kind === 'top' || repository.kind === 'nested' ? '' : ` (${repository.kind})` }}
         </option>
       </select>
@@ -295,16 +295,16 @@
 
     <!-- The last write here that can be taken back: a commit, a reset, a dropped or cleared stash -->
     <div
-      v-if="git.data.lastUndoable && !git.data.gitError"
+      v-if="recovery?.data.lastUndoable && !openCommit?.data.gitError"
       data-testid="write-undo"
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       <span class="flex-1">
-        <template v-if="git.data.undoConfirmation">{{ git.data.undoConfirmation }}</template>
-        <template v-else>Done: {{ git.data.lastUndoable.summary }}.</template>
+        <template v-if="recovery.data.undoConfirmation">{{ recovery.data.undoConfirmation }}</template>
+        <template v-else>Done: {{ recovery.data.lastUndoable.summary }}.</template>
       </span>
       <button
-        v-if="git.data.undoConfirmation"
+        v-if="recovery.data.undoConfirmation"
         data-testid="write-undo-anyway"
         class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
         @click="send({ type: 'commit.UNDO_LAST', evenIfPublished: true })"
@@ -320,11 +320,11 @@
 
     <!-- An amend or a rewrite of commits a remote branch already holds: done here only once the user says so -->
     <div
-      v-if="git.data.rewriteConfirmation"
+      v-if="composer?.data.rewriteConfirmation"
       data-testid="rewrite-confirmation"
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-amber-300"
     >
-      <span class="flex-1">{{ git.data.rewriteConfirmation.message }}</span>
+      <span class="flex-1">{{ composer.data.rewriteConfirmation.message }}</span>
       <button
         data-testid="rewrite-anyway"
         class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
@@ -335,14 +335,14 @@
 
     <!-- A discard kept what it removed, which is offered back until it is dismissed -->
     <div
-      v-if="git.data.lastDiscard && !git.data.gitError"
+      v-if="recovery?.data.lastDiscard && !openCommit?.data.gitError"
       data-testid="discard-undo"
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       <span class="flex-1">
-        Discarded {{ git.data.lastDiscard.paths.length === 1 ? git.data.lastDiscard.paths[0] : `${git.data.lastDiscard.paths.length} changes` }}. What was removed is kept for 14 days.
-        <template v-if="git.data.lastDiscard.notKept.length > 0">
-          {{ git.data.lastDiscard.notKept.length === 1 ? 'One file was' : `${git.data.lastDiscard.notKept.length} files were` }} too large to keep.
+        Discarded {{ recovery.data.lastDiscard.paths.length === 1 ? recovery.data.lastDiscard.paths[0] : `${recovery.data.lastDiscard.paths.length} changes` }}. What was removed is kept for 14 days.
+        <template v-if="recovery.data.lastDiscard.notKept.length > 0">
+          {{ recovery.data.lastDiscard.notKept.length === 1 ? 'One file was' : `${recovery.data.lastDiscard.notKept.length} files were` }} too large to keep.
         </template>
       </span>
       <button class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700" @click="send({ type: 'commit.UNDO_DISCARD' })">Undo</button>
@@ -351,26 +351,26 @@
 
     <!-- Undoing a discard left alone what had changed or been made again since -->
     <div
-      v-else-if="git.data.discardLeft.length > 0 && !git.data.gitError"
+      v-else-if="(recovery?.data.discardLeft.length ?? 0) > 0 && !openCommit?.data.gitError"
       data-testid="discard-left"
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       <span class="flex-1">
-        Put back, except {{ git.data.discardLeft.length === 1 ? git.data.discardLeft[0] : `${git.data.discardLeft.length} files` }}, which {{ git.data.discardLeft.length === 1 ? 'has' : 'have' }} changed since and {{ git.data.discardLeft.length === 1 ? 'was' : 'were' }} left as {{ git.data.discardLeft.length === 1 ? 'it is' : 'they are' }}.
+        Put back, except {{ recovery!.data.discardLeft.length === 1 ? recovery!.data.discardLeft[0] : `${recovery!.data.discardLeft.length} files` }}, which {{ recovery!.data.discardLeft.length === 1 ? 'has' : 'have' }} changed since and {{ recovery!.data.discardLeft.length === 1 ? 'was' : 'were' }} left as {{ recovery!.data.discardLeft.length === 1 ? 'it is' : 'they are' }}.
       </span>
       <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="send({ type: 'commit.DISMISS_DISCARD' })"><X :size="12" /></button>
     </div>
 
     <!-- The repository has more changed files than are listed -->
     <div
-      v-if="git.data.isStatusTruncated && !git.data.gitError"
+      v-if="openCommit?.data.isStatusTruncated && !openCommit.data.gitError"
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
-      Too many changes to list them all. Showing the first {{ git.data.gitStatus.length.toLocaleString() }}.
+      Too many changes to list them all. Showing the first {{ openCommit.data.gitStatus.length.toLocaleString() }}.
     </div>
 
     <!-- Git is in the middle of something, which ends when it is carried on with or given up -->
-    <div v-if="git.data.operation" class="px-3 py-2 border-b border-neutral-800 bg-orange-900/10" data-testid="repository-operation">
+    <div v-if="openCommit?.data.operation" class="px-3 py-2 border-b border-neutral-800 bg-orange-900/10" data-testid="repository-operation">
       <div class="text-xs font-medium text-orange-400">{{ operationTitle }}</div>
       <div class="mt-0.5 text-xs text-neutral-400">{{ operationHint }}</div>
       <div class="flex items-center gap-2 mt-2">
@@ -387,7 +387,7 @@
           Continue
         </button>
         <button
-          v-if="git.data.operation.kind === 'rebase'"
+          v-if="openCommit.data.operation.kind === 'rebase'"
           @click="moveOperation('skip')"
           :disabled="isMovingOperation"
           class="px-2 py-1 text-xs font-medium transition-colors rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed"
@@ -410,13 +410,13 @@
     <OwnershipRequest v-else-if="ownershipRequest" :directory="ownershipRequest.directory" @trust="send({ type: 'commit.TRUST_OWNERSHIP' })" />
 
     <!-- Git Error (only show non-directory errors) -->
-    <div v-else-if="git.data.gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
+    <div v-else-if="openCommit?.data.gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
       <div class="flex items-start gap-2">
         <div
           ref="errorContentRef"
           class="flex-1 text-sm text-red-400 whitespace-pre-wrap break-words"
           :class="{ 'max-h-24 overflow-hidden': !isErrorExpanded }"
-        >{{ git.data.gitError }}<pre v-if="refusingHook?.output" data-testid="hook-output" class="mt-1.5 p-2 rounded bg-neutral-950/60 text-xs font-mono text-neutral-300 whitespace-pre-wrap">{{ refusingHook.output }}</pre></div>
+        >{{ openCommit.data.gitError }}<pre v-if="refusingHook?.output" data-testid="hook-output" class="mt-1.5 p-2 rounded bg-neutral-950/60 text-xs font-mono text-neutral-300 whitespace-pre-wrap">{{ refusingHook.output }}</pre></div>
         <button
           @click="dismissError"
           class="shrink-0 p-0.5 rounded text-red-400 hover:text-red-200 hover:bg-red-900/40 transition-colors"
@@ -449,7 +449,7 @@
               <button
                 @click="showStashMenu = !showStashMenu"
                 @blur="hideStashMenu"
-                :disabled="git.data.gitStatus.length === 0 && !isStashing"
+                :disabled="(openCommit?.data.gitStatus.length ?? 0) === 0 && !isStashing"
                 class="p-1 rounded transition-colors text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="More actions"
               >
@@ -475,39 +475,39 @@
                 </button>
               </div>
             </div>
-            <label :class="['text-sm transition-colors', git.data.isGeneratingMessage ? 'text-amber-400/70 animate-pulse' : 'text-neutral-400']">
-              {{ git.data.isGeneratingMessage ? 'Generating...' : 'Commit Message' }}
+            <label :class="['text-sm transition-colors', commit?.data.isGeneratingMessage ? 'text-amber-400/70 animate-pulse' : 'text-neutral-400']">
+              {{ commit?.data.isGeneratingMessage ? 'Generating...' : 'Commit Message' }}
             </label>
           </div>
           <button
-            :disabled="git.data.isGeneratingMessage"
+            :disabled="commit?.data.isGeneratingMessage"
             class="p-1 rounded transition-colors text-neutral-400 hover:text-amber-400 disabled:cursor-not-allowed"
             title="Generate commit message"
             @click="generateMessage"
           >
-            <Loader2 v-if="git.data.isGeneratingMessage" :size="14" class="animate-spin text-amber-400" />
+            <Loader2 v-if="commit?.data.isGeneratingMessage" :size="14" class="animate-spin text-amber-400" />
             <Sparkles v-else :size="14" />
           </button>
         </div>
         <textarea
           ref="commitTextarea"
-          :value="git.data.commitMessage"
-          :readonly="git.data.isGeneratingMessage"
+          :value="commit?.data.commitMessage ?? ''"
+          :readonly="commit?.data.isGeneratingMessage"
           data-testid="commit-message"
           @input="updateCommitMessage"
           @keydown.enter="commitByKey"
-          :placeholder="`Message (currently on ${git.data.gitBranch || 'unknown'})`"
+          :placeholder="`Message (currently on ${openCommit?.data.gitBranch || 'unknown'})`"
           :class="[
             'w-full px-3 py-2 text-sm border rounded resize-none overflow-y-auto bg-neutral-900 text-neutral-100 placeholder-neutral-500 focus:outline-none commit-message transition-colors',
-            git.data.isGeneratingMessage ? 'border-amber-400/30 animate-pulse' : 'border-neutral-700 focus:border-neutral-600'
+            commit?.data.isGeneratingMessage ? 'border-amber-400/30 animate-pulse' : 'border-neutral-700 focus:border-neutral-600'
           ]"
           style="max-height: 200px"
           rows="4"
         />
         <!-- The trailers git reads at the end of the message: each can be taken out, and those the settings name are left out of the commit -->
-        <div v-if="git.data.trailers.length > 0" class="flex flex-wrap items-center gap-1" data-testid="commit-trailers">
+        <div v-if="(composer?.data.trailers.length ?? 0) > 0" class="flex flex-wrap items-center gap-1" data-testid="commit-trailers">
           <span
-            v-for="(trailer, index) in git.data.trailers"
+            v-for="(trailer, index) in composer!.data.trailers"
             :key="`${index}:${trailer.key}:${trailer.value}`"
             :class="[
               'inline-flex items-center gap-1 max-w-full pl-1.5 pr-0.5 py-0.5 text-[11px] rounded border',
@@ -552,7 +552,7 @@
 
         <button
           v-if="!shouldShowActionButton"
-          @click="commit"
+          @click="commitChanges"
           :disabled="!canCommit"
           :title="whyNot.commit ?? undefined"
           data-testid="commit-button"
@@ -569,7 +569,7 @@
           v-if="hasCommits && !isPushing"
           data-testid="amend-button"
           @click="amend"
-          :disabled="!!git.data.operation || isCommitting"
+          :disabled="!!openCommit?.data.operation || isCommitting"
           class="w-full mt-1 px-3 py-1 rounded text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
           title="Amend the last commit with what is staged, and with this message if one is written"
         >
@@ -581,9 +581,9 @@
     <!-- File Changes -->
     <div class="flex-1 overflow-y-auto">
       <!-- Nothing is known of a repository git was not run in, so it is not said to be clean -->
-      <div v-if="gitNeverRan && git.data.gitStatus.length === 0" />
+      <div v-if="gitNeverRan && (openCommit?.data.gitStatus.length ?? 0) === 0" />
       <EmptyState
-        v-else-if="git.data.gitStatus.length === 0"
+        v-else-if="(openCommit?.data.gitStatus.length ?? 0) === 0"
         :icon="GitCommit"
         title="No changes to commit"
         subtitle="Working tree is clean"
@@ -603,8 +603,8 @@
               v-for="file in stagedFiles"
               :key="`staged-${file.path}`"
               :file="file"
-              :count="git.data.lineCounts[`${file.staged}:${file.path}`]"
-              :isSelected="git.data.selectedGitFile?.path === file.path && git.data.selectedGitFile?.staged === file.staged"
+              :count="openCommit?.data.lineCounts[`${file.staged}:${file.path}`]"
+              :isSelected="openCommit?.data.selectedGitFile?.path === file.path && openCommit?.data.selectedGitFile?.staged === file.staged"
               @select="selectFile"
               @openFile="openFile"
             >
@@ -643,7 +643,7 @@
               v-for="file in mergeConflictFiles"
               :key="`merge-${file.path}`"
               :file="file"
-              :isSelected="git.data.selectedGitFile?.path === file.path"
+              :isSelected="openCommit?.data.selectedGitFile?.path === file.path"
               @select="selectFile"
               @openFile="openFile"
             >
@@ -697,13 +697,13 @@
               <!-- A file in an open folder is a row under the folder's, which is one row for all of it -->
               <GitFileItem
                 :file="file"
-                :count="git.data.lineCounts[`${file.staged}:${file.path}`]"
-                :isSelected="git.data.selectedGitFile?.path === file.path && git.data.selectedGitFile?.staged === file.staged"
+                :count="openCommit?.data.lineCounts[`${file.staged}:${file.path}`]"
+                :isSelected="openCommit?.data.selectedGitFile?.path === file.path && openCommit?.data.selectedGitFile?.staged === file.staged"
                 @select="file.isDirectory ? toggleFolder(file) : selectFile(file)"
                 @openFile="openFile"
               >
                 <template v-if="file.isDirectory" #prefix>
-                  <component :is="git.data.openFolders[file.path] ? ChevronDown : ChevronRight" :size="12" class="text-neutral-500 flex-shrink-0" />
+                  <component :is="openCommit?.data.openFolders[file.path] ? ChevronDown : ChevronRight" :size="12" class="text-neutral-500 flex-shrink-0" />
                   <Folder :size="12" class="text-neutral-400 flex-shrink-0" />
                 </template>
                 <!-- Set in from the folder's row, by the width of its arrow and icon -->
@@ -714,12 +714,12 @@
                   <button
                     v-if="file.submodule?.commit"
                     @click.stop="updateSubmodule(file)"
-                    :disabled="git.data.updatingSubmodule !== null"
+                    :disabled="openCommit?.data.updatingSubmodule !== null"
                     class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-50"
-                    :title="git.data.updatingSubmodule === file.path ? `Updating submodule${progressOf('submodule')}` : 'Update submodule to the commit this repository records'"
+                    :title="openCommit?.data.updatingSubmodule === file.path ? `Updating submodule${progressOf('submodule')}` : 'Update submodule to the commit this repository records'"
                     data-testid="update-submodule"
                   >
-                    <component :is="git.data.updatingSubmodule === file.path ? Loader2 : FolderSync" :class="['w-3 h-3 text-neutral-400', git.data.updatingSubmodule === file.path && 'animate-spin']" />
+                    <component :is="openCommit?.data.updatingSubmodule === file.path ? Loader2 : FolderSync" :class="['w-3 h-3 text-neutral-400', openCommit?.data.updatingSubmodule === file.path && 'animate-spin']" />
                   </button>
                   <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
                     <RotateCcw class="w-3 h-3 text-red-400" />
@@ -732,7 +732,7 @@
                   <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
                     <Plus class="w-4 h-4" /> Stage
                   </ContextMenuItem>
-                  <ContextMenuItem v-if="file.submodule?.commit" :disabled="git.data.updatingSubmodule !== null" @select="updateSubmodule(file)" :class="MENU_ITEM_CLASS">
+                  <ContextMenuItem v-if="file.submodule?.commit" :disabled="openCommit?.data.updatingSubmodule !== null" @select="updateSubmodule(file)" :class="MENU_ITEM_CLASS">
                     <FolderSync class="w-4 h-4" /> Update Submodule
                   </ContextMenuItem>
                   <ContextMenuItem v-if="!file.isDirectory" @select="stashFile(file)" :class="MENU_ITEM_CLASS">
@@ -743,7 +743,7 @@
                   </ContextMenuItem>
                 </template>
               </GitFileItem>
-              <div v-if="file.isDirectory && git.data.openFolders[file.path]?.truncated" class="ml-4 px-2 py-1 text-xs text-neutral-500">
+              <div v-if="file.isDirectory && openCommit?.data.openFolders[file.path]?.truncated" class="ml-4 px-2 py-1 text-xs text-neutral-500">
                 This folder holds more files than are listed here. Staging or discarding its row covers all of them.
               </div>
             </template>
@@ -759,19 +759,19 @@
 
     <!-- Stash resize handle -->
     <PanelResizer
-      v-if="codeSettings?.showStashes && git.data.stashList.length > 0 && isStashesExpanded"
+      v-if="codeSettings?.showStashes && (stashes?.data.stashList.length ?? 0) > 0 && isStashesExpanded"
       orientation="vertical"
       subtle
       @resize="onStashResize"
     />
 
     <!-- Stashes Section -->
-    <div v-if="codeSettings?.showStashes && git.data.stashList.length > 0" class="flex-shrink-0 border-t border-neutral-800" @contextmenu.prevent="onSectionContextMenu">
+    <div v-if="codeSettings?.showStashes && (stashes?.data.stashList.length ?? 0) > 0" class="flex-shrink-0 border-t border-neutral-800" @contextmenu.prevent="onSectionContextMenu">
       <div class="flex items-center justify-between p-3 px-5 cursor-pointer hover:bg-neutral-800/60 transition-colors" @click="isStashesExpanded = !isStashesExpanded">
         <div class="flex items-center gap-1 text-xs font-medium text-neutral-400">
           <ChevronRight v-if="!isStashesExpanded" class="w-3 h-3" />
           <ChevronDown v-else class="w-3 h-3" />
-          STASHES ({{ stashSearchQuery.trim() ? `${filteredStashes.length}/` : '' }}{{ git.data.stashList.length }})
+          STASHES ({{ stashSearchQuery.trim() ? `${filteredStashes.length}/` : '' }}{{ stashes!.data.stashList.length }})
         </div>
         <div class="flex items-center gap-1" @click.stop>
           <button @click="toggleStashSearch" class="p-1 hover:bg-neutral-700 rounded transition-colors" :class="showStashSearch ? 'bg-neutral-700' : ''" title="Search Stashes">
@@ -834,8 +834,8 @@
               </div>
             </div>
             <!-- What the stash holds, read without applying it -->
-            <div v-if="git.data.stashFiles[stash.index]" class="mt-1 pl-2 space-y-0.5" data-testid="stash-files" @click.stop>
-              <div v-for="file in git.data.stashFiles[stash.index]" :key="file.path" class="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
+            <div v-if="stashes?.data.stashFiles[stash.index]" class="mt-1 pl-2 space-y-0.5" data-testid="stash-files" @click.stop>
+              <div v-for="file in stashes.data.stashFiles[stash.index]" :key="file.path" class="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
                 <span class="truncate flex-1" :title="file.path">{{ file.path }}</span>
                 <span v-if="!file.binary" class="tabular-nums flex-shrink-0"><span class="text-green-500/80">+{{ file.added }}</span> <span class="text-red-500/80">-{{ file.removed }}</span></span>
               </div>
@@ -879,12 +879,12 @@
     />
 
     <!-- Worktrees Section -->
-    <div v-if="codeSettings?.showWorktrees && git.data.worktreeList.length > 0" class="flex-shrink-0 border-t border-neutral-800" @contextmenu.prevent="onSectionContextMenu">
+    <div v-if="codeSettings?.showWorktrees && (worktrees?.data.worktreeList.length ?? 0) > 0" class="flex-shrink-0 border-t border-neutral-800" @contextmenu.prevent="onSectionContextMenu">
       <div class="flex items-center justify-between p-3 px-5 cursor-pointer hover:bg-neutral-800/60 transition-colors" @click="isWorktreesExpanded = !isWorktreesExpanded">
         <div class="flex items-center gap-1 text-xs font-medium text-neutral-400">
           <ChevronRight v-if="!isWorktreesExpanded" class="w-3 h-3" />
           <ChevronDown v-else class="w-3 h-3" />
-          WORKTREES ({{ git.data.worktreeList.length }})
+          WORKTREES ({{ worktrees!.data.worktreeList.length }})
           <Loader2 v-if="isWorktreeLoading" class="w-3 h-3 animate-spin ml-1" />
         </div>
         <div class="flex items-center gap-1" @click.stop>
@@ -927,7 +927,7 @@
         <!-- Worktree list -->
         <div class="space-y-0.5 pl-3">
           <div
-            v-for="wt in git.data.worktreeList"
+            v-for="wt in worktrees!.data.worktreeList"
             :key="wt.path"
             class="group px-2 py-1.5 rounded hover:bg-neutral-800/50 transition-colors"
             :class="{ 'bg-neutral-800/30': wt.isCurrent, 'cursor-pointer': !wt.isCurrent }"
@@ -983,9 +983,9 @@
 import { whatCanBeDone, type Availability, type UnavailableReason } from '@apackdev/git/availability'
 
 import { computed, ref, nextTick, watch } from 'vue'
-import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
-import type { CodeState } from '#features/code/fe/state.ts'
-import { checkoutUnderWay, commitUnderWay, worktreeChangeUnderWay, type GitStatusFile } from '#features/code/fe/features/commit/state.ts'
+import { useShell } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
+import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { CommitTrailer, ConflictKind, OperationMove, ProgressDuring } from '#features/code/be/types.ts'
 import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
@@ -1003,19 +1003,21 @@ import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
-import { panelChild } from '../children.ts';
 
-// Get actors
 const shell = useShell()
-const codeActor: CodeState = useSurface()
-const commitActor = panelChild(codeActor, 'commit')!
 
-// The code surface's machine and the commit child's, each read as one value: where it is and what it holds.
-// A place in either renders this panel again only when that place changes.
-const { state: code } = useState(codeActor)
-const { state: git, send } = useState(commitActor)
+// The code surface's machine, the commit child, and commit's six folder-scoped children.
+const { state: code, child } = useState('code')
+const { state: commit, send, child: commitChild } = useState(() => child('commit'))
+const openCommit = computed(() => (commit.value?.at === 'open' ? commit.value : undefined))
+const { state: composer } = useState(() => commitChild('composer'))
+const { state: recovery } = useState(() => commitChild('recovery'))
+const { state: history } = useState(() => commitChild('history'))
+const { state: remotes } = useState(() => commitChild('remotes'))
+const { state: stashes } = useState(() => commitChild('stashes'))
+const { state: worktrees } = useState(() => commitChild('worktrees'))
 
-// Settings from code actor
+// Settings from code state
 const codeSettings = computed(() => code.value.data.settings)
 /** Whether the settings leave this trailer out of what is committed: by key, whatever its case, as git reads one */
 const removedOnCommit = (trailer: CommitTrailer) =>
@@ -1024,17 +1026,19 @@ const removedOnCommit = (trailer: CommitTrailer) =>
 // Section visibility context menu
 const { showMenu, menuPos, sectionMenuItems, onSectionContextMenu } = useSectionVisibilityMenu(codeSettings)
 
-// State selectors from commit actor
+// State selectors from commit state and its children
 /** The hook of the repository's that refused the last command, whose output is shown as its own */
-const refusingHook = computed(() => git.value.data.gitFailure?.hook ?? null)
-const isGitLoading = computed(() => git.value.data.making.statusShown)
-const hasCommits = computed(() => git.value.data.commitLog.length > 0)
+const refusingHook = computed(() => openCommit.value?.data.gitFailure?.hook ?? null)
+const isGitLoading = computed(() => Boolean(openCommit.value?.data.statusLoadingShown))
+const hasCommits = computed(() => (history.value?.data.commitLog.length ?? 0) > 0)
 /** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
-const notKeptOf = (paths: string[]): string[] =>
-  (git.value.data.discardPreview && git.value.data.discardPreview.paths.join('\0') === paths.join('\0') ? git.value.data.discardPreview.notKept : [])
+const notKeptOf = (paths: string[]): string[] => {
+  const preview = recovery.value?.data.discardPreview
+  return preview && preview.paths.join('\0') === paths.join('\0') ? [...preview.notKept] : []
+}
 /** What a pull would do, said before the click */
 const pullTitle = computed(() => {
-  const preview = git.value.data.pullPreview
+  const preview = openCommit.value?.data.pullPreview
   if (!preview) return 'Pull latest'
   switch (preview.kind) {
     case 'fast-forward': return 'Pull: a fast-forward'
@@ -1044,32 +1048,33 @@ const pullTitle = computed(() => {
     default: return 'Pull latest'
   }
 })
-const isCheckingOutBranch = computed(() => checkoutUnderWay(git.value.data.making))
-const isSpeedingUpStatus = computed(() => git.value.data.making.speedUp)
+const isCheckingOutBranch = computed(() => Boolean(remotes.value?.pending.checkout || remotes.value?.pending.createBranch))
+const isSpeedingUpStatus = computed(() => Boolean(openCommit.value?.pending.speedUp))
 /** What turning the speed-ups on would turn on, of those that are off */
 const slowStatusRemedy = computed(() => {
+  const slow = openCommit.value?.data.slowStatus
   const off = [
-    ...(git.value.data.slowStatus && !git.value.data.slowStatus.fileMonitor && git.value.data.slowStatus.fileMonitorAvailable ? ['watching for changes itself'] : []),
-    ...(git.value.data.slowStatus && !git.value.data.slowStatus.untrackedCache ? ['remembering untracked files'] : []),
+    ...(slow && !slow.fileMonitor && slow.fileMonitorAvailable ? ['watching for changes itself'] : []),
+    ...(slow && !slow.untrackedCache ? ['remembering untracked files'] : []),
   ]
   return off.join(' and ')
 })
-const isSettingUpSignIn = computed(() => git.value.data.making.signIn)
+const isSettingUpSignIn = computed(() => Boolean(remotes.value?.pending.signIn))
 // The help belongs to the error it came with, and goes when that error does
-const missingBranch = computed(() => (git.value.data.gitError ? git.value.data.gitFailure?.missingBranch ?? null : null))
-const errorSignIn = computed(() => (git.value.data.gitError ? git.value.data.gitFailure?.signIn ?? null : null))
+const missingBranch = computed(() => (openCommit.value?.data.gitError ? openCommit.value.data.gitFailure?.missingBranch ?? null : null))
+const errorSignIn = computed(() => (openCommit.value?.data.gitError ? openCommit.value.data.gitFailure?.signIn ?? null : null))
 // The refusal belongs to the error it came with, and goes when that error does
-const trustRequest = computed(() => (git.value.data.gitError ? git.value.data.gitFailure?.trust ?? null : null))
-const ownershipRequest = computed(() => (git.value.data.gitError ? git.value.data.gitFailure?.ownership ?? null : null))
+const trustRequest = computed(() => (openCommit.value?.data.gitError ? openCommit.value.data.gitFailure?.trust ?? null : null))
+const ownershipRequest = computed(() => (openCommit.value?.data.gitError ? openCommit.value.data.gitFailure?.ownership ?? null : null))
 /** The failures for which git read nothing, so the panel says nothing of the working tree */
 const NOTHING_READ = new Set(['untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old'])
-const gitNeverRan = computed(() => !!git.value.data.gitError && NOTHING_READ.has(git.value.data.gitFailure?.code ?? ''))
-const isMovingOperation = computed(() => git.value.data.making.moveOperation)
-const isStartingOperation = computed(() => git.value.data.making.startOperation)
+const gitNeverRan = computed(() => !!openCommit.value?.data.gitError && NOTHING_READ.has(openCommit.value.data.gitFailure?.code ?? ''))
+const isMovingOperation = computed(() => Boolean(remotes.value?.pending.moveOperation))
+const isStartingOperation = computed(() => Boolean(remotes.value?.pending.startOperation))
 /** What merging a branch in would do, said before the click once it is known */
 const mergeTitle = (branch: string): string => {
-  const known = git.value.data.mergePreview?.target === branch ? git.value.data.mergePreview.preview : undefined
-  const merging = `Merge ${branch} into ${git.value.data.gitBranch}`
+  const known = remotes.value?.data.mergePreview?.target === branch ? remotes.value.data.mergePreview.preview : undefined
+  const merging = `Merge ${branch} into ${openCommit.value?.data.gitBranch}`
   switch (known?.kind) {
     case 'fast-forward': return `${merging}: a fast-forward`
     case 'clean': return `${merging}: merges cleanly`
@@ -1082,10 +1087,11 @@ const startOperation = (kind: 'merge' | 'rebase', target: string) => {
   showBranchDropdown.value = false
   send({ type: 'commit.START_OPERATION', kind, target })
 }
-const isPushing = computed(() => git.value.data.making.push)
-const isPulling = computed(() => git.value.data.making.pull)
-const isStashing = computed(() => git.value.data.making.stash)
-const isWorktreeLoading = computed(() => worktreeChangeUnderWay(git.value.data.making))
+const isPushing = computed(() => Boolean(remotes.value?.pending.push))
+const isPulling = computed(() => Boolean(remotes.value?.pending.pull))
+const isStashing = computed(() => Boolean(stashes.value?.pending.stash))
+const isWorktreeLoading = computed(() =>
+  Boolean(worktrees.value?.pending.worktreeAdd || worktrees.value?.pending.worktreeRemove || worktrees.value?.pending.worktreeSwitch))
 const baseDirectory = computed(() => code.value.data.baseDirectory)
 
 // Local state
@@ -1147,8 +1153,8 @@ const watchSyncOp = (
       clearTimeout(syncClearTimer)
       syncFeedback.value = null
     } else if (wasActive) {
-      if (git.value.data.gitError) {
-        toast.value?.error(`${label} failed`, git.value.data.gitError)
+      if (openCommit.value?.data.gitError) {
+        toast.value?.error(`${label} failed`, openCommit.value.data.gitError)
       } else if (stopped?.()) {
         showSyncFeedback(`${label} stopped`)
       } else {
@@ -1169,7 +1175,7 @@ const dismissError = () => {
   isErrorExpanded.value = false
 }
 
-watch(() => git.value.data.gitError, () => {
+watch(() => openCommit.value?.data.gitError, () => {
   isErrorExpanded.value = false
   nextTick(() => {
     const el = errorContentRef.value
@@ -1181,30 +1187,37 @@ watch(() => git.value.data.gitError, () => {
   })
 })
 
-watchSyncOp(isPulling, () => git.value.data.commitsBehind, 'Pull', 'Already up to date')
-watchSyncOp(isPushing, () => git.value.data.commitsAhead, 'Push', 'Nothing to push', () => git.value.data.pushStopped)
+watchSyncOp(isPulling, () => openCommit.value?.data.commitsBehind ?? 0, 'Pull', 'Already up to date')
+watchSyncOp(isPushing, () => openCommit.value?.data.commitsAhead ?? 0, 'Push', 'Nothing to push', () => remotes.value?.data.pushStopped ?? false)
 
-watch(() => git.value.data.commitMessage, (val) => {
+watch(() => commit.value?.data.commitMessage, (val) => {
   if (!val && commitTextarea.value) {
     commitTextarea.value.style.height = ''
   }
 })
 
 // Computed
-const stagedFiles = computed(() => git.value.data.gitStatus.filter((f: any) => f.staged))
-const mergeConflictFiles = computed(() => git.value.data.gitStatus.filter((f: any) => f.status === 'unmerged'))
-const unstagedFiles = computed(() => git.value.data.gitStatus.filter((f: any) => !f.staged && f.status !== 'unmerged'))
+const gitStatusList = computed(() => (openCommit.value?.data.gitStatus ?? []) as GitStatusFile[])
+const stagedFiles = computed(() => gitStatusList.value.filter((f) => f.staged))
+const mergeConflictFiles = computed(() => gitStatusList.value.filter((f) => f.status === 'unmerged'))
+const unstagedFiles = computed(() => gitStatusList.value.filter((f) => !f.staged && f.status !== 'unmerged'))
 /** The unstaged rows as they are drawn: each open folder's row is followed by a row for each file it lists */
 const unstagedRows = computed(() => unstagedFiles.value.flatMap((file: GitStatusFile): (GitStatusFile & { inFolder?: boolean })[] => {
-  const open = file.isDirectory ? git.value.data.openFolders[file.path] : undefined
+  const open = file.isDirectory ? openCommit.value?.data.openFolders[file.path] : undefined
   return [file, ...(open?.files ?? []).map(path => ({ path, status: 'untracked' as const, staged: false, inFolder: true }))]
 }))
 const toggleFolder = (file: GitStatusFile) => send({ type: 'commit.TOGGLE_FOLDER', path: file.path })
 
 /** What can be done now, and why not, from what the panel holds of the repository: worded here, decided by the engine */
 const canBeDone = computed(() => whatCanBeDone({
-  files: [...git.value.data.gitStatus], truncated: git.value.data.isStatusTruncated, branch: git.value.data.gitBranch, hasUpstream: git.value.data.hasUpstream,
-  ahead: git.value.data.commitsAhead, behind: git.value.data.commitsBehind, hasIdentity: git.value.data.hasIdentity, ...(git.value.data.operation && { operation: git.value.data.operation }),
+  files: [...gitStatusList.value],
+  truncated: openCommit.value?.data.isStatusTruncated ?? false,
+  branch: openCommit.value?.data.gitBranch ?? '',
+  hasUpstream: openCommit.value?.data.hasUpstream ?? false,
+  ahead: openCommit.value?.data.commitsAhead ?? 0,
+  behind: openCommit.value?.data.commitsBehind ?? 0,
+  hasIdentity: openCommit.value?.data.hasIdentity ?? true,
+  ...(openCommit.value?.data.operation && { operation: openCommit.value.data.operation }),
 }))
 const REASONS: Record<UnavailableReason, string> = {
   'nothing-staged': 'Nothing is staged to commit.',
@@ -1217,47 +1230,49 @@ const REASONS: Record<UnavailableReason, string> = {
 }
 const reasonOf = (availability: Availability) => (availability.possible ? null : REASONS[availability.reason])
 const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
-const syncTitle = computed(() => (git.value.data.commitsAhead > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
+const syncTitle = computed(() => ((openCommit.value?.data.commitsAhead ?? 0) > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
 
-const isCommitting = computed(() => commitUnderWay(git.value.data.making))
-const canCommit = computed(() => !!git.value.data.commitMessage.trim() && stagedFiles.value.length > 0 && canBeDone.value.commit.possible && !isCommitting.value)
+const isCommitting = computed(() => Boolean(composer.value?.pending.commit || composer.value?.pending.amend))
+const canCommit = computed(() => !!commit.value?.data.commitMessage.trim() && stagedFiles.value.length > 0 && canBeDone.value.commit.possible && !isCommitting.value)
 
 const isNoDirectoryError = computed(() => {
-  return git.value.data.gitError?.includes('No directory selected')
+  return openCommit.value?.data.gitError?.includes('No directory selected')
 })
 
 const isNoGitRepoError = computed(() => {
-  return git.value.data.gitError?.includes('not a git repository') ||
-         git.value.data.gitError?.includes('Not a git repository')
+  return openCommit.value?.data.gitError?.includes('not a git repository') ||
+         openCommit.value?.data.gitError?.includes('Not a git repository')
 })
 
 const shouldShowActionButton = computed(() => {
   // Commit button takes priority when there are staged files
   if (stagedFiles.value.length > 0) return false
-  return !git.value.data.hasUpstream || git.value.data.commitsAhead > 0 || git.value.data.commitsBehind > 0
+  return !openCommit.value?.data.hasUpstream || (openCommit.value?.data.commitsAhead ?? 0) > 0 || (openCommit.value?.data.commitsBehind ?? 0) > 0
 })
 
 /** How far along git says it is, once it has said: `Writing objects 42%` */
-const progressOf = (during: ProgressDuring) => (git.value.data.progress?.during === during ? ` ${git.value.data.progress.stage} ${git.value.data.progress.percent}%` : '...')
+const progressOf = (during: ProgressDuring) => (openCommit.value?.data.progress?.during === during ? ` ${openCommit.value.data.progress.stage} ${openCommit.value.data.progress.percent}%` : '...')
 const actionButtonText = computed(() => {
   if (isPushing.value) return `Pushing${progressOf('push')}`
   if (isPulling.value) return `Pulling${progressOf('pull')}`
-  if (!git.value.data.hasUpstream) return 'Publish Branch'
+  if (!openCommit.value?.data.hasUpstream) return 'Publish Branch'
 
+  const behind = openCommit.value.data.commitsBehind
+  const ahead = openCommit.value.data.commitsAhead
   // If we have both commits ahead and behind, prioritize pull
-  if (git.value.data.commitsBehind > 0 && git.value.data.commitsAhead === 0) {
-    return `Pull (${git.value.data.commitsBehind} commit${git.value.data.commitsBehind !== 1 ? 's' : ''} behind)`
+  if (behind > 0 && ahead === 0) {
+    return `Pull (${behind} commit${behind !== 1 ? 's' : ''} behind)`
   }
 
-  if (git.value.data.commitsAhead > 0) {
-    return `Push (${git.value.data.commitsAhead} commit${git.value.data.commitsAhead !== 1 ? 's' : ''})`
+  if (ahead > 0) {
+    return `Push (${ahead} commit${ahead !== 1 ? 's' : ''})`
   }
 
   return 'Sync'
 })
 
 const isActionButtonPull = computed(() => {
-  return git.value.data.hasUpstream && git.value.data.commitsBehind > 0 && git.value.data.commitsAhead === 0
+  return Boolean(openCommit.value?.data.hasUpstream && openCommit.value.data.commitsBehind > 0 && openCommit.value.data.commitsAhead === 0)
 })
 
 const isActionButtonDisabled = computed(() => {
@@ -1265,18 +1280,20 @@ const isActionButtonDisabled = computed(() => {
 })
 
 const filteredBranches = computed(() => {
-  const input = git.value.data.branchInput.toLowerCase().trim()
-  if (!input) return git.value.data.availableBranches
-  return git.value.data.availableBranches.filter((branch: string) =>
+  const branches = remotes.value?.data.availableBranches ?? []
+  const input = (remotes.value?.data.branchInput ?? '').toLowerCase().trim()
+  if (!input) return branches
+  return branches.filter((branch: string) =>
     branch.toLowerCase().includes(input)
   )
 })
 
 const filteredStashes = computed(() => {
+  const list = stashes.value?.data.stashList ?? []
   const query = stashSearchQuery.value.trim()
-  if (!query) return git.value.data.stashList
+  if (!query) return list
   const lowerQuery = query.toLowerCase()
-  return git.value.data.stashList.filter((stash: any) => {
+  return list.filter((stash: any) => {
     const text = `${stash.ref} ${stash.message}`.toLowerCase()
     return text.includes(lowerQuery)
   })
@@ -1312,7 +1329,7 @@ const updateCommitMessage = (event: Event) => {
   send({ type: 'commit.UPDATE_MESSAGE', message: target.value })
 }
 
-const commit = () => {
+const commitChanges = () => {
   if (canCommit.value) {
     send({ type: 'commit.COMMIT' })
   }
@@ -1325,7 +1342,7 @@ const commit = () => {
 const commitByKey = (event: KeyboardEvent) => {
   if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return
   event.preventDefault()
-  commit()
+  commitChanges()
 }
 
 const handleActionButton = () => {
@@ -1338,7 +1355,7 @@ const handleActionButton = () => {
 
 /** Amends the last commit with what is staged, and with the message box's words when there are any */
 const amend = () => {
-  const message = git.value.data.commitMessage?.trim()
+  const message = commit.value?.data.commitMessage?.trim()
   send({ type: 'commit.AMEND', ...(message && { message }) })
 }
 
@@ -1397,10 +1414,11 @@ const conflictLabel = (file: GitStatusFile) => file.conflict ? `In conflict: ${C
 
 /** What git is in the middle of, as the panel names it */
 const operationTitle = computed(() => {
-  const current = git.value.data.operation
+  const current = openCommit.value?.data.operation
   if (!current) return ''
+  const branch = openCommit.value?.data.gitBranch
   switch (current.kind) {
-    case 'merge': return `Merging ${current.subject}${git.value.data.gitBranch && git.value.data.gitBranch !== 'HEAD' ? ` into ${git.value.data.gitBranch}` : ''}`
+    case 'merge': return `Merging ${current.subject}${branch && branch !== 'HEAD' ? ` into ${branch}` : ''}`
     case 'rebase': return `Rebasing ${current.branch ?? 'commits'} onto ${current.subject}${current.step ? ` (commit ${current.step} of ${current.steps})` : ''}`
     case 'cherry-pick': return `Cherry-picking ${current.subject}`
     case 'revert': return `Reverting ${current.subject}`
@@ -1430,7 +1448,8 @@ const openRevertDialog = (file: GitStatusFile) => {
 }
 
 const confirmRevert = () => {
-  send({ type: 'commit.REVERT_FILE', path: git.value.data.revertDialogFile!.path })
+  const file = recovery.value?.data.revertDialogFile
+  if (file) send({ type: 'commit.REVERT_FILE', path: file.path })
 }
 
 const cancelRevert = () => {
@@ -1449,7 +1468,7 @@ const updateBranchInput = (event: Event) => {
 }
 
 const checkoutBranch = () => {
-  if (git.value.data.branchInput.trim() && !isCheckingOutBranch.value) {
+  if (remotes.value?.data.branchInput.trim() && !isCheckingOutBranch.value) {
     send({ type: 'commit.CHECKOUT_BRANCH' })
     showBranchDropdown.value = false
   }
@@ -1516,12 +1535,12 @@ const hideStashMenu = () => {
 
 const stashAll = () => {
   showStashMenu.value = false
-  send({ type: 'commit.STASH_PUSH', message: git.value.data.commitMessage || undefined, stagedOnly: false })
+  send({ type: 'commit.STASH_PUSH', message: commit.value?.data.commitMessage || undefined, stagedOnly: false })
 }
 
 const stashStaged = () => {
   showStashMenu.value = false
-  send({ type: 'commit.STASH_PUSH', message: git.value.data.commitMessage || undefined, stagedOnly: true })
+  send({ type: 'commit.STASH_PUSH', message: commit.value?.data.commitMessage || undefined, stagedOnly: true })
 }
 
 const applyStash = (index: number) => {
@@ -1535,7 +1554,7 @@ const confirmTag = () => {
   tagConfirmation.value = null
   if (asked) send({ type: asked.action === 'push' ? 'commit.PUSH_TAG' : 'commit.DELETE_TAG', name: asked.name })
 }
-watch(() => git.value.data.tagPushed, (pushed) => { if (pushed) toast.value?.success('Tag pushed', `${pushed.name} is on the remote`) })
+watch(() => remotes.value?.data.tagPushed, (pushed) => { if (pushed) toast.value?.success('Tag pushed', `${pushed.name} is on the remote`) })
 
 const popStash = (index: number) => {
   send({ type: 'commit.STASH_POP', index })

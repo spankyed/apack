@@ -838,16 +838,16 @@ type CodeContext = {
     isLoading: boolean;
     error: string | null;
     selectedPanel: PanelType;
-    tabsRestored?: boolean;
-    pendingTabOrder?: Array<{
+    tabsRestored: boolean;
+    pendingTabOrder: Array<{
         path: string;
         order: number;
-    }>;
-    pendingPersistedMetadata?: Map<string, {
+    }> | undefined;
+    pendingPersistedMetadata: Map<string, {
         groupId?: string;
         isPinned?: boolean;
         isPreview?: boolean;
-    }>;
+    }> | undefined;
     tabGroups: TabGroup[];
     isQuickOpenVisible: boolean;
     quickOpenQuery: string;
@@ -857,7 +857,7 @@ type CodeContext = {
     recentlyOpenedFiles: string[];
     tabViewHistory: string[];
     hotkeys: HotkeysMap;
-    settings?: CodeSettings;
+    settings: CodeSettings | undefined;
     pendingRevealLine: {
         filePath: string;
         line: number;
@@ -868,7 +868,7 @@ type CodeContext = {
     searchPrefillText: string;
     panelTerminalId: string | null;
     panelTerminalExpanded: boolean;
-    pendingTerminalTabIds?: string[];
+    pendingTerminalTabIds: string[] | undefined;
     panelNavHistory: NavHistory<PanelType>;
 };
 

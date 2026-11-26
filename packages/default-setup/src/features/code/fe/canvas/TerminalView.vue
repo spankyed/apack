@@ -108,8 +108,6 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
@@ -123,17 +121,16 @@ import {
 } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPARATOR_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'lucide-vue-next'
-import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
 import { terminalPool, type TerminalAttachment, type Command } from '#features/code/fe/utils/terminal-pool.ts'
 import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
 import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
-import { panelChild } from '../features/children.ts';
+import { useState } from '#generated/state-fe.ts'
 import { useStatusSeen } from '../features/terminal/useStatusSeen.ts'
 import { dropShellOf, dropText } from '../utils/drop-text.ts';
 
 /* --------------------------------------------------------------------------
- * Props & actor -------------------------------------------------------------------------- */
+ * Props & state ------------------------------------------------------------ */
 const props = defineProps<{
   terminalInfo: TerminalInfo
 }>()
@@ -143,12 +140,12 @@ defineEmits<{
   'restart-terminal': []
 }>()
 
-const codeActor: CodeState = useSurface()
-const terminalActor = panelChild(codeActor, 'terminal')!
-useStatusSeen(terminalActor, () => props.terminalInfo.id)
+const { send: sendCode, child } = useState('code')
+const { state: terminals, send } = useState(() => child('terminal'))
+const { send: sendExplorer } = useState(() => child('explorer'))
+useStatusSeen(() => props.terminalInfo.id)
 // Whether this terminal's bell is flashing now, which the state starts and ends
-const { state: terminals, send } = useState(terminalActor)
-const bellFlashing = computed(() => terminals.value.data.bells[props.terminalInfo.id] === 'flashing')
+const bellFlashing = computed(() => terminals.value?.data.bells[props.terminalInfo.id] === 'flashing')
 
 /* --------------------------------------------------------------------------
  * Refs --------------------------------------------------------------------- */
@@ -261,9 +258,9 @@ onMounted(() => {
     onCommands: list => { commands.value = list },
     // A path a program printed opens as the file it names, where the explorer opens every other
     onOpenPath: (path, at) => {
-      panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
+      sendExplorer({ type: 'explorer.OPEN_FILE', path })
       // Shown at the line the program named, once the file is the one showing
-      if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
+      if (at) sendCode({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
     },
   })
   // The pool's view outlives this component, so what it already knows is shown now rather than at the next command

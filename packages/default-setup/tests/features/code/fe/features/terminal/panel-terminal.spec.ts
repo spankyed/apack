@@ -1,102 +1,95 @@
 // Which terminal the panel shows, and whether the user can see it.
-//
-// Two defects in that one path (T1 and T5 in the terminal integration review). The panel's replacement was
-// chosen from a list the terminal that just closed was still in, so closing the panel's terminal could put
-// the dead one straight back. And a terminal routed to the panel did not show the panel,
-// so "Open Terminal Here" spawned a shell into a collapsed panel: the user asked for a terminal and got
-// nothing they could see.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
-import { latestAsk, resetAsks } from '../../_support/asks.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { startMachine } from '../../_support/asks.ts';
 
-const tell = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
-
-const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }));
-vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent);
-
-vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn() } }));
+vi.mock('#features/code/fe/utils/terminal-pool.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#features/code/fe/utils/terminal-pool.ts')>()),
+  terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn(), setCopyOnSelect: vi.fn(), setViewSettings: vi.fn() },
+}));
 vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
   terminalEventBus: { emit: vi.fn(), clearOutput: vi.fn(), prunePersistedOutputs: vi.fn() },
 }));
 
-const { terminalState } = await import('#features/code/fe/features/terminal/state.ts');
+const codeState = (await import('#features/code/fe/state.ts')).default;
 
-const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp' }) as never;
+const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp', submit: '\n' }) as never;
 
-/** The machine given the running terminals, the way it gets them: it asks for the list, which is answered with these */
-async function listTerminals(actor: { send(event: { type: 'terminal.REFRESH_LIST' }): void }, terminals: unknown[]): Promise<void> {
-  actor.send({ type: 'terminal.REFRESH_LIST' })
-  await latestAsk('terminal.REFRESH_LIST').answer(terminals)
+const running: Array<{ stop(): void }> = [];
+function startCode() {
+  const h = startMachine(codeState, { id: 'default-setup/code' });
+  running.push(h);
+  const terminalHandle = h.childHandle('terminal') as Parameters<typeof h.sys.send>[0];
+  const sendTerminal = (ev: unknown) => h.sys.send(terminalHandle, ev as never);
+  return { h, sendTerminal };
 }
 
-
-/** What the surface was last told about its panel */
-const panelUpdates = () => parent.updateParentState.mock.calls.map(([, update]) => update);
-
 beforeEach(() => {
-  tell.mockReset();
-  resetAsks();
-  parent.updateParentState.mockReset();
-  parent.addTabToParent.mockReset();
-  parent.getParentContext.mockReset().mockReturnValue(null);
+  localStorage.clear();
 });
+afterEach(() => {
+  for (const h of running.splice(0)) h.stop();
+});
+
+async function listTerminals(
+  ctx: ReturnType<typeof startCode>,
+  terminals: unknown[],
+): Promise<void> {
+  ctx.sendTerminal({ type: 'terminal.REFRESH_LIST' });
+  await ctx.h.latestAsk('terminal.REFRESH_LIST').answer(terminals);
+}
 
 describe('the terminal the panel shows next', () => {
   it('is never the one that just closed', async () => {
-    const actor = createActor(terminalState).start();
-    await listTerminals(actor, [aTerminal('t-1'), aTerminal('t-2')]);
-    // The panel is showing t-1, and t-1 is what exits
-    parent.getParentContext.mockReturnValue({ panelTerminalId: 't-1', openFiles: [] } as never);
-    parent.updateParentState.mockReset();
+    const ctx = startCode();
+    await listTerminals(ctx, [aTerminal('t-1'), aTerminal('t-2')]);
+    ctx.h.send({ type: 'SELECT_PANEL_TERMINAL', terminalId: 't-1' });
 
-    actor.send({ type: 'terminal.CLOSED', data: { terminalId: 't-1' } });
+    ctx.sendTerminal({ type: 'terminal.CLOSED', data: { terminalId: 't-1' } });
 
-    const chosen = panelUpdates().map(update => update.panelTerminalId).filter(id => id !== undefined);
-    expect(chosen, 'the dead terminal is not a terminal to show').toEqual(['t-2']);
+    expect(ctx.h.read().data.panelTerminalId, 'the dead terminal is not a terminal to show').toBe('t-2');
   });
 
   it('is nothing at all when the one that closed was the only one', async () => {
-    const actor = createActor(terminalState).start();
-    await listTerminals(actor, [aTerminal('t-1')]);
-    parent.getParentContext.mockReturnValue({ panelTerminalId: 't-1', openFiles: [] } as never);
-    parent.updateParentState.mockReset();
+    const ctx = startCode();
+    await listTerminals(ctx, [aTerminal('t-1')]);
+    ctx.h.send({ type: 'SELECT_PANEL_TERMINAL', terminalId: 't-1' });
 
-    actor.send({ type: 'terminal.CLOSED', data: { terminalId: 't-1' } });
+    ctx.sendTerminal({ type: 'terminal.CLOSED', data: { terminalId: 't-1' } });
 
-    expect(panelUpdates().map(update => update.panelTerminalId)).toEqual([null]);
+    expect(ctx.h.read().data.panelTerminalId).toBeNull();
   });
 
   it('is left alone when some other terminal closed', async () => {
-    const actor = createActor(terminalState).start();
-    await listTerminals(actor, [aTerminal('t-1'), aTerminal('t-2')]);
-    parent.getParentContext.mockReturnValue({ panelTerminalId: 't-1', openFiles: [] } as never);
-    parent.updateParentState.mockReset();
+    const ctx = startCode();
+    await listTerminals(ctx, [aTerminal('t-1'), aTerminal('t-2')]);
+    ctx.h.send({ type: 'SELECT_PANEL_TERMINAL', terminalId: 't-1' });
 
-    actor.send({ type: 'terminal.CLOSED', data: { terminalId: 't-2' } });
+    ctx.sendTerminal({ type: 'terminal.CLOSED', data: { terminalId: 't-2' } });
 
-    expect(panelUpdates().every(update => update.panelTerminalId === undefined)).toBe(true);
+    expect(ctx.h.read().data.panelTerminalId).toBe('t-1');
   });
 });
 
 describe('a terminal routed to the panel', () => {
   it('shows the panel, since a terminal the user cannot see is not one they asked for', async () => {
-    const actor = createActor(terminalState).start();
+    const ctx = startCode();
     // No target: the panel is where a create goes unless a tab was asked for
-    actor.send({ type: 'terminal.CREATE', cwd: '/repo' });
+    ctx.sendTerminal({ type: 'terminal.CREATE', cwd: '/repo' });
 
-    await latestAsk('terminal.CREATE_TERMINAL').answer(aTerminal('t-1'));
+    await ctx.h.latestAsk('terminal.CREATE_TERMINAL').answer(aTerminal('t-1'));
 
-    expect(panelUpdates()).toEqual([{ panelTerminalId: 't-1', panelTerminalExpanded: true }]);
+    expect(ctx.h.read().data.panelTerminalId).toBe('t-1');
+    expect(ctx.h.read().data.panelTerminalExpanded).toBe(true);
   });
 
   it('does not touch the panel when a tab was asked for', async () => {
-    const actor = createActor(terminalState).start();
-    actor.send({ type: 'terminal.CREATE', target: 'tab' });
+    const ctx = startCode();
+    ctx.sendTerminal({ type: 'terminal.CREATE', target: 'tab' });
 
-    await latestAsk('terminal.CREATE_TERMINAL').answer(aTerminal('t-1'));
+    await ctx.h.latestAsk('terminal.CREATE_TERMINAL').answer(aTerminal('t-1'));
 
-    expect(parent.addTabToParent).toHaveBeenCalled();
-    expect(panelUpdates()).toEqual([]);
+    expect(ctx.h.read().data.openFiles.map((f) => f.path)).toContain('terminal:t-1');
+    expect(ctx.h.read().data.panelTerminalId).toBeNull();
+    expect(ctx.h.read().data.panelTerminalExpanded).toBe(false);
   });
 });

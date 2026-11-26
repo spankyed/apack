@@ -1,107 +1,66 @@
-import { setup, assign , type ActorRefFrom } from 'xstate';
-import { fromAsk } from '#generated/events.ts';
-import type { ProgressEventOf } from '@apackdev/sdk/events';
-import { safeEvents } from '@apackdev/sdk/helpers';
-import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
-import { getParentContext } from '../../utils/parent-communication.ts';
+import { state } from '#generated/state.ts';
 
 // Search types
 export interface SearchMatch {
-  line: number
-  column: number
-  lineText: string
-  matchStart: number
-  matchEnd: number
+  line: number;
+  column: number;
+  lineText: string;
+  matchStart: number;
+  matchEnd: number;
 }
 
 export interface SearchResult {
-  path: string
-  matches: SearchMatch[]
-  fileSize?: number
+  path: string;
+  matches: SearchMatch[];
+  fileSize?: number;
 }
 
 export interface SearchProgress {
-  filesSearched: number
-  totalFiles: number
-  currentFile?: string
+  filesSearched: number;
+  totalFiles: number;
+  currentFile?: string;
 }
 
-export interface CodeSearchContext {
-  searchQuery: string
-  searchResults: SearchResult[]
-  searchError: string | null
-  searchProgress: SearchProgress | null
+export interface CodeSearchData {
+  baseDirectory: string;
+  searchQuery: string;
+  searchResults: SearchResult[];
+  searchError: string | null;
+  searchProgress: SearchProgress | null;
   searchOptions: {
-    includePattern: string
-    excludePattern: string
-    caseSensitive: boolean
-    wholeWord: boolean
-    useRegex: boolean
-  }
+    includePattern: string;
+    excludePattern: string;
+    caseSensitive: boolean;
+    wholeWord: boolean;
+    useRegex: boolean;
+  };
 }
 
-export type Event =
+export type CodeSearchEvent =
   | { type: 'search.START'; query: string }
   | { type: 'search.CANCEL' }
   | { type: 'search.CLEAR' }
-  | { type: 'search.UPDATE_OPTIONS'; options: Partial<CodeSearchContext['searchOptions']> }
+  | { type: 'search.UPDATE_OPTIONS'; options: Partial<CodeSearchData['searchOptions']> }
   | { type: 'search.CLEAR_ERROR' }
   | { type: 'search.DIRECTORY_CHANGED'; baseDirectory: string }
-  | { type: 'CODE_STARTED' }
-  // What the search asked for says as it runs: how far it is, and each file's matches
-  | ProgressEventOf<CodeSystemContract, 'search.SEARCH_FILES'>;
+  | { type: 'CODE_STARTED'; baseDirectory?: string };
 
-const typeOf = safeEvents<Event>()
+type CodeSearchShape = {
+  data: CodeSearchData;
+  states: {
+    idle: {};
+    searching: {
+      calls: {
+        searchFiles: 'one';
+      };
+    };
+  };
+};
 
-export const searchState = setup({
-  types: {
-    context: {} as CodeSearchContext,
-    events: {} as Event
-  },
-  actors: {
-    searchFiles: fromAsk('code', 'search.SEARCH_FILES'),
-  },
-  actions: {
-    assignSearchQuery: assign({
-      searchQuery: ({ event }) => typeOf('search.START', event).query,
-      searchError: null,
-      searchResults: []
-    }),
-
-    hearSearch: assign(({ context, event }) => {
-      const { update } = typeOf('search.SEARCH_FILES.progress', event)
-      return 'result' in update ? { searchResults: [...context.searchResults, update.result] } : { searchProgress: update.progress }
-    }),
-
-    clearSearch: assign({
-      searchQuery: '',
-      searchResults: [],
-      searchError: null,
-    }),
-
-    clearError: assign({
-      searchError: null
-    }),
-
-    updateSearchOptions: assign({
-      searchOptions: ({ context, event }) => {
-        const ev = typeOf('search.UPDATE_OPTIONS', event)
-        return { ...context.searchOptions, ...ev.options }
-      }
-    }),
-
-    handleDirectoryChanged: ({ self, context, event }) => {
-      const ev = typeOf('search.DIRECTORY_CHANGED', event)
-      // Clear the "No directory selected" error when a directory is selected
-      if (context.searchError?.includes('No directory selected') && ev.baseDirectory) {
-        self.send({ type: 'search.CLEAR_ERROR' })
-      }
-    }
-  }
-}).createMachine({
-  id: 'search',
+export const searchState = state<CodeSearchShape, CodeSearchEvent>()({
   initial: 'idle',
-  context: {
+  data: {
+    baseDirectory: '',
     searchQuery: '',
     searchResults: [],
     searchError: null,
@@ -111,47 +70,83 @@ export const searchState = setup({
       excludePattern: '',
       caseSensitive: false,
       wholeWord: false,
-      useRegex: false
-    }
+      useRegex: false,
+    },
   },
   on: {
     // Entering `searching` again stops the search under way and starts this one
-    'search.START': { target: '.searching', reenter: true, actions: 'assignSearchQuery' },
-    'search.CANCEL': { target: '.idle' },
-    'search.CLEAR': { target: '.idle', actions: 'clearSearch' },
-    'search.UPDATE_OPTIONS': { actions: 'updateSearchOptions' },
-    'search.CLEAR_ERROR': { actions: 'clearError' },
-    'search.DIRECTORY_CHANGED': { actions: 'handleDirectoryChanged' },
-    // Nothing to do as the code surface starts: a search with no directory says so when it is asked for
-    'CODE_STARTED': {},
+    'search.START': ({ query }) => ({
+      at: 'searching',
+      data: {
+        searchQuery: query,
+        searchError: null,
+        searchResults: [],
+        searchProgress: null,
+      },
+    }),
+    'search.CANCEL': (_event, { snapshot }) =>
+      snapshot.at === 'searching' ? { at: 'idle', data: { searchProgress: null } } : undefined,
+    'search.CLEAR': (_event, { snapshot }) =>
+      snapshot.at === 'searching'
+        ? { at: 'idle', data: { searchQuery: '', searchResults: [], searchError: null, searchProgress: null } }
+        : { data: { searchQuery: '', searchResults: [], searchError: null, searchProgress: null } },
+    'search.UPDATE_OPTIONS': ({ options }, { data }) => ({
+      data: { searchOptions: { ...data.searchOptions, ...options } },
+    }),
+    'search.CLEAR_ERROR': () => ({ data: { searchError: null } }),
+    'search.DIRECTORY_CHANGED': ({ baseDirectory }, { data }) => ({
+      data: {
+        baseDirectory,
+        // Clear the "No directory selected" error when a directory is selected
+        ...(data.searchError?.includes('No directory selected') && baseDirectory ? { searchError: null } : {}),
+      },
+    }),
+    // Nothing to search on start: a search with no directory says so when it is asked for
+    CODE_STARTED: ({ baseDirectory }) =>
+      baseDirectory !== undefined ? { data: { baseDirectory } } : undefined,
   },
   states: {
     idle: {},
     // A search is under way for exactly as long as this state is: leaving it stops the search on the backend
     searching: {
-      invoke: {
-        src: 'searchFiles',
-        input: ({ context, self }) => ({
-          query: context.searchQuery,
-          path: getParentContext(self)?.baseDirectory,
-          includePattern: context.searchOptions.includePattern || undefined,
-          excludePattern: context.searchOptions.excludePattern || undefined,
-          caseSensitive: context.searchOptions.caseSensitive,
-          wholeWord: context.searchOptions.wholeWord,
-          useRegex: context.searchOptions.useRegex,
+      calls: ({ one }) => ({
+        searchFiles: one('code', 'search.SEARCH_FILES', {
+          args: (data) => ({
+            query: data.searchQuery,
+            path: data.baseDirectory,
+            includePattern: data.searchOptions.includePattern || undefined,
+            excludePattern: data.searchOptions.excludePattern || undefined,
+            caseSensitive: data.searchOptions.caseSensitive,
+            wholeWord: data.searchOptions.wholeWord,
+            useRegex: data.searchOptions.useRegex,
+          }),
+          progress: (updates, { data }) => {
+            const added: SearchResult[] = [];
+            let nextProgress: SearchProgress | undefined;
+            for (const update of updates) {
+              if ('result' in update) added.push(update.result);
+              else nextProgress = update.progress;
+            }
+            if (added.length === 0 && nextProgress === undefined) return;
+            return {
+              data: {
+                ...(added.length > 0 ? { searchResults: [...data.searchResults, ...added] } : {}),
+                ...(nextProgress !== undefined ? { searchProgress: nextProgress } : {}),
+              },
+            };
+          },
+          done: (outcome) => ({
+            at: 'idle',
+            data: {
+              searchProgress: null,
+              searchError: outcome.ok ? null : outcome.failure.message,
+            },
+          }),
         }),
-        onDone: {
-          target: 'idle',
-          actions: assign({ searchError: ({ event }) => (event.output.ok ? null : event.output.failure.message) }),
-        },
-      },
-      exit: assign({ searchProgress: null }),
-      on: {
-        'search.SEARCH_FILES.progress': { actions: 'hearSearch' },
+      }),
+      run: ({ call }) => {
+        call('searchFiles');
       },
     },
-  }
+  },
 });
-
-/** The search child's actor, named by whoever reads its context (`codeChild(…)`) */
-export type SearchActor = ActorRefFrom<typeof searchState>;

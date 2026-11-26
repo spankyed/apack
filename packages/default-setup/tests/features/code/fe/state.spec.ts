@@ -8,59 +8,47 @@
 //
 // And moving a terminal from a tab into the panel removed the tab without pruning the group it emptied,
 // where every other removal in this machine prunes.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createActor } from 'xstate'
-import type { OpenFile } from '#features/code/fe/contract.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OpenFile } from '#features/code/fe/contract.ts';
+import { startMachine } from './_support/asks.ts';
 
-// An ask a machine invokes stands in as one that is never answered: these cases start no search. The ask for what
-// the surface starts from is the one a case answers (`startOver`)
-const starts = vi.hoisted(() => [] as Array<(outcome: { ok: true; value: unknown }) => void>)
-/** Each ask a machine made by invoking or spawning it, by type, in the order made */
-const invoked = vi.hoisted(() => [] as string[])
-vi.mock('#generated/events.ts', async () => {
-  const { fromPromise } = await import('xstate')
-  return {
-    tell: vi.fn(), broadcast: vi.fn(), sendToSurface: vi.fn(),
-    fromAsk: (_to: string, type: string) => fromPromise(() => new Promise((resolve) => { invoked.push(type); if (type === 'GET_CODE_START') starts.push(resolve) })),
-  }
-})
 vi.mock('#features/code/fe/utils/terminal-pool.ts', async (importOriginal) => ({
   // The real `viewSettingsOf` is the mapping under test; only the pool is replaced
   ...(await importOriginal<typeof import('#features/code/fe/utils/terminal-pool.ts')>()),
   terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn(), setCopyOnSelect: vi.fn(), setViewSettings: vi.fn() },
-}))
+}));
 vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
   terminalEventBus: { emit: vi.fn(), clearOutput: vi.fn(), prunePersistedOutputs: vi.fn() },
-}))
+}));
 
-const codeState = (await import('#features/code/fe/state.ts')).default
-const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
+const codeState = (await import('#features/code/fe/state.ts')).default;
+const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts');
 
-const TABS_KEY = 'default-setup/code:open-tabs'
-const GROUPS_KEY = 'default-setup/code:tab-groups'
+const TABS_KEY = 'default-setup/code:open-tabs';
+const GROUPS_KEY = 'default-setup/code:tab-groups';
 
 /** Every surface a case started, stopped when it ends: a running surface holds listeners on the window */
-const running: Array<{ stop(): void }> = []
+const running: Array<{ stop(): void }> = [];
 const started = () => {
-  const actor = createActor(codeState).start()
-  running.push(actor)
-  return actor
-}
+  const h = startMachine(codeState, { id: 'default-setup/code' });
+  running.push(h);
+  return h;
+};
 /** Starts the surface as the shell does, and answers what it asks the code system for with `start` */
-const startOver = async (actor: ReturnType<typeof started>, start: { baseDirectory: string; settings?: object }) => {
-  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
-  starts.pop()!({ ok: true, value: start })
-  await vi.waitFor(() => expect(contextOf(actor).baseDirectory).toBe(start.baseDirectory))
-}
-const contextOf = (actor: ReturnType<typeof started>) => actor.getSnapshot().context
-const storedTabs = (): { tabs: Array<{ path: string }> } => JSON.parse(localStorage.getItem(TABS_KEY) ?? '{"tabs":[]}')
+const startOver = async (h: ReturnType<typeof started>, start: { baseDirectory: string; settings?: object }) => {
+  h.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
+  await h.latestAsk('GET_CODE_START').answer(start);
+  expect(h.read().data.baseDirectory).toBe(start.baseDirectory);
+};
+const dataOf = (h: ReturnType<typeof started>) => h.read().data;
+const storedTabs = (): { tabs: Array<{ path: string }> } => JSON.parse(localStorage.getItem(TABS_KEY) ?? '{"tabs":[]}');
 
-beforeEach(() => { localStorage.clear(); starts.length = 0 })
+beforeEach(() => { localStorage.clear(); });
 afterEach(() => {
-  for (const actor of running.splice(0)) actor.stop()
+  for (const h of running.splice(0)) h.stop();
   // Stopping a surface disposes its pool, which is one case's subject and no other's
-  vi.mocked(terminalPool.disposeAll).mockClear()
-})
+  vi.mocked(terminalPool.disposeAll).mockClear();
+});
 
 describe('settling a restore that did not finish', () => {
   /** A previous session: one file and one terminal, the terminal pinned and in a group */
@@ -71,336 +59,276 @@ describe('settling a restore that did not finish', () => {
         { path: 'terminal:t-1', type: 'terminal', terminalId: 't-1', order: 1, isPinned: true, groupId: 'g-1' },
       ],
       activeFilePath: '/src/a.ts',
-    }))
-    localStorage.setItem(GROUPS_KEY, JSON.stringify([{ id: 'g-1', name: 'shells', color: 'blue', isCollapsed: false, order: 0 }]))
-  }
+    }));
+    localStorage.setItem(GROUPS_KEY, JSON.stringify([{ id: 'g-1', name: 'shells', color: 'blue', isCollapsed: false, order: 0 }]));
+  };
 
   it('leaves storage alone, so what has not arrived is still there next launch', () => {
-    seedTwoTabs()
-    const actor = started()
+    seedTwoTabs();
+    const h = started();
     // Nothing has arrived: no child answered inside the window
-    expect(contextOf(actor).openFiles).toEqual([])
+    expect(dataOf(h).openFiles).toEqual([]);
 
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
 
-    expect(storedTabs().tabs.map(tab => tab.path), 'persisting the pruned list is what made the loss permanent')
-      .toEqual(['/src/a.ts', 'terminal:t-1'])
-  })
+    expect(storedTabs().tabs.map((tab) => tab.path), 'persisting the pruned list is what made the loss permanent')
+      .toEqual(['/src/a.ts', 'terminal:t-1']);
+  });
 
   it('keeps the metadata of a tab that has not arrived, so a late one still has its pin and group', () => {
-    seedTwoTabs()
-    const actor = started()
+    seedTwoTabs();
+    const h = started();
 
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
 
-    const metadata = contextOf(actor).pendingPersistedMetadata
-    expect([...(metadata ?? [])].map(([path]) => path)).toEqual(['/src/a.ts', 'terminal:t-1'])
-    expect(metadata?.get('terminal:t-1')).toMatchObject({ isPinned: true, groupId: 'g-1' })
-  })
+    const metadata = dataOf(h).pendingPersistedMetadata;
+    expect([...(metadata ?? [])].map(([path]) => path)).toEqual(['/src/a.ts', 'terminal:t-1']);
+    expect(metadata?.get('terminal:t-1')).toMatchObject({ isPinned: true, groupId: 'g-1' });
+  });
 
   it('keeps the group a tab that has not arrived belongs to', () => {
-    seedTwoTabs()
-    const actor = started()
+    seedTwoTabs();
+    const h = started();
 
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
 
-    expect(contextOf(actor).tabGroups.map(group => group.id)).toEqual(['g-1'])
-  })
+    expect(dataOf(h).tabGroups.map((group) => group.id)).toEqual(['g-1']);
+  });
 
-  /**
-   * **T10's guard, which is why that row dissolves rather than being fixed.**
-   *
-   * The claim was that every per-tab save persists a list without the tabs still arriving. It does not:
-   * `saveTabsAction` returns early while the order is still pending, and the save fires naturally on the
-   * last arrival, because that is when `addTab` clears it. What made the claim look true is the *settled*
-   * case above — a save after the settle wrote a pruned group list — and that is a different defect.
-   */
   it('persists nothing while the restore is still arriving, so a partial list is never written', () => {
-    seedTwoTabs()
-    const actor = started()
+    seedTwoTabs();
+    const h = started();
 
     // One of the two arrives; the other is still expected, so the batch is in flight
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } as OpenFile });
 
-    expect(storedTabs().tabs.map(tab => tab.path), 'a save mid-restore wrote the list it had so far')
-      .toEqual(['/src/a.ts', 'terminal:t-1'])
-  })
+    expect(storedTabs().tabs.map((tab) => tab.path), 'a save mid-restore wrote the list it had so far')
+      .toEqual(['/src/a.ts', 'terminal:t-1']);
+  });
 
-  /**
-   * **A close is forced past the mid-restore guard, and it took the unarrived tabs with it.**
-   *
-   * `saveTabsAction` returns early while a restore is in flight, which is the case above. `CLOSE_TAB`,
-   * `CLOSE_ACTIVE_TAB`, `DELETE_GROUP` and `KILL_TERMINAL` go through `forceSaveTabsAction` instead, which
-   * has to write — the user closed something and that must survive a relaunch — and wrote the open tabs
-   * alone. So closing one tab in the seconds a restore takes persisted a list without every tab still on its
-   * way, and the next launch had nothing left to ask for. The restore window is not a moment: the backend
-   * spawns restored shells one at a time, and closing a tab you did not want back is a thing people do
-   * exactly then.
-   */
   it('keeps what has not arrived when a close forces a save mid-restore', () => {
-    seedTwoTabs()
-    const actor = started()
+    seedTwoTabs();
+    const h = started();
 
     // One of the two arrives; the terminal is still expected, so the batch is in flight
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
-    actor.send({ type: 'CLOSE_TAB', path: '/src/a.ts' } as never)
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } as OpenFile });
+    h.send({ type: 'CLOSE_TAB', path: '/src/a.ts' });
 
-    expect(storedTabs().tabs.map(tab => tab.path), 'the close wrote a list without the tab still arriving')
-      .toEqual(['terminal:t-1'])
-  })
+    expect(storedTabs().tabs.map((tab) => tab.path), 'the close wrote a list without the tab still arriving')
+      .toEqual(['terminal:t-1']);
+  });
 
-  /**
-   * **The settle is not the end of the restore, and the prunes have to know that.**
-   *
-   * Settling clears `pendingTabOrder` — the order has been applied — while `pendingPersistedMetadata` still
-   * holds the tabs that have not arrived. Every prune keyed on the order alone therefore started firing
-   * again with tabs still coming, and a prune that counts only *open* tabs removes the group of one that is
-   * still expected. So the arrival of the tab with no group dropped the other tab's group.
-   */
   it('keeps a still-expected tab s group when another tab arrives after the settle', () => {
-    seedTwoTabs()
-    const actor = started()
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    seedTwoTabs();
+    const h = started();
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
 
     // `/src/a.ts` arrives late; `terminal:t-1` is still expected, and `g-1` is its group
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } as OpenFile });
 
-    expect(contextOf(actor).tabGroups.map(group => group.id), 'the group of a tab still coming was pruned')
-      .toEqual(['g-1'])
-  })
+    expect(dataOf(h).tabGroups.map((group) => group.id), 'the group of a tab still coming was pruned')
+      .toEqual(['g-1']);
+  });
 
-  /**
-   * And the same arrival persists, so the loss would outlive the session: `persistCodeTabs` prunes the
-   * groups it writes, and the per-tab save resumes once the order is cleared. That is what made this
-   * permanent rather than a wrong screen until the next launch.
-   */
   it('leaves a still-expected tab s group in storage when another tab arrives after the settle', () => {
-    seedTwoTabs()
-    const actor = started()
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    seedTwoTabs();
+    const h = started();
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
 
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } as OpenFile });
 
-    const stored = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '[]') as Array<{ id: string }>
-    expect(stored.map(group => group.id), 'storage lost the group, so the next launch has nothing to restore it from')
-      .toEqual(['g-1'])
-  })
+    const stored = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '[]') as Array<{ id: string }>;
+    expect(stored.map((group) => group.id), 'storage lost the group, so the next launch has nothing to restore it from')
+      .toEqual(['g-1']);
+  });
 
   it('stops waiting, so a restore settles exactly once', () => {
-    seedTwoTabs()
-    const actor = started()
+    seedTwoTabs();
+    const h = started();
 
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
 
-    expect(contextOf(actor).pendingTabOrder).toBeUndefined()
-    expect(contextOf(actor).pendingTerminalTabIds).toBeUndefined()
-  })
-})
+    expect(dataOf(h).pendingTabOrder).toBeUndefined();
+    expect(dataOf(h).pendingTerminalTabIds).toBeUndefined();
+  });
+});
 
 describe('moving a terminal from a tab into the panel', () => {
   it('prunes the group it emptied', () => {
-    const actor = started()
-    actor.send({ type: 'ADD_TAB', tab: { path: 'terminal:t-1', isTerminal: true, terminalInfo: { id: 't-1', title: 't-1', cwd: '/tmp' } } } as never)
-    actor.send({ type: 'CREATE_GROUP', name: 'shells', color: 'blue', tabPaths: ['terminal:t-1'] } as never)
-    expect(contextOf(actor).tabGroups).toHaveLength(1)
+    const h = started();
+    h.send({ type: 'ADD_TAB', tab: { path: 'terminal:t-1', isTerminal: true, terminalInfo: { id: 't-1', title: 't-1', cwd: '/tmp' } } as never });
+    h.send({ type: 'CREATE_GROUP', name: 'shells', tabPaths: ['terminal:t-1'] });
+    expect(dataOf(h).tabGroups).toHaveLength(1);
 
-    actor.send({ type: 'MOVE_TERMINAL_TO_PANEL', path: 'terminal:t-1' })
+    h.send({ type: 'MOVE_TERMINAL_TO_PANEL', path: 'terminal:t-1' });
 
-    expect(contextOf(actor).openFiles).toEqual([])
-    expect(contextOf(actor).tabGroups, 'a group with no tabs still renders in the tab bar').toEqual([])
-  })
-})
+    expect(dataOf(h).openFiles).toEqual([]);
+    expect(dataOf(h).tabGroups, 'a group with no tabs still renders in the tab bar').toEqual([]);
+  });
+});
 
-// A popout showing this surface observes the layout and writes none, which is M5.
-//
-// Every window has its own copy of the window storage but they share its names, so two windows showing the
-// code surface kept their tabs under one key: each restored the other's and each rewrote them, and which
-// layout you got was whichever window had most recently changed something. The shell already decides which
-// window records app-wide layout — it is how the last-open surface is recorded — and answers the same
-// question on `SURFACE_STARTED`.
 describe('which window keeps the layout', () => {
-  /**
-   * A window with a layout of its own and a tab arriving in it.
-   *
-   * **It has to be a window that would write**, which is the part that took a mutation to notice: a machine
-   * whose restore has not settled saves nothing at all (`saveTabsAction` returns early), so a case over one
-   * passes whether or not the window is allowed to write.
-   */
   const aWindowWithATab = (ownsAppLayout?: boolean) => {
     localStorage.setItem(TABS_KEY, JSON.stringify({
       tabs: [{ path: '/src/a.ts', type: 'file', order: 0 }], activeFilePath: '/src/a.ts',
-    }))
-    const actor = started()
-    if (ownsAppLayout !== undefined) actor.send({ type: 'SURFACE_STARTED', ownsAppLayout })
+    }));
+    const h = started();
+    if (ownsAppLayout !== undefined) h.send({ type: 'SURFACE_STARTED', ownsAppLayout });
     // The restore gives up, which is what makes this machine one that saves from here on
-    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/b.ts', type: 'file', name: 'b.ts' } })
-    return actor
-  }
+    h.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' });
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/b.ts', content: '', originalContent: '', modified: false } as OpenFile });
+    return h;
+  };
 
   it('writes nothing when the shell says another window keeps it', () => {
-    aWindowWithATab(false)
+    aWindowWithATab(false);
 
-    expect(storedTabs().tabs.map(tab => tab.path), "the popout rewrote the main window's tabs")
-      .toEqual(['/src/a.ts'])
-  })
+    expect(storedTabs().tabs.map((tab) => tab.path), "the popout rewrote the main window's tabs")
+      .toEqual(['/src/a.ts']);
+  });
 
   it('writes when the shell says this window keeps it', () => {
-    aWindowWithATab(true)
+    aWindowWithATab(true);
 
-    expect(storedTabs().tabs.map(tab => tab.path)).toContain('/src/b.ts')
-  })
+    expect(storedTabs().tabs.map((tab) => tab.path)).toContain('/src/b.ts');
+  });
 
   it('writes when nothing has said otherwise, since a window that was never told is the only one', () => {
-    aWindowWithATab()
+    aWindowWithATab();
 
-    expect(storedTabs().tabs.map(tab => tab.path)).toContain('/src/b.ts')
-  })
-})
+    expect(storedTabs().tabs.map((tab) => tab.path)).toContain('/src/b.ts');
+  });
+});
 
-/**
- * **Who owns the terminal pool**, which is a module singleton and so has nothing else that could.
- *
- * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws the
- * same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
- * replaces this pack's frontend by importing a fresh module with a fresh pool, and the last one's emulator
- * instances, DOM and GL contexts stay in the window with nothing left that could reach them.
- *
- * A child actor and not an `exit` action, because **XState 5 runs no `exit` action on `actor.stop()`** — an
- * exit here would read as cleanup and be dead code. An invoked actor's cleanup does run.
- */
 describe('the terminal pool the code surface holds', () => {
   it('is left alone while the surface is running', () => {
-    const actor = started()
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+    const h = started();
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } as OpenFile });
 
     expect(terminalPool.disposeAll, 'a running surface disposed the emulators it is drawing with')
-      .not.toHaveBeenCalled()
-  })
+      .not.toHaveBeenCalled();
+  });
 
   it('is disposed when the surface stops, which is when the shell replaces this frontend', () => {
-    const actor = started()
+    const h = started();
 
-    actor.stop()
+    h.stop();
 
     expect(terminalPool.disposeAll, 'the stopped surface left its emulators in the window')
-      .toHaveBeenCalledTimes(1)
-  })
-})
+      .toHaveBeenCalledTimes(1);
+  });
+});
 
-// A diff is read when its tab opens. The file under it goes on changing, so the commit panel reads an open
-// diff again when the repository says it changed, and hands the surface what it read.
 describe('an open diff read again', () => {
   const unstaged = (modifiedContent: string, originalContent = 'in the index\n') =>
-    ({ path: 'a.ts', staged: false, originalContent, modifiedContent })
-  const theTab = (actor: ReturnType<typeof started>) => contextOf(actor).openFiles.find(file => file.path === 'diff:a.ts:unstaged') as OpenFile
+    ({ path: 'a.ts', staged: false, originalContent, modifiedContent });
+  const theTab = (h: ReturnType<typeof started>) => dataOf(h).openFiles.find((file) => file.path === 'diff:a.ts:unstaged') as OpenFile;
   const opened = async () => {
-    const { diffTab } = await import('#features/code/fe/utils/diff-tabs.ts')
-    const actor = started()
-    actor.send({ type: 'ADD_TAB', tab: diffTab(unstaged('first edit\n')) })
-    return actor
-  }
+    const { diffTab } = await import('#features/code/fe/utils/diff-tabs.ts');
+    const h = started();
+    h.send({ type: 'ADD_TAB', tab: diffTab(unstaged('first edit\n')) });
+    return h;
+  };
 
   it('shows the file as it is now, where the tab is', async () => {
-    const actor = await opened()
+    const h = await opened();
     // Kept, so that the next tab opens beside it and not in its place
-    actor.send({ type: 'PROMOTE_PREVIEW_TAB', path: 'diff:a.ts:unstaged' })
-    actor.send({ type: 'ADD_TAB', tab: { path: '/src/other.ts', content: '', originalContent: '', modified: false } })
+    h.send({ type: 'PROMOTE_PREVIEW_TAB', path: 'diff:a.ts:unstaged' });
+    h.send({ type: 'ADD_TAB', tab: { path: '/src/other.ts', content: '', originalContent: '', modified: false } });
 
-    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n', 'staged since\n') })
+    h.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n', 'staged since\n') });
 
-    expect(theTab(actor)).toMatchObject({ content: 'second edit\n', originalContent: 'second edit\n', modified: false })
-    expect(theTab(actor).gitDiff?.originalContent).toBe('staged since\n')
-    expect(contextOf(actor).activeFilePath, 'and the tab being looked at stays the one in front').toBe('/src/other.ts')
-  })
+    expect(theTab(h)).toMatchObject({ content: 'second edit\n', originalContent: 'second edit\n', modified: false });
+    expect(theTab(h).gitDiff?.originalContent).toBe('staged since\n');
+    expect(dataOf(h).activeFilePath, 'and the tab being looked at stays the one in front').toBe('/src/other.ts');
+  });
 
   it('keeps what was typed into it, and says the file changed under that', async () => {
-    const actor = await opened()
-    const typed = contextOf(actor).openFiles.map(file => file.path === 'diff:a.ts:unstaged' ? { ...file, content: 'typed, not saved\n', modified: true } : file)
-    actor.send({ type: 'UPDATE_STATE', updates: { openFiles: typed } })
+    const h = await opened();
+    const typed = dataOf(h).openFiles.map((file) => file.path === 'diff:a.ts:unstaged' ? { ...file, content: 'typed, not saved\n', modified: true } : file);
+    h.send({ type: 'UPDATE_STATE', updates: { openFiles: typed as OpenFile[] } });
 
-    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('first edit\n', 'staged since\n') })
-    expect(theTab(actor), 'only the index moved: nothing to settle').toMatchObject({ content: 'typed, not saved\n', modified: true })
-    expect(theTab(actor).pendingSaveConflict).toBeFalsy()
-    expect(theTab(actor).gitDiff?.originalContent).toBe('staged since\n')
+    h.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('first edit\n', 'staged since\n') });
+    expect(theTab(h), 'only the index moved: nothing to settle').toMatchObject({ content: 'typed, not saved\n', modified: true });
+    expect(theTab(h).pendingSaveConflict).toBeFalsy();
+    expect(theTab(h).gitDiff?.originalContent).toBe('staged since\n');
 
-    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('edited by something else\n') })
-    expect(theTab(actor)).toMatchObject({ content: 'typed, not saved\n', modified: true, externallyModified: true, pendingSaveConflict: true })
-  })
+    h.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('edited by something else\n') });
+    expect(theTab(h)).toMatchObject({ content: 'typed, not saved\n', modified: true, externallyModified: true, pendingSaveConflict: true });
+  });
 
   it('opens no tab for a diff whose tab was closed since', async () => {
-    const actor = await opened()
-    actor.send({ type: 'CLOSE_TAB', path: 'diff:a.ts:unstaged' })
+    const h = await opened();
+    h.send({ type: 'CLOSE_TAB', path: 'diff:a.ts:unstaged' });
 
-    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n') })
+    h.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n') });
 
-    expect(contextOf(actor).openFiles.map(file => file.path)).toEqual([])
-  })
-})
+    expect(dataOf(h).openFiles.map((file) => file.path)).toEqual([]);
+  });
+});
 
 describe("the feature's settings reaching the terminals", () => {
   it('gives the saved copy-on-selection setting to the terminal pool when the surface starts, not only when it next changes', async () => {
-    const actor = started()
-    vi.mocked(terminalPool.setCopyOnSelect).mockClear()
+    const h = started();
+    vi.mocked(terminalPool.setCopyOnSelect).mockClear();
 
-    await startOver(actor, { baseDirectory: '/work', settings: { copyOnSelect: true } })
-    expect(terminalPool.setCopyOnSelect, 'the saved value reaches the terminals at start').toHaveBeenLastCalledWith(true)
-  })
+    await startOver(h, { baseDirectory: '/work', settings: { copyOnSelect: true } });
+    expect(terminalPool.setCopyOnSelect, 'the saved value reaches the terminals at start').toHaveBeenLastCalledWith(true);
+  });
 
   it('gives the copy-on-selection setting to the terminal pool as it changes, and off when it is not set', () => {
-    const actor = started()
-    vi.mocked(terminalPool.setCopyOnSelect).mockClear()
+    const h = started();
+    vi.mocked(terminalPool.setCopyOnSelect).mockClear();
 
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { copyOnSelect: true } } as never)
-    expect(terminalPool.setCopyOnSelect).toHaveBeenLastCalledWith(true)
+    h.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { copyOnSelect: true } as never });
+    expect(terminalPool.setCopyOnSelect).toHaveBeenLastCalledWith(true);
 
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { copyOnSelect: false } } as never)
-    expect(terminalPool.setCopyOnSelect).toHaveBeenLastCalledWith(false)
+    h.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { copyOnSelect: false } as never });
+    expect(terminalPool.setCopyOnSelect).toHaveBeenLastCalledWith(false);
 
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: {} } as never)
-    expect(terminalPool.setCopyOnSelect, 'a setting that is not there is off, not left as it was').toHaveBeenLastCalledWith(false)
-  })
+    h.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: {} as never });
+    expect(terminalPool.setCopyOnSelect, 'a setting that is not there is off, not left as it was').toHaveBeenLastCalledWith(false);
+  });
 
   it('gives the cursor and link settings to the terminal pool at start and as they change, with their defaults when unset', async () => {
-    const actor = started()
-    vi.mocked(terminalPool.setViewSettings).mockClear()
+    const h = started();
+    vi.mocked(terminalPool.setViewSettings).mockClear();
 
-    await startOver(actor, { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } })
-    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', linkPreview: 'all' })
+    await startOver(h, { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } });
+    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', linkPreview: 'all' });
 
     // The blink is not a view's setting: one changed leaves the view's as they were, at their defaults here
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { cursorBlink: 'off' } } as never)
-    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'hollow', linkPreview: 'osc8' })
-  })
-})
+    h.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { cursorBlink: 'off' } as never });
+    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'hollow', linkPreview: 'osc8' });
+  });
+});
 
 describe('starting over a folder', () => {
-  it('has each panel ask about the folder the start names, which is the surface\'s by the time they ask', async () => {
-    const { tell } = await import('#generated/events.ts')
-    const actor = started()
-    vi.mocked(tell).mockClear()
-    invoked.length = 0
+  it("has each panel ask about the folder the start names, which is the surface's by the time they ask", async () => {
+    const h = started();
+    h.reset();
 
-    await startOver(actor, { baseDirectory: '/work' })
+    await startOver(h, { baseDirectory: '/work' });
 
-    expect(invoked, 'the pull request panel asks whether GitHub answers for it').toContain('pr.CHECK_GITHUB_ACCESS')
-    expect(invoked, 'the commit panel asks for the repositories under it').toContain('commit.LIST_REPOSITORIES')
-  })
-})
+    const asked = h.made.map((a) => a.event.type);
+    expect(asked, 'the pull request panel asks whether GitHub answers for it').toContain('pr.CHECK_GITHUB_ACCESS');
+    expect(asked, 'the commit panel asks for the repositories under it').toContain('commit.LIST_REPOSITORIES');
+  });
+});
 
 describe('asking for what the surface starts from', () => {
   it('hears the ask made last: one still under way when the directory moves is stopped, and its answer changes nothing', async () => {
-    const actor = started()
-    actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
-    const first = starts.pop()!
+    const h = started();
+    h.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
+    const first = h.latestAsk('GET_CODE_START');
 
-    actor.send({ type: 'BASE_DIRECTORY_CHANGED', baseDirectory: '/second' })
-    const second = starts.pop()!
-    second({ ok: true, value: { baseDirectory: '/second' } })
-    first({ ok: true, value: { baseDirectory: '/first' } })
+    h.send({ type: 'BASE_DIRECTORY_CHANGED', baseDirectory: '/second' });
+    const second = h.latestAsk('GET_CODE_START');
+    expect(first.stopped).toBe(true);
 
-    await vi.waitFor(() => expect(contextOf(actor).baseDirectory).toBe('/second'))
-    await new Promise<void>(resolve => setImmediate(resolve))
-    expect(contextOf(actor).baseDirectory, 'the stopped ask is not heard after it').toBe('/second')
-  })
-})
+    await second.answer({ baseDirectory: '/second' });
+    await first.answer({ baseDirectory: '/first' });
+
+    expect(dataOf(h).baseDirectory, 'the stopped ask is not heard after it').toBe('/second');
+  });
+});

@@ -8,7 +8,7 @@
   />
 
   <!-- Commits Section -->
-  <div v-if="commitLog.length > 0 || git.data.logPath" class="flex-shrink-0 border-t border-neutral-800">
+  <div v-if="commitLog.length > 0 || history?.data.logPath" class="flex-shrink-0 border-t border-neutral-800">
     <div class="flex items-center justify-between p-3 px-5 cursor-pointer hover:bg-neutral-800/60 transition-colors" @click="toggleCommitsExpanded">
       <div class="flex items-center gap-1 text-xs font-medium text-neutral-400">
         <ChevronRight v-if="!isCommitsExpanded" class="w-3 h-3" />
@@ -45,8 +45,8 @@
         </div>
       </div>
       <!-- A file's history, followed across its renames, until it is cleared -->
-      <div v-if="git.data.logPath" class="flex items-center gap-2 pl-5 pr-3 mb-1.5 text-[11px] text-neutral-400" data-testid="file-history">
-        <span class="flex-1 truncate" :title="git.data.logPath">History of {{ git.data.logPath }}</span>
+      <div v-if="history?.data.logPath" class="flex items-center gap-2 pl-5 pr-3 mb-1.5 text-[11px] text-neutral-400" data-testid="file-history">
+        <span class="flex-1 truncate" :title="history.data.logPath">History of {{ history.data.logPath }}</span>
         <button class="px-1.5 py-0.5 rounded hover:bg-neutral-700" @click="send({ type: 'commit.CLEAR_FILE_HISTORY' })">Whole history</button>
       </div>
       <div class="space-y-0.5 pl-3">
@@ -86,8 +86,8 @@
               <button @click.stop="openRevertCommitDialog(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Revert this commit">
                 <Undo2 class="w-3 h-3 text-neutral-400" />
               </button>
-              <Loader2 v-if="git.data.resettingTo === entry.hash" data-testid="reset-busy" class="w-3 h-3 animate-spin text-neutral-400" />
-              <button v-else data-testid="reset-to-commit" :disabled="!!git.data.resettingTo" @click.stop="pendingReset = entry" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40" title="Reset to this commit">
+              <Loader2 v-if="history?.data.resettingTo === entry.hash" data-testid="reset-busy" class="w-3 h-3 animate-spin text-neutral-400" />
+              <button v-else data-testid="reset-to-commit" :disabled="!!history?.data.resettingTo" @click.stop="pendingReset = entry" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40" title="Reset to this commit">
                 <RotateCw class="w-3 h-3 text-neutral-400" />
               </button>
               <button @click.stop="copyCommitHash(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy commit hash">
@@ -110,11 +110,11 @@
             <button data-testid="tag-save" :disabled="!tagName.trim()" class="px-2 py-0.5 text-[11px] rounded text-neutral-200 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-40" @click="createTag(entry.hash)">Tag</button>
           </div>
           <!-- A reword, over the commit's whole message once it is read -->
-          <div v-if="git.data.rewording?.hash === entry.hash" class="mt-1.5 ml-5 flex flex-col gap-1">
+          <div v-if="history?.data.rewording?.hash === entry.hash" class="mt-1.5 ml-5 flex flex-col gap-1">
             <textarea
-              v-if="git.data.rewording.message !== null"
+              v-if="history.data.rewording.message !== null"
               data-testid="reword-message"
-              :value="git.data.rewording.message"
+              :value="history.data.rewording.message"
               @input="rewordText = ($event.target as HTMLTextAreaElement).value"
               @keydown.escape="send({ type: 'commit.CANCEL_REWORD' })"
               rows="3"
@@ -125,15 +125,15 @@
               <button class="px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="send({ type: 'commit.CANCEL_REWORD' })">Cancel</button>
               <button
                 data-testid="reword-save"
-                :disabled="git.data.rewording.message === null || !(rewordText ?? git.data.rewording.message).trim()"
+                :disabled="history.data.rewording.message === null || !(rewordText ?? history.data.rewording.message).trim()"
                 class="px-2 py-0.5 text-[11px] rounded text-neutral-200 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-40"
-                @click="send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'reword', message: rewordText ?? git.data.rewording.message! })"
+                @click="send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'reword', message: rewordText ?? history.data.rewording.message! })"
               >Reword</button>
             </div>
           </div>
         </div>
       </div>
-      <button v-if="git.data.logCursor && !commitSearchQuery.trim()" data-testid="load-more-log" class="ml-5 mt-1 px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="send({ type: 'commit.LOAD_MORE_LOG' })">Load more</button>
+      <button v-if="history?.data.logCursor && !commitSearchQuery.trim()" data-testid="load-more-log" class="ml-5 mt-1 px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="send({ type: 'commit.LOAD_MORE_LOG' })">Load more</button>
     </div>
   </div>
 
@@ -162,27 +162,23 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed, nextTick, watch } from 'vue'
-import type { CodeState } from '#features/code/fe/state.ts'
 import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
 import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2, Tag, Loader2 } from 'lucide-vue-next'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import HistoryGraph from '#features/code/fe/features/commit/HistoryGraph.vue'
 import { laneRows } from '#features/code/fe/utils/history-lanes.ts'
-import { panelChild } from '../children.ts';
+import { useState } from '#generated/state-fe.ts'
 
 const props = defineProps<{
   toast: { success: (title: string, message: string) => void } | undefined
 }>()
 
-const codeActor: CodeState = useSurface()
-const commitActor = panelChild(codeActor, 'commit')!
-
-const { state: git, send } = useState(commitActor)
-const commitLog = computed(() => git.value.data.commitLog as CommitLogEntry[])
+const { child } = useState('code')
+const { send, child: commitChild } = useState(() => child('commit'))
+const { state: history } = useState(() => commitChild('history'))
+const commitLog = computed(() => (history.value?.data.commitLog ?? []) as CommitLogEntry[])
 /** The commit a tag is being made at, and the name typed for it */
 const tagging = ref<string | null>(null)
 const tagName = ref('')
@@ -201,7 +197,7 @@ const createTag = (hash: string) => {
 
 /** The reword's text as edited, until it is saved or another commit is reworded */
 const rewordText = ref<string | null>(null)
-watch(() => git.value.data.rewording?.hash, () => { rewordText.value = null })
+watch(() => history.value?.data.rewording?.hash, () => { rewordText.value = null })
 const lanes = computed(() => laneRows(commitLog.value))
 /** The commits shown that what is checked out already holds, which there is nothing to pick from: children come first */
 const inCheckout = computed(() => {

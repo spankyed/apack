@@ -19,9 +19,9 @@
           v-if="code.data.baseDirectory && showDirectoryMenu"
           :base-directory="code.data.baseDirectory"
           @open-directory="handleDirectorySelect"
-          @open-terminal="terminalActor?.send({ type: 'terminal.CREATE', cwd: code.data.baseDirectory })"
+          @open-terminal="sendTerminal({ type: 'terminal.CREATE', cwd: code.data.baseDirectory })"
           @open-project-directory="handleProjectDirectorySelect"
-          @refresh="explorerActor?.send({ type: 'explorer.REFRESH_TREE' })"
+          @refresh="sendExplorer({ type: 'explorer.REFRESH_TREE' })"
         />
         <div class="header-actions flex items-center gap-1 ml-auto">
           <slot name="actions" />
@@ -79,10 +79,9 @@
 
 import type { Component } from 'vue'
 import { computed } from 'vue'
-import { type CodeState } from '#features/code/fe/state.ts'
-import { isAnyMenuOpen, useState, useSurface } from '@apackdev/sdk/fe'
+import { isAnyMenuOpen } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 import BaseDirectoryMenu from '#features/code/fe/features/explorer/components/BaseDirectoryMenu.vue'
-import { panelChild } from './children.ts';
 import {
   FolderOpen,
   Search,
@@ -102,15 +101,12 @@ defineEmits<{
   'title-click': []
 }>()
 
-const actor: CodeState = useSurface()
-const explorerActor = panelChild(actor, 'explorer')!
-const terminalActor = panelChild(actor, 'terminal')!
-const commitActor = panelChild(actor, 'commit')!
+const { state: code, send, child } = useState('code')
+const { send: sendExplorer } = useState(() => child('explorer'))
+const { send: sendTerminal } = useState(() => child('terminal'))
+const { state: git } = useState(() => child('commit'))
 
-const { state: code, send } = useState(actor)
-const { state: git } = useState(commitActor)
-
-const changeCount = computed(() => git.value.data.gitStatus?.length ?? 0)
+const changeCount = computed(() => (git.value?.at === 'open' ? git.value.data.gitStatus.length : 0))
 
 const directoryMenuPanels = ['explorer', 'commit', 'pr', 'search'] as const
 const showDirectoryMenu = computed(() =>
@@ -125,7 +121,7 @@ const handleDirectorySelect = async () => {
   try {
     const directoryPath = await window.electronAPI.fileUtils.selectDirectory()
     if (directoryPath && directoryPath !== code.value.data.baseDirectory) {
-      explorerActor?.send({ type: 'explorer.SET_BASE_DIRECTORY', path: directoryPath })
+      sendExplorer({ type: 'explorer.SET_BASE_DIRECTORY', path: directoryPath })
     }
   } catch (error) {
     console.error('Error selecting directory:', error)
@@ -133,7 +129,7 @@ const handleDirectorySelect = async () => {
 }
 
 const handleProjectDirectorySelect = (path: string) => {
-  explorerActor?.send({ type: 'explorer.SET_BASE_DIRECTORY', path })
+  sendExplorer({ type: 'explorer.SET_BASE_DIRECTORY', path })
 }
 
 const codePanels = [
