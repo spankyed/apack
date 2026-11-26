@@ -82,10 +82,10 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   let cancelRefresh: (() => void) | undefined;
   /** Runs once a burst of commits from elsewhere has passed. Nothing waits on this timer to catch what it throws, and an uncaught error ends the process */
   const refreshAfterBurst = () => {
-    if (cancelRefresh || !database.isOpen || !runHistory.database.isOpen) return;
+    if (cancelRefresh || database.isOpen === false || runHistory.database.isOpen === false) return;
     const run = () => {
       cancelRefresh = undefined;
-      if (!database.isOpen || !runHistory.database.isOpen) return;
+      if (database.isOpen === false || runHistory.database.isOpen === false) return;
       try {
         // Either database: a tool resets the run history first, and may stop before the app's
         if (engine.admin.replacedElsewhere() !== undefined || runHistory.engine.admin.replacedElsewhere() !== undefined) {
