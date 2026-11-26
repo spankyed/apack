@@ -6,7 +6,9 @@ import {
   system,
   windowFrame,
   type AnyState,
+  type Asks,
   type Clock,
+  type Handle,
   type State,
   type System,
   type ViewHost,
@@ -47,7 +49,7 @@ export interface WindowStateBridgeOptions {
 
 export interface WindowStateBridge {
   readonly system: System;
-  createSurfaceActor(surface: Surface & { state: AnyState }, ownsAppLayout: boolean): ActorLogic<StateSurfaceSnapshot, StateEvent>;
+  createSurfaceActor(surface: Surface & { state: AnyState }): ActorLogic<StateSurfaceSnapshot, StateEvent>;
   stopAll(): void;
 }
 
@@ -105,12 +107,11 @@ function readSurfaceValue(sys: System, ref: string): { value: string; context: R
   };
 }
 
+type SurfaceHandle = Handle<unknown, never, Asks, unknown>;
+
 interface ActiveSurface {
-  readonly ref: string;
-  readonly state: AnyState;
-  readonly ownsAppLayout: boolean;
-  readonly meta: StateSurfaceMeta;
   readonly actor: AnyActorRef;
+  handle?: SurfaceHandle;
   inTransition: boolean;
   stopped: boolean;
 }
@@ -229,11 +230,10 @@ export function createWindowStateBridge(options: WindowStateBridgeOptions): Wind
   }
 
   const activeSurfaces = new Map<string, ActiveSurface>();
-  let restarting = false;
   let bridgeStopped = false;
 
   const unsubscribeSys = sys.subscribe((changed) => {
-    if (restarting || bridgeStopped) return;
+    if (bridgeStopped) return;
     for (const ref of changed) {
       const entry = activeSurfaces.get(ref);
       if (!entry || entry.stopped || entry.inTransition) continue;
@@ -244,34 +244,14 @@ export function createWindowStateBridge(options: WindowStateBridgeOptions): Wind
   });
   cleanups.push(unsubscribeSys);
 
-  /**
-   * Stops one running surface in `sys`. `@apackdev/state` stops a system wholesale rather than per-ref, so when other
-   * surfaces remain active we stop `sys` and cleanly restart only the remaining ones so `sys.start` never collides on
-   * a reloaded pack ref.
-   */
+  /** Stops one running surface in `sys` by handle without disturbing sibling surfaces. */
   const stopSurface = (ref: string) => {
     const removed = activeSurfaces.get(ref);
     if (!removed) return;
     removed.stopped = true;
     activeSurfaces.delete(ref);
-    if (bridgeStopped) return;
-
-    restarting = true;
-    try {
-      sys.stop();
-      for (const remaining of activeSurfaces.values()) {
-        sys.start(remaining.ref, remaining.state as State<any, any, any, never>);
-        sys.port.tell(remaining.ref, { type: 'SURFACE_STARTED', ownsAppLayout: remaining.ownsAppLayout });
-      }
-    } finally {
-      restarting = false;
-    }
-
-    for (const remaining of activeSurfaces.values()) {
-      if (!remaining.stopped && remaining.actor.getSnapshot().status === 'active') {
-        remaining.actor.send({ type: STATE_SYNC_EVENT });
-      }
-    }
+    if (bridgeStopped || !removed.handle) return;
+    sys.stop(removed.handle);
   };
 
   const stopAll = () => {
@@ -285,7 +265,6 @@ export function createWindowStateBridge(options: WindowStateBridgeOptions): Wind
 
   const createSurfaceActor = (
     surface: Surface & { state: AnyState },
-    ownsAppLayout: boolean,
   ): ActorLogic<StateSurfaceSnapshot, StateEvent> => {
     const ref = surface.id;
     const meta: StateSurfaceMeta = { id: ref, ...(surface.chrome ? { chrome: surface.chrome } : {}) };
@@ -302,10 +281,6 @@ export function createWindowStateBridge(options: WindowStateBridgeOptions): Wind
         if (activeSurfaces.has(ref)) stopSurface(ref);
 
         const entry: ActiveSurface = {
-          ref,
-          state: surface.state,
-          ownsAppLayout,
-          meta,
           actor: self,
           inTransition: true,
           stopped: false,
@@ -313,7 +288,7 @@ export function createWindowStateBridge(options: WindowStateBridgeOptions): Wind
         activeSurfaces.set(ref, entry);
         instances.set(self, entry);
         try {
-          sys.start(ref, surface.state as State<any, any, any, never>);
+          entry.handle = sys.start(ref, surface.state as State<any, any, any, never>);
         } catch (error) {
           entry.stopped = true;
           activeSurfaces.delete(ref);

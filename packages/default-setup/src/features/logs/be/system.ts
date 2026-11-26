@@ -29,12 +29,7 @@ export const logsSystem = state<
   NormalizeAsks<ContractAsks<Contract>>
 >()({
   data: { logs: [] },
-  run: ({ send, signal, onExit }) => new Promise<void>((resolve) => {
-    // Keep `run` active until state exit so `send` stays alive for future `onLog` callbacks.
-    onExit(onLog((log) => send({ type: 'ADD_LOG', log })));
-    signal.addEventListener('abort', () => resolve(), { once: true });
-  }),
-  failed: () => {},
+  listen: ({ send }) => onLog((log) => send({ type: 'ADD_LOG', log })),
   on: {
     CLEAR_LOGS: (_event, { broadcast }) => {
       broadcast('logs', { type: 'LOGS_CLEARED' });

@@ -20,12 +20,7 @@ export const helpSystem = hostState<
   IncomingOnlyEventsOf<Contract>,
   {}
 >()({
-  run: ({ send, signal, onExit }) => new Promise<void>((resolve) => {
-    // Keep `run` active until state exit so `send` stays alive for catalog change callbacks.
-    onExit(onPackCatalogChanged(() => send({ type: 'CATALOG_CHANGED' })));
-    signal.addEventListener('abort', () => resolve(), { once: true });
-  }),
-  failed: () => {},
+  listen: ({ send }) => onPackCatalogChanged(() => send({ type: 'CATALOG_CHANGED' })),
   on: {
     GET_HELP: (_event, { broadcast }) => {
       broadcast('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() });
