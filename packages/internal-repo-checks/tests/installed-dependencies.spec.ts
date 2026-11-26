@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { duplicateCopies, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
 import { missingBroker } from '../../../scripts/lib/broker-installed.mjs';
+import { missingHoistedOverrides, pruneNestedOverrides } from '../../../scripts/lib/external-packages.mjs';
 
 
 let dir: string | undefined;
@@ -127,5 +128,40 @@ describe("the terminal broker's platform package", () => {
   it('says nothing when it is there, or when no package is built for this platform', () => {
     expect(missingBroker(aCheckout(['@apackdev/terminal-here'], true))).toBeUndefined();
     expect(missingBroker(aCheckout(['@apackdev/terminal-there'], false))).toBeUndefined();
+  });
+});
+
+describe('override switching cleanup and hoisting check', () => {
+  it('prunes nested workspace copies and broken symlinks for switched packages while preserving root and unrelated packages', () => {
+    const root = aDir('prune-nested-');
+    // Root node_modules must stay untouched
+    fs.mkdirSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true });
+    // Workspace A has a scoped directory + unrelated package
+    fs.mkdirSync(path.join(root, 'packages', 'apack-host', 'node_modules', '@elmdb', 'ears'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'other-pkg'), { recursive: true });
+    // Workspace B has a broken symlink for an unscoped package and a valid symlink for a scoped one
+    fs.mkdirSync(path.join(root, 'packages', 'server', 'node_modules', '@elmdb'), { recursive: true });
+    fs.symlinkSync(path.join(root, 'does-not-exist'), path.join(root, 'packages', 'server', 'node_modules', 'elmdb'));
+    fs.symlinkSync(path.join(root, 'node_modules', '@elmdb', 'ears'), path.join(root, 'packages', 'server', 'node_modules', '@elmdb', 'ears'));
+
+    const removed = pruneNestedOverrides(root, ['elmdb', '@elmdb/ears']).sort();
+    expect(removed).toEqual([
+      'packages/apack-host/node_modules/@elmdb/ears',
+      'packages/server/node_modules/@elmdb/ears',
+      'packages/server/node_modules/elmdb',
+    ]);
+    // Empty @elmdb scope dirs are cleaned up too; unrelated and root packages remain
+    expect(fs.existsSync(path.join(root, 'packages', 'apack-host', 'node_modules', '@elmdb'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages', 'server', 'node_modules', '@elmdb'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages', 'apack-host', 'node_modules', 'other-pkg'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'node_modules', '@elmdb', 'ears'))).toBe(true);
+  });
+
+  it('reports packages missing from root node_modules after install', () => {
+    const root = aDir('hoisted-check-');
+    fs.mkdirSync(path.join(root, 'node_modules', 'elmdb'), { recursive: true });
+    expect(missingHoistedOverrides(root, ['elmdb', '@elmdb/ears'])).toEqual(['@elmdb/ears']);
+    fs.mkdirSync(path.join(root, 'node_modules', '@elmdb', 'ears'), { recursive: true });
+    expect(missingHoistedOverrides(root, ['elmdb', '@elmdb/ears'])).toEqual([]);
   });
 });

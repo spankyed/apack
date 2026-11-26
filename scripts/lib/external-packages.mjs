@@ -6,6 +6,8 @@
 //
 // Plain Node, importing nothing outside `node:`: `deps.mjs` runs it before anything is installed, and the janitor
 // runs under launchd with no npm.
+import { existsSync, lstatSync, readdirSync, rmSync } from 'node:fs';
+import path from 'node:path';
 
 /**
  * @typedef {{ file: string, dir: string }} ExternalPackage
@@ -67,4 +69,61 @@ export function releaseOf(spec) {
 /** The repository that publishes `name`, or `undefined` @param {string} name */
 export function repositoryOf(name) {
   return Object.keys(REPOSITORIES).find((repo) => name in REPOSITORIES[repo].packages);
+}
+
+/**
+ * Removes stale nested workspace `packages/<ws>/node_modules/<pkg>` copies/symlinks for `packageNames` before
+ * reinstalling after an override switch (`deps:local` <-> `deps:pin` / `deps:released`), so npm hoists a single copy
+ * into root `node_modules` instead of leaving stale workspace links behind.
+ *
+ * @param {string} root
+ * @param {readonly string[]} packageNames
+ * @returns {string[]} paths removed, relative to `root`
+ */
+export function pruneNestedOverrides(root, packageNames) {
+  const packagesDir = path.join(root, 'packages');
+  if (!existsSync(packagesDir)) return [];
+  /** @type {string[]} */
+  const removed = [];
+  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const nodeModules = path.join(packagesDir, entry.name, 'node_modules');
+    if (!existsSync(nodeModules)) continue;
+    for (const name of packageNames) {
+      const segments = name.split('/');
+      const target = path.join(nodeModules, ...segments);
+      let present = false;
+      try {
+        lstatSync(target);
+        present = true;
+      } catch {
+        present = false;
+      }
+      if (!present) continue;
+      rmSync(target, { recursive: true, force: true });
+      removed.push(path.relative(root, target).split(path.sep).join('/'));
+      // Remove now-empty @scope folder so stale empty scope directories do not linger
+      if (segments.length === 2) {
+        const scopeDir = path.join(nodeModules, segments[0]);
+        try {
+          if (readdirSync(scopeDir).length === 0) rmSync(scopeDir, { recursive: true, force: true });
+        } catch {
+          // Scope directory already gone
+        }
+      }
+    }
+  }
+  return removed;
+}
+
+/**
+ * Returns any package in `packageNames` missing from root `node_modules` after install (for example, when a `file:`
+ * override was not hoisted or points at a missing directory).
+ *
+ * @param {string} root
+ * @param {readonly string[]} packageNames
+ * @returns {string[]}
+ */
+export function missingHoistedOverrides(root, packageNames) {
+  return packageNames.filter((name) => !existsSync(path.join(root, 'node_modules', ...name.split('/'))));
 }
