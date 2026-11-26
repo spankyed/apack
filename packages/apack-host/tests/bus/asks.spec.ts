@@ -3,11 +3,10 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // does — the system is not running, or the state it is in does not take the ask. And an answer to an ask this
 // process is waiting on is that ask's, taken off before any system or surface sees it.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, setup, type AnyActorRef } from 'xstate';
+import { state } from '@apackdev/state';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
 import { untypedAsk, type Message } from '@apackdev/sdk/events';
-import { defineSystem } from '@apackdev/sdk/framework';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 
 const registry = createNativePackTestRegistry();
@@ -15,57 +14,63 @@ startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 
 const COUNTER = 'counter-pack/counter';
 
-type Contract = {
-  context: { count: number };
-  incoming: { type: 'OPEN' } | { type: 'CLOSE' };
-  outgoing: { type: 'COUNTED' };
-  asks: {
-    COUNT: { answer: { count: number } }; READ: { answer: { count: number } }; WAIT: { answer: { count: number } };
-    STREAM: { answer: { count: number }; progress: number };
-  };
-};
-const spec = defineSystem<Contract>();
 /** What WAIT's handler waits on, which a case settles */
 let release: (count: number) => void = () => {};
-const answers = spec.answers({
-  COUNT: ({ context }) => ({ count: context.count + 1 }),
-  READ: ({ context }) => ({ count: context.count }),
-  WAIT: () => new Promise<number>((resolve) => { release = resolve; }).then((count) => ({ count })),
-  // Tells its asker 1 and 2, waits to be released, then tells 3 and answers: what it was handed says whether to go on
-  STREAM: async ({ progress, signal }) => {
-    progress(1);
-    progress(2);
-    const count = await new Promise<number>((resolve) => { release = resolve; });
-    streamStopped = signal.aborted;
-    progress(3);
-    return { count };
-  },
-});
 /** Whether STREAM's handler found its signal aborted when it was released */
 let streamStopped: boolean | undefined;
 
+type CounterShape = {
+  data: { count: number };
+  states: { closed: {}; open: {} };
+};
+type CounterEvents = { type: 'OPEN' } | { type: 'CLOSE' };
+type CounterAsks = {
+  COUNT: { args: {}; answer: { count: number } };
+  READ: { args: {}; answer: { count: number } };
+  WAIT: { args: {}; answer: { count: number } };
+  STREAM: { args: {}; answer: { count: number }; progress: number };
+};
+
 /** A system that takes COUNT only while open, and READ in either state */
-const counter = setup({ types: spec.types, actions: { ...answers.actions } }).createMachine({
-  context: { count: 41 },
+const counter = state<CounterShape, CounterEvents, CounterAsks>()({
+  data: { count: 41 },
   initial: 'closed',
-  on: { READ: answers.on.READ, WAIT: answers.on.WAIT, STREAM: answers.on.STREAM },
+  answers: {
+    READ: (_args, { data }) => ({ count: data.count }),
+    WAIT: () => new Promise<number>((resolve) => { release = resolve; }).then((count) => ({ count })),
+    // Tells its asker 1 and 2, waits to be released, then tells 3 and answers: what it was handed says whether to go on
+    STREAM: async (_args, { progress, signal }) => {
+      progress(1);
+      progress(2);
+      const count = await new Promise<number>((resolve) => { release = resolve; });
+      streamStopped = signal.aborted;
+      progress(3);
+      return { count };
+    },
+  },
   states: {
-    closed: { on: { OPEN: 'open' } },
-    open: { on: { COUNT: answers.on.COUNT, CLOSE: 'closed' } },
+    closed: { on: { OPEN: () => ({ at: 'open' }) } },
+    open: {
+      on: { CLOSE: () => ({ at: 'closed' }) },
+      answers: {
+        COUNT: (_args, { data }) => ({ count: data.count + 1 }),
+      },
+    },
   },
 });
 
-let bus: AnyActorRef;
+let bus: BackendBus;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const send = (message: Message) => { bus.send({ type: 'INCOMING', message }); };
 
 beforeEach(async () => {
+  streamStopped = undefined;
   registry.registerPack({ id: 'counter-pack', features: { counter: {
     system: { machine: counter, receives: ['OPEN', 'CLOSE', 'COUNT', 'READ', 'WAIT', 'STREAM'], asks: { COUNT: [], READ: [], WAIT: [], STREAM: [] } },
     // The surface a window's ask comes from, which its answer goes back to
     surface: { receives: [] },
   } } });
-  bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
   testRootEvents.emitConnected();
   await flush();
   takeSystemErrors();
@@ -84,7 +89,7 @@ describe('an ask', () => {
 
   it('is answered unavailable when the state the system is in does not take it', async () => {
     expect(await untypedAsk(COUNTER, { type: 'COUNT' })).toEqual({
-      ok: false, failure: { kind: 'unavailable', message: expect.stringContaining('does not take "COUNT" in the state it is in') },
+      ok: false, failure: { kind: 'unavailable', message: expect.stringContaining('does not take COUNT') },
     });
     send({ to: COUNTER, event: { type: 'OPEN' } });
     expect(await untypedAsk(COUNTER, { type: 'COUNT' })).toEqual({ ok: true, value: { count: 42 } });

@@ -1,6 +1,6 @@
 // A test app: the pack's registered systems under the app's bus core, with a client the test drives.
-import { createActor, type Actor, type AnyActorRef } from 'xstate';
-import { createBusMachine, HOST } from '@apackdev/host/bus';
+import type { System } from '@apackdev/state';
+import { createBus, type BackendBus } from '@apackdev/host/bus';
 import { resolveName, resolveRegistered } from '@apackdev/sdk/ids';
 import type { PackLifecycleHooks, PackRegistration, PackSystemLogic, ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 import { createViewHost } from '@apackdev/host/views';
@@ -77,6 +77,19 @@ export interface TestView<Result = unknown> {
   next(options?: { timeoutMs?: number }): Promise<ViewUpdate<Result>>;
   /** Unsubscribes, as a window's component unmounting does; the app stopping does it too */
   stop(): void;
+}
+
+/** A running backend system in a `TestApp`. */
+export interface TestSystem {
+  readonly ref: string;
+  /** Current committed `@apackdev/state` snapshot (`{ at?, data, pending? }`). */
+  read(): {
+    readonly at?: string;
+    readonly data: Record<string, unknown>;
+    readonly pending?: Record<string, unknown>;
+  };
+  /** Sends an event directly to this system. */
+  send(event: { type: string; [key: string]: unknown }): void;
 }
 
 export interface TestApp {
@@ -165,8 +178,10 @@ export interface TestApp {
   runFlow(label: string, options?: RunFlowOptions): Promise<FlowRun>;
   /** The steps a flow (the root flow or a subflow, by label) has run so far in this app. Readable after `stop` */
   flowSteps(label: string): FlowRunStep[];
-  /** A running system's actor */
-  system(systemId: string): AnyActorRef;
+  /** The `@apackdev/state` `System` running this test app's backend systems. */
+  readonly stateSystem: System;
+  /** A running backend system */
+  system(systemId: string): TestSystem;
   /**
    * Subscribes to a feature's view as a window does (`useView`), the feature named as `tell` names a
    * system. Each call is its own subscriber, so two of them stand in for two windows; subscribers asking for the
@@ -364,10 +379,8 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   const finished = (runNodeId: string) => reports.some((e) => isUpdate(e) && e.data.runNodeId === runNodeId && (e.data.status === 'completed' || e.data.status === 'failed'));
   const brainRunning = () => {
     const brainId = hasDesignation('brain') ? getDesignated('brain') : undefined;
-    const brain = brainId === undefined ? undefined : bus.system.get(brainId);
-    const snap = brain?.getSnapshot() as { matches?: (state: string) => boolean; value?: unknown } | undefined;
-    if (typeof snap?.matches === 'function') return snap.matches('running') === true;
-    return snap?.value === 'running' || (typeof snap?.value === 'string' && snap.value.startsWith('running.'));
+    const snap = brainId === undefined ? undefined : bus.read(brainId);
+    return snap?.at === 'running' || (typeof snap?.at === 'string' && snap.at.startsWith('running.'));
   };
   /** The running flows' run nodes and labels: the root flow's, and each subflow's not yet finished */
   /** The brain's session root: the newest root run still active */
@@ -384,7 +397,7 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   let stopped = false;
   /** Whether the packs are up, so a start that failed before they were doesn't shut them down twice */
   let packsUp = false;
-  const bus: Actor<ReturnType<typeof createBusMachine>> = createActor(createBusMachine({
+  const bus: BackendBus = createBus({
     registry: packs(),
     systems: () => systems,
     onOutgoing: (event) => testRootEvents.emitOutgoing(event),
@@ -397,13 +410,14 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       ];
       return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
     },
-  }), {
-    systemId: HOST.bus,
-    inspect: (inspection) => {
+    onStep: () => {
+      activity++;
+    },
+    onEvent: (event) => {
       activity++;
       // What systems send the bus for clients, connected or not
-      if (inspection.type === '@xstate.event' && inspection.event.type === 'OUTGOING' && inspection.actorRef === (inspection.actorRef as AnyActorRef).system.get(HOST.bus)) {
-        record((inspection.event as unknown as { message: Message }).message.event);
+      if (event.type === 'OUTGOING') {
+        record(event.message.event);
       }
     },
   });
@@ -486,7 +500,7 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
    * another app's `connect()` in the same test would set a flag on this one. The actor's own state is the
    * answer, read when the wait fails rather than when it started.
    */
-  const heldForAClient = (): string => (bus.getSnapshot().value === 'awaitingClient'
+  const heldForAClient = (): string => (bus.status === 'awaitingClient'
     ? ' No client has connected, and the bus holds sends to surfaces until one does, so a reply had nowhere to go:'
       + ' `await app.connect()` before the send.'
     : '');
@@ -622,11 +636,20 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
         .filter((e) => e.runNode.kind !== 'event' && flowLabels.get(e.runNode.id) === label)
         .map((e) => runStep(e));
     },
+    stateSystem: bus.system,
     system(systemId) {
       if (stopped) throw stoppedError();
-      const actor = bus.system.get(resolveSystemId(systemId, systems));
-      if (!actor) throw new Error(`System "${systemId}" isn't running`);
-      return actor;
+      const runningSystem = bus.getSystem(resolveSystemId(systemId, systems));
+      if (!runningSystem) throw new Error(`System "${systemId}" isn't running`);
+      return {
+        ref: runningSystem.ref,
+        read: () => {
+          const snap = runningSystem.read();
+          if (!snap) throw new Error(`System "${systemId}" isn't running`);
+          return snap;
+        },
+        send: (event) => runningSystem.send(event),
+      };
     },
     watchView<Result>(feature: string, view: string, args?: unknown): TestView<Result> {
       if (stopped) throw stoppedError();

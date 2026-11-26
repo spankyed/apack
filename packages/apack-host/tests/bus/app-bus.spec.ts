@@ -5,10 +5,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, setup, type AnyActorRef } from 'xstate';
+import { state } from '@apackdev/state';
 import { startTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
 import type { Message } from '@apackdev/sdk/events';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 import { appState, HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 import { hostRegistration } from '../../src/features/registration.ts';
 
@@ -22,8 +22,8 @@ const received: string[] = [];
 
 /** A system that records each CLIENT_CONNECTED it receives */
 function recorder(label: string) {
-  return setup({}).createMachine({
-    on: { CLIENT_CONNECTED: { actions: () => received.push(label) } },
+  return state<{}, { type: 'CLIENT_CONNECTED' }>()({
+    on: { CLIENT_CONNECTED: () => { received.push(label); } },
   });
 }
 
@@ -31,7 +31,7 @@ function registerRecorderPack(id: string) {
   registerPack({ id, features: { feature: { system: { machine: recorder(id), receives: ['CLIENT_CONNECTED'] } } } });
 }
 
-let bus: AnyActorRef;
+let bus: BackendBus;
 let packDir: string;
 const outgoing: Message[] = [];
 let stopOutgoing: () => void;
@@ -54,7 +54,7 @@ beforeEach(() => {
     id: 'fe-pack', name: 'fe-pack', version: '1.0.0', dir: packDir,
     manifest: { id: 'fe-pack', name: 'fe-pack', version: '1.0.0', features: { feature: { description: 'Feature declaration fixture.', system: { entry: 'system.ts' } } } },
   });
-  bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
 });
 
 afterEach(() => {
@@ -96,7 +96,7 @@ describe('createAppBus', () => {
       id: 'ping-pack',
       features: {
         feature: {
-          system: { machine: setup({}).createMachine({ on: { PING: { actions: () => pings.push('ping') } } }), receives: ['PING'] },
+          system: { machine: state<{}, { type: 'PING' }>()({ on: { PING: () => { pings.push('ping'); } } }), receives: ['PING'] },
           // The bus drops a send to a surface that declares no such event, so this case declares the two it sends
           surface: { receives: ['EARLY', 'LATE'] },
         },
@@ -104,7 +104,7 @@ describe('createAppBus', () => {
     });
     try {
       bus.stop();
-      bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+      bus = createAppBus(registry).start();
       testRootEvents.emitConnected();
       testRootEvents.emitIncoming({ to: 'ping-pack/feature', event: { type: 'PING' } });
       await flush();
@@ -120,7 +120,7 @@ describe('createAppBus', () => {
       id: 'ping-pack',
       features: {
         feature: {
-          system: { machine: setup({}).createMachine({ on: { PING: { actions: () => pings.push('ping') } } }), receives: ['PING'] },
+          system: { machine: state<{}, { type: 'PING' }>()({ on: { PING: () => { pings.push('ping'); } } }), receives: ['PING'] },
           // The bus drops a send to a surface that declares no such event, so this case declares the two it sends
           surface: { receives: ['EARLY', 'LATE'] },
         },
@@ -128,7 +128,7 @@ describe('createAppBus', () => {
     });
     try {
       bus.stop();
-      bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+      bus = createAppBus(registry).start();
       // A schedule tick or a `fire` step at boot, with no window open yet
       testRootEvents.emitIncoming({ to: 'ping-pack/feature', event: { type: 'PING' } });
       testRootEvents.emitSurfaceSend({ to: 'ping-pack/feature', event: { type: 'EARLY' } });

@@ -1,11 +1,10 @@
 import { boundEars } from '@apackdev/sdk/ears';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
 import type { Message } from '@apackdev/sdk/events';
 import { resetTestData, startTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import type { PackOrigin } from '@apackdev/host/packs';
-import { createAppBus, HOST } from '@apackdev/host/bus';
+import { createAppBus, HOST, type BackendBus } from '@apackdev/host/bus';
 import { createSettingsSystem, hostRegistration, settingsEvents } from '@apackdev/host/features';
 import { createSettingsAccess, createSettingsService, createSettingsStore } from '@apackdev/host/settings';
 import { HOST_ENTITY_TYPES } from '@apackdev/host/app-state';
@@ -28,7 +27,7 @@ const origins = new Map<string, PackOrigin>();
 const stamp = { registrationId: 'runtime', id: 'consumer', declarationRevision: 'declarations', buildRevision: 'build' };
 const origin = (): PackOrigin => ({ ...stamp, name: 'Consumer', version: '1.0.0', dir: '/fixture/consumer' });
 const target = (groupId: string) => ({ kind: 'pack' as const, packId: 'owner', groupId });
-let bus: ReturnType<typeof createActor<ReturnType<typeof createAppBus>>>;
+let bus: BackendBus;
 let messages: Message[];
 let stop: () => void;
 
@@ -47,7 +46,7 @@ beforeEach(() => {
   live.access = createSettingsAccess(admin, id => { const origin = origins.get(id); return origin ? { origin, registrationId: 'runtime' } : null; });
   messages = [];
   stop = testRootEvents.onOutgoing(message => { messages.push(message); });
-  bus = createActor(createAppBus(packs), { systemId: HOST.bus }).start();
+  bus = createAppBus(packs).start();
   testRootEvents.emitConnected();
 });
 afterEach(() => {

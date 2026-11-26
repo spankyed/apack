@@ -149,8 +149,9 @@ export interface TestApp {
         settingsAccess?: TestSettingsAccess;
     }): Promise<string>;
     settle(): Promise<void>;
+    readonly stateSystem: System;
     stop(): void;
-    system(systemId: string): AnyActorRef;
+    system(systemId: string): TestSystem;
     viewStats(): {
         views: number;
         subscriptions: number;
@@ -178,6 +179,21 @@ export interface TestShell {
 export type TestSurface = {
     state: SurfaceDefinition['state'];
 } & Partial<Omit<SurfaceDefinition, 'state'>>;
+
+// @public
+export interface TestSystem {
+    read(): {
+        readonly at?: string;
+        readonly data: Record<string, unknown>;
+        readonly pending?: Record<string, unknown>;
+    };
+    // (undocumented)
+    readonly ref: string;
+    send(event: {
+        type: string;
+        [key: string]: unknown;
+    }): void;
+}
 
 // @public
 export interface TestView<Result = unknown> {

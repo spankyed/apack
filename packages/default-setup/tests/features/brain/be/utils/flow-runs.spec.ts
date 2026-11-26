@@ -122,12 +122,12 @@ describe('runFlow', () => {
 
 describe('brain start', () => {
   const brainState = (app: TestApp) => {
-    const snapshot = app.system('brain').getSnapshot() as {
-      value: string
-      context: { rootRunId?: string; flows?: Record<string, unknown> }
+    const snapshot = app.system('brain').read() as {
+      at?: string
+      data: { rootRunId?: string; flows?: Record<string, unknown> }
     }
-    const running = snapshot.value === 'running' || snapshot.value.startsWith('running.')
-    const hasActor = Boolean(snapshot.context.rootRunId && snapshot.context.flows?.[snapshot.context.rootRunId])
+    const running = snapshot.at === 'running' || (snapshot.at?.startsWith('running.') ?? false)
+    const hasActor = Boolean(snapshot.data.rootRunId && snapshot.data.flows?.[snapshot.data.rootRunId])
     return { running, hasActor }
   }
   /** A root flow's tracks that keep it running, as the app's root flow does */
@@ -217,7 +217,7 @@ describe('brain start', () => {
     importFlows({ 'Root Flow': { root: true, tracks: staysRunning } })
     const app = await startBrain()
     const rootFlowId = repository.flowsQueries.rootFlow()!
-    const runningRootFlow = () => (app.system('brain').getSnapshot().context as { runningRootFlowId?: string }).runningRootFlowId
+    const runningRootFlow = () => (app.system('brain').read().data as { runningRootFlowId?: string }).runningRootFlowId
     expect(runningRootFlow()).toBe(rootFlowId)
 
     await app.connect()
@@ -237,12 +237,12 @@ describe('brain start', () => {
     const paused = await startBrain()
     await paused.connect()
     await paused.send('brain', { type: 'PAUSE_BRAIN' })
-    expect(paused.system('brain').getSnapshot().value).toBe('running.paused')
+    expect(paused.system('brain').read().at).toBe('running.paused')
     paused.stop()
 
     const fresh = await startBrain()
 
-    expect(fresh.system('brain').getSnapshot().value).toBe('running.active')
+    expect(fresh.system('brain').read().at).toBe('running.active')
   })
 })
 

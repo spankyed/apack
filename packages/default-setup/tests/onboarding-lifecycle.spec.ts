@@ -7,7 +7,7 @@ import { packSettings } from '#generated/settings.ts';
 import { services } from '#generated/services.ts';
 
 const activeFlowIds = (app: TestApp) =>
-  Object.keys((app.system('brain').getSnapshot().context as { flows?: Record<string, unknown> }).flows ?? {});
+  Object.keys((app.system('brain').read().data as { flows?: Record<string, unknown> }).flows ?? {});
 
 const initialized = (app: TestApp) => app.flowSteps('Onboarding Flow').filter(step => step.label === 'setup onboarding' && step.status === 'completed');
 const thread = () => repository.threadQueries.idByRole('assistant_birth');
@@ -78,7 +78,7 @@ it('resumes existing progress after data replacement and explicit restart', asyn
   const first = thread();
   const state = structuredClone(progress());
   await app.send('brain', { type: 'DATA_REPLACED' });
-  expect(app.system('brain').getSnapshot().value).toBe('stopped');
+  expect(app.system('brain').read().at).toBe('stopped');
   await app.connect();
   expect(initialized(app)).toHaveLength(1);
   await app.send('brain', { type: 'START_BRAIN' });

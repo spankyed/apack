@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, setup, type AnyActorRef } from 'xstate';
-import { answered, forNet } from '@apackdev/state';
+import { answered, forNet, state } from '@apackdev/state';
 import { untypedAsk, type Message } from '@apackdev/sdk/events';
 import {
   isState,
@@ -12,9 +11,9 @@ import { resolveName } from '@apackdev/sdk/ids';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 
-const PACK_ID = 'state-bridge-pack';
+const PACK_ID = 'bus-state-pack';
 const COUNTER = `${PACK_ID}/counter`;
 const BRAIN = `${PACK_ID}/brain`;
 
@@ -133,17 +132,14 @@ void _assertMatches;
 const registry = createNativePackTestRegistry();
 startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 
-let bus: AnyActorRef;
+let bus: BackendBus;
 const brainEvents: Array<{ type: string }> = [];
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const send = (message: Message) => { bus.send({ type: 'INCOMING', message }); };
 
-const brainMachine = setup({
-  types: { events: {} as { type: 'RESTART_BRAIN' } },
-}).createMachine({
-  id: 'brain',
+const brainState = state<{}, { type: 'RESTART_BRAIN' }>()({
   on: {
-    RESTART_BRAIN: { actions: ({ event }) => { brainEvents.push(event); } },
+    RESTART_BRAIN: (event) => { brainEvents.push(event); },
   },
 });
 
@@ -165,7 +161,7 @@ function registerCounterPack() {
       },
       brain: {
         designation: 'brain',
-        system: { machine: brainMachine, receives: ['RESTART_BRAIN'] },
+        system: { machine: brainState, receives: ['RESTART_BRAIN'] },
       },
     },
   });
@@ -178,7 +174,7 @@ beforeEach(async () => {
   exitCount = 0;
   brainEvents.length = 0;
   registerCounterPack();
-  bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
   testRootEvents.emitConnected();
   await flush();
   takeSystemErrors();
@@ -190,24 +186,25 @@ afterEach(() => {
   takeSystemErrors();
 });
 
-describe('backend @apackdev/state bus bridge', () => {
-  it('handles tells, updates XState snapshot, and notifies subscribers', () => {
-    const actor = bus.system.get(COUNTER)!;
-    expect(actor.getSnapshot()).toMatchObject({ status: 'active', value: 'closed', context: { count: 41 } });
+describe('native @apackdev/state backend bus', () => {
+  it('exposes the shared System and Port, handles tells, updates snapshots, and notifies subscribers', () => {
+    expect(bus.port).toBe(bus.system.port);
+    const sysRef = bus.getSystem(COUNTER)!;
+    expect(sysRef.read()).toMatchObject({ at: 'closed', data: { count: 41 } });
 
-    const seen: Array<{ value: unknown; count: unknown }> = [];
-    const sub = actor.subscribe((snap: { value: unknown; context: { count: unknown } }) => {
-      seen.push({ value: snap.value, count: snap.context.count });
+    const seen: Array<{ at: unknown; count: unknown }> = [];
+    const unsubscribe = sysRef.subscribe((snap) => {
+      seen.push({ at: snap.at, count: snap.data.count });
     });
 
     send({ to: COUNTER, event: { type: 'OPEN' } });
     send({ to: COUNTER, event: { type: 'INCREMENT' } });
-    sub.unsubscribe();
+    unsubscribe();
 
-    expect(actor.getSnapshot()).toMatchObject({ status: 'active', value: 'open', context: { count: 42 } });
+    expect(sysRef.read()).toMatchObject({ at: 'open', data: { count: 42 } });
     expect(seen).toEqual([
-      { value: 'open', count: 41 },
-      { value: 'open', count: 42 },
+      { at: 'open', count: 41 },
+      { at: 'open', count: 42 },
     ]);
   });
 
@@ -256,7 +253,7 @@ describe('backend @apackdev/state bus bridge', () => {
 
     send({ to: COUNTER, event: { type: 'OPEN' } });
     expect(await untypedAsk(COUNTER, { type: 'COUNT' })).toEqual({ ok: true, value: { count: 42 } });
-    expect(bus.system.get(COUNTER)!.getSnapshot()).toMatchObject({ value: 'open', context: { count: 42 } });
+    expect(bus.read(COUNTER)).toMatchObject({ at: 'open', data: { count: 42 } });
   });
 
   it('answers async asks and updates snapshot on completion', async () => {
@@ -266,7 +263,7 @@ describe('backend @apackdev/state bus bridge', () => {
     releaseWait!(99);
     expect(await pending).toEqual({ ok: true, value: { count: 99 } });
     await flush();
-    expect(bus.system.get(COUNTER)!.getSnapshot()).toMatchObject({ context: { count: 99 } });
+    expect(bus.read(COUNTER)).toMatchObject({ data: { count: 99 } });
   });
 
   it('forwards structured refusals with refusal data', async () => {
@@ -318,23 +315,24 @@ describe('backend @apackdev/state bus bridge', () => {
     send({ to: COUNTER, event: { type: 'PING_BRAIN' } });
     await flush();
     expect(brainEvents).toEqual([{ type: 'RESTART_BRAIN' }]);
-    expect(bus.system.get(BRAIN)).toBeDefined();
+    expect(bus.getSystem(BRAIN)).toBeDefined();
   });
 
   it('stops cleanly on RELOAD_PACK and TEARDOWN_PACK, invoking onExit and afterStop', async () => {
     send({ to: COUNTER, event: { type: 'OPEN' } });
     send({ to: COUNTER, event: { type: 'INCREMENT' } });
-    expect(bus.system.get(COUNTER)!.getSnapshot()).toMatchObject({ value: 'open', context: { count: 42 } });
+    expect(bus.read(COUNTER)).toMatchObject({ at: 'open', data: { count: 42 } });
 
     bus.send({ type: 'RELOAD_PACK', packId: PACK_ID, systemIds: [COUNTER] });
     await flush();
     expect(exitCount).toBe(1);
-    expect(bus.system.get(COUNTER)!.getSnapshot()).toMatchObject({ status: 'active', value: 'closed', context: { count: 41 } });
+    expect(bus.read(COUNTER)).toMatchObject({ at: 'closed', data: { count: 41 } });
 
     let afterStopCalled = false;
     bus.send({ type: 'TEARDOWN_PACK', packId: PACK_ID, systemIds: [COUNTER], afterStop: () => { afterStopCalled = true; } });
     await flush();
     expect(exitCount).toBe(2);
     expect(afterStopCalled).toBe(true);
+    expect(bus.getSystem(COUNTER)).toBeUndefined();
   });
 });

@@ -25,12 +25,12 @@ describe('a flow’s spawned children', () => {
     await app.runFlow('Outer', { event: 'go' })
     await app.settle()
 
-    const snap = app.system('brain').getSnapshot() as {
-      value: string
-      context: { flows?: Record<string, unknown> }
+    const snap = app.system('brain').read() as {
+      at?: string
+      data: { flows?: Record<string, unknown> }
     }
-    const flowKeys = Object.keys(snap.context.flows ?? {})
-    expect(snap.value).toBe('running.active')
+    const flowKeys = Object.keys(snap.data.flows ?? {})
+    expect(snap.at).toBe('running.active')
     expect(flowKeys, `flows were ${JSON.stringify(flowKeys)}`).toHaveLength(3)
     expect(flowKeys).not.toContain('undefined')
     expect(new Set(flowKeys).size).toBe(flowKeys.length)
