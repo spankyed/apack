@@ -7,6 +7,7 @@ const backend = await definePackTestConfig({ dataDirPrefix: 'default-setup-tests
 const frontend = await definePackTestConfig({ dataDirPrefix: 'default-setup-frontend-tests-', vue: true, setupFiles: [] });
 
 export default defineConfig({
+  cacheDir: backend.cacheDir,
   test: {
     projects: [
       { ...backend, test: { ...backend.test, name: '@app/default-setup:backend', include: ['tests/**/!(*.frontend).spec.ts'] } },

@@ -52,7 +52,7 @@ import { explorerState, type CodeExplorerReport } from './features/explorer/stat
 import { searchState } from './features/search/state.ts';
 import { commitState, type CommitReport, type OpenDiffRef } from './features/commit/state.ts';
 import { pullRequestState, type CodePullRequestReport } from './features/pull-request/state.ts';
-import { terminalState, type CodeTerminalReport, type TerminalInfo } from './features/terminal/state.ts';
+import { terminalState, type CodeTerminalEvent, type CodeTerminalReport, type TerminalInfo } from './features/terminal/state.ts';
 import { actionsState, type CodeActionsReport } from './features/actions/state.ts';
 import { promptsState, type CodePromptsReport } from './features/prompts/state.ts';
 import { githubState } from './features/github/state.ts';
@@ -373,6 +373,10 @@ export type CodeEvent =
   | OutgoingCodeEvents
   | CodeInboxEvent
   | CodeChildReports
+  | Extract<
+      CodeTerminalEvent,
+      { type: 'terminal.CLOSE' | 'terminal.RESTART' | 'terminal.INPUT' | 'terminal.RESIZE' | 'terminal.REFRESH_LIST' }
+    >
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
   | { type: 'SURFACE_ACTIVATED' }
@@ -642,6 +646,21 @@ const codeState = state<CodeShape, CodeEvent>()({
 
     // ── Routed inbox & backend events to children ─────────────────────────────────────
     'terminal.CREATE': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.CLOSE': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.RESTART': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.INPUT': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.RESIZE': (event, { tell, child }) => {
+      tell(child('terminal'), event);
+    },
+    'terminal.REFRESH_LIST': (event, { tell, child }) => {
       tell(child('terminal'), event);
     },
     'explorer.SET_BASE_DIRECTORY': (event, { tell, child }) => {

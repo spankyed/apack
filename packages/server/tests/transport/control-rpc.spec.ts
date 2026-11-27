@@ -535,7 +535,7 @@ describe('Host Control RPC (packages/server/src/transport/control-rpc.ts)', () =
   });
 
   describe('packs.*', () => {
-    it('pushes immediate catalog snapshot, coalesces bursts, and cleans up on unsubscribe and lane close', async () => {
+    it('pushes immediate catalog snapshot, streams updates in FIFO order, and cleans up on unsubscribe and lane close', async () => {
       const packs = createDefaultPacksDeps();
       packs.catalog.setNative([
         {
@@ -560,7 +560,7 @@ describe('Host Control RPC (packages/server/src/transport/control-rpc.ts)', () =
         expect(received[0]!.snapshot.native[0]!.features?.view.surface?.label).toBe('Initial');
         expect(server.activeSubscriptionCount).toBe(1);
 
-        // Burst of 5 synchronous mutations coalesces into a single frame with the latest snapshot
+        // Synchronous mutations emit immediately in FIFO order so catalog updates stay ahead of link broadcasts
         for (let i = 1; i <= 5; i += 1) {
           packs.catalog.setNative([
             {
@@ -571,8 +571,8 @@ describe('Host Control RPC (packages/server/src/transport/control-rpc.ts)', () =
         }
         await flushMicrotasks();
 
-        expect(received).toHaveLength(2);
-        expect(received[1]!.snapshot.native[0]!.features?.view.surface?.label).toBe('Burst-5');
+        expect(received).toHaveLength(6);
+        expect(received.at(-1)!.snapshot.native[0]!.features?.view.surface?.label).toBe('Burst-5');
 
         // Unsubscribing removes the listener so further updates are not sent
         sub.unsubscribe();
@@ -586,7 +586,7 @@ describe('Host Control RPC (packages/server/src/transport/control-rpc.ts)', () =
           },
         ]);
         await flushMicrotasks();
-        expect(received).toHaveLength(2);
+        expect(received).toHaveLength(6);
 
         // Closing the lane also cleans up an active subscription listener
         const onChangedSpy = vi.fn();
