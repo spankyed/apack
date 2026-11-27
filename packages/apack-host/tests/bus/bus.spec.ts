@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { answered, forNet, state } from '@apackdev/state';
 import { untypedAsk, type Message } from '@apackdev/sdk/events';
 import {
@@ -11,7 +11,7 @@ import { resolveName } from '@apackdev/sdk/ids';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
-import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
+import { createAppBus, createBus, HOST, type BackendBus } from '../../src/bus/index.ts';
 
 const PACK_ID = 'bus-state-pack';
 const COUNTER = `${PACK_ID}/counter`;
@@ -334,5 +334,230 @@ describe('native @apackdev/state backend bus', () => {
     expect(exitCount).toBe(2);
     expect(afterStopCalled).toBe(true);
     expect(bus.getSystem(COUNTER)).toBeUndefined();
+  });
+
+  it('preserves true emitting sender and from across synchronous cross-system tell and Def.listen cascades', async () => {
+    const externalListeners = new Set<() => void>();
+    const fireExternal = () => { for (const fn of externalListeners) fn(); };
+
+    interface CascadeNet {
+      systems: {
+        'alpha/driver': { events: { type: 'TRIGGER_TELL' } | { type: 'TRIGGER_LISTEN' }; asks: {} };
+        'beta/worker': { events: { type: 'FROM_ALPHA' }; asks: {} };
+        'gamma/watcher': { events: never; asks: {} };
+      };
+      surfaces: {
+        'beta/worker': { events: { type: 'BETA_BROADCAST' } };
+        'gamma/watcher': { events: { type: 'GAMMA_BROADCAST' } };
+      };
+      views: {};
+      peers: {
+        'role:brain': { events: { type: 'RESTART_BRAIN' } };
+      };
+    }
+    const cascadeState = forNet<CascadeNet>();
+
+    const alphaDriver = cascadeState<{}, { type: 'TRIGGER_TELL' } | { type: 'TRIGGER_LISTEN' }>()({
+      on: {
+        TRIGGER_TELL: (_ev, { tell }) => {
+          tell('beta/worker', { type: 'FROM_ALPHA' });
+        },
+        TRIGGER_LISTEN: () => {
+          fireExternal();
+        },
+      },
+    });
+    const betaWorker = cascadeState<{}, { type: 'FROM_ALPHA' }>()({
+      on: {
+        FROM_ALPHA: (_ev, { broadcast, tell }) => {
+          broadcast('beta/worker', { type: 'BETA_BROADCAST' });
+          tell({ peer: 'role:brain' }, { type: 'RESTART_BRAIN' });
+        },
+      },
+    });
+    const gammaWatcher = cascadeState<{ internal: { type: 'EXTERNAL_FIRED' } }, never>()({
+      listen: ({ send }) => {
+        const listener = () => send({ type: 'EXTERNAL_FIRED' });
+        externalListeners.add(listener);
+        return () => { externalListeners.delete(listener); };
+      },
+      internal: {
+        EXTERNAL_FIRED: (_ev, { broadcast, tell }) => {
+          broadcast('gamma/watcher', { type: 'GAMMA_BROADCAST' });
+          tell({ peer: 'role:brain' }, { type: 'RESTART_BRAIN' });
+        },
+      },
+    });
+
+    const localReg = createNativePackTestRegistry();
+    localReg.registerPack({
+      id: 'alpha',
+      features: { driver: { system: { machine: alphaDriver, receives: ['TRIGGER_TELL', 'TRIGGER_LISTEN'] } } },
+    });
+    localReg.registerPack({
+      id: 'beta',
+      features: {
+        worker: {
+          system: { machine: betaWorker, receives: ['FROM_ALPHA'] },
+          surface: { receives: ['BETA_BROADCAST'] },
+        },
+      },
+    });
+    localReg.registerPack({
+      id: 'gamma',
+      features: {
+        watcher: {
+          system: { machine: gammaWatcher, receives: [] },
+          surface: { receives: ['GAMMA_BROADCAST'] },
+        },
+      },
+    });
+    const roleBrain = state<{}, { type: 'RESTART_BRAIN' }>()({
+      on: { RESTART_BRAIN: () => {} },
+    });
+    localReg.registerPack({
+      id: 'host-brain',
+      features: { brain: { designation: 'brain', system: { machine: roleBrain, receives: ['RESTART_BRAIN'] } } },
+    });
+
+    const outgoing: Message[] = [];
+    const incomingToBrain: Message[] = [];
+    const cascadeBus = createBus({
+      registry: localReg,
+      onOutgoing: (msg) => outgoing.push(msg),
+      listen: () => () => {},
+      onEvent: (ev) => {
+        if (ev.type === 'INCOMING' && ev.message.to === 'host-brain/brain') {
+          incomingToBrain.push(ev.message);
+        }
+      },
+    }).start();
+    cascadeBus.send({ type: 'CLIENT_CONNECTED' });
+
+    try {
+      // Cross-system synchronous tell cascade: alpha/driver -> beta/worker -> broadcast & role:brain
+      cascadeBus.send({ type: 'INCOMING', message: { to: 'alpha/driver', event: { type: 'TRIGGER_TELL' } } });
+      await flush();
+
+      expect(outgoing).toContainEqual(expect.objectContaining({
+        to: 'beta/worker',
+        from: 'beta',
+        sender: 'beta/worker',
+        event: { type: 'BETA_BROADCAST' },
+      }));
+      expect(incomingToBrain[0]).toMatchObject({
+        to: 'host-brain/brain',
+        sender: 'beta/worker',
+        event: { type: 'RESTART_BRAIN' },
+      });
+
+      // Def.listen cascade triggered synchronously inside alpha/driver's delivery: gamma/watcher -> broadcast & role:brain
+      outgoing.length = 0;
+      incomingToBrain.length = 0;
+      cascadeBus.send({ type: 'INCOMING', message: { to: 'alpha/driver', event: { type: 'TRIGGER_LISTEN' } } });
+      await flush();
+
+      expect(outgoing).toContainEqual(expect.objectContaining({
+        to: 'gamma/watcher',
+        from: 'gamma',
+        sender: 'gamma/watcher',
+        event: { type: 'GAMMA_BROADCAST' },
+      }));
+      expect(incomingToBrain[0]).toMatchObject({
+        to: 'host-brain/brain',
+        sender: 'gamma/watcher',
+        event: { type: 'RESTART_BRAIN' },
+      });
+
+      // Def.listen cascade triggered completely outside any delivery
+      outgoing.length = 0;
+      incomingToBrain.length = 0;
+      fireExternal();
+      await flush();
+
+      expect(outgoing).toContainEqual(expect.objectContaining({
+        to: 'gamma/watcher',
+        from: 'gamma',
+        sender: 'gamma/watcher',
+        event: { type: 'GAMMA_BROADCAST' },
+      }));
+      expect(incomingToBrain[0]).toMatchObject({
+        to: 'host-brain/brain',
+        sender: 'gamma/watcher',
+        event: { type: 'RESTART_BRAIN' },
+      });
+    } finally {
+      cascadeBus.stop();
+    }
+  });
+
+  it('settles queued TEARDOWN_PACK and SYSTEMS_STOPPED afterStop callbacks on bus.stop()', () => {
+    const settled: string[] = [];
+    const localBus = createBus({
+      registry,
+      onOutgoing: () => {},
+      listen: () => () => {},
+      onEvent: (ev) => {
+        if (ev.type === 'INCOMING' && ev.message.event.type === 'OPEN') {
+          // Enqueue teardowns while draining, then immediately stop the bus
+          localBus.send({ type: 'TEARDOWN_PACK', systemIds: [COUNTER], afterStop: () => settled.push('queued-teardown') });
+          localBus.send({ type: 'SYSTEMS_STOPPED', afterStop: () => settled.push('queued-stopped') });
+          localBus.stop();
+        }
+      },
+    }).start();
+
+    localBus.send({ type: 'INCOMING', message: { to: COUNTER, event: { type: 'OPEN' } } });
+    expect(settled).toEqual(['queued-teardown', 'queued-stopped']);
+
+    // A TEARDOWN_PACK sent after bus.stop() also settles immediately rather than hanging
+    localBus.send({ type: 'TEARDOWN_PACK', systemIds: [COUNTER], afterStop: () => settled.push('post-stop') });
+    expect(settled).toEqual(['queued-teardown', 'queued-stopped', 'post-stop']);
+  });
+
+  it('resumes draining remaining queued events after an observer exception in drain()', async () => {
+    let shouldThrow = true;
+    const seen: string[] = [];
+    const onError = vi.fn();
+    const localBus = createBus({
+      registry,
+      onOutgoing: () => {},
+      listen: () => () => {},
+      onEvent: (ev) => {
+        if (ev.type === 'INCOMING') {
+          seen.push(ev.message.event.type);
+          if (shouldThrow && ev.message.event.type === 'OPEN') {
+            shouldThrow = false;
+            localBus.send({ type: 'INCOMING', message: { to: COUNTER, event: { type: 'INCREMENT' } } });
+            throw new Error('boom in first queued item');
+          }
+        }
+      },
+    }).start();
+    localBus.onError(onError);
+
+    try {
+      expect(() => localBus.send({ type: 'INCOMING', message: { to: COUNTER, event: { type: 'OPEN' } } }))
+        .toThrow('boom in first queued item');
+      expect(onError).toHaveBeenCalledOnce();
+      await flush();
+      expect(seen).toEqual(['OPEN', 'INCREMENT']);
+      expect(localBus.read(COUNTER)?.data.count).toBe(42);
+    } finally {
+      localBus.stop();
+    }
+  });
+
+  it('rejects unrecognized and privileged lifecycle events addressed to HOST.bus via INCOMING', async () => {
+    const afterStop = vi.fn();
+    send({ to: HOST.bus, event: { type: 'TEARDOWN_PACK', packId: PACK_ID, systemIds: [COUNTER], afterStop } });
+    send({ to: HOST.bus, event: { type: 'RELOAD_PACK', packId: PACK_ID, systemIds: [COUNTER] } });
+    send({ to: HOST.bus, event: { type: 'SYSTEMS_STOPPED', afterStop } });
+    await flush();
+
+    // Counter must still be running untouched and privileged callbacks must never have executed
+    expect(bus.getSystem(COUNTER)).toBeDefined();
+    expect(afterStop).not.toHaveBeenCalled();
+    expect(takeSystemErrors().length).toBeGreaterThanOrEqual(1);
   });
 });

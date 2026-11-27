@@ -486,3 +486,74 @@ it('queues a newer runtime received during preparation and accepts the latest re
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ ext: 'second' });
   expect(packClientReady.mock.calls).toEqual([['ext', 'first'], ['ext', 'second']]);
 });
+
+it('does not unload a newly installed pack frontend when packs.catalog has not received its declaration yet, but does unload an explicitly disabled one', async () => {
+  const local = fakeShell({ surfaces: [surface('notes')] });
+  local.catalog.status.mockReturnValue('ready');
+  const shell = createShell(local.options, { ownsLastActiveSurface: false }).start();
+  try {
+    // Newly installed pack: declaration is NOT in catalog yet (decl === undefined)
+    const brandNew = surface('newpack/main');
+    local.bindings.set('newpack/main', {
+      packId: 'newpack',
+      registrationId: 'reg-new',
+      declarationRevision: 'decl-new',
+      buildRevision: 'build-new',
+      declaration: { label: 'New', state: 'state.ts' },
+      binding: brandNew,
+    });
+    shell.send({ type: 'PACK_FRONTEND_LOADED', packId: 'newpack', registrationId: 'reg-new', surfaces: [brandNew] });
+    await settle();
+    expect(local.packFrontends.unload).not.toHaveBeenCalled();
+
+    // Explicitly disabled pack in catalog (decl.enabled === false) MUST be unloaded
+    const disabledSurface = surface('disabledpack/main');
+    local.declarations.set('disabledpack/main', {
+      featureRef: 'disabledpack/main' as import('@apackdev/sdk/ids').FeatureRef,
+      packId: 'disabledpack',
+      origin: 'installed',
+      enabled: false,
+      declarationRevision: 'decl-dis',
+      buildRevision: 'build-dis',
+      declaration: { label: 'Disabled', state: 'state.ts' },
+    });
+    local.bindings.set('disabledpack/main', {
+      packId: 'disabledpack',
+      registrationId: 'reg-dis',
+      declarationRevision: 'decl-dis',
+      buildRevision: 'build-dis',
+      declaration: { label: 'Disabled', state: 'state.ts' },
+      binding: disabledSurface,
+    });
+    shell.send({ type: 'PACK_FRONTEND_LOADED', packId: 'disabledpack', registrationId: 'reg-dis', surfaces: [disabledSurface] });
+    await settle();
+    expect(local.packFrontends.unload).toHaveBeenCalledWith('disabledpack');
+  } finally {
+    shell.stop();
+  }
+});
+
+it('retries LOAD_PACK_FRONTENDS on PACK_RUNTIMES_UPDATED when packFrontendsNeedRefresh is true after a failed reconnect read', async () => {
+  loadedPacksQuery.mockResolvedValue([{ id: 'ext', registrationId: 'rev-1', feEntry: 'runtime/fe.js' }]);
+  loadPackFrontend.mockResolvedValue([surface('ext/own')]);
+  connect();
+  await settle();
+  expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ ext: 'rev-1' });
+
+  // Reconnect fails its initial loadedPacks() read, leaving packFrontendsNeedRefresh = true
+  loadedPacksQuery.mockRejectedValueOnce(new Error('temporary transport blip'));
+  dropConnection();
+  connect();
+  await settle();
+  expect(app.getSnapshot().context.packFrontendsNeedRefresh).toBe(true);
+
+  // Subsequent PACK_RUNTIMES_UPDATED with identical revision map still retries LOAD_PACK_FRONTENDS
+  loadedPacksQuery.mockResolvedValue([{ id: 'ext', registrationId: 'rev-1', feEntry: 'runtime/fe.js' }]);
+  loadedPacksQuery.mockClear();
+  fake.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: { ext: 'rev-1' } } });
+  await settle();
+
+  expect(loadedPacksQuery).toHaveBeenCalledOnce();
+  expect(app.getSnapshot().context.packFrontendsNeedRefresh).toBe(false);
+  expect(loadPackFrontend).toHaveBeenCalledTimes(2);
+});

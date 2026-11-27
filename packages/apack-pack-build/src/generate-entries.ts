@@ -1996,13 +1996,33 @@ export type PackSurfaces = {
   [K in keyof __RawPackSurfaces as __RawPackSurfaces[K] extends AnyState ? K : never]: Extract<__RawPackSurfaces[K], AnyState>;
 };
 
+const __binding = /*#__PURE__*/ vueBinding<PackSurfaces>(
+  (name) => (name.includes('/') ? name : \`${manifest.id}/\${name}\`),
+);
+
+/** Provides the window's \`@apackdev/state\` system to this pack's Vue components. */
+export const provide = __binding.provide;
+
 /**
  * Vue binding for this pack's \`@apackdev/state\` surfaces and their started children.
  * Bare surface names resolve to \`${manifest.id}/<name>\`; qualified \`<pack>/<feature>\` names pass through unchanged.
+ * Top-level surfaces retain their last committed snapshot across Vue's unmount tick after a synchronous stop.
  */
-export const { provide, useState } = /*#__PURE__*/ vueBinding<PackSurfaces>(
-  (name) => (name.includes('/') ? name : \`${manifest.id}/\${name}\`),
-);
+export const useState: typeof __binding.useState = ((source: unknown) => {
+  const bound = (__binding.useState as (s: unknown) => { readonly state: { readonly value: unknown } })(source);
+  if (typeof source !== 'string') return bound;
+  let last: unknown = bound.state.value;
+  const state = {
+    __v_isRef: true,
+    __v_isReadonly: true,
+    get value() {
+      const now = bound.state.value;
+      if (now !== undefined) last = now;
+      return now !== undefined ? now : last;
+    },
+  };
+  return { ...bound, state };
+}) as typeof __binding.useState;
 `;
   }
 

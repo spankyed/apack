@@ -18,6 +18,7 @@ import {
   writeApiRuntimeFile,
   type ToolSocketServer,
 } from '../../src/transport/tool-socket.ts';
+import { connectToolClient, toolSocketTransport } from '../../src/transport/tool-client.ts';
 
 const isPosix = process.platform !== 'win32';
 const cleanupDirs: string[] = [];
@@ -585,5 +586,48 @@ describe('startToolSocketServer and connectToolSocket', () => {
       expect(fs.existsSync(socketAddr)).toBe(false);
     }
     expect(fs.existsSync(runtimeFilePath(appDir))).toBe(false);
+  });
+
+  it('handles immediate server reset right after auth ack without unhandled socket error or hung client', async () => {
+    const shortTmp = makeShortTmpDir();
+    const appDir = makeTempDir('app-reset-after-ack-');
+    const addr = toolSocketAddress(appDir, { tmpDir: shortTmp });
+    if (isPosix) {
+      fs.mkdirSync(path.dirname(addr), { recursive: true, mode: 0o700 });
+    }
+
+    const rawServer = net.createServer((socket) => {
+      socket.on('error', () => {});
+      socket.once('data', () => {
+        // Send valid auth ack and immediately destroy the socket right after
+        socket.write('{"ok":true}\n', () => {
+          socket.destroy();
+        });
+      });
+    });
+    activeRawServers.push(rawServer);
+    await new Promise<void>((resolve) => rawServer.listen(addr, resolve));
+
+    const unhandled: unknown[] = [];
+    const onUncaught = (err: unknown) => unhandled.push(err);
+    process.on('uncaughtException', onUncaught);
+    try {
+      await using client = await connectToolClient({ socket: addr, token: 'tok' });
+      await vi.waitFor(() => expect(client.closed).toBe(true));
+      await expect(client.control.call('packs.loaded')).rejects.toThrow();
+
+      // Also exercise the exact post-handshake microtask race: an 'error' + destroy arriving on the socket
+      // between `connectToolSocket` resolving and `toolSocketTransport` attaching listeners
+      const conn = await connectToolSocket({ socket: addr, token: 'tok' });
+      conn.socket.emit('error', Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
+      conn.socket.destroy();
+      let transportClosed = false;
+      const transport = toolSocketTransport(conn.socket, conn.initialBytes);
+      transport.onClose(() => { transportClosed = true; });
+      expect(transportClosed).toBe(true);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('uncaughtException', onUncaught);
+    }
   });
 });

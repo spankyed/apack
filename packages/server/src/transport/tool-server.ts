@@ -11,10 +11,11 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import { port as wrapMessagePort, type Accepting } from '@apackdev/link';
-import { HOST, receiveClientEvent, UnknownClientEventError } from '@apackdev/host/bus';
+import { HOST, receiveClientEvent, UnknownClientEventError, type ParticipantClaims } from '@apackdev/host/bus';
+import type { PackRegistry } from '@apackdev/host/packs';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { secretsSnapshot, secretsStore } from '@apackdev/host/secrets';
-import { bindSettingsRequest, SETTINGS_MUTATIONS } from '@apackdev/host/settings';
+import { bindSettingsRequest, SETTINGS_MUTATIONS, type createSettingsAccess } from '@apackdev/host/settings';
 import {
   ControlRpcError,
   muxTransport,
@@ -87,6 +88,50 @@ export interface HostTransport extends Disposable, AsyncDisposable {
 }
 
 /**
+ * Builds the `settings` Control RPC deps backed by a `SettingsAccess` lease store, pack registry, and participant claims.
+ */
+export function createRuntimeSettingsControlDeps(deps: {
+  readonly packs: Pick<PackRegistry, 'getEventValidationMap' | 'getSurfaceEventValidationMap' | 'askKinds'>;
+  readonly claims: ParticipantClaims;
+  readonly access: ReturnType<typeof createSettingsAccess>;
+}): HostControlServerDeps['settings'] {
+  return {
+    openHost: (id) => deps.access.issueHost(id),
+    openPack: (id, expected) => deps.access.issuePack(id, expected),
+    close: (id, credential) => deps.access.revoke(id, credential),
+    mutate: (id, credential, event, meta) => {
+      if (!SETTINGS_MUTATIONS.has(event.type)) {
+        throw new ControlRpcError('BAD_REQUEST', `Unsupported settings mutation event: ${event.type}`);
+      }
+      if (meta?.sender !== undefined && !isAddressableRef(deps.packs, deps.claims, meta.sender)) {
+        throw new ControlRpcError(
+          'BAD_REQUEST',
+          `"${meta.sender}" can't be a sender: it names no registered system, no registered surface and no claimed participant.`,
+        );
+      }
+      deps.access.resolve(id, credential);
+      bindSettingsRequest(event, () => deps.access.resolve(id, credential));
+      try {
+        receiveClientEvent(deps.packs, {
+          to: HOST.settings,
+          event,
+          client: id,
+          ...(meta?.sender !== undefined ? { sender: meta.sender } : {}),
+          ...(meta?.call !== undefined ? { call: meta.call } : {}),
+          ...(meta?.from !== undefined ? { from: meta.from } : {}),
+        });
+      } catch (error) {
+        if (error instanceof UnknownClientEventError) {
+          throw new ControlRpcError('BAD_REQUEST', error.message);
+        }
+        throw error;
+      }
+    },
+    releaseConnection: (id) => deps.access.releaseClient(id),
+  };
+}
+
+/**
  * Builds the process-live `HostControlDepsFactory` wired directly to the booted server runtime
  * (`secretsStore`, `appSettingsAccess`, `appPacks`, `appPerformance`, `reloadPackById`, `installDevPack`).
  */
@@ -122,41 +167,11 @@ export function createRuntimeControlDepsFactory(appEnv: AppEnv): HostControlDeps
       delete: (id) => secretsStore.delete(id),
       allowUnprotected: () => secretsStore.allowUnprotected(),
     },
-    settings: {
-      openHost: (id) => appSettingsAccess.issueHost(id),
-      openPack: (id, expected) => appSettingsAccess.issuePack(id, expected),
-      close: (id, credential) => appSettingsAccess.revoke(id, credential),
-      mutate: (id, credential, event, meta) => {
-        if (!SETTINGS_MUTATIONS.has(event.type)) {
-          throw new ControlRpcError('BAD_REQUEST', `Unsupported settings mutation event: ${event.type}`);
-        }
-        if (meta?.sender !== undefined && !isAddressableRef(appPacks, appClaims, meta.sender)) {
-          throw new ControlRpcError(
-            'BAD_REQUEST',
-            `"${meta.sender}" can't be a sender: it names no registered system, no registered surface and no claimed participant.`,
-          );
-        }
-        const access = appSettingsAccess;
-        access.resolve(id, credential);
-        bindSettingsRequest(event, () => access.resolve(id, credential));
-        try {
-          receiveClientEvent(appPacks, {
-            to: HOST.settings,
-            event,
-            client: id,
-            ...(meta?.sender !== undefined ? { sender: meta.sender } : {}),
-            ...(meta?.call !== undefined ? { call: meta.call } : {}),
-            ...(meta?.from !== undefined ? { from: meta.from } : {}),
-          });
-        } catch (error) {
-          if (error instanceof UnknownClientEventError) {
-            throw new ControlRpcError('BAD_REQUEST', error.message);
-          }
-          throw error;
-        }
-      },
-      releaseConnection: (id) => appSettingsAccess.releaseClient(id),
-    },
+    settings: createRuntimeSettingsControlDeps({
+      packs: appPacks,
+      claims: appClaims,
+      access: appSettingsAccess,
+    }),
     packs: {
       getCatalogFrame: () => getPackCatalogFrame(),
       onCatalogChanged: (listener) => appPacks.catalog.onChanged(listener),
@@ -283,7 +298,7 @@ export async function startHostTransport(options: StartHostTransportOptions = {}
       activeWindows.delete(info.windowId);
       disposeSession(previous);
     }
-    const connectionId = `window:${info.windowId}:${info.generation}`;
+    const connectionId = `window:${info.windowId}:${info.generation}:${randomUUID()}`;
     const raw = wrapMessagePort(messagePort);
     const mux = muxTransport(raw);
     const control = createHostControlServer(mux.control, createControlDeps(connectionId));

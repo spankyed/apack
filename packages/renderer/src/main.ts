@@ -38,7 +38,14 @@ declare global {
 installGlobalErrorHandling();
 
 const query = new URLSearchParams(window.location.search);
-if (query.has('performanceStartup')) await startStartupRecording(query.get('performanceStartup'));
+if (query.has('performanceStartup')) {
+  try {
+    await startStartupRecording(query.get('performanceStartup'));
+  } catch (error) {
+    console.warn('[performance] Startup recording failed; continuing boot without it:', error);
+    reportRendererError('startup-performance', error, undefined, false);
+  }
+}
 const isSurfacePopout = query.get('popout') === 'surface';
 const initialSurfaceId = isSurfacePopout ? query.get('surfaceId') ?? undefined : undefined;
 

@@ -29,6 +29,10 @@ export class ApiServer implements AppModule {
   private restartAttempts = 0;
   /** The current launch's forgiveness, pending: a launch that exits takes its own with it */
   private restartReset?: ReturnType<typeof setTimeout>;
+  /** Pending delayed restart timer scheduled after a crash exit, cancelled on reload/quit/start */
+  private restartTimer?: ReturnType<typeof setTimeout>;
+  /** In-flight `startApiServer()` promise so concurrent starts serialize across async orphan cleanup */
+  private starting?: Promise<void>;
   /**
    * The current startup's readiness, which `waitForReady` hands out. A crash before the API is ready restarts it
    * within the same startup, so the promise is renewed only once it has settled: the launch that becomes ready
@@ -122,8 +126,11 @@ export class ApiServer implements AppModule {
       if (this.shutdownComplete) return;
       event.preventDefault();
       this.isShuttingDown = true;
+      this.clearRestartTimer();
+      clearTimeout(this.restartReset);
       this.portBroker.onBackendStopped();
-      this.shutdown ??= this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT)
+      const stopProcess = () => this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT);
+      this.shutdown ??= (this.starting ? this.starting.catch(() => {}).then(stopProcess) : stopProcess())
         .catch(error => { logError('[MAIN] API shutdown failed; quitting without it:', error); })
         .then(() => {
           this.shutdownComplete = true;
@@ -133,18 +140,35 @@ export class ApiServer implements AppModule {
 
   }
 
-  private async startApiServer(): Promise<void> {
-    if (this.isShuttingDown || this.processManager.isRunning()) return;
+  private clearRestartTimer(): void {
+    if (this.restartTimer !== undefined) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
+  }
 
-    this.lastError = undefined; // Clear stale error so getStatus() doesn't report old crashes during restart
-    // A launch after the last one settled starts a new startup; a restart after a crash continues the current one
-    if (!this.serverReadyResolve) this.serverReady = this.createReadyPromise();
-    logInfo('[MAIN] Starting API server...');
-    broadcastEvent(API_EVENTS.STARTING);
+  private startApiServer(): Promise<void> {
+    if (this.starting) return this.starting;
+    if (this.isShuttingDown || this.processManager.isRunning()) return Promise.resolve();
+    this.clearRestartTimer();
 
-    const paths = getApiPaths();
-    await this.cleanupOrphanedApiChildren(paths.apiPath);
-    await this.launchApiServer(paths.apiPath);
+    this.starting = (async () => {
+      try {
+        this.lastError = undefined; // Clear stale error so getStatus() doesn't report old crashes during restart
+        // A launch after the last one settled starts a new startup; a restart after a crash continues the current one
+        if (!this.serverReadyResolve) this.serverReady = this.createReadyPromise();
+        logInfo('[MAIN] Starting API server...');
+        broadcastEvent(API_EVENTS.STARTING);
+
+        const paths = getApiPaths();
+        await this.cleanupOrphanedApiChildren(paths.apiPath);
+        if (this.isShuttingDown || this.processManager.isRunning()) return;
+        await this.launchApiServer(paths.apiPath);
+      } finally {
+        this.starting = undefined;
+      }
+    })();
+    return this.starting;
   }
 
   private async cleanupOrphanedApiChildren(apiPath: string): Promise<void> {
@@ -267,8 +291,10 @@ export class ApiServer implements AppModule {
         message: errors[0].message,
         stack: errors.map(e => e.stack || e.message).join('\n\n'),
       };
-    } else {
-      this.lastError = { message: stderr || `Backend process exited unexpectedly (code ${code})` };
+    } else if (stderr) {
+      this.lastError = { message: stderr };
+    } else if (!this.lastError) {
+      this.lastError = { message: `Backend process exited unexpectedly (code ${code})` };
     }
     const willRestart = !this.isShuttingDown && this.restartAttempts < API_CONFIG.MAX_RESTART_ATTEMPTS;
     broadcastEvent(API_EVENTS.STOPPED, { error: this.lastError, restarting: willRestart });
@@ -286,7 +312,11 @@ export class ApiServer implements AppModule {
         startupId: this.startupId,
       });
 
-      setTimeout(() => this.startApiServer(), API_CONFIG.RESTART_DELAY);
+      this.clearRestartTimer();
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = undefined;
+        void this.startApiServer();
+      }, API_CONFIG.RESTART_DELAY);
     } else if (this.restartAttempts >= API_CONFIG.MAX_RESTART_ATTEMPTS) {
       // What the API said as it exited is what the user is shown: an unreadable database names its fix there
       const failure = this.lastError.message;
@@ -301,7 +331,11 @@ export class ApiServer implements AppModule {
   private handleProcessError(error: Error): void {
     this.lastError = { message: error.message, stack: error.stack };
     logError('[MAIN] Failed to start API server:', error);
-    broadcastEvent(API_EVENTS.ERROR, { error: error.message });
+    // Avoid broadcasting terminal `api:error` while automatic restarts can still recover; `handleProcessExit`
+    // drives recovery or broadcasts terminal `api:error` once restart attempts are exhausted.
+    if (!this.isShuttingDown && this.restartAttempts >= API_CONFIG.MAX_RESTART_ATTEMPTS) {
+      broadcastEvent(API_EVENTS.ERROR, { error: error.message });
+    }
   }
 
   /**
@@ -339,6 +373,9 @@ export class ApiServer implements AppModule {
   public reloadApiServer(): Promise<void> {
     this.reloading ??= (async () => {
       try {
+        this.clearRestartTimer();
+        clearTimeout(this.restartReset);
+        if (this.starting) await this.starting.catch(() => {});
         // Read by `handleServerReady`, which happens after this resolves — so it is a flag and not this
         // promise, however much one field would be tidier than two
         this.announceReload = true;

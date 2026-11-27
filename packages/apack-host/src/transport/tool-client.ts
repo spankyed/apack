@@ -20,6 +20,7 @@ import {
   inspectApiRuntimeFile,
   readApiRuntimeFile,
   runtimeFilePath,
+  takeToolSocketHandoff,
   type ApiRuntimeReadResult,
   type ApiRuntimeRecord,
 } from './tool-socket.ts';
@@ -45,10 +46,26 @@ export function toolSocketTransport(
   initialBytes: Buffer = Buffer.alloc(0),
   options?: StreamOptions,
 ): RawTransport {
-  if (initialBytes.length > 0) {
+  const handoff = takeToolSocketHandoff(socket);
+  const canReadSocket = !socket.destroyed && !socket.readableAborted && socket.errored == null;
+  if (initialBytes.length > 0 && canReadSocket) {
     socket.unshift(initialBytes);
   }
-  return stream(socket, options);
+  const transport = stream(socket, options);
+  handoff.release();
+  if (handoff.closedDuringHandoff || socket.destroyed || socket.readableAborted || socket.errored != null) {
+    if (initialBytes.length > 0) {
+      queueMicrotask(() => {
+        if (!canReadSocket) {
+          socket.emit('data', initialBytes);
+        }
+        transport.close();
+      });
+    } else {
+      transport.close();
+    }
+  }
+  return transport;
 }
 
 export type ConnectToolClientOptions = (

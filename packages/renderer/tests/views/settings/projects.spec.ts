@@ -5,10 +5,14 @@ import type { SettingUpdate } from '@apackdev/sdk/fe';
 import type { Message } from '@apackdev/sdk/events';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 const { send } = vi.hoisted(() => ({ send: vi.fn(async (_message: Message) => {}) }));
+const { controlCall } = vi.hoisted(() => ({
+  controlCall: (method: string) => (method === 'settings.openHost' ? Promise.resolve({ credential: 'host-access' }) : Promise.resolve()),
+}));
 vi.mock('@/transport', () => ({
   windowTransport: {
     linkSend: send,
-    controlCall: (method: string) => (method === 'settings.openHost' ? Promise.resolve({ credential: 'host-access' }) : Promise.resolve()),
+    controlCall,
+    tryControlCall: controlCall,
   },
 }));
 import { windowSettings, connectWindowSettings, disconnectWindowSettings } from '@/runtime/settings';

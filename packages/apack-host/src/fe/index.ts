@@ -59,9 +59,31 @@ export type HostSurfaces = {
   settings: ReturnType<typeof createSettingsMachineRef>;
 };
 
-export const { provide: provideHostState, useState: useHostState } = /*#__PURE__*/ vueBinding<HostSurfaces>(
+const hostBinding = /*#__PURE__*/ vueBinding<HostSurfaces>(
   (name) => resolveName(name, HOST_PACK_ID),
 );
+
+export const provideHostState = hostBinding.provide;
+
+/**
+ * Vue binding for host surfaces and their started children.
+ * Top-level surfaces retain their last committed snapshot across Vue's unmount tick after a synchronous stop.
+ */
+export const useHostState: typeof hostBinding.useState = ((source: unknown) => {
+  const bound = (hostBinding.useState as (s: unknown) => { readonly state: { readonly value: unknown } })(source);
+  if (typeof source !== 'string') return bound;
+  let last: unknown = bound.state.value;
+  const state = {
+    __v_isRef: true,
+    __v_isReadonly: true,
+    get value() {
+      const now = bound.state.value;
+      if (now !== undefined) last = now;
+      return now !== undefined ? now : last;
+    },
+  };
+  return { ...bound, state };
+}) as typeof hostBinding.useState;
 
 export { createWindowSettingsRuntime, type WindowSettingsIO } from './settings-runtime.ts';
 export { settingsProblems, isEqual } from '../features/settings/document.ts';

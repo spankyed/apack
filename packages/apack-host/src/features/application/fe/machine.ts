@@ -682,10 +682,14 @@ export function createShellState(options: ShellOptions, runtime: ShellRuntimeBri
         })) return;
 
         if (packSurfaces?.some((surface) => getEligibleSurface(catalog, packs.surfaceBindings(), surface.id) !== surface)) {
-          // The catalog disabled or removed the pack while its frontend loaded: take the committed frontend back
-          // out, since nothing else would. While the catalog is still settling, eligibility says nothing yet.
+          // The catalog explicitly disabled the pack while its frontend loaded: take the committed frontend back
+          // out, since nothing else would. When the declaration hasn't arrived in the catalog yet (newly installed)
+          // or the catalog is still settling, leave the binding in place until the catalog catches up.
           const withdrawn = catalog.status() === 'ready'
-            && packSurfaces.some((surface) => selectSurfaceDeclaration(catalog, surface.id)?.enabled !== true);
+            && packSurfaces.some((surface) => {
+              const decl = selectSurfaceDeclaration(catalog, surface.id);
+              return decl !== undefined && decl.enabled !== true;
+            });
           if (withdrawn) send({ type: 'PACK_SURFACES_UNLOADED', packId, refused: true });
           return;
         }
@@ -768,7 +772,8 @@ export function createShellState(options: ShellOptions, runtime: ShellRuntimeBri
         const { runtimes } = event;
         const accepted = data.acceptedPackRuntimes;
         tell(child('entityOpening'), { type: 'RUNTIMES_UPDATED', runtimes });
-        if (Object.keys(accepted).length !== Object.keys(runtimes).length
+        if (data.packFrontendsNeedRefresh
+          || Object.keys(accepted).length !== Object.keys(runtimes).length
           || Object.entries(runtimes).some(([id, revision]) => accepted[id] !== revision)) {
           send({ type: 'LOAD_PACK_FRONTENDS' });
         }
@@ -779,6 +784,9 @@ export function createShellState(options: ShellOptions, runtime: ShellRuntimeBri
         tell(child('entityOpening'), { type: 'UNLOADED', packId });
         const surfaceIds = data.surfaces.filter((p) => p.id.startsWith(`${packId}/`)).map((p) => p.id);
 
+        for (const id of surfaceIds) {
+          runtime.enqueueEffect(() => runtime.stopSurface(id));
+        }
         runtime.enqueueEffect(() => packFrontends.unload(packId));
 
         const patch: Partial<ShellContext> = {
@@ -804,10 +812,6 @@ export function createShellState(options: ShellOptions, runtime: ShellRuntimeBri
         const needsNavigate = removeSet.has(data.activeSurface.id);
         const defaultSurface = selectedDefaultSurface(remaining) ?? null;
         const activeSurface = needsNavigate ? (remaining[0] ?? data.activeSurface) : data.activeSurface;
-
-        for (const id of surfaceIds) {
-          runtime.enqueueEffect(() => runtime.stopSurface(id));
-        }
 
         patch.surfaces = remaining;
         patch.surfaceVisibility = surfaceVisibility;
@@ -1299,12 +1303,6 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
     return next;
   };
 
-  const pendingStops = new Map<string, () => void>();
-
-  const flushPendingStop = (id: string): void => {
-    pendingStops.get(id)?.();
-  };
-
   const stopSurface = (id: string): void => {
     const entry = runningSurfaces.get(id);
     if (!entry) return;
@@ -1312,18 +1310,10 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
     entry.stopped = true;
     entry.lastSnapshot = { ...finalSnap, status: 'stopped' };
     runningSurfaces.delete(id);
-    notifyShellSubscribers();
     if (!stopped) {
-      // Stop the state handle after Vue's microtask flush unmounts components reading this surface's mirror,
-      // so sync watchers / post-effects in an unmounting surface never observe an undefined mirror snapshot.
-      const runStop = () => {
-        if (pendingStops.get(id) !== runStop) return;
-        pendingStops.delete(id);
-        if (!stopped) sys.stop(entry.handle);
-      };
-      pendingStops.set(id, runStop);
-      void Promise.resolve().then(() => Promise.resolve().then(runStop));
+      sys.stop(entry.handle);
     }
+    notifyShellSubscribers();
   };
 
   const startSurface = (surface: Surface, ownsAppLayout: boolean): void => {
@@ -1332,7 +1322,6 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
       throw new Error(`Surface "${surface.id}" must be an @apackdev/state State definition`);
     }
     if (runningSurfaces.has(surface.id)) stopSurface(surface.id);
-    flushPendingStop(surface.id);
 
     const handle = sys.start(surface.id, surface.state as State<any, any, any, never>);
     const listeners = new Set<(snapshot: HostShellSurfaceSnapshot) => void>();
@@ -1565,7 +1554,6 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
         entry.lastSnapshot = { ...snap, status: 'stopped' };
       }
       runningSurfaces.clear();
-      pendingStops.clear();
       for (const cleanup of cleanups.splice(0).reverse()) cleanup();
       sys.stop();
     },

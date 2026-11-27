@@ -366,6 +366,68 @@ function parseAckHandshakeLine(lineBuffer: Buffer): boolean {
   return keys.length === 1 && keys[0] === 'ok' && obj.ok === true;
 }
 
+interface ToolSocketHandoffGuard {
+  closed: boolean;
+  release(): void;
+}
+
+const handoffGuards = new WeakMap<net.Socket, ToolSocketHandoffGuard>();
+
+/**
+ * Guards an authenticated `net.Socket` across the `connectToolSocket` Promise microtask boundary until
+ * `toolSocketTransport` (or another caller) attaches its own listeners: absorbs post-handshake `'error'`
+ * events so Node never throws an unhandled error, and records `'end'`/`'close'` occurring during handoff.
+ */
+function installHandoffGuard(socket: net.Socket): void {
+  const guard: ToolSocketHandoffGuard = {
+    closed: socket.destroyed || socket.readableEnded || socket.readableAborted || socket.errored != null,
+    release() {
+      socket.off('error', onError);
+      socket.off('end', onEnded);
+      socket.off('close', onEnded);
+      socket.off('newListener', onNewListener);
+      handoffGuards.delete(socket);
+    },
+  };
+  const onError = () => {
+    guard.closed = true;
+  };
+  const onEnded = () => {
+    guard.closed = true;
+  };
+  const onNewListener = (event: string | symbol) => {
+    if (event === 'error') {
+      socket.off('error', onError);
+      socket.off('newListener', onNewListener);
+    }
+  };
+  socket.on('error', onError);
+  socket.once('end', onEnded);
+  socket.once('close', onEnded);
+  socket.on('newListener', onNewListener);
+  handoffGuards.set(socket, guard);
+}
+
+/**
+ * Reads whether `socket` already closed or errored during the post-handshake microtask handoff and
+ * returns a `release()` callback to detach any temporary guard once the transport's listeners are attached.
+ */
+export function takeToolSocketHandoff(socket: net.Socket): {
+  readonly closedDuringHandoff: boolean;
+  release(): void;
+} {
+  const guard = handoffGuards.get(socket);
+  const closedDuringHandoff = (guard?.closed ?? false)
+    || socket.destroyed
+    || socket.readableEnded
+    || socket.readableAborted
+    || socket.errored != null;
+  return {
+    closedDuringHandoff,
+    release: () => guard?.release(),
+  };
+}
+
 /**
  * Pauses `socket` across the handshake-to-caller handoff so no post-handshake bytes or `'end'` events are lost
  * before the caller attaches listeners, then automatically resumes on the first `'data'` listener (since Node's
@@ -699,11 +761,11 @@ export function connectToolSocket(options: ConnectToolSocketOptions): Promise<To
 
       settled = true;
       socket.pause();
-      cleanup();
 
       const lineHead = chunk.subarray(0, newlineIndex);
       const lineBuffer = chunks.length === 0 ? lineHead : Buffer.concat([...chunks, lineHead]);
       if (!parseAckHandshakeLine(lineBuffer)) {
+        cleanup();
         socket.on('error', () => {});
         socket.destroy();
         reject(new Error('Tool socket server sent an invalid handshake acknowledgement'));
@@ -712,6 +774,10 @@ export function connectToolSocket(options: ConnectToolSocketOptions): Promise<To
 
       const trailing = chunk.subarray(newlineIndex + 1);
       const initialBytes = trailing.length > 0 ? Buffer.from(trailing) : Buffer.alloc(0);
+      // Install the post-handshake guard BEFORE detaching handshake listeners so there is never an unprotected
+      // window where `'error'` has no listener or `'close'`/`'end'` fires unnoticed across the microtask hop.
+      installHandoffGuard(socket);
+      cleanup();
       pauseUntilConsumed(socket);
       resolve({ socket, initialBytes });
     };

@@ -236,13 +236,11 @@ export function createPacksSystem(registry: PackRegistry) {
             startAccepted = acceptInstalledPack(registry, candidate.id, bus);
           },
         });
-        let activated: boolean;
-        try {
-          if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
-            throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
-          }
+        if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
+          await teardownPack(registry, result.id, bus);
+          throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
         }
-        finally { activated = startAccepted!(); }
+        const activated = startAccepted!();
         const problem = activationProblem(registry, result.id, activated);
         if (problem) {
           broadcast('packs', {
@@ -271,6 +269,7 @@ export function createPacksSystem(registry: PackRegistry) {
           packSlug,
           error: message,
         });
+        emitPacksList(registry, broadcast);
       }
     })();
   };
@@ -605,15 +604,13 @@ export function createPacksSystem(registry: PackRegistry) {
           accept: candidate => {
             if (entry.enabled) startAccepted = acceptInstalledPack(registry, candidate.id, bus);
           },
-        }).then(result => {
-          let activated: boolean;
-          try {
-            if (!recordUpdateInstalled(packId)) throw new Error(`Updated ${packId}, but its update record could not be saved`);
+        }).then(async result => {
+          if (!recordUpdateInstalled(packId)) {
+            if (entry.enabled) await teardownPack(registry, packId, bus);
+            else registry.refreshCatalog();
+            throw new Error(`Updated ${packId}, but its update record could not be saved`);
           }
-          finally {
-            if (entry.enabled) activated = startAccepted!();
-            else { registry.refreshCatalog(); activated = false; }
-          }
+          const activated = entry.enabled ? startAccepted!() : (registry.refreshCatalog(), false);
           const problem = entry.enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) {
             broadcast('packs', {
@@ -709,19 +706,38 @@ export function createPacksSystem(registry: PackRegistry) {
         }
 
         if (!newEnabled) {
+          const finishDisable = () => {
+            broadcast('packs', { type: 'PACK_DEACTIVATED', packId });
+            emitPacksList(registry, broadcast);
+          };
+          const hadSystems = registry.getRegisteredPackSystemIds(packId).length > 0;
           const tearingDown = teardownPack(registry, packId, bus);
+          if (!hadSystems) {
+            finishDisable();
+            broadcast('packs', {
+              type: 'PACK_ENABLED_CHANGED',
+              packId,
+              enabled: newEnabled,
+            });
+            return;
+          }
           const held = claims.move();
-          const settled = tearingDown.finally(() => {
+          const settled = tearingDown.then(finishDisable).finally(() => {
             held.dispose();
             teardowns.delete(packId);
           });
           teardowns.set(packId, settled);
           void settled;
-          broadcast('packs', { type: 'PACK_DEACTIVATED', packId });
-        } else {
-          if (activatePack(registry, packId, bus)) {
-            broadcast('packs', { type: 'PACK_ACTIVATED', packId });
-          }
+          broadcast('packs', {
+            type: 'PACK_ENABLED_CHANGED',
+            packId,
+            enabled: newEnabled,
+          });
+          return;
+        }
+
+        if (activatePack(registry, packId, bus)) {
+          broadcast('packs', { type: 'PACK_ACTIVATED', packId });
         }
 
         broadcast('packs', {

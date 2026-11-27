@@ -575,6 +575,26 @@ describe('a decision that could not be saved', () => {
       system.stop();
     }
   });
+
+  it('does not activate an installed pack when recordInstalled fails to save', async () => {
+    const system = runPacksSystem();
+    try {
+      const source = packSource('1.0.0');
+      // Block writing installed-packs.json so recordInstalled returns false after files are placed
+      fs.mkdirSync(resolveAppEnvironment({ env: 'test', userDataDir: tmpDir }).installedPacksFile, { recursive: true });
+
+      system.send({ type: 'INSTALL_PACK', packSlug: source, sourceKind: 'local' });
+
+      await vi.waitFor(() => {
+        expect(emitted(system.sent).map(event => event.type)).toContain('PACK_INSTALL_FAILED');
+      });
+      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
+      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_INSTALL_COMPLETE');
+      expect(registry.getPackRegistration(PACK_ID)).toBeNull();
+    } finally {
+      system.stop();
+    }
+  });
 });
 
 describe('a pack that is gone', () => {
@@ -1337,9 +1357,14 @@ describe('the claim on a pack', () => {
       // The pack is still registered until the bus finishes, so another operation may not start on it yet
       expect(registry.getPackRegistration(PACK_ID)).not.toBeNull();
       expect(probeClaim(PACK_ID)).toBe(false);
+      // PACK_DEACTIVATED must not be broadcast until teardownPack finishes (after afterStop)
+      expect(emitted(system.sent).map(e => e.type)).not.toContain('PACK_DEACTIVATED');
+      const listsBeforeFinish = emitted(system.sent).filter(e => e.type === 'PACKS_LIST').length;
       system.stops.splice(0).forEach(finish => finish());
       await vi.waitFor(() => expect(probeClaim(PACK_ID)).toBe(true));
       expect(registry.getPackRegistration(PACK_ID)).toBeNull();
+      expect(emitted(system.sent).map(e => e.type)).toContain('PACK_DEACTIVATED');
+      expect(emitted(system.sent).filter(e => e.type === 'PACKS_LIST').length).toBeGreaterThan(listsBeforeFinish);
     } finally { system.stop(); }
   });
 
