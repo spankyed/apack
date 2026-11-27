@@ -197,7 +197,7 @@ const reservedEventKey = (node: ts.Node): string[] | undefined => {
  * ends — returned, thrown, or thrown as a refusal of a declared kind — and reports a failure nobody asked about. An
  * answer written by hand skips all of it: an action that forgets its failure path leaves the asker waiting, and one
  * that names the wrong ask settles somebody else's. A transition for one is the other half: the ask that was made
- * takes its answer (`ask`, `fromAsk`), so a machine that also routes it has to work out which ask it is about.
+ * takes its answer (`ask`, or a state's `calls` / `loads`), so a machine that also routes it has to work out which ask it is about.
  * Source only, since a spec driving an asking machine directly has to hand it the answers a system would.
  */
 const handWrittenAnswer = (node: ts.Node): string[] | undefined => {

@@ -10,7 +10,7 @@ export type { _BackendPortTransport, _HostBridge } from './electron-api.ts';
 // manifest could describe, so nothing could derive that they compile this file
 export type { SpeechEvent } from './speech-event.ts';
 export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceLifecycleEvent, SurfaceStateOf, RouteComponents } from './surface.ts'
-export type { BreadcrumbItem, ComputedTrail, SurfaceChrome, SurfaceStateChrome, SurfaceStateValue } from './chrome.ts'
+export type { BreadcrumbItem, BreadcrumbSpec, ComputedTrail, MenuSpec, SurfaceChrome, SurfaceStateChrome, SurfaceStateValue } from './chrome.ts'
 export { isState } from '../state-guard.ts'
 export type { PackFEFeature, PackFERegistration } from './pack-fe-registration.ts'
 export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
@@ -33,7 +33,7 @@ export { contextMenu, contextMenuFn, type ContextMenuItem, type ContextMenuMeta 
 export { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward, type NavHistory } from './nav-history.ts'
 export { createHotkeyProcessor, matchesHotkey, processHotkeys, type HotkeyEvent, type HotkeysMap, type KeyboardShortcut, type SurfaceHotkeyDefinition } from './hotkeys.ts'
 export { saveTabGroups, loadTabGroups, clearTabGroups, getNextAvailableColor, ALL_COLORS, type TabGroup, type TabGroupColor } from './tab-groups.ts'
-export { targetIs, TRAIL_CLICK, type TrailClickEvent } from './route-trailer.ts'
+export type { TrailClickEvent } from './route-trailer.ts'
 export { getDesignated, hasDesignation } from '../designations/index.ts'
 
 export { secretsClient, type SecretsClient, type SecretsSnapshot } from './secrets-client.ts'

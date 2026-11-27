@@ -31,7 +31,7 @@ export interface _BackendPortTransport {
  * window has and pack authors are not pointed at. Host code that needs one of those takes this type.
  *
  * **Host-only, and the underscore is what makes that checkable.** Publishing the whole bridge under a
- * pack-facing name would point pack authors at `apiToken` through a different door than the one the
+ * pack-facing name would point pack authors at `backendPort` through a different door than the one the
  * pack-facing view closes; `check:specifiers` refuses pack code importing an `_`-prefixed export, so this
  * is a boundary something enforces rather than an omission nothing does.
  *

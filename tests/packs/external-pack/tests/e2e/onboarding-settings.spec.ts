@@ -39,7 +39,7 @@ test('real onboarding writes app and feature preferences without a settings asse
       };` });
     });
     await appPage.getByRole('button', { name: 'Execute', exact: true }).click();
-    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('default-setup/database').getSnapshot().context.making.query)).toBe(false);
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system.snapshot()['default-setup/database']?.pending?.query)).toBe(false);
     const result = await appPage.evaluate(() => {
       const context = (window as any).applicationState.surface('default-setup/database').getSnapshot().context;
       return { value: context.queryResult, error: context.error };
