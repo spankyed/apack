@@ -264,13 +264,14 @@ const writeDebounceState = standaloneState<
       waiting: { data: { repository: AppGitRepository | null } };
     };
   },
-  { type: 'REFRESH'; repository: AppGitRepository | null }
+  { type: 'REFRESH'; repository: AppGitRepository | null } | { type: 'CANCEL' }
 >()({
   initial: 'idle',
   states: {
     idle: {
       on: {
         REFRESH: ({ repository }) => ({ at: 'waiting', data: { repository } }),
+        CANCEL: () => {},
       },
     },
     waiting: {
@@ -283,6 +284,7 @@ const writeDebounceState = standaloneState<
       failed: () => ({ at: 'idle' }),
       on: {
         REFRESH: ({ repository }) => ({ at: 'waiting', data: { repository } }),
+        CANCEL: () => ({ at: 'idle' }),
       },
     },
   },
@@ -301,6 +303,8 @@ const writeDebounceState = standaloneState<
 const statusRefreshState = standaloneState<
   {
     data: {
+      repository: AppGitRepository | null;
+      generation: number;
       next: RefreshRequest | null;
       /**
        * Whether a changed status was announced and no window has asked for it since. Every window showing the
@@ -310,7 +314,12 @@ const statusRefreshState = standaloneState<
       unasked: boolean;
       owed: RefreshRequest | null;
     };
-    internal: { type: 'CHECK_FINISHED'; changed: RepositoryChange | null };
+    internal: {
+      type: 'CHECK_FINISHED';
+      changed: RepositoryChange | null;
+      generation: number;
+      repository: AppGitRepository | null;
+    };
     reports: { type: 'REPOSITORY_CHANGED'; changed: RepositoryChange };
     starts: { debounce: typeof writeDebounceState };
     states: {
@@ -318,12 +327,15 @@ const statusRefreshState = standaloneState<
       checking: { data: { current: RefreshRequest } };
     };
   },
+  | { type: 'RESET'; repository: AppGitRepository | null }
   | { type: 'REFRESH'; repository: AppGitRepository | null }
   | { type: 'CHECK'; repository: AppGitRepository | null; everything: boolean; refreshIndex: boolean; byWindow: boolean }
   | { type: 'ASKED'; repository: AppGitRepository | null }
   | { type: 'WRITE_DUE'; repository: AppGitRepository | null; from?: string }
 >()({
   data: {
+    repository: given,
+    generation: 0,
     next: null,
     unasked: false,
     owed: null,
@@ -331,7 +343,21 @@ const statusRefreshState = standaloneState<
   initial: 'idle',
   starts: () => ({ debounce: writeDebounceState }),
   on: {
-    REFRESH: ({ repository }, { tell, child }) => {
+    RESET: ({ repository }, { data, tell, child }) => {
+      tell(child('debounce'), { type: 'CANCEL' });
+      return {
+        at: 'idle',
+        data: {
+          repository,
+          generation: data.generation + 1,
+          next: null,
+          unasked: false,
+          owed: null,
+        },
+      };
+    },
+    REFRESH: ({ repository }, { data, tell, child }) => {
+      if (repository !== data.repository) return;
       tell(child('debounce'), { type: 'REFRESH', repository });
     },
   },
@@ -339,6 +365,7 @@ const statusRefreshState = standaloneState<
     idle: {
       on: {
         ASKED: ({ repository }, { data }) => {
+          if (repository !== data.repository) return;
           const waiting = data.owed;
           // What was put off is checked now, for the windows that did not ask as well as the one that did
           if (waiting && waiting.repository === repository) {
@@ -347,6 +374,7 @@ const statusRefreshState = standaloneState<
           return { data: { unasked: false, owed: null } };
         },
         CHECK: (ev, { data }) => {
+          if (ev.repository !== data.repository) return;
           const asked: RefreshRequest = {
             repository: ev.repository,
             written: false,
@@ -360,25 +388,35 @@ const statusRefreshState = standaloneState<
           }
           return { at: 'checking', data: { current: asked } };
         },
-        WRITE_DUE: ({ repository }) => ({
-          at: 'checking',
-          data: { current: { repository, written: true, everything: true, refreshIndex: false } },
-        }),
+        WRITE_DUE: ({ repository }, { data }) => {
+          if (repository !== data.repository) return;
+          return {
+            at: 'checking',
+            data: { current: { repository, written: true, everything: true, refreshIndex: false } },
+          };
+        },
       },
     },
     checking: {
       data: { current: given },
       run: async ({ data, send }) => {
         const req = data.current;
+        const generation = data.generation;
         const found = req.repository
           ? await req.repository.refreshSnapshot(req.everything ? 'everything' : 'noted', { refreshIndex: req.refreshIndex })
           : NOTHING_CHANGED;
         const changed = req.written ? { ...found, status: true } : found;
-        send({ type: 'CHECK_FINISHED', changed: changedAnything(changed) ? changed : null });
+        send({
+          type: 'CHECK_FINISHED',
+          changed: changedAnything(changed) ? changed : null,
+          generation,
+          repository: req.repository,
+        });
       },
       failed: () => ({ at: 'idle', data: { next: null } }),
       on: {
         ASKED: ({ repository }, { data }) => {
+          if (repository !== data.repository) return;
           const waiting = data.owed;
           if (waiting && waiting.repository === repository) {
             return { data: { unasked: false, owed: null, next: mergeRequest(waiting, data.next) } };
@@ -386,6 +424,7 @@ const statusRefreshState = standaloneState<
           return { data: { unasked: false, owed: null } };
         },
         CHECK: (ev, { data }) => {
+          if (ev.repository !== data.repository) return;
           const asked: RefreshRequest = {
             repository: ev.repository,
             written: false,
@@ -397,25 +436,31 @@ const statusRefreshState = standaloneState<
           }
           return { data: { next: mergeRequest(asked, data.next) } };
         },
-        WRITE_DUE: ({ repository }, { data }) => ({
-          data: {
-            next: mergeRequest({ repository, written: true, everything: true, refreshIndex: false }, data.next),
-          },
-        }),
+        WRITE_DUE: ({ repository }, { data }) => {
+          if (repository !== data.repository) return;
+          return {
+            data: {
+              next: mergeRequest({ repository, written: true, everything: true, refreshIndex: false }, data.next),
+            },
+          };
+        },
       },
       internal: {
-        CHECK_FINISHED: ({ changed }, { data, report }) => {
+        CHECK_FINISHED: ({ changed, generation, repository }, { data, report }) => {
+          if (generation !== data.generation || repository !== data.repository) {
+            return { at: 'idle', data: { next: null } };
+          }
           if (changed) {
             report({ type: 'REPOSITORY_CHANGED', changed });
           }
           const nextUnasked = changed?.status ? true : data.unasked;
-          if (data.next) {
+          if (data.next && data.next.repository === data.repository) {
             return {
               at: 'checking',
               data: { current: data.next, next: null, unasked: nextUnasked },
             };
           }
-          return { at: 'idle', data: { unasked: nextUnasked } };
+          return { at: 'idle', data: { next: null, unasked: nextUnasked } };
         },
       },
     },
@@ -504,7 +549,11 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
     gitRepository: given,
     fetchCoordinator: null,
   },
-  starts: () => ({ statusRefresh: statusRefreshState }),
+  starts: (start) => ({
+    statusRefresh: start(statusRefreshState, {
+      given: (data) => ({ repository: data.gitRepository }),
+    }),
+  }),
   listen: ({ data, send }) => {
     const repo = (data.gitRepository as AppGitRepository | null) ?? (data.baseDirectory ? openGitRepository(data.baseDirectory) : null);
     const coordinator = new FetchCoordinator(() => send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }));
@@ -513,17 +562,21 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
     return () => coordinator.stop();
   },
   internal: {
-    INIT: ({ gitRepository, fetchCoordinator }) => ({
-      data: { gitRepository, fetchCoordinator },
-    }),
+    INIT: ({ gitRepository, fetchCoordinator }, { tell, child }) => {
+      tell(child('statusRefresh'), { type: 'RESET', repository: gitRepository });
+      return {
+        data: { gitRepository, fetchCoordinator },
+      };
+    },
     ANNOUNCE_REPOSITORY_CHANGED: ({ changed }, { broadcast, report }) => {
       broadcast('code', { type: 'commit.REPOSITORY_CHANGED', changed });
       if (changed.history || changed.refs) report({ type: 'GIT_STATUS_CHANGED' });
     },
   },
   on: {
-    'commit.UPDATE_BASE_DIRECTORY': ({ path, gitRepository }, { data }) => {
+    'commit.UPDATE_BASE_DIRECTORY': ({ path, gitRepository }, { data, tell, child }) => {
       data.fetchCoordinator?.bind(gitRepository);
+      tell(child('statusRefresh'), { type: 'RESET', repository: gitRepository });
       return { data: { baseDirectory: path, gitRepository } };
     },
     'commit.GIT_STATUS_CHANGED': (_event, { data, tell, child }) => {
@@ -681,8 +734,9 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
 
     'commit.STAGE_FILES': ({ paths }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).stageFiles(paths);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.stageFiles(paths);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { paths };
       }),
 
@@ -699,14 +753,15 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
           }
         }
         await repository.unstageFiles([...allPaths]);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { paths };
       }),
 
     'commit.REVERT_FILE': ({ path }, { data, tell, child, broadcast, refuse }) =>
       git(refuse, async () => {
-        const kept = await repositoryIn(data.gitRepository).revertFile(path);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        const kept = await repository.revertFile(path);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         broadcast('code', {
           type: 'explorer.FILE_CHANGED_EXTERNALLY',
           data: { path, changeType: 'change', modifiedAt: new Date() },
@@ -716,8 +771,9 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
 
     'commit.REVERT_FILES': ({ paths }, { data, tell, child, broadcast, refuse }) =>
       git(refuse, async () => {
-        const kept = await repositoryIn(data.gitRepository).revertFiles(paths);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        const kept = await repository.revertFiles(paths);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         for (const path of paths) {
           broadcast('code', {
             type: 'explorer.FILE_CHANGED_EXTERNALLY',
@@ -729,15 +785,17 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
 
     'commit.RESOLVE_CONFLICT': ({ path, strategy }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).resolveConflict(path, strategy);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.resolveConflict(path, strategy);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { path };
       }),
 
     'commit.MARK_RESOLVED': ({ path }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).stageFiles([path]);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.stageFiles([path]);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { path };
       }),
 
@@ -748,7 +806,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         for (const f of status.filter((item) => item.status === 'unmerged')) {
           await repository.resolveConflict(f.path, strategy);
         }
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
       }),
 
     /**
@@ -761,7 +819,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         try {
           await repository.moveOperation(move);
         } finally {
-          tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+          tell(child('statusRefresh'), { type: 'REFRESH', repository });
         }
         return { move };
       }),
@@ -773,7 +831,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         await repository.amend({ message: committed, evenIfPublished }).catch((error: unknown) => {
           throw published(error, refuse) ?? error;
         });
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return undoableAfter(repository);
       }),
 
@@ -799,7 +857,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         await repository.rewrite(base, steps, { evenIfPublished }).catch((error: unknown) => {
           throw published(error, refuse) ?? error;
         });
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { hash, action, ...(await undoableAfter(repository)) };
       }),
 
@@ -828,7 +886,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
           return { kind, target, stopped, ...(stopped ? {} : await undoableAfter(repository)) };
         });
       } finally {
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
       }
     },
 
@@ -842,7 +900,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         if (stagedFiles.length === 0) throw new Error('No files staged for commit. Please stage files before committing.');
         const message = await asCommitted(repository, args.message);
         await repository.commit(message);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { message, ...(await undoableAfter(repository)) };
       } catch (error) {
         // What failed and why, with what can be done about it (a trust to give, a hook's output); two of git's
@@ -886,14 +944,14 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         const { message, ...details } = failureOf(error);
         throw refuse('git', message, details.code === 'unknown-ref' ? { ...details, missingBranch: branchName } : details);
       }
-      tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+      tell(child('statusRefresh'), { type: 'REFRESH', repository });
       if (pull && (await git(refuse, () => repository.readSnapshot())).hasUpstream) {
         try {
           await repository.pullBranch(progressDuring(progress, 'pull'));
         } catch (error) {
           throw await remoteRefusal(refuse, error, 'pull', repository);
         }
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
       }
       return { branchName };
     },
@@ -901,8 +959,9 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
     /** Makes a branch at what is checked out and checks it out: answered as a checkout of it */
     'commit.CREATE_BRANCH': ({ branchName }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).createBranch(branchName);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.createBranch(branchName);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { branchName };
       }),
 
@@ -917,10 +976,10 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         await repository.pushBranch(progressDuring(progress, 'push'), signal);
       } catch (error) {
         // What the remote holds is not known from here: it has the push or it does not
-        if (signal.aborted) tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        if (signal.aborted) tell(child('statusRefresh'), { type: 'REFRESH', repository });
         throw await remoteRefusal(refuse, error, 'push', repository);
       }
-      tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+      tell(child('statusRefresh'), { type: 'REFRESH', repository });
       return { branchName };
     },
 
@@ -932,7 +991,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
       } catch (error) {
         throw await remoteRefusal(refuse, error, 'pull', repository);
       }
-      tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+      tell(child('statusRefresh'), { type: 'REFRESH', repository });
       return { branchName };
     },
 
@@ -982,7 +1041,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
           },
         );
         // Nothing was read while git refused it: its status, and its watches
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         report({ type: 'CHECK_FOR_EXTERNAL_CHANGES' });
         return { directory };
       }),
@@ -993,11 +1052,12 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
      */
     'commit.TRUST_REPOSITORY': ({ repository: named }, { data, tell, child, report, refuse }) =>
       git(refuse, async () => {
-        const { repository } = await repositoryIn(data.gitRepository).readTrust();
+        const repo = repositoryIn(data.gitRepository);
+        const { repository } = await repo.readTrust();
         if (!repository || repository !== named) throw new Error('That is not the repository this panel is showing');
         trustRepository(repository);
         // Its watches were not opened while it was refused, and the status was never read
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository: repo });
         report({ type: 'CHECK_FOR_EXTERNAL_CHANGES' });
         return { repository };
       }),
@@ -1010,17 +1070,18 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         const { entry } = await repository.undo((await lastUndoable(repository))?.id ?? '', { evenIfPublished }).catch((error: unknown) => {
           throw published(error, refuse) ?? error;
         });
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { id: entry.id, summary: entry.summary, ...(await undoableAfter(repository)) };
       }),
 
     /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
     'commit.RESTORE_DISCARDED': ({ id }, { data, tell, child, broadcast, refuse }) =>
       git(refuse, async () => {
+        const repository = repositoryIn(data.gitRepository);
         // A discard is in the engine's journal, and undoing it is what puts it back
-        const { discard } = await repositoryIn(data.gitRepository).undo(id);
+        const { discard } = await repository.undo(id);
         const restored = discard ?? { restored: [], left: [] };
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         for (const path of restored.restored) {
           broadcast('code', {
             type: 'explorer.FILE_CHANGED_EXTERNALLY',
@@ -1037,15 +1098,16 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
     /** Stages one piece of a file's change, or takes one back out of what is staged: a write like staging the file */
     'commit.APPLY_HUNK': ({ path: file, staged, hunk }, { data, tell, child, send, refuse }) =>
       git(refuse, async () => {
+        const repository = repositoryIn(data.gitRepository);
         try {
-          await repositoryIn(data.gitRepository).applyHunk(file, staged, hunk);
+          await repository.applyHunk(file, staged, hunk);
         } catch (error) {
           // A refusal means the file moved on under the window's diff, so that diff is read again. Its diff and
           // not the status: nothing was written, and a status answer would take the reason off the screen
           send({ type: 'ANNOUNCE_REPOSITORY_CHANGED', changed: { ...NOTHING_CHANGED, diffs: true, files: [file] } });
           throw error;
         }
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { path: file, staged, hunk };
       }),
 
@@ -1070,14 +1132,15 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
         });
       }
       repository.resumeAutoFetch();
-      tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+      tell(child('statusRefresh'), { type: 'REFRESH', repository });
       return { host, ...during };
     },
 
     'commit.STASH_PUSH': ({ message, stagedOnly, paths }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        const result = await repositoryIn(data.gitRepository).stashPush(message, stagedOnly, paths);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        const result = await repository.stashPush(message, stagedOnly, paths);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { message: result };
       }),
 
@@ -1101,16 +1164,18 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
 
     'commit.RENAME_BRANCH': ({ name, to }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).renameBranch(name, to);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.renameBranch(name, to);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { name, to };
       }),
 
     /** Turns on git's own file monitor and untracked cache for the repository, on the user's click: it writes its config */
     'commit.SPEED_UP_STATUS': (_args, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        const turnedOn = await repositoryIn(data.gitRepository).speedUpStatus();
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        const turnedOn = await repository.speedUpStatus();
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return turnedOn;
       }),
 
@@ -1123,29 +1188,31 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
      */
     'commit.STASH_APPLY': ({ index }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository)
+        const repository = repositoryIn(data.gitRepository);
+        await repository
           .stashApply(index)
           .catch((error: unknown) => {
             if (error instanceof StashConflictError) {
-              tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+              tell(child('statusRefresh'), { type: 'REFRESH', repository });
             }
             throw error;
           });
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { index, popped: false };
       }),
 
     'commit.STASH_POP': ({ index }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository)
+        const repository = repositoryIn(data.gitRepository);
+        await repository
           .stashPop(index)
           .catch((error: unknown) => {
             if (error instanceof StashConflictError) {
-              tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+              tell(child('statusRefresh'), { type: 'REFRESH', repository });
             }
             throw error;
           });
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { index, popped: true };
       }),
 
@@ -1164,7 +1231,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
       git(refuse, async () => {
         const repository = repositoryIn(data.gitRepository);
         await repository.stashDrop(index);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return undoableAfter(repository);
       }),
 
@@ -1172,7 +1239,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
       git(refuse, async () => {
         const repository = repositoryIn(data.gitRepository);
         await repository.stashClear();
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return undoableAfter(repository);
       }),
 
@@ -1216,17 +1283,19 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
      */
     'commit.UPDATE_SUBMODULE': ({ path: submodule }, { data, tell, child, progress, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).updateSubmodules([submodule], {
+        const repository = repositoryIn(data.gitRepository);
+        await repository.updateSubmodules([submodule], {
           onProgress: progressDuring(progress, 'submodule'),
         });
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { path: submodule };
       }),
 
     'commit.REVERT_COMMIT': ({ hash }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).revertCommit(hash);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.revertCommit(hash);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { hash };
       }),
 
@@ -1234,7 +1303,7 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
       git(refuse, async () => {
         const repository = repositoryIn(data.gitRepository);
         await repository.resetToCommit(hash);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { hash, ...(await undoableAfter(repository)) };
       }),
 
@@ -1243,15 +1312,17 @@ export const commitSystem = state<CommitShape, Event, NormalizeAsks<CommitAsks>>
 
     'commit.WORKTREE_ADD': ({ path, branch, createBranch }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).worktreeAdd(path, branch, createBranch);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.worktreeAdd(path, branch, createBranch);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { path, branch: branch || '' };
       }),
 
     'commit.WORKTREE_REMOVE': ({ path, force }, { data, tell, child, refuse }) =>
       git(refuse, async () => {
-        await repositoryIn(data.gitRepository).worktreeRemove(path, force);
-        tell(child('statusRefresh'), { type: 'REFRESH', repository: data.gitRepository });
+        const repository = repositoryIn(data.gitRepository);
+        await repository.worktreeRemove(path, force);
+        tell(child('statusRefresh'), { type: 'REFRESH', repository });
         return { path };
       }),
   },

@@ -6,7 +6,7 @@ import { repository } from '#generated/repository.ts';
 import { state } from '#generated/state.ts';
 import { EARS } from '#generated/ears.ts';
 import type { NodeEntity } from '#generated/types.ts';
-import { stepRegistry, type ExecutionContext, type RunNodeId, type StepInput } from '@apackdev/sdk/steps';
+import { stepRegistry, type ExecutionContext, type RunNodeId, type RunTree, type StepInput } from '@apackdev/sdk/steps';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { isPersistentTriggerFlow, shouldCompleteFlow } from './flow-completion.ts';
 import { dedupeTriggerNodes, type FlowTriggerNode, type TriggerDedupeWarning } from './trigger-dedupe.ts';
@@ -144,8 +144,51 @@ function finishIfActive(id: RunNodeId, status: 'completed' | 'failed'): boolean 
   return true;
 }
 
+/** Guarded stop: marks a still-`'active'` RunNode as `'stopped'` without touching finished nodes. */
+function stopIfActive(id: RunNodeId): boolean {
+  const current = appServices.runHistory.get(id);
+  if (!current || current.status !== 'active') return false;
+  appServices.runHistory.finish(id, 'stopped' as 'completed');
+  return true;
+}
+
 type BrainBroadcast = (to: 'brain', event: Read<OutgoingBrainEvents>) => void;
 type FlowReporter = (event: Read<FlowReport>) => void;
+
+/**
+ * Marks every still-`'active'` child step, non-drained event, and descendant subflow under `rootId`
+ * (and `rootId` itself when `includeSelf` is true) as `'stopped'` in `runHistory` and broadcasts
+ * `RUN_NODE_UPDATED` for each stopped node.
+ */
+export function stopActiveSubtree(
+  rootId: RunNodeId,
+  broadcast: BrainBroadcast,
+  options: { includeSelf?: boolean; parentEventRunNodeId?: RunNodeId } = {},
+): void {
+  const tree = appServices.runHistory.tree(rootId);
+  if (!tree) return;
+
+  const visit = (node: RunTree, currentEventId: RunNodeId | undefined, isRoot: boolean): void => {
+    const nextEventId = node.kind === 'event' ? node.id : currentEventId;
+    for (const child of node.children) {
+      visit(child, nextEventId, false);
+    }
+    if (!isRoot || options.includeSelf) {
+      if (stopIfActive(node.id)) {
+        broadcast('brain', {
+          type: 'RUN_NODE_UPDATED',
+          data: {
+            runNodeId: node.id,
+            status: 'stopped',
+            ...(nextEventId ? { eventRunNodeId: nextEventId } : {}),
+          },
+        });
+      }
+    }
+  };
+
+  visit(tree, options.parentEventRunNodeId, true);
+}
 
 function spawnChildNode(
   stepOrFlowNode: NodeEntity,
@@ -238,6 +281,10 @@ function completeFlow(
   report: FlowReporter,
 ): void {
   brainLogger.debug(`Flow ${spec.flowRunNodeId} completed (isFinalStep: ${spec.isFinalStep})`);
+  stopActiveSubtree(spec.flowRunNodeId, broadcast, {
+    includeSelf: false,
+    parentEventRunNodeId: spec.parentEventRunNodeId,
+  });
   if (finalResult !== undefined) {
     updateIfActive(spec.flowRunNodeId, { result: finalResult });
   }

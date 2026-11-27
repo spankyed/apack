@@ -29,75 +29,6 @@ function computeUrlKey(url: string): string {
   return `${parsed.protocol}//${host}${path}`;
 }
 
-// In-memory cache — avoids JSON.parse on every autocomplete keystroke
-let cache: HistoryEntry[] | null = null;
-
-function getHistory(): HistoryEntry[] {
-  if (cache) return cache;
-  try {
-    const raw = storage.get('history');
-    cache = raw ? JSON.parse(raw) : [];
-  } catch {
-    cache = [];
-  }
-  return cache!;
-}
-
-function persistHistory(): void {
-  storage.set('history', JSON.stringify(cache ?? []));
-}
-
-export function recordVisit(url: string, title: string, favicon: string, typed: boolean): void {
-  if (!url || url === 'about:blank') return;
-  // Skip data: URLs (error pages, etc.)
-  if (url.startsWith('data:')) return;
-
-  const urlKey = computeUrlKey(url);
-  const entries = getHistory();
-  const existing = entries.find(e => e.urlKey === urlKey);
-
-  if (existing) {
-    existing.visitCount++;
-    if (typed) existing.typedCount++;
-    existing.lastVisitTime = Date.now();
-    if (title) existing.title = title;
-    if (favicon) existing.favicon = favicon;
-    // Keep the most "complete" URL (prefer with path over bare domain)
-    if (url.length > existing.url.length) existing.url = url;
-  } else {
-    entries.push({
-      url,
-      urlKey,
-      title: title || '',
-      favicon: favicon || '',
-      visitCount: 1,
-      typedCount: typed ? 1 : 0,
-      lastVisitTime: Date.now(),
-    });
-  }
-
-  persistHistory();
-}
-
-export function updateHistoryMeta(url: string, title?: string, favicon?: string): void {
-  if (!url || url === 'about:blank' || url.startsWith('data:')) return;
-  const urlKey = computeUrlKey(url);
-  const entries = getHistory();
-  const existing = entries.find(e => e.urlKey === urlKey);
-  if (!existing) return;
-
-  let changed = false;
-  if (title && title !== existing.title) {
-    existing.title = title;
-    changed = true;
-  }
-  if (favicon && favicon !== existing.favicon) {
-    existing.favicon = favicon;
-    changed = true;
-  }
-  if (changed) persistHistory();
-}
-
 function frecencyScore(entry: HistoryEntry): number {
   const ageHours = (Date.now() - entry.lastVisitTime) / (1000 * 60 * 60);
 
@@ -115,42 +46,117 @@ export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\/(www\.)?/, '');
 }
 
-export function autocomplete(query: string, limit = 8): AutocompleteSuggestion[] {
-  if (!query || query.length < 1) return [];
+/** Per-instance browsing history store and autocomplete index (no module-level cache singleton). */
+export class BrowserHistory {
+  private cache: HistoryEntry[] | null = null;
 
-  const q = query.toLowerCase();
-  const entries = getHistory();
-  const scored: { entry: HistoryEntry; score: number; matchType: 'url' | 'title' }[] = [];
-
-  for (const entry of entries) {
-    const display = displayUrl(entry.url).toLowerCase();
-    let matchType: 'url' | 'title' = 'url';
-    let positionBoost = 0;
-
-    if (display.startsWith(q)) {
-      positionBoost = 2.0;
-    } else if (display.includes(q)) {
-      positionBoost = 1.0;
-    } else if (entry.title?.toLowerCase().includes(q)) {
-      matchType = 'title';
-      positionBoost = 0.8;
-    } else {
-      continue; // No match
+  private getHistory(): HistoryEntry[] {
+    if (this.cache) return this.cache;
+    try {
+      const raw = storage.get('history');
+      this.cache = raw ? JSON.parse(raw) : [];
+    } catch {
+      this.cache = [];
     }
-
-    scored.push({
-      entry,
-      score: frecencyScore(entry) * positionBoost,
-      matchType,
-    });
+    return this.cache!;
   }
 
-  scored.sort((a, b) => b.score - a.score);
+  private persistHistory(): void {
+    storage.set('history', JSON.stringify(this.cache ?? []));
+  }
 
-  return scored.slice(0, limit).map(({ entry, matchType }) => ({
-    url: entry.url,
-    title: entry.title,
-    favicon: entry.favicon,
-    matchType,
-  }));
+  recordVisit(url: string, title: string, favicon: string, typed: boolean): void {
+    if (!url || url === 'about:blank') return;
+    // Skip data: URLs (error pages, etc.)
+    if (url.startsWith('data:')) return;
+
+    const urlKey = computeUrlKey(url);
+    const entries = this.getHistory();
+    const existing = entries.find(e => e.urlKey === urlKey);
+
+    if (existing) {
+      existing.visitCount++;
+      if (typed) existing.typedCount++;
+      existing.lastVisitTime = Date.now();
+      if (title) existing.title = title;
+      if (favicon) existing.favicon = favicon;
+      // Keep the most "complete" URL (prefer with path over bare domain)
+      if (url.length > existing.url.length) existing.url = url;
+    } else {
+      entries.push({
+        url,
+        urlKey,
+        title: title || '',
+        favicon: favicon || '',
+        visitCount: 1,
+        typedCount: typed ? 1 : 0,
+        lastVisitTime: Date.now(),
+      });
+    }
+
+    this.persistHistory();
+  }
+
+  updateHistoryMeta(url: string, title?: string, favicon?: string): void {
+    if (!url || url === 'about:blank' || url.startsWith('data:')) return;
+    const urlKey = computeUrlKey(url);
+    const entries = this.getHistory();
+    const existing = entries.find(e => e.urlKey === urlKey);
+    if (!existing) return;
+
+    let changed = false;
+    if (title && title !== existing.title) {
+      existing.title = title;
+      changed = true;
+    }
+    if (favicon && favicon !== existing.favicon) {
+      existing.favicon = favicon;
+      changed = true;
+    }
+    if (changed) this.persistHistory();
+  }
+
+  autocomplete(query: string, limit = 8): AutocompleteSuggestion[] {
+    if (!query || query.length < 1) return [];
+
+    const q = query.toLowerCase();
+    const entries = this.getHistory();
+    const scored: { entry: HistoryEntry; score: number; matchType: 'url' | 'title' }[] = [];
+
+    for (const entry of entries) {
+      const display = displayUrl(entry.url).toLowerCase();
+      let matchType: 'url' | 'title' = 'url';
+      let positionBoost = 0;
+
+      if (display.startsWith(q)) {
+        positionBoost = 2.0;
+      } else if (display.includes(q)) {
+        positionBoost = 1.0;
+      } else if (entry.title?.toLowerCase().includes(q)) {
+        matchType = 'title';
+        positionBoost = 0.8;
+      } else {
+        continue; // No match
+      }
+
+      scored.push({
+        entry,
+        score: frecencyScore(entry) * positionBoost,
+        matchType,
+      });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, limit).map(({ entry, matchType }) => ({
+      url: entry.url,
+      title: entry.title,
+      favicon: entry.favicon,
+      matchType,
+    }));
+  }
+}
+
+export function createBrowserHistory(): BrowserHistory {
+  return new BrowserHistory();
 }

@@ -11,7 +11,7 @@ import { createLogger, reportError, setDebugEnabled, isDebugEnabled } from '@apa
 
 import type { Contract } from './contract.ts';
 import type { BrainFlowSpec, BrainInternalEvents, FlowRunNodeData, OutgoingBrainEvents } from './types.ts';
-import { flowState, loadFlowTriggers, type FlowEvent } from './flow-system.ts';
+import { flowState, loadFlowTriggers, stopActiveSubtree, type FlowEvent } from './flow-system.ts';
 import { notify as notifyAdHocListeners, removeAllListeners as removeAllAdHocListeners } from './services/brain.ts';
 
 const logger = createLogger('brain');
@@ -410,6 +410,13 @@ export const brainSystem = state<
             });
           }
           const toRemove = collectDescendantFlowIds(data.flows, ev.flowRunNodeId);
+          for (const id of toRemove) {
+            if (id === ev.flowRunNodeId) continue;
+            stopActiveSubtree(id as RunNodeId, broadcast, {
+              includeSelf: true,
+              parentEventRunNodeId: data.flows[id]?.parentEventRunNodeId,
+            });
+          }
           return {
             data: (d) => {
               for (const id of toRemove) {

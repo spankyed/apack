@@ -1417,7 +1417,9 @@ export const commitState = state<CommitShape, CommitEvent>()({
   initial: 'closed',
   on: {
     CODE_STARTED: ({ directory }) =>
-      directory ? { at: 'open', data: { ...openInitialData(directory), appliedHunks: {} } } : { at: 'closed' },
+      directory
+        ? { at: 'open', data: { ...openInitialData(directory), appliedHunks: {}, commitMessage: '', isGeneratingMessage: false } }
+        : { at: 'closed', data: { appliedHunks: {}, commitMessage: '', isGeneratingMessage: false } },
     OPEN_DIFFS_CHANGED: ({ openDiffs }) => ({ data: { openDiffs: [...openDiffs] } }),
     'commit.SHOWN': () => ({ data: { isShown: true } }),
     'commit.HIDDEN': () => ({ data: { isShown: false } }),
@@ -1665,9 +1667,14 @@ export const commitState = state<CommitShape, CommitEvent>()({
           call('diff', tab, { path, staged });
         },
         CODE_STARTED: ({ directory }, { data, tell, child }) => {
-          if (!directory) return { at: 'closed', data: { appliedHunks: {} } };
+          if (!directory) {
+            return { at: 'closed', data: { appliedHunks: {}, commitMessage: '', isGeneratingMessage: false } };
+          }
           if (directory !== data.directory) {
-            return { at: 'open', data: { ...openInitialData(directory), appliedHunks: {} } };
+            return {
+              at: 'open',
+              data: { ...openInitialData(directory), appliedHunks: {}, commitMessage: '', isGeneratingMessage: false },
+            };
           }
           // Same folder (e.g., reconnect): keep current state and refresh lists
           tell(child('stashes'), { type: 'STASH_LIST' });

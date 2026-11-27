@@ -169,10 +169,9 @@ function runContext(data: Read<FlowRunNodeData>) {
  * answered with, which a window just started has not heard yet
  */
 function answeredTree(
-  current: Read<BrainData>,
   { data, state: brainStateVal }: Read<{ data: FlowRunNodeData; state: BrainStateEvent }>,
 ) {
-  return { ...(current.brainIsDead ? {} : runContext(data)), ...brainStateContext(brainStateVal) };
+  return { ...(!brainStateVal.rootFlowId ? {} : runContext(data)), ...brainStateContext(brainStateVal) };
 }
 
 /** The flow run a breadcrumb names, where it names one */
@@ -308,9 +307,9 @@ const brainState = state<BrainShape, BrainEvents>()({
         reading: {
           loads: (load) => ({
             surfaceData: load('brain', 'REQUEST_SURFACE_DATA', {
-              done: (outcome, { data }) => {
+              done: (outcome) => {
                 if (outcome.ok) {
-                  return { at: 'ready', data: answeredTree(data, outcome.value) };
+                  return { at: 'ready', data: answeredTree(outcome.value) };
                 }
                 // A tree that could not be read is asked for again when the surface is next started
                 return { at: 'loading.unasked' };
@@ -481,9 +480,9 @@ const brainState = state<BrainShape, BrainEvents>()({
             surfaceData: load('brain', 'REQUEST_SURFACE_DATA', {
               from: ['readFlowRunNodeId'],
               args: ({ readFlowRunNodeId }) => (readFlowRunNodeId ? { flowRunNodeId: readFlowRunNodeId } : {}),
-              done: (outcome, { data }) => ({
+              done: (outcome) => ({
                 at: 'ready.shown',
-                ...(outcome.ok ? { data: answeredTree(data, outcome.value) } : {}),
+                ...(outcome.ok ? { data: answeredTree(outcome.value) } : {}),
               }),
             }),
           }),

@@ -79,7 +79,10 @@ type UIEvent =
 
 export type NotesEvents = OpenEntity | UIEvent | TrailClickEvent<string>;
 
-type NotesData = NotesContext & {
+type PendingSubDocumentInsert = { key: string; cursorPos: number; parentId: string };
+
+type NotesData = Omit<NotesContext, 'pendingSubDocumentInsert'> & {
+  pendingSubDocumentInsert: PendingSubDocumentInsert | null;
   /** How the last import ended, until another folder is picked */
   imported: OutcomeOf<NotesAsks['IMPORT_NOTES']> | undefined;
   /** How the last export ended, until another is made */
@@ -166,6 +169,8 @@ function selectNoteData(data: Read<NotesData>, noteId: string, isHistoryNav = fa
         selectedNoteIds: [],
         selectedTaskId: noteId,
         selectedTask: note,
+        pendingSubDocumentInsert: null,
+        lastSubDocumentInsertChildId: null,
         expandedNodeIds: [...new Set([...data.expandedNodeIds, ...ancestorIds])],
         taskExpandedNodeIds: [...new Set([...data.taskExpandedNodeIds, ...intermediateIds, taskList.id])],
         ...(!isHistoryNav ? { navHistory: pushNavHistory(nav, taskList.id) } : {}),
@@ -181,6 +186,8 @@ function selectNoteData(data: Read<NotesData>, noteId: string, isHistoryNav = fa
     selectedNoteIds: [],
     selectedTaskId: null,
     selectedTask: null,
+    pendingSubDocumentInsert: null,
+    lastSubDocumentInsertChildId: null,
     expandedNodeIds: [...new Set([...data.expandedNodeIds, ...ancestorIds, noteId])],
     ...(!isHistoryNav ? { navHistory: pushNavHistory(nav, noteId) } : {}),
   };
@@ -196,6 +203,8 @@ function openNoteData(data: Read<NotesData>, noteId: string): Partial<NotesData>
     selectedNoteIds: [],
     selectedTaskId: null,
     selectedTask: null,
+    pendingSubDocumentInsert: null,
+    lastSubDocumentInsertChildId: null,
     expandedNodeIds: [...new Set([...data.expandedNodeIds, ...ancestorIds, noteId])],
     navHistory: pushNavHistory(data.navHistory as NavHistory<string | null>, noteId),
   };
@@ -278,7 +287,15 @@ const notesState = state<NotesShape, NotesEvents>()({
       args: (_key, input) => input,
       done: (outcome, { key, data, snapshot, tell }) => {
         const writes = writeEnded(data.writes as ViewWrites, key, !outcome.ok);
-        if (!outcome.ok || !outcome.value.note) return { data: { writes } };
+        const matchesPendingInsert = data.pendingSubDocumentInsert?.key === key;
+        if (!outcome.ok || !outcome.value.note) {
+          return {
+            data: {
+              writes,
+              ...(matchesPendingInsert ? { pendingSubDocumentInsert: null, lastSubDocumentInsertChildId: null } : {}),
+            },
+          };
+        }
         const note = outcome.value.note;
         const updatedNotes = withNote(data.notes, note);
 
@@ -320,9 +337,19 @@ const notesState = state<NotesShape, NotesEvents>()({
         }
 
         // In editor state
-        if (data.pendingSubDocumentInsert !== null) {
+        if (matchesPendingInsert) {
+          const pending = data.pendingSubDocumentInsert!;
           const validParentId = data.selectedTaskId ?? data.currentNoteId;
-          if (!note.parentId || note.parentId !== validParentId) return { data: { writes } };
+          if (!note.parentId || note.parentId !== pending.parentId || note.parentId !== validParentId) {
+            return {
+              data: {
+                writes,
+                notes: updatedNotes,
+                pendingSubDocumentInsert: null,
+                lastSubDocumentInsertChildId: null,
+              },
+            };
+          }
           return {
             data: {
               writes,
@@ -867,7 +894,8 @@ const notesState = state<NotesShape, NotesEvents>()({
           });
           return {
             data: {
-              pendingSubDocumentInsert: { cursorPos: event.cursorPos },
+              pendingSubDocumentInsert: { key, cursorPos: event.cursorPos, parentId: event.parentId },
+              lastSubDocumentInsertChildId: null,
               writes: writeSent(data.writes as ViewWrites, key),
             },
           };
@@ -877,6 +905,8 @@ const notesState = state<NotesShape, NotesEvents>()({
           data: {
             currentNoteId: null,
             currentNote: null,
+            pendingSubDocumentInsert: null,
+            lastSubDocumentInsertChildId: null,
             navHistory: pushNavHistory(data.navHistory as NavHistory<string | null>, null),
           },
         }),

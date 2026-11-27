@@ -1141,9 +1141,11 @@ const codeState = state<CodeShape, CodeEvent>()({
     SELECT_PANEL: ({ panel }, { data, tell, child }) => {
       if (!ALL_PANELS.includes(panel)) {
         tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: false });
+        tell(child('commit'), { type: 'commit.HIDDEN' });
         return { data: { selectedPanel: 'explorer' } };
       }
       tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: panel === 'pr' });
+      tell(child('commit'), { type: panel === 'commit' ? 'commit.SHOWN' : 'commit.HIDDEN' });
       if (panel === 'commit') tell(child('commit'), { type: 'commit.REFRESH_STATUS' });
       else if (panel === 'pr') tell(child('pr'), { type: 'pr.REFRESH_STATUS' });
 
@@ -1158,6 +1160,7 @@ const codeState = state<CodeShape, CodeEvent>()({
       if (!canGoBack(data.panelNavHistory)) return;
       const result = goBack(data.panelNavHistory)!;
       tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: result.entry === 'pr' });
+      tell(child('commit'), { type: result.entry === 'commit' ? 'commit.SHOWN' : 'commit.HIDDEN' });
       if (result.entry === 'commit') tell(child('commit'), { type: 'commit.REFRESH_STATUS' });
       else if (result.entry === 'pr') tell(child('pr'), { type: 'pr.REFRESH_STATUS' });
       return { data: { panelNavHistory: result.history, selectedPanel: result.entry } };
@@ -1166,6 +1169,7 @@ const codeState = state<CodeShape, CodeEvent>()({
       if (!canGoForward(data.panelNavHistory)) return;
       const result = goForward(data.panelNavHistory)!;
       tell(child('pr'), { type: 'SYNC_PANEL_SHOWN', isPanelShown: result.entry === 'pr' });
+      tell(child('commit'), { type: result.entry === 'commit' ? 'commit.SHOWN' : 'commit.HIDDEN' });
       if (result.entry === 'commit') tell(child('commit'), { type: 'commit.REFRESH_STATUS' });
       else if (result.entry === 'pr') tell(child('pr'), { type: 'pr.REFRESH_STATUS' });
       return { data: { panelNavHistory: result.history, selectedPanel: result.entry } };

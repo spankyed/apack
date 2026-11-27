@@ -1083,6 +1083,7 @@ const threadsState = state<ThreadsShape, ThreadsEvents>()({
         const threadId = threadIdFromTabKey(key);
         const tab = update.value as ThreadTabView | null;
         if (tab === null) {
+          if (writing(data.writes)) return;
           return { data: dropThreadData(data, threadId, false, send) };
         }
         if (!data.tabs.some(t => t.id === threadId)) return;

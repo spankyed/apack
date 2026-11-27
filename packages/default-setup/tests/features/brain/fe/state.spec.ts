@@ -170,3 +170,49 @@ it('passes an inspect toggle on, and takes what it became, before its first tree
     ctx.cleanup();
   }
 });
+
+it('populates the run tree immediately when recovering from brainIsDead', async () => {
+  const ctx = startBrainSurface();
+  try {
+    ctx.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
+    await ctx.answerTree('RunNode-initial');
+
+    // Brain dies -> brainIsDead becomes true
+    ctx.send({ type: 'BRAIN_KILLED', startError: 'stopped' });
+    expect(ctx.read().data.brainIsDead).toBe(true);
+
+    // Surface activates (or reads again) while brainIsDead is still true, and server answers with a live brain
+    ctx.send({ type: 'SURFACE_ACTIVATED' });
+    ctx.made.filter((ask) => ask.name === 'REQUEST_SURFACE_DATA').at(-1)!.done({
+      ok: true,
+      value: {
+        data: {
+          flowRunNodeId: 'RunNode-recovered',
+          runNodeTree: [
+            {
+              id: 'RunNode-recovered',
+              kind: 'flow',
+              label: 'Root',
+              status: 'active',
+              startedAt: 1,
+              rootId: 'RunNode-recovered',
+              children: [],
+            },
+          ],
+          possibleEvents: [],
+          flowHierarchy: [{ flowRunNodeId: 'RunNode-recovered', label: 'Root' }],
+        },
+        state: RUNNING,
+      },
+    });
+    await waitFor(ctx.sys, ctx.handle, (v) => v.at === 'ready.shown');
+
+    expect(ctx.read().data.brainIsDead).toBe(false);
+    expect(ctx.read().data.flowRunNodeId).toBe('RunNode-recovered');
+    expect(ctx.read().data.runNodeTree).toHaveLength(1);
+    expect(ctx.read().data.normalizedTree?.rootIds).toEqual(['RunNode-recovered']);
+    expect(ctx.read().data.flowHierarchy).toEqual([{ flowRunNodeId: 'RunNode-recovered', label: 'Root' }]);
+  } finally {
+    ctx.cleanup();
+  }
+});

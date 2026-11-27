@@ -103,11 +103,13 @@ function applyNodeTypeDefaults(nodeData: Record<string, any>): void {
   if (defaults) Object.assign(nodeData, structuredClone(defaults));
 }
 
-type FlowsInternalEvents = {
-  type: 'LAYOUT_COMPUTED';
-  graph: FlowsContext['graph'];
-  positions: Record<string, { x: number; y: number }>;
-};
+type FlowsInternalEvents =
+  | { type: 'INIT_LAYOUT'; controller: LayoutController }
+  | {
+      type: 'LAYOUT_COMPUTED';
+      graph: FlowsContext['graph'];
+      positions: Record<string, { x: number; y: number }>;
+    };
 
 type UIEvent =
   | FlowsInboxEvent
@@ -174,6 +176,7 @@ type FlowsData = Omit<
   showEditLabelDialog: boolean | undefined;
   showDeleteFlowDialog: boolean | undefined;
   canvasError: string | undefined;
+  _layout: LayoutController | null;
 };
 
 type FlowsShape = {
@@ -208,17 +211,55 @@ const LEAVE_VIEW = {
   selectedHandle: undefined,
 } as const;
 
-/** A layout result belongs to the exact graph that requested it. */
+/** Coordinates async ELK layout runs on the flows surface lifetime so stale or post-stop results are dropped. */
+class LayoutController {
+  private stopped = false;
+  private generation = 0;
+
+  constructor(private readonly send: (event: FlowsInternalEvents) => void) {}
+
+  schedule(
+    graph: FlowsContext['graph'],
+    data: Pick<FlowsContext['graph'], 'nodes' | 'edges'>,
+  ): void {
+    if (this.stopped) return;
+    const gen = ++this.generation;
+    void calculateLayoutAsync(data).then(
+      (computed) => {
+        if (this.stopped || gen !== this.generation) return;
+        this.send({ type: 'LAYOUT_COMPUTED', graph, positions: computed });
+      },
+      () => {},
+    );
+  }
+
+  cancel(): void {
+    this.generation++;
+  }
+
+  stop(): void {
+    this.stopped = true;
+    this.generation++;
+  }
+}
+
+/** A layout result belongs to the exact graph that requested it; preserves existing node positions while laying out new nodes. */
 function layoutGraph(
   data: Pick<FlowsContext['graph'], 'nodes' | 'edges'>,
   positions: Read<FlowsContext['graph']['positions']>,
-  send: (event: FlowsInternalEvents) => void,
+  controller: Read<LayoutController> | null,
 ): FlowsContext['graph'] {
-  const plainPositions = { ...positions } as Record<string, { x: number; y: number }>;
-  const needsLayout = data.nodes.length > 0 && !allNodesHavePositions(data.nodes, plainPositions);
-  const graph = { ...data, positions: needsLayout ? {} : plainPositions };
+  const keptPositions: Record<string, { x: number; y: number }> = {};
+  for (const node of data.nodes) {
+    const pos = positions[node.id];
+    if (pos) keptPositions[node.id] = { x: pos.x, y: pos.y };
+  }
+  const needsLayout = data.nodes.length > 0 && !allNodesHavePositions(data.nodes, keptPositions);
+  const graph = { ...data, positions: keptPositions };
   if (needsLayout) {
-    void calculateLayoutAsync(data).then(computed => send({ type: 'LAYOUT_COMPUTED', graph, positions: computed }));
+    controller?.schedule(graph, data);
+  } else {
+    controller?.cancel();
   }
   return graph;
 }
@@ -325,6 +366,12 @@ const flowsState = state<FlowsShape, FlowsEvents>()({
       skipped: [],
     },
     navHistory: createNavHistory<string | null>(null),
+    _layout: null,
+  },
+  listen: ({ send }) => {
+    const controller = new LayoutController((event) => send(event));
+    send({ type: 'INIT_LAYOUT', controller });
+    return () => controller.stop();
   },
   calls: ({ each }) => ({
     modelCatalog: each('flows', 'GET_MODEL_CATALOG', {
@@ -497,6 +544,7 @@ const flowsState = state<FlowsShape, FlowsEvents>()({
     }),
   }),
   internal: {
+    INIT_LAYOUT: ({ controller }) => ({ data: { _layout: controller } }),
     LAYOUT_COMPUTED: (event, { data }) => {
       // Node ids are unique to a flow, so a shared node means the same flow, however often its graph was rebuilt
       // since the layout was asked for; another flow's late layout shares none and is dropped
@@ -538,7 +586,7 @@ const flowsState = state<FlowsShape, FlowsEvents>()({
     'ROOT_FLOW.SET': (event, { call }) => {
       call('setRootFlow', freshKey(), { flowId: event.flowId });
     },
-    'FLOW.GRAPH_READ': (event, { data, send }) => {
+    'FLOW.GRAPH_READ': (event, { data }) => {
       const readsPendingFlow = data.pendingFlow?.flowId === event.flowId;
       const readsShownFlow = !data.pendingFlow && data.selectedFlowId === event.flowId;
 
@@ -562,13 +610,14 @@ const flowsState = state<FlowsShape, FlowsEvents>()({
             editingNodeId: found ? (nodeId as EARS.EntityId) : undefined,
             selectedHandle: undefined,
             canvasError: nodeId && !found ? `Node "${nodeId}" is no longer in flow "${event.flowId}".` : undefined,
-            graph: layoutGraph(event.data, data.selectedFlowId === event.flowId ? data.graph.positions : {}, e => send(e)),
+            graph: layoutGraph(event.data, data.selectedFlowId === event.flowId ? data.graph.positions : {}, data._layout),
             navHistory: request?.recordHistory ? pushNavHistory(data.navHistory as NavHistory<string | null>, event.flowId) : data.navHistory,
             writes: viewRead(data.writes as ViewWrites).writes,
           },
         };
       }
       if (readsShownFlow && event.data === null) {
+        data._layout?.cancel();
         return {
           at: 'list',
           data: {
@@ -589,7 +638,7 @@ const flowsState = state<FlowsShape, FlowsEvents>()({
           data: {
             selectedNodeId: kept(data.selectedNodeId),
             editingNodeId: kept(data.editingNodeId),
-            graph: layoutGraph(graphData, data.graph.positions, e => send(e)),
+            graph: layoutGraph(graphData, data.graph.positions, data._layout),
             writes: viewRead(data.writes as ViewWrites).writes,
           },
         };

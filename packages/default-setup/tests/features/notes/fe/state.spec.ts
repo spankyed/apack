@@ -152,3 +152,44 @@ it('holds its views until the last of several writes has ended, however each end
     ctx.cleanup();
   }
 });
+
+it('ties pendingSubDocumentInsert to its createNote key, clears on failure/navigation, and never drops valid created notes', async () => {
+  const ctx = open('Note-parent', 'hello');
+  try {
+    ctx.send({ type: 'NOTES.READ', notes: [summary('Note-parent'), summary('Note-other')] });
+
+    // 1. Failed sub-document insert clears pendingSubDocumentInsert
+    ctx.send({ type: 'NOTE.REQUEST_DOCUMENT_INSERT', parentId: 'Note-parent', cursorPos: 5 });
+    expect(ctx.data().pendingSubDocumentInsert).toMatchObject({ cursorPos: 5, parentId: 'Note-parent' });
+    await ctx.end('CREATE_NOTE', { ok: false, failure: { kind: 'failed', message: 'disk full' } }, 0);
+    expect(ctx.data().pendingSubDocumentInsert).toBeNull();
+    expect(ctx.data().lastSubDocumentInsertChildId).toBeNull();
+
+    // 2. Concurrent regular NOTE.CREATE while a sub-document insert is pending is NOT hijacked or dropped
+    ctx.send({ type: 'NOTE.REQUEST_DOCUMENT_INSERT', parentId: 'Note-parent', cursorPos: 10 });
+    ctx.send({ type: 'NOTE.CREATE', title: 'Unrelated Note' });
+
+    // Unrelated NOTE.CREATE finishes first (ask index 2)
+    await ctx.end('CREATE_NOTE', { ok: true, value: { note: summary('Note-unrelated', 'Unrelated Note') } }, 2);
+    expect(ctx.data().notes.some((n) => n.id === 'Note-unrelated'), 'valid created note added to data.notes').toBe(true);
+    expect(ctx.data().pendingSubDocumentInsert, 'unrelated create did not consume pending insert').not.toBeNull();
+
+    // Navigating via NOTE.SELECT clears pendingSubDocumentInsert
+    ctx.send({ type: 'NOTE.SELECT', noteId: 'Note-other' });
+    expect(ctx.data().pendingSubDocumentInsert).toBeNull();
+
+    // Even when the superseded sub-document create finishes later (ask index 1), it is still added to data.notes
+    await ctx.end('CREATE_NOTE', { ok: true, value: { note: summary('Note-sub', 'Untitled', 'Note-parent') } }, 1);
+    expect(ctx.data().notes.some((n) => n.id === 'Note-sub')).toBe(true);
+
+    // 3. VIEW_WELCOME also clears pendingSubDocumentInsert
+    ctx.send({ type: 'NOTE.SELECT', noteId: 'Note-parent' });
+    ctx.send({ type: 'NOTE.REQUEST_DOCUMENT_INSERT', parentId: 'Note-parent', cursorPos: 3 });
+    expect(ctx.data().pendingSubDocumentInsert).not.toBeNull();
+    ctx.send({ type: 'VIEW_WELCOME' });
+    expect(ctx.read().at).toBe('welcome');
+    expect(ctx.data().pendingSubDocumentInsert).toBeNull();
+  } finally {
+    ctx.cleanup();
+  }
+});

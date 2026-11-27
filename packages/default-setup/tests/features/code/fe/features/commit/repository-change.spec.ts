@@ -89,3 +89,27 @@ it('asks nothing while the window does not show the code surface, and asks for a
   h.send({ type: 'commit.SHOWN' });
   expect(asked(h), 'what was missed is asked about once').toEqual(['commit.GET_GIT_STATUS']);
 });
+
+it('resets commitMessage and isGeneratingMessage on repo switch and close', () => {
+  const h = startCommit({ directory: '/repo-a' });
+  running.push(h);
+
+  h.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: repo a draft' });
+  h.send({ type: 'commit.GENERATING_MESSAGE' });
+  expect(h.read().data.commitMessage).toBe('feat: repo a draft');
+  expect(h.read().data.isGeneratingMessage).toBe(true);
+
+  // Switch to repo B: both message and generating flag must reset
+  h.send({ type: 'CODE_STARTED', directory: '/repo-b' });
+  expect(h.read().at).toBe('open');
+  expect(h.read().data.commitMessage).toBe('');
+  expect(h.read().data.isGeneratingMessage).toBe(false);
+
+  // Set again, then close (no directory): both must reset
+  h.send({ type: 'commit.UPDATE_MESSAGE', message: 'fix: repo b draft' });
+  h.send({ type: 'commit.GENERATING_MESSAGE' });
+  h.send({ type: 'CODE_STARTED', directory: '' });
+  expect(h.read().at).toBe('closed');
+  expect(h.read().data.commitMessage).toBe('');
+  expect(h.read().data.isGeneratingMessage).toBe(false);
+});
