@@ -1161,6 +1161,7 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
   let stopped = false;
   let draining = false;
   let drainScheduled = false;
+  let shellNotifyPending = false;
   let shellHandle: Handle<Value<ShellShape>, ShellEvent, Asks, {
     entityOpening: EntityOpeningState;
     packLoader: PackFrontendLoaderState;
@@ -1223,6 +1224,10 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
     } finally {
       draining = false;
     }
+    if (shellNotifyPending && !stopped) {
+      shellNotifyPending = false;
+      notifyShellSubscribers();
+    }
   };
 
   const scheduleDrain = (): void => {
@@ -1284,6 +1289,10 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
   };
 
   const notifyShellSubscribers = (): void => {
+    if (draining) {
+      shellNotifyPending = true;
+      return;
+    }
     if (shellSubscribers.size === 0 || !shellHandle) return;
     const snap = readCurrentShellSnapshot();
     for (const sub of Array.from(shellSubscribers)) {
@@ -1450,7 +1459,13 @@ export function createShell(options: ShellOptions, params: ShellParams = {}): Sh
       }
     }
     if (changed.includes(HOST.application)) {
-      notifyShellSubscribers();
+      // Hold shell notifications until queued surface start/stop effects drain outside the kernel step so
+      // subscribers never observe a surface in `snapshot.context.surfaces` whose actor isn't running yet.
+      if (effects.length > 0 || draining) {
+        shellNotifyPending = true;
+      } else {
+        notifyShellSubscribers();
+      }
     }
     if (effects.length > 0) {
       scheduleDrain();

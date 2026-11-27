@@ -291,24 +291,24 @@ describe('startHostTransport end-to-end wiring', () => {
       expect(loaded).toHaveLength(1);
       expect(loaded[0]!.id).toBe('default-setup');
 
-      // packs.catalog subscription: initial snapshot + live coalesced update
+      // packs.catalog subscription: initial snapshot + live FIFO updates
       const frames: PackCatalogFrame[] = [];
-      let resolveSecond!: () => void;
-      const gotSecond = new Promise<void>((resolve) => { resolveSecond = resolve; });
+      let resolveLatest!: () => void;
+      const gotLatest = new Promise<void>((resolve) => { resolveLatest = resolve; });
       const sub = client.control.subscribe('packs.catalog', undefined, {
         onData: (frame) => {
           frames.push(frame);
-          if (frames.length >= 2) resolveSecond();
+          if (frame.snapshot.revision >= 3) resolveLatest();
         },
       });
 
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       expect(frames[0]!.snapshot.revision).toBe(1);
 
-      // Rapid burst coalesces into latest revision
+      // Rapid updates deliver latest revision in order
       harness.emitCatalogChange();
       harness.emitCatalogChange();
-      await gotSecond;
+      await gotLatest;
       expect(frames.at(-1)!.snapshot.revision).toBe(3);
       sub.unsubscribe();
 

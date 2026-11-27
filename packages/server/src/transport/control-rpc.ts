@@ -527,8 +527,9 @@ export function createHostControlServer(
     },
 
     subscriptions: {
+      // Emit catalog frames synchronously (no microtask coalescing) so they stay FIFO-ordered ahead of
+      // `link`-lane `PACK_ACTIVATED`/`PACK_RUNTIMES_UPDATED` broadcasts emitted later in the same turn.
       'packs.catalog': {
-        coalesce: true,
         subscribe: (_input, sink) => {
           const publish = (): void => {
             if (sink.closed) return;

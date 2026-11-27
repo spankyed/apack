@@ -132,3 +132,25 @@ it('takes back a frontend whose pack the catalog disabled while it loaded, and i
   settling.accept();
   expect(f.shell.packFrontends.unload).not.toHaveBeenCalledWith('later');
 });
+
+it('starts every newly loaded surface actor before notifying shell subscribers', async () => {
+  const f = fixture();
+  const next = f.candidate('external');
+  next.declare();
+  f.shell.client.loadedPacks.mockResolvedValue([next.pack as any]);
+  f.shell.packFrontends.load.mockImplementation(async () => f.packs.registerPackFE({ kind: 'loaded', pack: next.pack }, next.registration));
+
+  const missingOnNotify: string[] = [];
+  const sub = app!.subscribe((snapshot) => {
+    for (const surface of snapshot.context.surfaces) {
+      if (!app!.surface(surface.id)) missingOnNotify.push(surface.id);
+    }
+  });
+  try {
+    f.shell.client.connect();
+    await vi.waitFor(() => expect(app!.getSnapshot().context.surfaces.some((s) => s.id === resolveName('view', 'external'))).toBe(true));
+    expect(missingOnNotify).toEqual([]);
+  } finally {
+    sub.unsubscribe();
+  }
+});
