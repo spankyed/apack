@@ -8,7 +8,7 @@ import { isError } from '../utils/is-error.ts';
 import { redactSecrets, redactSecretText } from '../utils/redact.ts';
 import { errorMessage } from '../utils/shared.ts';
 import { _boundBackendHost } from '../runtime/backend-port.ts';
-import type { RunNodeId } from '../services/run-history.ts';
+import type { RunHistory, RunNodeId } from '../services/run-history.ts';
 import type { StepRuntimeError } from '../steps/types.ts';
 import { createLogger } from './logger.ts';
 
@@ -171,15 +171,20 @@ function reportStepError(input: ReportSystemErrorInput, step: StepErrorContext):
 
   if (runtimeError.runNodeId) {
     try {
-      _boundBackendHost().runHistory?.update(runtimeError.runNodeId as RunNodeId, { result: {
-        error: {
-          message: runtimeError.message,
-          source: runtimeError.source,
-          phase: runtimeError.phase,
-          errorId: runtimeError.errorId,
-          stack: runtimeError.stack,
-        },
-      } });
+      const runHistory = _boundBackendHost().runHistory as (Pick<RunHistory, 'update'> & Partial<Pick<RunHistory, 'get'>>) | undefined;
+      const runNodeId = runtimeError.runNodeId as RunNodeId;
+      const existing = runHistory?.get?.(runNodeId);
+      if (!existing || existing.status === 'active') {
+        runHistory?.update(runNodeId, { result: {
+          error: {
+            message: runtimeError.message,
+            source: runtimeError.source,
+            phase: runtimeError.phase,
+            errorId: runtimeError.errorId,
+            stack: runtimeError.stack,
+          },
+        } });
+      }
     } catch (err) {
       logger.warn('Failed to record the runtime error in the run history', { runNodeId: runtimeError.runNodeId, error: err });
     }

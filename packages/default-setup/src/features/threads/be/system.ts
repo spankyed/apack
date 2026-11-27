@@ -85,27 +85,29 @@ export const threadsSystem = state<
       const tagNeedsWork = tRenames.size || tRemoved.size;
 
       if (statusNeedsWork || tagNeedsWork) {
-        for (const th of repository.threadQueries.all()) {
-          const patch: { status?: string; tags?: string[] } = {};
+        transact(() => {
+          for (const th of repository.threadQueries.all()) {
+            const patch: { status?: string; tags?: string[] } = {};
 
-          if (statusNeedsWork) {
-            const nextStatus = mapScalar(th.status, sRenames, sRemoved, statusFallback);
-            if (nextStatus !== th.status && nextStatus) {
-              patch.status = nextStatus;
+            if (statusNeedsWork) {
+              const nextStatus = mapScalar(th.status, sRenames, sRemoved, statusFallback);
+              if (nextStatus !== th.status && nextStatus) {
+                patch.status = nextStatus;
+              }
+            }
+
+            if (tagNeedsWork) {
+              const { next: nextTags, changed } = mapArray(th.tags, tRenames, tRemoved);
+              if (changed) {
+                patch.tags = nextTags;
+              }
+            }
+
+            if (Object.keys(patch).length) {
+              repository.threadCommands.update(th.id, patch);
             }
           }
-
-          if (tagNeedsWork) {
-            const { next: nextTags, changed } = mapArray(th.tags, tRenames, tRemoved);
-            if (changed) {
-              patch.tags = nextTags;
-            }
-          }
-
-          if (Object.keys(patch).length) {
-            repository.threadCommands.update(th.id, patch);
-          }
-        }
+        });
       }
     },
     THREAD_DELETED: () => {
@@ -448,41 +450,46 @@ export const threadsSystem = state<
       const forkContext: Record<string, any> = {};
 
       try {
-        const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-        const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
-        const sourceUserMessagesAfterFork = sourceIndex >= 0
-          ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
-          : 0;
-        const originalTopic = threadTopic || 'Untitled';
+        const { created, sourceUserMessagesAfterFork } = transact(() => {
+          const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+          const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
+          const userMessagesAfterFork = sourceIndex >= 0
+            ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
+            : 0;
+          const originalTopic = threadTopic || 'Untitled';
 
-        const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
-        const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
+          const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
+          const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
 
-        result = services.chat.createThread({ topic: forkTopic, instructions: '' });
-        if (!result) throw new Error('Failed to create thread');
+          const nextThread = services.chat.createThread({ topic: forkTopic, instructions: '' });
+          if (!nextThread) throw new Error('Failed to create thread');
 
-        repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
+          repository.threadCommands.linkFork(threadId as EARS.EntityId, nextThread.id);
 
-        repository.chatCommands.copyMessagesUpTo({
-          sourceThreadId: threadId as EARS.EntityId,
-          targetThreadId: result.id,
-          upToMessageId: messageId,
+          repository.chatCommands.copyMessagesUpTo({
+            sourceThreadId: threadId as EARS.EntityId,
+            targetThreadId: nextThread.id,
+            upToMessageId: messageId,
+          });
+
+          // Set forkPending on the NEW thread so chat actions queue messages
+          // until the async handle-fork actions finish persisting session state.
+          const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
+          const sourceContext = (sourceThread as any)?.context ?? {};
+          for (const [key, value] of Object.entries(sourceContext)) {
+            if (value && typeof value === 'object') {
+              forkContext[key] = { forkPending: true };
+            }
+          }
+          if (Object.keys(forkContext).length > 0) {
+            repository.threadCommands.update(nextThread.id, { context: forkContext });
+          }
+
+          services.chat.visitThread(nextThread.id);
+          return { created: nextThread, sourceUserMessagesAfterFork: userMessagesAfterFork };
         });
 
-        // Set forkPending on the NEW thread so chat actions queue messages
-        // until the async handle-fork actions finish persisting session state.
-        const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
-        const sourceContext = (sourceThread as any)?.context ?? {};
-        for (const [key, value] of Object.entries(sourceContext)) {
-          if (value && typeof value === 'object') {
-            forkContext[key] = { forkPending: true };
-          }
-        }
-        if (Object.keys(forkContext).length > 0) {
-          repository.threadCommands.update(result.id, { context: forkContext });
-        }
-
-        services.chat.visitThread(result.id);
+        result = created;
         // A window that asked opens the fork from its answer. One no window asked for is shown to every window
         if (!client) broadcast('threads', { type: 'SHOW_THREAD', threadId: result.id });
 
@@ -498,7 +505,7 @@ export const threadsSystem = state<
         });
       } catch (err) {
         logger.error('forkThread failed', { error: err });
-        // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
+        // Clear forkPending if the transaction already committed before a post-commit failure.
         if (result && Object.keys(forkContext).length > 0) {
           const clearContext = Object.fromEntries(
             Object.keys(forkContext).map(key => [key, { forkPending: undefined }])

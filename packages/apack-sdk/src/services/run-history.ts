@@ -208,10 +208,14 @@ export function _createRunHistory(runs: Ears): RunHistory {
       return started;
     },
     finish(id, status) {
-      if (node(id)) runs.write(id as unknown as EARS.EntityId).setMany({ status, completedAt: runs.now() });
+      const existing = node(id);
+      if (!existing || existing.status !== 'active') return;
+      runs.write(id as unknown as EARS.EntityId).setMany({ status, completedAt: runs.now() });
     },
     update(id, patch) {
-      if (node(id)) runs.write(id as unknown as EARS.EntityId).setMany(bounded(patch) as Record<string, unknown>);
+      const existing = node(id);
+      if (!existing || existing.status !== 'active') return;
+      runs.write(id as unknown as EARS.EntityId).setMany(bounded(patch) as Record<string, unknown>);
     },
     get: (id) => (node(id) ? stripped([runs.getRow(id as unknown as EARS.EntityId)!])[0] : undefined),
     findChildren: (id, page = {}) => rows(paged(where('parentId', id), page)),

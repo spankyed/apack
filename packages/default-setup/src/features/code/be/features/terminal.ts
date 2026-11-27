@@ -30,6 +30,26 @@ class RestoreGate {
   }
 }
 
+/** Waits for terminal restoration, aborting immediately if the ask or system was cancelled. */
+async function awaitRestore(restore: { readonly ready: PromiseLike<void> } | null, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw new Error('Cancelled');
+  if (restore) {
+    await new Promise<void>((resolve) => {
+      if (signal.aborted) {
+        resolve();
+        return;
+      }
+      const onAbort = () => resolve();
+      signal.addEventListener('abort', onAbort, { once: true });
+      void restore.ready.then(() => {
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      });
+    });
+  }
+  if (signal.aborted) throw new Error('Cancelled');
+}
+
 export interface CodeTerminalSystemContext {
   baseDirectory: string | null;
   restore: RestoreGate | null;
@@ -253,8 +273,8 @@ export const terminalSystem = state<TerminalShape, Event, NormalizeAsks<Terminal
   },
   answers: {
     // **The answer waits for the session**, because the process is the broker's and a socket away
-    'terminal.CREATE_TERMINAL': async (args, { data, broadcast }) => {
-      await data.restore?.ready;
+    'terminal.CREATE_TERMINAL': async (args, { data, broadcast, signal }) => {
+      await awaitRestore(data.restore, signal);
       const cwd = args.cwd || data.baseDirectory;
       const terminalInfo = await terminalService.create(
         {
@@ -273,8 +293,8 @@ export const terminalSystem = state<TerminalShape, Event, NormalizeAsks<Terminal
       return terminalInfo;
     },
 
-    'terminal.RESTART_TERMINAL': async ({ terminalId }, { data, broadcast }) => {
-      await data.restore?.ready;
+    'terminal.RESTART_TERMINAL': async ({ terminalId }, { data, broadcast, signal }) => {
+      await awaitRestore(data.restore, signal);
       const info = await terminalService.restart(terminalId, terminalHandlers);
       if (!info) throw new Error(`No terminal ${terminalId}`);
       // Every window showing this terminal has a new shell under it; the one that asked hears it too, which is why
@@ -282,8 +302,8 @@ export const terminalSystem = state<TerminalShape, Event, NormalizeAsks<Terminal
       broadcast('code', { type: 'terminal.RESTARTED', data: info });
     },
 
-    'terminal.CLOSE_TERMINAL': async ({ terminalId }, { data }) => {
-      await data.restore?.ready;
+    'terminal.CLOSE_TERMINAL': async ({ terminalId }, { data, signal }) => {
+      await awaitRestore(data.restore, signal);
       const terminalName = nameOf(terminalId);
       const outcome = await terminalService.kill(terminalId, terminalHandlers);
       // Only one of these is a terminal that was not there. A broker that would not end the session closed the
@@ -316,36 +336,36 @@ export const terminalSystem = state<TerminalShape, Event, NormalizeAsks<Terminal
       broadcast('code', { type: 'terminal.RENAMED', data: { terminalId, customTitle } });
     },
 
-    'terminal.REFRESH_LIST': async (_args, { data }) => {
-      await data.restore?.ready;
+    'terminal.REFRESH_LIST': async (_args, { data, signal }) => {
+      await awaitRestore(data.restore, signal);
       return terminalService.list();
     },
 
-    'terminal.OPEN_TERMINAL_TAB': async ({ terminalId }, { data }) => {
-      await data.restore?.ready;
+    'terminal.OPEN_TERMINAL_TAB': async ({ terminalId }, { data, signal }) => {
+      await awaitRestore(data.restore, signal);
       const terminal = terminalService.list().find((t) => t.id === terminalId);
       if (!terminal) throw new Error('Terminal not found');
       return terminal;
     },
 
     /** Every window showing the terminal marks it as one that keeps running, which is news rather than the answer */
-    'terminal.KEEP_TERMINAL': async ({ terminalId, kept }, { data, broadcast }) => {
-      await data.restore?.ready;
+    'terminal.KEEP_TERMINAL': async ({ terminalId, kept }, { data, broadcast, signal }) => {
+      await awaitRestore(data.restore, signal);
       if (!(await terminalService.keep(terminalId, kept))) throw new Error(`No running terminal ${terminalId}`);
       broadcast('code', { type: 'terminal.KEPT', data: { terminalId, kept } });
     },
 
     /** A recording is opened for the window that asked to look, and nobody else is looking */
-    'terminal.REWIND': async ({ terminalId, cols, rows }, { data }) => {
+    'terminal.REWIND': async ({ terminalId, cols, rows }, { data, signal }) => {
       const client = currentClient();
-      await data.restore?.ready;
+      await awaitRestore(data.restore, signal);
       const opened = await terminalService.rewind(terminalId, { cols, rows }, client);
       if (!opened) throw new Error(`No terminal ${terminalId}`);
       return opened;
     },
 
-    'terminal.REWIND_SEEK': async ({ session, at }, { data }) => {
-      await data.restore?.ready;
+    'terminal.REWIND_SEEK': async ({ session, at }, { data, signal }) => {
+      await awaitRestore(data.restore, signal);
       const sought = await terminalService.seekRewind(session, at);
       return sought === null ? null : { session, at: sought };
     },

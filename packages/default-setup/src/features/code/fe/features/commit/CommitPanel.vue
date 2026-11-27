@@ -982,7 +982,7 @@
 <script setup lang="ts">
 import { whatCanBeDone, type Availability, type UnavailableReason } from '@apackdev/git/availability'
 
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, nextTick, watch } from 'vue'
 import { useShell } from '@apackdev/sdk/fe'
 import { useState } from '#generated/state-fe.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
@@ -1128,6 +1128,14 @@ const commitTextarea = ref<HTMLTextAreaElement | null>(null)
 const toast = ref<InstanceType<typeof ToastNotification>>()
 const syncFeedback = ref<string | null>(null)
 let syncClearTimer: ReturnType<typeof setTimeout> | undefined
+let stashMenuHideTimer: ReturnType<typeof setTimeout> | undefined
+let branchDropdownHideTimer: ReturnType<typeof setTimeout> | undefined
+
+onBeforeUnmount(() => {
+  clearTimeout(syncClearTimer)
+  clearTimeout(stashMenuHideTimer)
+  clearTimeout(branchDropdownHideTimer)
+})
 
 const onStashResize = (delta: number) => {
   stashHeight.value = Math.max(MIN_STASH_HEIGHT, Math.min(MAX_STASH_HEIGHT, stashHeight.value - delta))
@@ -1528,7 +1536,8 @@ const stashFile = (file: GitStatusFile) => {
 
 // Stash handlers
 const hideStashMenu = () => {
-  setTimeout(() => {
+  clearTimeout(stashMenuHideTimer)
+  stashMenuHideTimer = setTimeout(() => {
     showStashMenu.value = false
   }, 200)
 }
@@ -1677,7 +1686,8 @@ watch(newWorktreeBranch, (branch) => {
 
 const hideBranchDropdown = () => {
   // Small delay to allow click events to fire
-  setTimeout(() => {
+  clearTimeout(branchDropdownHideTimer)
+  branchDropdownHideTimer = setTimeout(() => {
     showBranchDropdown.value = false
     highlightedBranchIndex.value = -1
   }, 200)

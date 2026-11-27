@@ -124,8 +124,29 @@ type CodeStarts = {
   codePrompts: typeof promptsSystem;
 };
 
+/** Owns the active `AppGitRepository` handle so repo switches and `codeSystem` exit always close it. */
+class RepositoryOwner {
+  private current: AppGitRepository | null = null;
+
+  replace(next: AppGitRepository | null): void {
+    const prev = this.current;
+    this.current = next;
+    if (prev && prev !== next) {
+      void prev.close().catch((error: unknown) =>
+        cliLogger.warn('The repository left behind could not be closed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  close(): void {
+    this.replace(null);
+  }
+}
+
 type CodeShape = {
-  data: CodeSystemContext;
+  data: CodeSystemContext & { repositoryOwner: RepositoryOwner | null };
   starts: CodeStarts;
 };
 
@@ -324,8 +345,9 @@ export const codeSystem = state<CodeShape, CodeEvent, CodeNormalizedAsks>()({
     openedDirectory: null,
     gitRepository: null,
     gitWatcher: null,
+    repositoryOwner: null,
   },
-  run: () => {
+  run: ({ onExit }) => {
     const codeSettings = featureSettings.forFeature('code').get();
     const projects = services.settings.get<AppSettings>({ kind: 'app' }).projects;
 
@@ -340,6 +362,10 @@ export const codeSystem = state<CodeShape, CodeEvent, CodeNormalizedAsks>()({
       gitRepo.setFetchConfig(codeSettings?.autoFetchRemote ?? false, codeSettings?.autoFetchIntervalSeconds ?? 180);
     }
 
+    const repositoryOwner = new RepositoryOwner();
+    repositoryOwner.replace(gitRepo);
+    onExit(() => repositoryOwner.close());
+
     return {
       data: {
         baseDirectory: baseDir,
@@ -347,6 +373,7 @@ export const codeSystem = state<CodeShape, CodeEvent, CodeNormalizedAsks>()({
         openedDirectory: baseDir,
         gitRepository: repositoryHandle(gitRepo),
         gitWatcher: watcherHandle(baseDir ? openGitWatcher(baseDir) : null),
+        repositoryOwner,
       },
     };
   },
@@ -440,20 +467,25 @@ export const codeSystem = state<CodeShape, CodeEvent, CodeNormalizedAsks>()({
       }
       if (event.path === data.baseDirectory) return;
 
-      // The repository it replaces lets go of what it holds open — its readers, a fetch under way — which on
-      // Windows would hold its directory
-      const replaced = repositoryOf(data.gitRepository);
-      if (replaced) {
-        void replaced.close().catch((error: unknown) =>
-          cliLogger.warn('The repository left behind could not be closed', {
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        );
-      }
-
       const repo = openGitRepository(event.path);
       const codeSettings = featureSettings.forFeature('code').get();
       repo.setFetchConfig(codeSettings?.autoFetchRemote ?? false, codeSettings?.autoFetchIntervalSeconds ?? 180);
+
+      // The repository it replaces lets go of what it holds open — its readers, a fetch under way — which on
+      // Windows would hold its directory
+      if (data.repositoryOwner) {
+        data.repositoryOwner.replace(repo);
+      } else {
+        const replaced = repositoryOf(data.gitRepository);
+        if (replaced) {
+          void replaced.close().catch((error: unknown) =>
+            cliLogger.warn('The repository left behind could not be closed', {
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      }
+
       const watcher = openGitWatcher(event.path);
 
       // Update child systems

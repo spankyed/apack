@@ -151,3 +151,40 @@ describe('a file diff, whose answer opens a tab', () => {
     expect(h.reportsOf('PR_OPEN_DIFF_TAB')).toEqual([]);
   });
 });
+
+describe('write cancellation and stale error isolation across repo switches', () => {
+  it('cancels all in-flight write calls on CODE_STARTED and never lets a repo-A write error clobber repo B', async () => {
+    const h = started();
+    await selectPR(h, pr(10, 'main', 'repo-a-branch'));
+
+    // Launch multiple write calls against repo A (including merge and comment writes)
+    h.send({ type: 'pr.MERGE', method: 'squash' });
+    h.send({ type: 'pr.CREATE_COMMENT', number: 10, body: 'comment on repo A' });
+    h.send({ type: 'pr.CLOSE' });
+    const mergeAsk = h.latestAsk('pr.MERGE_PR');
+    const commentAsk = h.latestAsk('pr.CREATE_COMMENT');
+    const closeAsk = h.latestAsk('pr.CLOSE_PR');
+    expect(mergeAsk.stopped).toBe(false);
+    expect(commentAsk.stopped).toBe(false);
+    expect(closeAsk.stopped).toBe(false);
+
+    // Switch to repo B
+    h.send({ type: 'CODE_STARTED', baseDirectory: '/repo-b' });
+    expect(mergeAsk.stopped, 'merge call from repo A is cancelled on repo switch').toBe(true);
+    expect(commentAsk.stopped, 'comment call from repo A is cancelled on repo switch').toBe(true);
+    expect(closeAsk.stopped, 'close call from repo A is cancelled on repo switch').toBe(true);
+
+    await selectPR(h, pr(20, 'main', 'repo-b-branch'));
+    expect(h.read().data.prError).toBeNull();
+    expect(h.read().data.selectedPR?.number).toBe(20);
+
+    // Even if a repo-A failure somehow settled after switching PRs (e.g., comment write on PR 20 then switched to PR 21)
+    h.send({ type: 'pr.CREATE_COMMENT', number: 20, body: 'comment on PR 20' });
+    const pr20Comment = h.latestAsk('pr.CREATE_COMMENT');
+    await selectPR(h, pr(21, 'main', 'repo-b-other'));
+    await pr20Comment.refuse('repo/PR 20 write failed');
+
+    expect(h.read().data.prError, 'unrecorded write error must not clobber current PR state').toBeNull();
+    expect(h.read().data.selectedPR?.number).toBe(21);
+  });
+});

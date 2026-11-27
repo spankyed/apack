@@ -468,11 +468,12 @@ function endWritePatch(
   call: (name: 'comments' | 'threads', input: { number: number }) => void,
 ): { recorded: Read<PullRequestWrite> | undefined; patch: Partial<CodePullRequestData> } {
   const { recorded, pending: remainingWrites } = settled(data.writes, key);
+  if (recorded === undefined) return { recorded: undefined, patch: {} };
+
   const patch: Partial<CodePullRequestData> = {
     detailRefreshes: settled(data.detailRefreshes, key).pending,
   };
   if (!outcome.ok) Object.assign(patch, failureShown(outcome.failure));
-  if (recorded === undefined) return { recorded: undefined, patch };
 
   const answer = writeAnswer(recorded, outcome.ok);
   const comment = outcome.ok ? commentChangeOf(recorded) : undefined;
@@ -714,13 +715,15 @@ export const pullRequestState = state<CodePullRequestShape, CodePullRequestEvent
         args: (input) => input.args,
         done: (outcome, { input, data, snapshot, cancel, call }) => {
           if (!outcome.ok) {
+            if (!(input.key in data.writes)) return;
             const details =
               outcome.failure.kind === 'github' && 'details' in outcome.failure ? outcome.failure.details : undefined;
             const detailsPatch = refreshes(data, input.key, details)
               ? takeDetailsPatch(data, details, snapshot.pending.fileDiff, cancel, call)
               : undefined;
             const afterDetails = detailsPatch ? ({ ...data, ...detailsPatch } as Read<CodePullRequestData>) : data;
-            const { patch } = endWritePatch(afterDetails, input.key, outcome, cancel, call);
+            const { recorded, patch } = endWritePatch(afterDetails, input.key, outcome, cancel, call);
+            if (!recorded) return;
             return { data: { ...detailsPatch, ...patch } };
           }
           const { recorded, patch } = endWritePatch(data, input.key, outcome, cancel, call);
@@ -884,6 +887,21 @@ export const pullRequestState = state<CodePullRequestShape, CodePullRequestEvent
       cancel('checkoutBase');
       for (const key of Object.keys(snapshot.pending.diff)) cancel('diff', key);
       cancelAllFileDiffs(snapshot.pending.fileDiff, cancel);
+      if (snapshot.pending.createPR) cancel('createPR');
+      if (snapshot.pending.merge) cancel('merge');
+      if (snapshot.pending.close) cancel('close');
+      if (snapshot.pending.toggleDraft) cancel('toggleDraft');
+      if (snapshot.pending.deleteBranch) cancel('deleteBranch');
+      if (snapshot.pending.checkout) cancel('checkout');
+      if (snapshot.pending.updatePR) cancel('updatePR');
+      if (snapshot.pending.createComment) cancel('createComment');
+      if (snapshot.pending.editComment) cancel('editComment');
+      if (snapshot.pending.deleteComment) cancel('deleteComment');
+      if (snapshot.pending.replyToThread) cancel('replyToThread');
+      if (snapshot.pending.resolveThread) cancel('resolveThread');
+      if (snapshot.pending.unresolveThread) cancel('unresolveThread');
+      if (snapshot.pending.editReviewComment) cancel('editReviewComment');
+      if (snapshot.pending.deleteReviewComment) cancel('deleteReviewComment');
 
       const baseDirectory = event.baseDirectory !== undefined ? event.baseDirectory : data.baseDirectory;
       const reset: Partial<CodePullRequestData> = {

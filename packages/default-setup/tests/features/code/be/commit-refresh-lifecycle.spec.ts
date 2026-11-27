@@ -331,3 +331,43 @@ it('lets git write its index when a command or a turn ended, and at no other che
   await after({ ...HINT, reconcile: true });
   expect(await after(WINDOW_ASKS), 'nor when a check that was put off is made').toEqual(['everything']);
 });
+
+it('resets statusRefresh on UPDATE_BASE_DIRECTORY and never refreshes repo B for a mid-command repo A write', async () => {
+  let resolveStageA!: () => void;
+  let resolveCheckA!: (changed: typeof NOTHING) => void;
+  const repoA = {
+    whenFetchDue: () => {},
+    stageFiles: vi.fn(() => new Promise<void>((resolve) => { resolveStageA = resolve; })),
+    refreshSnapshot: vi.fn(() => new Promise<typeof NOTHING>((resolve) => { resolveCheckA = resolve; })),
+    fetchIfDue: async () => false,
+    isAutoFetchSuspended: false,
+  } as unknown as AppGitRepository;
+
+  const repoB = {
+    whenFetchDue: () => {},
+    refreshSnapshot: vi.fn(async () => ({ ...NOTHING, status: true })),
+    fetchIfDue: async () => false,
+    isAutoFetchSuspended: false,
+  } as unknown as AppGitRepository;
+
+  const { send, ask, announced } = startCommit({ baseDirectory: '/repo-a', gitRepository: repoA });
+
+  // Start an in-flight check and an in-flight stage on repo A
+  send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  expect(repoA.refreshSnapshot).toHaveBeenCalledTimes(1);
+  const stagePromise = ask('commit.STAGE_FILES', { paths: ['a.ts'] });
+  expect(repoA.stageFiles).toHaveBeenCalledWith(['a.ts']);
+
+  // Switch to repo B mid-command
+  send({ type: 'commit.UPDATE_BASE_DIRECTORY', path: '/repo-b', gitRepository: repoB });
+
+  // Late check result and late stage completion from repo A settle after switching to repo B
+  resolveCheckA({ ...NOTHING, status: true });
+  resolveStageA();
+  await stagePromise;
+  await vi.advanceTimersByTimeAsync(200);
+
+  // Neither the stale repo-A check nor the stale repo-A write may announce or refresh repo B
+  expect(announced).not.toHaveBeenCalled();
+  expect(repoB.refreshSnapshot).not.toHaveBeenCalled();
+});

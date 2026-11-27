@@ -694,7 +694,7 @@ export const librarySystem = state<LibraryShape, LibraryEvents>()({
         },
       },
       on: {
-        'DOCUMENT.READ': (event, { data }) => {
+        'DOCUMENT.READ': (event, { data, snapshot }) => {
           if (event.documentId !== data.editingDocumentId) return;
           if (!event.document.onDisk && event.document.document === null) {
             return {
@@ -703,6 +703,7 @@ export const librarySystem = state<LibraryShape, LibraryEvents>()({
             };
           }
           if (event.document.onDisk && !data.editingDocument) {
+            if (snapshot.at === 'edit.fetching') return;
             return { at: 'edit.fetching' };
           }
           if (!event.document.onDisk && event.document.document) {

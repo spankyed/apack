@@ -139,10 +139,21 @@ export const stepState = state<StepShape, never>()({
             runtime: {
               killFlow: (targetFlowRunNodeId) => {
                 if (settled || signal.aborted) return;
+                const killId = targetFlowRunNodeId as RunNodeId;
                 if (inSyncCall) {
-                  pendingKillFlowId = targetFlowRunNodeId as RunNodeId;
+                  pendingKillFlowId = killId;
+                } else if (killId === data.spec.flowRunNodeId) {
+                  // Defer killing our own flow to a microtask so an async step that calls
+                  // killFlow(ctx.flowRunNodeId) and immediately sends COMPLETE finishes its RunNode first.
+                  pendingKillFlowId = killId;
+                  queueMicrotask(() => {
+                    if (!settled && !signal.aborted && pendingKillFlowId === killId) {
+                      pendingKillFlowId = undefined;
+                      send({ type: 'STEP_KILL_FLOW', flowRunNodeId: killId });
+                    }
+                  });
                 } else {
-                  send({ type: 'STEP_KILL_FLOW', flowRunNodeId: targetFlowRunNodeId as RunNodeId });
+                  send({ type: 'STEP_KILL_FLOW', flowRunNodeId: killId });
                 }
               },
               servicesForAction: ownServicesForAction,
