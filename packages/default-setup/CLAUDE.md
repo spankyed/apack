@@ -43,13 +43,13 @@ src/
 
 Each feature lives in `src/features/<name>/` with this layout:
 
-- `be/system.ts` — XState backend system machine
+- `be/system.ts` — `@apackdev/state` backend system
 - `be/contract.ts` — the feature's backend leaf: its system's `Contract` (`context`, `incoming`, `internal`, `outgoing`), which `apack.json` names at `features.<id>.system.contract`. Its own module rather than the types barrel, since `#generated/types` star-exports that and one `Contract` per feature would collide there; codegen reads it as a declared type, without resolving the machine
 - `be/repository/` — EARS read/write layer: `xQueries`/`xCommands` objects declared in `apack.json` `features.<id>.repositories`, carried by the generated pack entry's registration and registered by the host with the app's engine; use them through `repository` from `#generated/repository`
 - `be/services/` — Service modules, each exporting the `<key>Service` object exposed to systems and actions (see Services)
 - `be/types.ts` — Shared types
 - `apack.json` `features.<id>.surface` — presentation, state and component targets; codegen assembles the frontend binding
-- `fe/state.ts` — XState frontend state machine
+- `fe/state.ts` — `@apackdev/state` frontend surface state
 - `fe/contract.ts` — the feature's frontend leaf: its surface's published state, the events its `Contract` opens an inbox to, and the `Contract` itself. It imports no machine, no other feature and nothing from `#generated/*` but `types` and `ears`, which is what lets codegen read the contract without resolving the machine (`check:specifiers`); `apack.json` names it at `features.<id>.surface.contract`
 - `fe/canvas/` — Main view components
 - `fe/references.ts` — which of the feature's things are linkable from an editor, and how (if applicable)
@@ -77,7 +77,7 @@ Frontend components don't render untrusted text as markup: script injected into 
 
 Backend systems wired via `__generated__/pack-entry.ts`, each feature's with `packSystem()` from the SDK. Each system file default-exports a `SystemEntry` (the manifest names only the path, not an export name). The logs system is the bus's like any other: what the in-app viewer shows is what `onLog` delivers from the moment the bus starts it, so the boot lines before that — the boot reading, each `onInit`, the migrations, the content — reach stdout and the log file only.
 
-Code names a system by feature id, and reaches another system with the typed `tell(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
+Code names a system by feature id, and reaches another system with the typed `tell(name, event)` from `#generated/events`, never its actor. Each system file defines its `@apackdev/state` system matching its `be/contract.ts`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
 
 ## What a system sends a surface: data is a view, a result is an ask's answer, news is a broadcast
 
@@ -116,8 +116,8 @@ actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recen
 
 **A result is an ask's answer.** Whatever a window or another system needs an answer to — a fetch, a write a surface
 holds its views behind, a command whose outcome the user is shown — is declared in the system's contract under `asks`,
-with what it takes, what it answers with and the kinds it may fail as, and answered by the system's `answers` table
-(`defineSystem`): a handler returns its answer and throws its refusal, so no path through it leaves the asker waiting,
+with what it takes, what it answers with and the kinds it may fail as, and answered by the system's `answers` handlers
+(`@apackdev/state`): a handler returns its answer and throws its refusal, so no path through it leaves the asker waiting,
 and the window that asked hears it and no other. `docs/public-facing/features.md#asks` is the reference; the library
 is the worked example of a read, notes of writes, threads of commands.
 
@@ -354,7 +354,7 @@ Import `EARS` from `#generated/ears` by default. The SDK's `EARS` (`@apackdev/sd
 
 Typed facades (no module augmentation):
 - `__generated__/ears.ts` — `PackShapes` (entity type → attribute interface; a numbered entity's shape gains the `shortCode` the engine writes, typed from its `apack.json` entry, so `ThreadEntity` declares none), `ShortCodeOf<E>` (a numbered entity's code type, `ShortCodeOf<'Thread'>` is `` `THR-${number}` ``), `EntityName`, and the typed `query`/`create`/`upsert`/`write`/`transact`/`newId`/`getAttr` helpers built with `defineEars`. Feature code imports its writes from here; migrations write with the unchecked `untypedCreate`/`untypedUpsert`/`untypedWrite` from `@apackdev/sdk/ears`, as does the Database console's transaction code (which exposes them to console code as `create`, `upsert` and `write`), which runs through `@apackdev/sdk/database-console` (`features/database/be/execute/`)
-- `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcast`/`sendToSurface`/`tell` built with `defineEvents`. Frontend state machines and systems send to systems with `tell` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcast`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked through its `answers` table, which is the only way an ask is answered; `ask` and `fromAsk`, from the same module, ask one of the pack's or its dependencies' systems and resolve to its `Outcome`
+- `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcast`/`sendToSurface`/`tell` built with `defineEvents`. Frontend state machines and systems send to systems with `tell` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcast`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked through its `@apackdev/state` `answers` handlers, which is the only way an ask is answered; `ask`, from the same module, asks one of the pack's or its dependencies' systems and resolves to its `Outcome`, and `@apackdev/state` machines declare asks under `calls` or `loads`
 - `__generated__/services.ts` — the `services` proxy typed as `Services` (with `services.repository` typed as `Repositories`, and `services.emitter`'s sends typed with the pack's events; actions name systems `default-setup/<feature>`)
 - `__generated__/repository.ts` — `repository`, typed with every repository in `features.<id>.repositories`
 

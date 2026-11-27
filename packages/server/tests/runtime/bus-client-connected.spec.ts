@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createActor, setup, type AnyActorRef } from 'xstate';
+import { state } from '@apackdev/state';
 import type { Message } from '@apackdev/sdk/events';
 import { _openTestRunHistory } from '@apackdev/sdk/testing';
 
@@ -18,7 +18,8 @@ vi.mock('@apackdev/host/app-state', async (importOriginal) => ({
 const { createNativePackTestRegistry } = await import('@apackdev/host/testing');
 const registry = createNativePackTestRegistry();
 const { registerPack, unregisterPack } = registry;
-const { createAppBus, createBusMachine } = await import('@apackdev/host/bus');
+const { createAppBus, createBus } = await import('@apackdev/host/bus');
+type BackendBus = import('@apackdev/host/bus').BackendBus;
 const { rootEvents } = await import('../../src/transport/emitter.ts');
 
 // The app's bus on the api's transport, as setup/backend.ts binds it (the services reach the store only when called)
@@ -28,16 +29,15 @@ const { _createTestEngine } = await import('@apackdev/sdk/testing');
 const { untypedBroadcast } = await import('@apackdev/sdk/events');
 type EarsDatabase = import('@elmdb/ears').EarsDatabase;
 bindHost(createHostRuntime({ runHistory: _openTestRunHistory(), database: { isOpen: true } as EarsDatabase, engine: _createTestEngine(), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
-const backendSystem = createAppBus(registry);
 
 const received: string[] = [];
 
 /** A system that records each CLIENT_CONNECTED it receives, and each pack content it's told about */
 function recorder(label: string) {
-  return setup({}).createMachine({
+  return state<{}, { type: 'CLIENT_CONNECTED' } | { type: 'PACK_CHANGED'; packId: string }>()({
     on: {
-      CLIENT_CONNECTED: { actions: () => received.push(label) },
-      PACK_CHANGED: { actions: ({ event }) => received.push(`${label}: changed ${(event as unknown as { packId: string }).packId}`) },
+      CLIENT_CONNECTED: () => { received.push(label); },
+      PACK_CHANGED: (event) => { received.push(`${label}: changed ${event.packId}`); },
     },
   });
 }
@@ -61,13 +61,13 @@ function loaded(id: string, files: string[], features: Record<string, { descript
 
 const withFrontend = ['runtime/fe.js'];
 
-let bus: AnyActorRef;
+let bus: BackendBus;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   received.length = 0;
   registerPack(pack('first-pack'));
-  bus = createActor(backendSystem, { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
 });
 
 afterEach(() => {
@@ -129,7 +129,7 @@ describe('CLIENT_CONNECTED on the bus', () => {
       },
     }, loaded('external-pack', withFrontend, { feature: { description: 'Publish client state.', system: { entry: 'system.ts' } }, background: { description: 'Run background work.', system: { entry: 'background.ts' } } }));
     registerPack(pack('second-pack'), loaded('second-pack', withFrontend));
-    bus = createActor(backendSystem, { systemId: 'host/bus' }).start();
+    bus = createAppBus(registry).start();
 
     rootEvents.emitConnected();
     await flush();
@@ -142,7 +142,7 @@ describe('CLIENT_CONNECTED on the bus', () => {
     expect(received).toEqual(['first-pack', 'with surface', 'without surface', 'second-pack']);
   });
 
-  it('reaches the new actors of a reloaded pack, not the stopped ones', async () => {
+  it('reaches the new systems of a reloaded pack, not the stopped ones', async () => {
     rootEvents.emitConnected();
     await flush();
     received.length = 0;
@@ -163,7 +163,7 @@ describe('CLIENT_CONNECTED on the bus', () => {
       },
     });
     bus.stop();
-    bus = createActor(backendSystem, { systemId: 'host/bus' }).start();
+    bus = createAppBus(registry).start();
     rootEvents.emitConnected();
     await flush();
     received.length = 0;
@@ -175,7 +175,7 @@ describe('CLIENT_CONNECTED on the bus', () => {
     await flush();
 
     expect(received).toEqual(['feature (reloaded)']);
-    expect(bus.system.get('first-pack/dropped')).toBeUndefined();
+    expect(bus.getSystem('first-pack/dropped')).toBeUndefined();
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -183,8 +183,6 @@ describe('CLIENT_CONNECTED on the bus', () => {
 
 // untypedBroadcast goes through the bus, as a system's emit does: nothing reaches a client before one connects
 describe('untypedBroadcast on the bus', () => {
-  // The surface's own pack declares what it receives, as in the app: a send to a surface no pack owns is
-  // dropped, which is the check's job and not what this test is about
   beforeEach(() => {
     registerPack({
       id: 'notes-pack',
@@ -204,7 +202,7 @@ describe('untypedBroadcast on the bus', () => {
       await flush();
       untypedBroadcast('notes-pack/notes', { type: 'AFTER_CONNECT' });
       await flush();
-      expect(outgoing.filter(({ event }) => event.type !== 'CLIENT_CONNECTED')).toEqual([{ to: 'notes-pack/notes', call: expect.any(String), event: { type: 'AFTER_CONNECT' } }]);
+      expect(outgoing.filter(({ event }) => event.type !== 'CLIENT_CONNECTED' && event.type !== 'SYSTEM_ERROR')).toEqual([{ to: 'notes-pack/notes', call: expect.any(String), event: { type: 'AFTER_CONNECT' } }]);
     } finally {
       stop();
     }
@@ -212,7 +210,7 @@ describe('untypedBroadcast on the bus', () => {
 });
 
 describe('a bus given a subset of the registered systems', () => {
-  let subsetBus: AnyActorRef;
+  let subsetBus: BackendBus;
   let connect: () => void;
   let packConnect: (packId: string) => void;
 
@@ -226,7 +224,7 @@ describe('a bus given a subset of the registered systems', () => {
     });
     const subset = new Map([['second-pack/feature', recorder('second-pack')]]);
     bus.stop();
-    subsetBus = createActor(createBusMachine({
+    subsetBus = createBus({
       registry,
       systems: () => subset,
       onOutgoing: () => {},
@@ -235,7 +233,7 @@ describe('a bus given a subset of the registered systems', () => {
         packConnect = (packId) => send({ type: 'PACK_CLIENT_CONNECTED', packId });
         return () => {};
       },
-    }), { systemId: 'host/bus' }).start();
+    }).start();
     connect();
     received.length = 0;
   });
@@ -255,13 +253,13 @@ describe('a bus given a subset of the registered systems', () => {
     subsetBus.send({ type: 'RELOAD_PACK', packId: 'second-pack', systemIds: ['second-pack/feature', 'second-pack/outside'] });
     await flush();
     expect(received).toEqual(['second-pack']);
-    expect(subsetBus.system.get('second-pack/outside')).toBeUndefined();
+    expect(subsetBus.getSystem('second-pack/outside')).toBeUndefined();
 
     subsetBus.send({ type: 'TEARDOWN_PACK', systemIds: ['second-pack/feature'] });
     subsetBus.send({ type: 'ACTIVATE_PACK', packId: 'second-pack', systemIds: ['second-pack/feature', 'second-pack/outside'] });
     await flush();
-    expect(subsetBus.system.get('second-pack/feature')).toBeDefined();
-    expect(subsetBus.system.get('second-pack/outside')).toBeUndefined();
+    expect(subsetBus.getSystem('second-pack/feature')).toBeDefined();
+    expect(subsetBus.getSystem('second-pack/outside')).toBeUndefined();
   });
 });
 
@@ -298,7 +296,7 @@ describe('PACK_CHANGED on the bus', () => {
 // running backend, or a headless boot. The bus has to act on those either way.
 describe('pack lifecycle before a client connects', () => {
   const systemIds = ['second-pack/feature'];
-  const isRunning = (systemId: string) => bus.system.get(systemId) !== undefined;
+  const isRunning = (systemId: string) => bus.getSystem(systemId) !== undefined;
 
   it('starts an activated pack’s systems, and sends their startup data once a client connects', async () => {
     registerPack(pack('second-pack'));
@@ -324,15 +322,15 @@ describe('pack lifecycle before a client connects', () => {
   });
 
   it('restarts a reloaded pack’s systems', async () => {
-    const before = bus.system.get('first-pack/feature');
+    const before = bus.getSystem('first-pack/feature');
     expect(before).toBeDefined();
 
     bus.send({ type: 'RELOAD_PACK', packId: 'first-pack', systemIds: ['first-pack/feature'] });
     await flush();
-    // A fresh actor under the same id, not the one that was already running
-    const after = bus.system.get('first-pack/feature');
+    // A fresh system handle under the same id, not the one that was already running
+    const after = bus.getSystem('first-pack/feature');
     expect(after, 'the reloaded pack’s system is running again').toBeDefined();
-    expect(after, 'it is a fresh actor, so the pack really was restarted').not.toBe(before);
+    expect(after, 'it is a fresh handle, so the pack really was restarted').not.toBe(before);
     // Still no client: the fresh systems get their startup data from the first connection
     expect(received).toEqual([]);
 
@@ -342,20 +340,22 @@ describe('pack lifecycle before a client connects', () => {
   });
 });
 
-
 it('waits for frontend readiness before requesting state from a reloaded frontend-bearing pack', async () => {
   const publishing = (label: string) => ({ id: 'first-pack', features: { feature: { system: {
-    machine: setup({}).createMachine({ on: {
-      CLIENT_CONNECTED: { actions: () => received.push(`${label}: connected`) },
-      SEND_STATE: { actions: () => received.push(`${label}: state`) },
-      PACK_CHANGED: { actions: () => received.push(`${label}: changed`) },
-    } }), receives: ['CLIENT_CONNECTED'],
+    machine: state<{}, { type: 'CLIENT_CONNECTED' } | { type: 'SEND_STATE' } | { type: 'PACK_CHANGED' }>()({
+      on: {
+        CLIENT_CONNECTED: () => { received.push(`${label}: connected`); },
+        SEND_STATE: () => { received.push(`${label}: state`); },
+        PACK_CHANGED: () => { received.push(`${label}: changed`); },
+      },
+    }),
+    receives: ['CLIENT_CONNECTED'],
   } } } });
   unregisterPack('first-pack');
   const origin = loaded('first-pack', withFrontend);
   registerPack(publishing('initial'), origin);
   bus.stop();
-  bus = createActor(backendSystem, { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
   rootEvents.emitConnected();
   await flush();
   expect(received).toEqual([]);

@@ -1,4 +1,4 @@
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { PackFERegistration, SettingsPort } from '@apackdev/sdk/fe';
@@ -24,7 +24,7 @@ function binding() {
 
 const registration = (name: string, hook?: PackFERegistration['bindSettings']): PackFERegistration => ({
   id: 'owner', bindSettings: hook,
-  features: { code: { designation: 'editor', surface: { label: name, state: createMachine({}) } } },
+  features: { code: { designation: 'editor', surface: { label: name, state: state()({}) } } },
   settingsForms: { preferences: { name } }, appExtensions: { toolbar: { name } },
 });
 

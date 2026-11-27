@@ -1,19 +1,20 @@
 // A surface's components reach their own surface through useSurface(): the host renders each surface area in a SurfaceScope,
-// and a surface's component rendered elsewhere (its settings) gets one too. Nothing else hands out surface actors.
+// and a surface's component rendered elsewhere (its settings) gets one too. Nothing else hands out surface handles.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSSRApp, defineComponent, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
-import type { AnyActorRef } from 'xstate';
 import { SurfaceScope, useSurface } from '../../src/fe/actor-system.ts';
+import type { HostShellSurfaceRef } from '../../src/fe/shell.ts';
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts';
 
-const memos = { id: 'memos-actor' } as unknown as AnyActorRef;
-const notes = { id: 'notes-actor' } as unknown as AnyActorRef;
+const memos = { id: 'memos-actor' } as unknown as HostShellSurfaceRef;
+const notes = { id: 'notes-actor' } as unknown as HostShellSurfaceRef;
 
 beforeEach(() => {
-  const running: Record<string, AnyActorRef> = { 'memo-pack/memos': memos, 'default-setup/notes': notes };
-  bindFeHost({ catalog: {} as never,
-    application: { system: { get: (ref: string) => running[ref] }, subscribe: () => ({ unsubscribe() {} }) } as never,
+  const running: Record<string, HostShellSurfaceRef> = { 'memo-pack/memos': memos, 'default-setup/notes': notes };
+  bindFeHost({
+    catalog: {} as never,
+    application: { surface: (ref: string) => running[ref], subscribe: () => ({ unsubscribe() {} }) } as never,
     secrets: {} as never,
     settings: {} as never,
     client: { send() {}, watchView: () => () => {} },
@@ -23,7 +24,7 @@ beforeEach(() => {
 
 afterEach(() => unbindFeHost());
 
-/** A component that renders the id of the surface actor useSurface() gave it */
+/** A component that renders the id of the surface handle useSurface() gave it */
 const ShowsSurface = defineComponent({ setup: () => () => (useSurface<{ id: string }>()).id });
 
 const render = (root: () => ReturnType<typeof h>) => renderToString(createSSRApp(defineComponent({ setup: () => root })));

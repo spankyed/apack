@@ -7,7 +7,6 @@ import type {AppProcessEnv} from '@apackdev/sdk/env';
 
 // API Server Configuration
 export const API_CONFIG = {
-  DEFAULT_PORT: 3001,
   MAX_RESTART_ATTEMPTS: 3,
   RESTART_DELAY: 2000,
   SHUTDOWN_TIMEOUT: 5000,
@@ -53,8 +52,7 @@ export const getApiPaths = () => {
 
 // Environment Configuration
 export const getEnvironment = (
-  port: number,
-  options: { apiToken: string; startupId?: string; logDir?: string },
+  options: { startupId?: string; logDir?: string } = {},
 ): Record<string, string> => {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -110,10 +108,6 @@ export const getEnvironment = (
   // the shell it spawns, so this is also the list of what a user's shell must not inherit.
   const appProcessEnv: AppProcessEnv = {
     NODE_ENV: app.isPackaged ? 'production' : 'development',
-    API_PORT: port.toString(),
-    // Clients must present it: the API refuses connections and requests without it. The API captures it at boot
-    // and deletes it from its own environment, so nothing it spawns inherits it.
-    APACK_API_TOKEN: options.apiToken,
     APACK_STARTUP_ID: options.startupId,
     APACK_LOG_DIR: options.logDir,
     SHIPPED_PACKS_DIR: shippedPacksDir(),

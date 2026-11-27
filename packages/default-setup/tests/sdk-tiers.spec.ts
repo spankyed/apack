@@ -70,9 +70,9 @@ describe('Tier 2 — EARS types', () => {
 });
 
 describe('Tier 3 — System Framework delegates', () => {
-  it('defineSystem is callable', async () => {
-    const { defineSystem } = await import('@apackdev/sdk/framework');
-    expect(typeof defineSystem).toBe('function');
+  it('packSystem is callable', async () => {
+    const { packSystem } = await import('@apackdev/sdk/framework');
+    expect(typeof packSystem).toBe('function');
   });
 
   it('safeEvents is exported', async () => {

@@ -3,8 +3,9 @@ import * as path from 'node:path';
 import { connect } from 'node:net';
 import { resolveAppEnvironment, appDataDirFor, type AppChannel } from '@apackdev/sdk/env';
 import { findRunningApp } from '@apackdev/host/database';
-import { readApiEndpoint } from '@apackdev/host/process-liveness';
-import { API_HOST, errorMessage } from '@apackdev/sdk/utils/pure';
+import { inspectApiRuntime } from '@apackdev/host/transport/tool-client';
+import { runtimeFilePath } from '@apackdev/host/transport/tool-socket';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { parseAppChannel } from '../utils';
 import { validateAppBundle } from '../app/installed-app';
 import { PRODUCT_NAMES } from '../app/channels';
@@ -15,9 +16,9 @@ export function doctorChannel(args: string[]): AppChannel {
   return channel;
 }
 
-function reachable(port: number): Promise<boolean> {
+function socketReachable(socketPath: string): Promise<boolean> {
   return new Promise(resolve => {
-    const socket = connect({ host: API_HOST, port });
+    const socket = connect(socketPath);
     const finish = (ok: boolean) => { socket.destroy(); resolve(ok); };
     socket.setTimeout(2_000, () => finish(false));
     socket.once('connect', () => finish(true));
@@ -29,7 +30,7 @@ function reachable(port: number): Promise<boolean> {
 export async function inspectApp(channel: AppChannel, options: {
   applications?: string;
   dataDir?: string;
-  probe?: (port: number) => Promise<boolean>;
+  probeSocket?: (socket: string) => Promise<boolean>;
   json?: boolean;
 } = {}): Promise<void> {
   const product = PRODUCT_NAMES[channel];
@@ -52,12 +53,26 @@ export async function inspectApp(channel: AppChannel, options: {
     return context.userDataDir;
   });
   await check('Runtime', async () => {
+    const runtime = inspectApiRuntime(context.appDir);
+    if (runtime.status === 'live') {
+      const { pid, socket } = runtime.record;
+      if (socket !== undefined) {
+        if (!await (options.probeSocket ?? socketReachable)(socket)) {
+          throw new Error(`API tool socket ${socket} is unreachable`);
+        }
+        return `API tool socket reachable at ${socket} (pid ${pid})`;
+      }
+      return `API running (pid ${pid}; no local socket)`;
+    }
+    if (runtime.status === 'corrupt') {
+      throw new Error(`API runtime record (${runtimeFilePath(context.appDir)}) is unreadable`);
+    }
     const running = findRunningApp(context);
-    const endpoint = readApiEndpoint(context.apiPortFile);
-    if (!running && !endpoint) return 'app is closed; API check skipped';
-    if (!endpoint) throw new Error(`${running?.why}; no live API endpoint`);
-    if (!await (options.probe ?? reachable)(endpoint.port)) throw new Error(`API port ${endpoint.port} is unreachable`);
-    return `API listener reachable on port ${endpoint.port} (pid ${endpoint.pid})`;
+    if (!running) return 'app is closed; API check skipped';
+    if (runtime.status === 'stale') {
+      throw new Error(`${running.why}; stale API runtime record (pid ${runtime.record.pid})`);
+    }
+    throw new Error(`${running.why}; no live API runtime record`);
   });
   const failures = checks.filter(check => !check.ok).length;
   if (options.json) console.log(JSON.stringify({ channel, healthy: failures === 0, checks }));
@@ -70,7 +85,7 @@ export async function inspectApp(channel: AppChannel, options: {
 
 export async function doctor(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: apack doctor [--channel production|beta|preview] [--json]\n\nInspect the installed production app, its data directory, and its API listener if running. --channel beta selects beta. Nothing is launched or modified. Pack checks are apack pack doctor.');
+    console.log('Usage: apack doctor [--channel production|beta|preview] [--json]\n\nInspect the installed production app, its data directory, and its API runtime if running. --channel beta selects beta. Nothing is launched or modified. Pack checks are apack pack doctor.');
     return;
   }
   const jsonFlags = args.filter(arg => arg === '--json');

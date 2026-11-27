@@ -2,33 +2,56 @@
 // `FEATURE_SETTINGS_UPDATED`, so it reached into the settings surface's actor instead — from a machine action,
 // where no composable can run. That is what this replaces.
 import { describe, expect, it } from 'vitest';
-import { createActor } from 'xstate';
+import { system, type EventsOf } from '@apackdev/state';
+import { defectGuard } from '@apackdev/state/testing';
 import browserState from '#features/browser/fe/state.ts';
 
 const started = () => {
-  const actor = createActor(browserState);
-  actor.start();
-  return actor;
+  const guard = defectGuard();
+  const sys = system({ side: 'window', onDefect: guard.onDefect });
+  sys.attach({
+    tell: () => {},
+    ask: () => () => {},
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'not used' });
+      return { stop: () => {} };
+    },
+  });
+  const handle = sys.start('default-setup/browser', browserState);
+  return {
+    read: () => sys.read(handle),
+    send: (event: EventsOf<typeof browserState>) => sys.send(handle, event),
+    cleanup: () => {
+      guard.assertNone();
+      sys.stop();
+      guard[Symbol.dispose]();
+    },
+  };
 };
 
 describe("the browser surface's own settings", () => {
   it('starts with none and takes them from the app', () => {
-    const actor = started();
-    expect(actor.getSnapshot().context.settings).toEqual({});
+    const ctx = started();
+    try {
+      expect(ctx.read().data.settings).toEqual({});
 
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { showBookmarksBar: false, openLinksInApp: false } });
+      ctx.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { showBookmarksBar: false, openLinksInApp: false } });
 
-    expect(actor.getSnapshot().context.settings).toEqual({ showBookmarksBar: false, openLinksInApp: false });
-    actor.stop();
+      expect(ctx.read().data.settings).toEqual({ showBookmarksBar: false, openLinksInApp: false });
+    } finally {
+      ctx.cleanup();
+    }
   });
 
   it('keeps the last settings the app sent', () => {
-    const actor = started();
+    const ctx = started();
+    try {
+      ctx.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { showBookmarksBar: true, openLinksInApp: true } });
+      ctx.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { showBookmarksBar: false, openLinksInApp: true } });
 
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { showBookmarksBar: true, openLinksInApp: true } });
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { showBookmarksBar: false, openLinksInApp: true } });
-
-    expect(actor.getSnapshot().context.settings.showBookmarksBar).toBe(false);
-    actor.stop();
+      expect(ctx.read().data.settings.showBookmarksBar).toBe(false);
+    } finally {
+      ctx.cleanup();
+    }
   });
 });

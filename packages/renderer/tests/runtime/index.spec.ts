@@ -1,5 +1,5 @@
 import type { StepDefinition } from '@apackdev/sdk/steps';
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { nativeFrontendDeclarationFixture } from '@apackdev/sdk/testing';
 // The renderer's frontend binding: SDK frontend code reaches the API client and the application actor only through it
 import { afterEach, expect, it, vi } from 'vitest';
@@ -8,7 +8,12 @@ const mutate = vi.hoisted(() => vi.fn<(event: unknown) => Promise<void>>());
 const secretsList = vi.hoisted(() => vi.fn(() => Promise.resolve({ secrets: [], status: { protection: 'os-keystore', backend: 'test' } })));
 const toastError = vi.hoisted(() => vi.fn());
 
-vi.mock('@/transport', () => ({ trpc: { bus: { send: { mutate } }, secrets: { list: { query: secretsList } } } }));
+vi.mock('@/transport', () => ({
+  windowTransport: {
+    linkSend: mutate,
+    controlCall: (method: string) => (method === 'secrets.list' ? secretsList() : Promise.resolve()),
+  },
+}));
 vi.mock('@/adapters/toast', () => ({ globalToast: { error: toastError } }));
 
 const logWrite = vi.hoisted(() => vi.fn(() => Promise.resolve()));
@@ -26,7 +31,7 @@ const application = {
     context: { surfaces: [{ id: 'default-setup/notes' }, { id: 'default-setup/settings' }], activeSurface: { id: 'default-setup/notes' }, defaultToggles: { canvas: false } },
   }),
   send: vi.fn(),
-  system: { get: () => undefined },
+  surface: () => undefined,
 };
 
 const unhandled = vi.fn();
@@ -45,7 +50,7 @@ it("gives the SDK's frontend lookups the window's registered pack frontends", ()
   const note = { type: 'note', node: { label: 'Note' }, fe: { nodeConfig: { icon, category: 'data', connectionRules: { inputs: 1, outputs: 1 } } } } satisfies StepDefinition;
   const registration = {
     id: 'fe-host-pack',
-    features: { notebookMain: { surface: { label: 'Notebook', state: createMachine({}) }, designation: 'notebook' } },
+    features: { notebookMain: { surface: { label: 'Notebook', state: state<Record<string, never>, never>()({}) }, designation: 'notebook' } },
     steps: [note],
     textEditor: { mentions },
   };

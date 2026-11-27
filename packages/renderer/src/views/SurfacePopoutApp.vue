@@ -48,8 +48,8 @@ import PopoutTitlebar from '@/views/layout/PopoutTitlebar.vue'
 import SurfacePane from '@/views/layout/SurfacePane.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { registerGlobalToast } from '@/adapters/toast'
-import { useState, type ContextMenuItem } from '@apackdev/sdk/fe'
-import { notifySurfaceActor } from '@apackdev/host/fe'
+import type { ContextMenuItem } from '@apackdev/sdk/fe'
+import { notifySurfaceActor, useHostState } from '@apackdev/host/fe'
 
 const send = applicationState.send
 const toast = ref<InstanceType<typeof ToastNotification> | null>(null)
@@ -57,7 +57,7 @@ const toast = ref<InstanceType<typeof ToastNotification> | null>(null)
 onMounted(() => registerGlobalToast(toast.value))
 onUnmounted(() => registerGlobalToast(null))
 
-const { state: shell } = useState(applicationState)
+const { state: shell } = useHostState('application')
 
 const canShowPanel = computed(() => !!shell.value.data.activeSurface.panel)
 const isPanelOpen = computed(() => shell.value.data.panelSizes.inspectionWidth > 0)
@@ -93,7 +93,7 @@ const handleMenuAction = (event: ContextMenuItem['event']) => {
 
   // Through the funnel, as the main window's does. The lookup stays guarded here rather than inside it:
   // whether a missing surface is a bug or a race is the call site's to know.
-  const actor = applicationState.system.get(shell.value.data.activeSurface.id)
+  const actor = applicationState.surface(shell.value.data.activeSurface.id)
   if (actor) notifySurfaceActor(actor, shell.value.data.activeSurface.id, event)
 }
 </script>

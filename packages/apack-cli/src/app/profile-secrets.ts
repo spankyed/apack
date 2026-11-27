@@ -11,9 +11,8 @@
  * nothing here narrows its vocabulary to "keys" — a reader who adds the next class of secret should find
  * no wording telling them this was for API keys.
  *
- * Two neighbours it is worth not confusing with: the **data key** below, which is the one key in play here
- * and encrypts the rest, and the app server's API token (`APACK_API_TOKEN`, the `api-token` file), which
- * is transport auth and never goes in this store.
+ * One neighbour it is worth not confusing with: the **data key** below, which is the one key in play here
+ * and encrypts the rest.
  *
  * This is the opt-out, and it keeps the property that mattered. The keys land in the profile's own file
  * vault rather than the OS keychain, so removing the directory still removes them; nothing is written to

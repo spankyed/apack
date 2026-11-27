@@ -1,42 +1,59 @@
-// The logs system collects what any code logs, through onLog, and sends each entry to its surface. It's the
-// pack's early system (the app starts it before the others and delivers its messages), which the harness's startApp
-// doesn't run, so the test starts its machine on the test host, whose bus is the bound runtime's. Its sends to the
-// surface go through the app's bus, which delivers them once a client is connected.
+// The logs system collects what any code logs, through onLog, and broadcasts each entry to its surface.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
+import { system } from '@apackdev/state';
+import { defectGuard } from '@apackdev/state/testing';
 import { createLogger } from '@apackdev/sdk/logger';
-import { testRootEvents } from '@apackdev/sdk/testing';
-import type { Message } from '@apackdev/testing/harness';
-import logsEntry from '#features/logs/be/system.ts';
+import logsSystem from '#features/logs/be/system.ts';
 import { registration } from '#generated/pack-entry.ts';
 
-const cleanup: Array<() => void> = [];
 afterEach(() => {
-  cleanup.splice(0).forEach((stop) => stop());
   vi.restoreAllMocks();
 });
 
 describe('logs system', () => {
-  it('receives a log entry through onLog and sends it to the logs surface', () => {
+  it('receives a log entry through onLog and broadcasts it to the logs surface', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const toSurface: Message[] = [];
-    cleanup.push(testRootEvents.onSurfaceSend((event) => toSurface.push(event)));
-    const actor = createActor(logsEntry.machine).start();
-    cleanup.push(() => actor.stop());
+    const toSurface: Array<{ to: string; event: unknown }> = [];
+    using guard = defectGuard();
+    using sys = system({ side: 'backend', onDefect: guard.onDefect });
+    sys.attach({
+      tell: (to, event) => { toSurface.push({ to, event }); },
+      ask: (_to, _name, _args, _progress, done) => {
+        done({ ok: false, failure: { kind: 'unavailable', message: 'not used' } });
+        return () => {};
+      },
+      follow: (_feature, _view, _args, _updated, failed) => {
+        failed({ kind: 'unavailable', message: 'not used' });
+        return { stop: () => {} };
+      },
+    });
+    const handle = sys.start('default-setup/logs', logsSystem);
 
     createLogger('notes').warn('Note sync is slow', { noteId: 'Note-1' });
 
     expect(toSurface).toEqual([{
       to: 'default-setup/logs',
-      call: expect.any(String),
-      // The pack that sent it, stamped by this pack's generated broadcast
-      from: 'default-setup',
       event: expect.objectContaining({
         type: 'LOG_ADDED',
-        log: expect.objectContaining({ level: 'warn', source: 'notes', message: 'Note sync is slow', meta: { noteId: 'Note-1' } }),
+        log: expect.objectContaining({
+          level: 'warn',
+          source: 'notes',
+          message: 'Note sync is slow',
+          meta: { noteId: 'Note-1' },
+        }),
       }),
     }]);
-    expect(actor.getSnapshot().context.logs).toEqual([expect.objectContaining({ source: 'notes', message: 'Note sync is slow' })]);
+    expect(sys.read(handle).data.logs).toEqual([
+      expect.objectContaining({ source: 'notes', message: 'Note sync is slow' }),
+    ]);
+
+    sys.send(handle, { type: 'CLEAR_LOGS' });
+    expect(sys.read(handle).data.logs).toEqual([]);
+    expect(toSurface.at(-1)).toEqual({
+      to: 'default-setup/logs',
+      event: { type: 'LOGS_CLEARED' },
+    });
+    guard.assertNone();
   });
 
   // It is the logs feature's system like any other pack's: the bus runs it and checks the sends to it, so

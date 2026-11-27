@@ -4,18 +4,16 @@ test('the running brain gives an external step its own service scope', async ({ 
   await app.waitForSurface('memos');
   await app.navigate('default-setup/flows');
   // The flows surface's labels and root flow, which its canvas reads from the flows list view
-  await expect.poll(() => appPage.evaluate(() => Object.values((window as any).applicationState.system
-    .get('default-setup/flows').getSnapshot().context.flowLabels as Record<string, string>).includes('Stamp Flow'))).toBe(true);
+  await expect.poll(() => appPage.evaluate(() => Object.values((window as any).applicationState.surface('default-setup/flows').getSnapshot().context.flowLabels as Record<string, string>).includes('Stamp Flow'))).toBe(true);
   const { flowId, originalRoot } = await appPage.evaluate(() => {
-    const { flowLabels, rootFlowId } = (window as any).applicationState.system.get('default-setup/flows').getSnapshot().context;
+    const { flowLabels, rootFlowId } = (window as any).applicationState.surface('default-setup/flows').getSnapshot().context;
     return { flowId: Object.entries(flowLabels as Record<string, string>).find(([, label]) => label === 'Stamp Flow')?.[0], originalRoot: rootFlowId };
   });
   if (!flowId) throw new Error('The flows list has no "Stamp Flow"');
   const flow = { id: flowId };
   try {
     await app.send('default-setup/flows', { type: 'SET_ROOT_FLOW', flowId: flow.id });
-    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-      .get('default-setup/flows').getSnapshot().context.rootFlowId)).toBe(flow.id);
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('default-setup/flows').getSnapshot().context.rootFlowId)).toBe(flow.id);
     await app.send('default-setup/brain', { type: 'RESTART_BRAIN' });
     await app.navigate('memos');
     // The brain queues this event until startup. Only the fixture pack owns memoStamp; a runner-owned

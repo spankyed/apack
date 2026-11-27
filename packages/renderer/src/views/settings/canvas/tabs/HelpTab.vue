@@ -42,14 +42,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { ArrowLeft } from 'lucide-vue-next';
-import { useState, useSurface, useShell, openHelp, openLink } from '@apackdev/sdk/fe';
+import { useShell, openHelp, openLink } from '@apackdev/sdk/fe';
 import { splitRef } from '@apackdev/sdk/ids';
-import { type SettingsState } from '@apackdev/host/fe';
+import { useHostState } from '@apackdev/host/fe';
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';
 import { DISCORD_URL, MEMORIAL_URL } from '@/views/settings/constants';
-const actor: SettingsState = useSurface();
 const surfaces = useShell().surfaces;
-const { state: settings, send } = useState(actor);
+const { state: settings, send } = useHostState('settings');
 const context = computed(() => settings.value.data.help);
 const selected = computed(() => context.value.catalog.articles.find(a => a.packId === context.value.target.packId && a.id === context.value.target.articleId));
 const articles = computed(() => {

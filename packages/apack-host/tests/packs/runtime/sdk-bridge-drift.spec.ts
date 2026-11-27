@@ -111,8 +111,12 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // The app's log files: Electron main and the API append to them; a pack logs through createLogger, which
   // reaches the same files as a log event, redacted and capped like everything else the app writes
   ['@apackdev/host/logs', "the app's log files, appended to by main and the API"],
-  // Host window-to-API transport multiplexer: composed by the API and preload; packs never require it
+  // Host transport primitives (multiplexer, control RPC contract, local tool socket & client): composed by API, renderer, CLI, and testing; packs never require them
+  ['@apackdev/host/transport/control-contract', 'host off-bus control RPC contract and client, used by the API, renderer, CLI, and testing'],
+  ['@apackdev/host/transport/link-protocol', 'host @apackdev/link wire envelope and diagnostic cause helpers, used by the API, renderer, and testing'],
   ['@apackdev/host/transport/mux', 'host window-to-API transport multiplexer, used by the API and preload'],
+  ['@apackdev/host/transport/tool-client', 'host local-tool socket client, used by the API, CLI, and testing'],
+  ['@apackdev/host/transport/tool-socket', 'host local-tool socket server and api-runtime.json discovery, used by the API, CLI, and testing'],
   // Metadata: tooling reads it, code never requires it.
   ['@apackdev/sdk/package.json', 'package metadata, not code'],
 ]);
@@ -226,7 +230,7 @@ describe('SDK bridge drift', () => {
     }
 
     const source = fs.readFileSync(RUNTIME_ENTRY, 'utf8');
-    const required = [...source.matchAll(/['"](@apackdev\/(?:sdk|ears|host)(?:\/[a-zA-Z0-9._/-]+)?)['"]/g)]
+    const required = [...source.matchAll(/['"](@apackdev\/(?:sdk|ears|host|state)(?:\/[a-zA-Z0-9._/-]+)?)['"]/g)]
       .map((m) => m[1]);
     expect(required.length, 'found no @apackdev/sdk specifiers — regex or bundle shape changed')
       .toBeGreaterThan(0);

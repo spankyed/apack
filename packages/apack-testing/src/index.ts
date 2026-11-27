@@ -16,6 +16,7 @@ import { appLaunchEnv, pinsViewport } from './launch-env.ts';
 import { assertCheckoutPackagesFresh } from './checkout-freshness.ts';
 import { assertPrebuiltPackCurrent, packArchiveAcceptance } from './prebuilt-pack.ts';
 import { connectToApp, type AppConnection } from './connection.ts';
+import { readApiRuntimeIn } from './engine/tool-client.ts';
 import {
   WILL_QUIT_MARKER,
   chromiumHelperPidsToKill,
@@ -576,15 +577,9 @@ function apiPidOf(app: ElectronApplication): number | undefined {
   return userDataDir === undefined ? undefined : apiPidIn(userDataDir);
 }
 
-/** The same, read from the data dir an app runs on; where that file sits does not depend on the environment */
+/** The pid of the API serving `userDataDir`, read from `apack/api-runtime.json`. */
 function apiPidIn(userDataDir: string): number | undefined {
-  const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
-  try { return (JSON.parse(fs.readFileSync(endpointFile, 'utf8')) as { pid?: number }).pid; }
-  catch (error) {
-    // No file is no API yet (or one that has exited); a file that cannot be read is a fault worth hearing about
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw error;
-  }
+  return readApiRuntimeIn(userDataDir)?.pid;
 }
 
 const ERROR_LINE = /error|exception|failed|cannot|not found|no machine export/i;
@@ -631,6 +626,7 @@ async function awaitShell(page: Page, condition: ShellCondition, timeout: number
     const actor = (window as any).applicationState;
     /** The dot-path match `waitForState` has always used: a nested value, or a leaf equal to the segment. */
     const atPath = (value: unknown, path: string): boolean => {
+      if (typeof value === 'string') return value === path || value.startsWith(`${path}.`);
       if (typeof value !== 'object' || value === null) return value === path;
       let current: any = value;
       for (const part of path.split('.')) {
@@ -688,6 +684,10 @@ export function waitForAppReady(page: Page, { state = APP_READY_STATE, timeout =
       __disableOnboardingUI?: () => void;
     };
     const value = win.applicationState?.getSnapshot().value;
+    if (typeof value === 'string') {
+      if (dismiss && (value === 'onboarding' || value.startsWith('onboarding.'))) win.__disableOnboardingUI?.();
+      return value === want || value.startsWith(`${want}.`);
+    }
     if (typeof value !== 'object' || value === null) return value === want;
     // Dismissed from inside the poll because it can arrive at any point during the boot
     if (dismiss && 'onboarding' in value) win.__disableOnboardingUI?.();
@@ -1006,9 +1006,9 @@ export function createTest(options: CreateTestOptions = {}) {
         const win = window as any;
         if (win.__droppedSends) return;
         win.__droppedSends = [];
-        win.applicationState?.system?.inspect?.((inspection: any) => {
-          const event = inspection?.event;
-          if (inspection?.type !== '@xstate.event' || event?.type !== 'SYSTEM_ERROR') return;
+        win.applicationState?.onEvent?.((record: any) => {
+          const event = record?.event;
+          if (event?.type !== 'SYSTEM_ERROR') return;
           if (event.operation === 'broadcast') win.__droppedSends.push(String(event.message ?? ''));
         });
       });
@@ -1070,8 +1070,12 @@ export function createTest(options: CreateTestOptions = {}) {
     },
 
     // Opened only for a test that names it, and closed after it, so its claim on `HOST.e2eConnection` ends with it
-    connection: async ({ appPage: page, electronApp }, use) => {
-      const connection = await connectToApp(page, { resolve: resolveFeature, appPid: electronApp.process().pid });
+    connection: async ({ appPage: _page, electronApp }, use) => {
+      const userDataDir = userDataDirs.get(electronApp);
+      if (userDataDir === undefined) {
+        throw new Error('The test fixture has no userDataDir recorded for this Electron app.');
+      }
+      const connection = await connectToApp(userDataDir, { resolve: resolveFeature, appPid: electronApp.process().pid });
       try {
         await use(connection);
       } finally {

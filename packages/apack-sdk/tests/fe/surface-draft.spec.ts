@@ -1,28 +1,49 @@
 // @vitest-environment jsdom
 // What a surface's component holds for the user survives the remount a reconnect causes: the shell replaces the
-// surface's actor, `SurfaceScope` remounts the surface for it, and the draft is handed back, kept by the surface's ref.
+// surface's handle, `SurfaceScope` remounts the surface for it, and the draft is handed back, kept by the surface's ref.
 import { afterEach, expect, it } from 'vitest';
 import { createApp, defineComponent, h, nextTick } from 'vue';
-import { createActor, setup } from 'xstate';
-import type { AnyActorRef } from 'xstate';
 import { SurfaceScope } from '../../src/fe/actor-system.ts';
+import type { HostShellSurfaceRef } from '../../src/fe/shell.ts';
 import { useSurfaceDraft } from '../../src/fe/surface-draft.ts';
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts';
 
 afterEach(() => unbindFeHost());
 
-/** A window whose shell runs one actor per ref, which `replace` swaps the way a reconnect does */
+let nextSession = 0;
+
+/** A window whose shell runs one handle per ref, which `replace` swaps the way a reconnect does */
 function aWindow() {
-  const running = new Map<string, AnyActorRef>();
-  const shell = createActor(setup({}).createMachine({ on: { CHANGED: {} } })).start();
-  const spawn = (ref: string) => running.set(ref, createActor(setup({}).createMachine({}), { id: ref }).start());
-  bindFeHost({ catalog: {} as never, application: {
-    system: { get: (ref: string) => running.get(ref) },
-    subscribe: (listener: () => void) => shell.subscribe(listener),
-  } as never, secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never });
+  const running = new Map<string, HostShellSurfaceRef>();
+  const listeners = new Set<() => void>();
+  const notify = () => { for (const fn of listeners) fn(); };
+  const spawn = (ref: string) => {
+    const sessionId = `s-${++nextSession}`;
+    running.set(ref, {
+      id: ref,
+      sessionId,
+      getSnapshot: () => ({ status: 'active', value: 'ready', context: {} }),
+      subscribe: () => ({ unsubscribe() {} }),
+      send() {},
+    });
+  };
+  bindFeHost({
+    catalog: {} as never,
+    application: {
+      surface: (ref: string) => running.get(ref),
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return { unsubscribe: () => { listeners.delete(listener); } };
+      },
+    } as never,
+    secrets: {} as never,
+    settings: {} as never,
+    client: { send() {}, watchView: () => () => {} },
+    packs: {} as never,
+  });
   return {
     spawn,
-    replace(ref: string) { running.get(ref)!.stop(); spawn(ref); shell.send({ type: 'CHANGED' }); },
+    replace(ref: string) { spawn(ref); notify(); },
   };
 }
 
@@ -47,7 +68,7 @@ function mount(surface: string, initial = 'initial') {
   };
 }
 
-it('hands the remounted surface what was typed before its actor was replaced', async () => {
+it('hands the remounted surface what was typed before its handle was replaced', async () => {
   const window = aWindow();
   window.spawn('pack/notes');
   const editor = mount('pack/notes');

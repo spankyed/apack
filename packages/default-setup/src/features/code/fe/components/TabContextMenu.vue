@@ -164,32 +164,29 @@ import {
   History,
   UserPen
 } from 'lucide-vue-next'
-import { useState, useSurface } from '@apackdev/sdk/fe'
-import type { CodeState } from '#features/code/fe/state.ts'
-import { panelChild } from '#features/code/fe/features/children.ts'
+import { useState } from '#generated/state-fe.ts'
 import type { OpenFile, TerminalTab, TabGroup as TabGroupType } from '#features/code/fe/state.ts'
 import type { ActionTab } from '#features/code/fe/features/actions/state.ts'
 import type { PromptTab } from '#features/code/fe/features/prompts/state.ts'
 
 type TabType = OpenFile | TerminalTab | ActionTab | PromptTab
 
-const codeActor: CodeState = useSurface()
+const { state: code, send: sendCode, child } = useState('code')
+const { state: git, send } = useState(() => child('commit'))
+
+/** The tab's path from the top of the folder, as git names it */
+const relativePath = () => {
+  const base = code.value.data.baseDirectory
+  return base && props.tab.path.startsWith(`${base}/`) ? props.tab.path.slice(base.length + 1) : props.tab.path
+}
 
 /** The file's history in the Source Control panel's log, from the top of the folder, and the panel shown */
 function showFileHistory() {
-  const base = codeActor.getSnapshot().context.baseDirectory as string | null
-  const path = base && props.tab.path.startsWith(`${base}/`) ? props.tab.path.slice(base.length + 1) : props.tab.path
-  panelChild(codeActor, 'commit')?.send({ type: 'commit.SHOW_FILE_HISTORY', path })
-  codeActor.send({ type: 'SELECT_PANEL', panel: 'commit' })
+  send({ type: 'commit.SHOW_FILE_HISTORY', path: relativePath() })
+  sendCode({ type: 'SELECT_PANEL', panel: 'commit' })
 }
-const commitActor = panelChild(codeActor, 'commit')
-const { state: git, send } = useState(commitActor!)
-/** The tab's path from the top of the folder, as git names it */
-const relativePath = () => {
-  const base = codeActor.getSnapshot().context.baseDirectory as string | null
-  return base && props.tab.path.startsWith(`${base}/`) ? props.tab.path.slice(base.length + 1) : props.tab.path
-}
-const blamed = computed(() => git.value.data.blame?.path === relativePath())
+
+const blamed = computed(() => git.value?.at === 'open' && git.value.data.blame?.path === relativePath())
 
 /** Shows who last changed each line of the file in the editor, or stops showing it */
 function toggleBlame() {

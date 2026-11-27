@@ -244,36 +244,34 @@ function fakeProcess(): {
 }
 
 describe('ProcessManager readiness, fatal stderr, and error handling', () => {
-  it('signals ready once from structured parentPort message and deduplicates stdout fallback', () => {
-    const readyPorts: number[] = [];
-    const { child, stdout } = fakeProcess();
-    const manager = new ProcessManager({ onReady: (port) => readyPorts.push(port) });
+  it('signals ready once from structured parentPort message (preserving optional socket) without requiring a TCP port', () => {
+    const readyEvents: Array<{ socket?: string }> = [];
+    const { child } = fakeProcess();
+    const manager = new ProcessManager({ onReady: (socket) => readyEvents.push({ socket }) });
     manager.setProcess(child);
 
-    // Malformed payloads are ignored
+    // Non-ready payloads are ignored
     child.emit('message', null);
-    child.emit('message', { type: 'ready', port: 0 });
-    child.emit('message', { type: 'ready', port: 3001.5 });
-    child.emit('message', { type: 'other', port: 3001 });
-    expect(readyPorts).toEqual([]);
+    child.emit('message', { type: 'other' });
+    expect(readyEvents).toEqual([]);
+    expect(manager.getSocket()).toBeUndefined();
 
-    child.emit('message', { type: 'ready', port: 3456 });
-    stdout.emit('data', Buffer.from('✅ WebSocket Server listening on ws://localhost:3456\n'));
-    child.emit('message', { type: 'ready', port: 3456 });
+    child.emit('message', { type: 'ready', socket: '/tmp/apack-501/api-0123456789abcdef.sock' });
+    child.emit('message', { type: 'ready', socket: '/tmp/other.sock' });
 
-    expect(readyPorts).toEqual([3456]);
-  });
+    expect(readyEvents).toEqual([{ socket: '/tmp/apack-501/api-0123456789abcdef.sock' }]);
+    expect(manager.getSocket()).toBe('/tmp/apack-501/api-0123456789abcdef.sock');
 
-  it('falls back to stdout readiness line when no structured ready message arrives', () => {
-    const readyPorts: number[] = [];
-    const { child, stdout } = fakeProcess();
-    const manager = new ProcessManager({ onReady: (port) => readyPorts.push(port) });
-    manager.setProcess(child);
-
-    stdout.emit('data', Buffer.from('✅ WebSocket Server listening on ws://localhost:3009\n'));
-    stdout.emit('data', Buffer.from('✅ WebSocket Server listening on ws://localhost:3009\n'));
-
-    expect(readyPorts).toEqual([3009]);
+    // A replacement process resets the socket and ignores empty/non-string socket fields
+    const next = fakeProcess();
+    manager.setProcess(next.child);
+    expect(manager.getSocket()).toBeUndefined();
+    next.child.emit('message', { type: 'ready', socket: '' });
+    expect(readyEvents).toEqual([
+      { socket: '/tmp/apack-501/api-0123456789abcdef.sock' },
+      { socket: undefined },
+    ]);
+    expect(manager.getSocket()).toBeUndefined();
   });
 
   it('reassembles __fatal JSON lines split across stderr chunks and flushes trailing buffer on exit', () => {

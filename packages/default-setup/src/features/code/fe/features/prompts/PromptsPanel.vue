@@ -234,11 +234,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed, watch, nextTick } from 'vue'
 import { openEntity } from '@apackdev/sdk/fe'
-import type { CodeState } from '#features/code/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import { useView } from '#generated/fe.ts'
 import { ExternalLink, Plus, X, Pencil, Trash2, Sparkle, Search, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
@@ -255,11 +253,10 @@ import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS } from '../explorer/constants.ts'
 import { useInfiniteScroll } from '@apackdev/ui/composables/useInfiniteScroll'
 import Button from '@apackdev/ui/design/button'
 import uFuzzy from '@leeoniya/ufuzzy'
-import { panelChild } from '../children.ts';
 
-// The code surface's actor, and its codePrompts child for tab management
-const codeActor: CodeState = useSurface()
-const codePromptsActor = panelChild(codeActor, 'codePrompts')!
+// The code surface's codePrompts child for tab management
+const { child } = useState('code')
+const { send: sendCodePrompts } = useState(() => child('codePrompts'))
 
 // The prompts, as the prompts feature's list view reads them: this panel's own page of it, a page more each time it's
 // read to the end and all of it while searching
@@ -349,7 +346,7 @@ function confirmAddParameter(prompt: PromptEntity) {
       ...prompt.inputs,
       [paramKey]: { name: paramKey, type: 'any' as const, required: false }
     }
-    codePromptsActor.send({
+    sendCodePrompts({
       type: 'codePrompts.UPDATE_INPUTS',
       promptId: prompt.id,
       inputs: updatedInputs
@@ -395,7 +392,7 @@ function confirmEditParameter(prompt: PromptEntity) {
         name: newName
       }
       delete updatedInputs[oldKey]
-        codePromptsActor.send({
+        sendCodePrompts({
         type: 'codePrompts.UPDATE_INPUTS',
         promptId: prompt.id,
         inputs: updatedInputs
@@ -415,7 +412,7 @@ function removeParameter(prompt: PromptEntity, key: string) {
   if (prompt.inputs) {
     const updatedInputs = { ...prompt.inputs }
     delete updatedInputs[key]
-    codePromptsActor.send({
+    sendCodePrompts({
       type: 'codePrompts.UPDATE_INPUTS',
       promptId: prompt.id,
       inputs: updatedInputs
@@ -437,7 +434,7 @@ function confirmEditName(prompt: PromptEntity) {
   if (editingNameForPrompt.value && editedName.value.trim()) {
     const newName = editedName.value.trim()
     if (newName !== prompt.label) {
-      codePromptsActor.send({
+      sendCodePrompts({
         type: 'codePrompts.UPDATE_LABEL',
         promptId: prompt.id,
         label: newName
@@ -454,7 +451,7 @@ function cancelEditName() {
 }
 
 function deletePrompt(prompt: PromptEntity) {
-  codePromptsActor.send({
+  sendCodePrompts({
     type: 'codePrompts.DELETE',
     promptId: prompt.id
   })
@@ -468,7 +465,7 @@ const { onScroll } = useInfiniteScroll({
 
 // Event handlers
 const selectPrompt = (prompt: PromptEntity) => {
-  codePromptsActor.send({ type: 'codePrompts.OPEN_PROMPT', promptId: prompt.id })
+  sendCodePrompts({ type: 'codePrompts.OPEN_PROMPT', promptId: prompt.id })
 }
 
 const goToPrompt = (prompt: PromptEntity) => {
@@ -478,7 +475,7 @@ const goToPrompt = (prompt: PromptEntity) => {
 const createPromptInline = () => {
   const defaultLabel = `Prompt ${prompts.value.length + 1}`
   pendingRename.value = true
-  codePromptsActor.send({
+  sendCodePrompts({
     type: 'codePrompts.CREATE_INLINE',
     label: defaultLabel,
     templateFn: '// Your template function body here\nreturn `Your prompt template`;',

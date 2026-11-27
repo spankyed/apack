@@ -9,11 +9,10 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // What it does not take is a declared event list: no pack describes a driver, so there is nothing to validate
 // against and whatever it is sent reaches it.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createActor, type AnyActorRef } from 'xstate';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
 import { untypedBroadcast, type Message } from '@apackdev/sdk/events';
 import { onLog } from '@apackdev/sdk/logger';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 import { createParticipantClaims } from '../../src/bus/participants.ts';
 import { HOST } from '../../src/refs.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
@@ -25,7 +24,7 @@ startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('a name a connection claimed', () => {
-  let bus: AnyActorRef;
+  let bus: BackendBus;
   let claims: ReturnType<typeof createParticipantClaims>;
   const outgoing: Message[] = [];
   let stopOutgoing: () => void;
@@ -41,7 +40,7 @@ describe('a name a connection claimed', () => {
     stopOutgoing = testRootEvents.onOutgoing((message) => { outgoing.push(message); });
     stopLog = onLog((entry) => { logged.push(entry.message); });
     registry.registerPack(hostRegistration());
-    bus = createActor(createAppBus(registry, claims), { systemId: 'host/bus' }).start();
+    bus = createAppBus(registry, claims).start();
     testRootEvents.emitConnected();
     await flush();
   });

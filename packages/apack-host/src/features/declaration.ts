@@ -10,9 +10,9 @@ export const hostFeatureIds = Object.fromEntries(
 /** Host declarations exist before any host system is constructed or registered. */
 export const hostSurfaceDeclarations = {
   packs: { label: 'Packs', icon: 'Package', isPinned: true, state: '@apackdev/host/fe#packsMachine',
-    canvas: 'packages/renderer/src/views/packs/canvas.vue' },
+    chrome: '@apackdev/host/fe#packsChrome', canvas: 'packages/renderer/src/views/packs/canvas.vue' },
   settings: { label: 'Settings', icon: 'Settings', isPinned: true, state: '@apackdev/host/fe#createSettingsMachine',
-    canvas: 'packages/renderer/src/views/settings/canvas/index.vue' },
+    chrome: '@apackdev/host/fe#settingsChrome', canvas: 'packages/renderer/src/views/settings/canvas/index.vue' },
 } satisfies Record<string, SurfaceDeclaration>;
 
 export const hostDeclaration: NativePackDeclaration = {

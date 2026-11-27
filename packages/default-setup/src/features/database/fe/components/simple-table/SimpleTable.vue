@@ -57,9 +57,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed } from 'vue';
+import { useState } from '#generated/state-fe.ts';
 import { useResultAnalysis } from './composables/useResultAnalysis.ts';
 import ResultsInfoBar from './components/ResultsInfoBar.vue';
 import ResultStates from './components/ResultStates.vue';
@@ -69,13 +68,12 @@ import JsonDisplay from './components/JsonDisplay.vue';
 import ExplainDisplay from './components/ExplainDisplay.vue';
 import { isExplanation } from './composables/explanation.ts';
 import PrimitiveDisplay from './components/PrimitiveDisplay.vue';
-import { isRunningCode, type DatabaseState } from '../../state.ts'
+import { isRunningCode } from '../../state.ts'
 
 // State Management
-const actor: DatabaseState = useSurface();
-const { state: database, send } = useState(actor);
+const { state: database, send } = useState('database');
 const queryResult = computed(() => database.value.data.queryResult);
-const isLoading = computed(() => isRunningCode(database.value.data.making));
+const isLoading = computed(() => isRunningCode(database.value.pending));
 
 // Result Analysis
 const { 

@@ -1,9 +1,12 @@
 import { windowPerformance, startStartupRecording } from './runtime/performance.ts';
-import { hostDeclaration } from '@apackdev/host/fe';
+import {
+  hostDeclaration,
+  installFromProtocol,
+  provideHostState,
+  runWindowStorageMigrations,
+  type ShellRuntime,
+} from '@apackdev/host/fe';
 import { createApp } from 'vue'
-import { createActor } from 'xstate';
-// import { createBrowserInspector } from '@statelyai/inspect';
-import type { Actor } from 'xstate';
 import App from './views/App.vue'
 import './style.css'
 import './boot/monaco';
@@ -12,7 +15,6 @@ import './boot/monaco';
 import 'highlight.js/styles/github-dark.css'
 import { hostFrontend } from '@/views/packs/surface';
 import { createAppShell } from '@/runtime/shell';
-import { HOST, installFromProtocol, runWindowStorageMigrations } from '@apackdev/host/fe';
 import 'virtual:host-shared-modules';
 import { bindRendererHost, onRendererDispose } from '@/runtime';
 import { fePacks } from '@/runtime/packs';
@@ -23,7 +25,7 @@ declare const __APP_VERSION__: string;
 
 declare global {
   interface Window {
-    applicationState: Actor<ReturnType<typeof createAppShell>>;
+    applicationState: ShellRuntime;
     __disableOnboardingUI?: () => void;
     /** The E2E suite's sends and asks to the backend's systems (`transport/e2e-door.ts`) */
     __e2eSystems?: E2eSystems;
@@ -36,7 +38,14 @@ declare global {
 installGlobalErrorHandling();
 
 const query = new URLSearchParams(window.location.search);
-if (query.has('performanceStartup')) await startStartupRecording(query.get('performanceStartup'));
+if (query.has('performanceStartup')) {
+  try {
+    await startStartupRecording(query.get('performanceStartup'));
+  } catch (error) {
+    console.warn('[performance] Startup recording failed; continuing boot without it:', error);
+    reportRendererError('startup-performance', error, undefined, false);
+  }
+}
 const isSurfacePopout = query.get('popout') === 'surface';
 const initialSurfaceId = isSurfacePopout ? query.get('surfaceId') ?? undefined : undefined;
 
@@ -44,8 +53,6 @@ const initialSurfaceId = isSurfacePopout ? query.get('surfaceId') ?? undefined :
 window.appVersion = __APP_VERSION__;
 console.log(`apack v${__APP_VERSION__}`);
 runWindowStorageMigrations(localStorage, __APP_VERSION__);
-
-// const { inspect } = createBrowserInspector();
 
 // The only frontend registered before the shell starts. Every *pack's* frontend — the one the app ships
 // among them — is loaded by the shell once the bus says which packs are running, through one path.
@@ -61,13 +68,9 @@ let createdApplication: typeof applicationState | undefined;
 bindRendererHost(() => createdApplication);
 
 // The shell starts with the surfaces registered above, its default the one a pack claims
-export const applicationState = createActor(createAppShell(), {
-  systemId: HOST.application,
-  // inspect,
-  input: {
-    initialSurfaceId,
-    ownsLastActiveSurface: !isSurfacePopout,
-  }
+export const applicationState = createAppShell({
+  initialSurfaceId,
+  ownsLastActiveSurface: !isSurfacePopout,
 });
 
 createdApplication = applicationState;
@@ -101,6 +104,7 @@ window.electronAPI?.protocolAction?.onAction(({ action, params }) => {
 });
 
 const app = createApp(App);
+provideHostState(app, applicationState.system);
 
 app.config.errorHandler = (err, _instance, info) => {
   handleVueError(err, info);

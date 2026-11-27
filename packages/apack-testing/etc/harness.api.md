@@ -5,8 +5,6 @@
 ```ts
 
 import { addTestSecret } from '@apackdev/sdk/testing';
-import { AnyActorRef } from 'xstate';
-import { AnyStateMachine } from 'xstate';
 import { ContentApplier } from '@apackdev/sdk/utils';
 import { ContentRuntime } from '@apackdev/sdk/framework';
 import { EarsClock } from '@apackdev/sdk/ears';
@@ -14,6 +12,7 @@ import { FakeInference } from '@apackdev/sdk/testing';
 import { fakeInference } from '@apackdev/sdk/testing';
 import { FlowDSL } from '@apackdev/sdk/build';
 import type { HostShell } from '@apackdev/sdk/fe';
+import type { HostShellSurfaceRef } from '@apackdev/sdk/fe';
 import { ImportMode } from '@apackdev/sdk/utils';
 import { ImportResult } from '@apackdev/sdk/utils';
 import { Message } from '@apackdev/sdk/events';
@@ -21,6 +20,7 @@ import { PackRegistration } from '@apackdev/sdk/framework';
 import { SettingsAdmin } from '@apackdev/sdk/services';
 import type { SettingsService } from '@apackdev/sdk/services';
 import type { SurfaceDefinition } from '@apackdev/sdk/fe';
+import type { System } from '@apackdev/state';
 import { takeSystemErrors } from '@apackdev/sdk/testing';
 import { UntypedAskOutcome } from '@apackdev/sdk/events';
 import type { ViewUpdate } from '@apackdev/sdk/framework';
@@ -149,8 +149,9 @@ export interface TestApp {
         settingsAccess?: TestSettingsAccess;
     }): Promise<string>;
     settle(): Promise<void>;
+    readonly stateSystem: System;
     stop(): void;
-    system(systemId: string): AnyActorRef;
+    system(systemId: string): TestSystem;
     viewStats(): {
         views: number;
         subscriptions: number;
@@ -169,14 +170,30 @@ export interface TestShell {
         detail?: string;
     }>;
     opened(): string;
+    readonly stateSystem: System;
     stop(): void;
-    surface(name: string): AnyActorRef;
+    surface(name: string): HostShellSurfaceRef;
 }
 
 // @public
 export type TestSurface = {
-    state: AnyStateMachine;
+    state: SurfaceDefinition['state'];
 } & Partial<Omit<SurfaceDefinition, 'state'>>;
+
+// @public
+export interface TestSystem {
+    read(): {
+        readonly at?: string;
+        readonly data: Record<string, unknown>;
+        readonly pending?: Record<string, unknown>;
+    };
+    // (undocumented)
+    readonly ref: string;
+    send(event: {
+        type: string;
+        [key: string]: unknown;
+    }): void;
+}
 
 // @public
 export interface TestView<Result = unknown> {

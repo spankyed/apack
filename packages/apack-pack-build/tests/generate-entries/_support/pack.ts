@@ -144,16 +144,12 @@ export async function generate(fields: Record<string, unknown>, deps: Record<str
 }
 
 /**
- * A system entry whose spec declares the events the system receives and sends, typed as `defineSystem` types
- * them, with no import: codegen reads the sent events from the default export's spec.
- */
-/**
  * A surface entry, and beside it the contract leaf when the surface declares one. The contract is a plain declared
  * type: these fixtures are bare temp dirs with no `@apackdev/sdk` to resolve, and a declared type needs no import to
  * read — which is the point of reading one rather than a value's phantom property.
  */
 export function writeSurfaceState(file: string, inbox?: string): string {
-  write(file.endsWith('.ts') ? file : `${file}.ts`, ['declare const state: import("xstate").AnyStateMachine;', 'export default state;'].join('\n') + '\n');
+  write(file.endsWith('.ts') ? file : `${file}.ts`, ['declare const state: import("@apackdev/state").AnyState;', 'export default state;'].join('\n') + '\n');
   if (inbox !== undefined) writeContract(`${file.replace(/(\.ts)?$/, '')}.types.ts`, inbox);
   return file;
 }
@@ -172,11 +168,12 @@ export const surfaceWithContract = (entry: string, inbox?: string) => ({
 
 export function writeSystemEntry(id: string, outgoing: string, incoming = `{ type: '${id.toUpperCase()}_RUN' }`): string {
   const entry = `src/features/${id}/be/system.ts`;
-  // A real spec: the generated pack entry asserts the machine was built from the contract apack.json names
+  // A real @apackdev/state system: the generated pack entry asserts the state matches the contract apack.json names
   write(entry, [
-    "import { defineSystem } from '@apackdev/sdk/framework';",
+    "import { state } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './contract.ts';",
-    'export default { spec: defineSystem<Contract>(), machine: undefined as never };',
+    'export default state<{}, IncomingOnlyEventsOf<Contract>>()({});',
   ].join('\n') + '\n');
   writeSystemContract(id, outgoing, incoming);
   return entry;

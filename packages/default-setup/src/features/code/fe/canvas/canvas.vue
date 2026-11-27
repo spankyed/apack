@@ -24,7 +24,7 @@
       ref="fileEditorRef"
       :open-files="code.data.openFiles"
       :active-file-path="code.data.activeFilePath"
-      :base-directory="code.data.baseDirectory"
+      :base-directory="code.data.baseDirectory ?? undefined"
       :tab-groups="code.data.tabGroups"
       :is-applying-hunk="isApplyingHunk"
       :applied-hunks="appliedHunks"
@@ -100,38 +100,34 @@
 
 <script setup lang="ts">
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
-import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
-import { type CodeState, type OpenFile, setEditorSelectionGetter, isEditableDiff } from '../state.ts'
+import { type OpenFile, setEditorSelectionGetter, isEditableDiff } from '../state.ts'
 import { GitCompare, FileCode, Terminal } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
 import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
-import { panelChild } from '../features/children.ts';
+import { useState } from '#generated/state-fe.ts'
 
-const actor: CodeState = useSurface()
-const explorerActor = panelChild(actor, 'explorer')
-const terminalActor = panelChild(actor, 'terminal')
+const { state: code, send, child } = useState('code')
+const { send: sendExplorer } = useState(() => child('explorer'))
 
 // A terminal ask of this window's that was not done is told here, the one place drawn whenever the surface is: the
 // system answers it to this window alone. One that ended while the surface was not shown is told as it is shown.
 // Telling and saying so are one step, run once the toast is drawn: the machine drops exactly the failures told, so
 // none is told twice and one noted meanwhile is told by the next run
 const toast = ref<InstanceType<typeof ToastNotification>>()
-const { state: terminals, send: sendTerminal } = useState(terminalActor)
+const { state: terminals, send: sendTerminal } = useState(() => child('terminal'))
 watchPostEffect(() => {
   const told = terminals.value?.data.failures ?? []
   if (!toast.value || told.length === 0) return
   for (const failure of told) toast.value.error('Terminal error', failure.message)
   sendTerminal({ type: 'terminal.FAILURES_TOLD', told })
 })
-const commitActor = panelChild(actor, 'commit')
 
-const { state: code, send } = useState(actor)
-const { state: git, send: sendCommit } = useState(commitActor)
-const isApplyingHunk = computed(() => git.value !== undefined && git.value.data.making.hunk)
+const { state: git, send: sendCommit } = useState(() => child('commit'))
+const isApplyingHunk = computed(() => git.value?.at === 'open' && git.value.pending.hunk)
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
 const appliedHunks = computed(() => git.value?.data.appliedHunks[code.value.data.activeFilePath ?? ''] ?? [])
 const applyHunk = (path: string, staged: boolean, hunk: string) => sendCommit({ type: 'commit.APPLY_HUNK', path, staged, hunk })
@@ -249,7 +245,7 @@ const { isDragging: isDraggingOver, onDragEnter: handleDragEnter, onDragLeave: h
     e.stopPropagation()
 
     for (const filePath of filePaths) {
-      explorerActor?.send({ type: 'explorer.OPEN_FILE', path: filePath })
+      sendExplorer({ type: 'explorer.OPEN_FILE', path: filePath })
     }
   },
 })
@@ -349,7 +345,7 @@ const saveFile = () => send({ type: 'SAVE_ACTIVE_FILE' })
 const loadExternalChanges = () => {
   if (activeFile.value && activeFile.value.pendingSaveConflict) {
     // Send event to explorer state machine
-    explorerActor?.send({
+    sendExplorer({
       type: 'explorer.OPEN_FILE',
       path: activeFile.value.path
     })
@@ -399,7 +395,7 @@ const getStatusText = (file: any) => {
 
 const revealInExplorer = (path: string) => {
   send({ type: 'SELECT_PANEL', panel: 'explorer' })
-  explorerActor?.send({ type: 'explorer.REVEAL_IN_TREE', path })
+  sendExplorer({ type: 'explorer.REVEAL_IN_TREE', path })
 }
 
 const pinTab = (path: string) => {

@@ -1,53 +1,38 @@
 import type { Contract } from './contract.ts';
 import { broadcast } from '#generated/events.ts';
-import { setup } from 'xstate';
-import { defineSystem } from '@apackdev/sdk/framework';
+import { state } from '#generated/state.ts';
+import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';
+import type { HostLifecycleEvents, StateMatchesContract } from '@apackdev/sdk/framework';
 
 import { repository } from '#generated/repository.ts';
 import { addMemoNote } from './memo-notes.ts';
 
-export const memosSpec = defineSystem<Contract>();
+type MemosEvent =
+  | IncomingOnlyEventsOf<Contract>
+  | Extract<HostLifecycleEvents, { type: 'SEND_STATE' }>;
 
-export const memosSystem = setup({
-  types: memosSpec.types,
-  actions: memosSpec.actions({
-    sendConnectedData: () => {
+export const memosSystem = state<{}, MemosEvent>()({
+  on: {
+    SEND_STATE: () => {
       broadcast('memos', { type: 'MEMOS_CONNECTED', memos: repository.memoQueries.all() });
     },
-    addMemo: ({ event }) => {
-      const { text } = memosSpec.typeOf('ADD_MEMO', event);
+    ADD_MEMO: ({ text }) => {
       broadcast('memos', { type: 'MEMO_ADDED', memo: repository.memoCommands.add(text) });
     },
     // A send to a dependency's surface, named as code names another pack's feature; that surface declares it takes it
-    announceMemo: ({ event }) => {
-      const { text } = memosSpec.typeOf('ANNOUNCE_MEMO', event);
+    ANNOUNCE_MEMO: ({ text }) => {
       broadcast('default-setup/logs', {
         type: 'LOG_ADDED',
         log: { id: `memo-${Date.now()}`, timestamp: Date.now(), level: 'info', message: text, source: 'memos' },
       });
     },
-    addMemoNote: ({ event }) => {
-      const { text } = memosSpec.typeOf('ADD_MEMO_NOTE', event);
+    ADD_MEMO_NOTE: ({ text }) => {
       broadcast('memos', { type: 'MEMO_NOTE_ADDED', text, note: addMemoNote(text) });
-    },
-  }),
-}).createMachine({
-  id: 'memos',
-  initial: 'idle',
-  on: {
-    ADD_MEMO: { actions: 'addMemo' },
-    ADD_MEMO_NOTE: { actions: 'addMemoNote' },
-    ANNOUNCE_MEMO: { actions: 'announceMemo' },
-  },
-  states: {
-    idle: {
-      on: {
-        SEND_STATE: { actions: 'sendConnectedData' },
-      },
     },
   },
 });
 
-const memosEntry = { spec: memosSpec, machine: memosSystem };
+const _contractMatches: StateMatchesContract<typeof memosSystem, Contract> = true;
+void _contractMatches;
 
-export default memosEntry;
+export default memosSystem;

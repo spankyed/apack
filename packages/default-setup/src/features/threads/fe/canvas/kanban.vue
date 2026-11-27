@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, reactive, computed, watch } from 'vue'
 import { ArrangeableList, type MovingItem } from 'vue-arrange'
-import { threadsFromStore, type ThreadsState, type ThreadListItem } from '#features/threads/fe/state.ts'
+import { threadsFromStore, type ThreadListItem } from '#features/threads/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import ThreadsHeader from './components/ThreadsHeader.vue'
 import { SquarePen } from 'lucide-vue-next'
 
 // import type { ThreadsSettings } from '#generated/types.ts'
 
-const actor: ThreadsState = useSurface()
-const { state: machine, send } = useState(actor)
+const { state: machine, send } = useState('threads')
 const threads = computed(() => threadsFromStore(machine.value.data.threadMap, machine.value.data.threadIds))
 const filters = computed(() => machine.value.data.filters)
 const settings = computed(() => machine.value.data.settings)

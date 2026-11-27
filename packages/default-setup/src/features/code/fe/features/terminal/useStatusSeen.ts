@@ -1,8 +1,7 @@
 // Says the person is looking at a terminal for as long as a component showing it is mounted: when something
 // its programs finished or failed at arrives while the window has the focus, and when the window gets it.
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useState } from '@apackdev/sdk/fe'
-import type { TerminalActor } from './state.ts'
+import { useState } from '#generated/state-fe.ts'
 import { needsLooking } from './status.ts'
 
 /**
@@ -12,11 +11,12 @@ import { needsLooking } from './status.ts'
  * what arrives then waits until the window is in front; and a pointer or a mount, which the components
  * already report, are not the only ways someone comes to be looking.
  */
-export function useStatusSeen(actor: TerminalActor, terminalId: () => string | undefined): void {
-  const { state: terminal, send } = useState(actor)
+export function useStatusSeen(terminalId: () => string | undefined): void {
+  const { child } = useState('code')
+  const { state: terminal, send } = useState(() => child('terminal'))
   const unseen = computed(() => {
     const id = terminalId()
-    return id !== undefined && needsLooking(terminal.value.data.terminals.find(terminal => terminal.id === id)?.statuses)
+    return id !== undefined && needsLooking(terminal.value?.data.terminals.find(t => t.id === id)?.statuses)
   })
   const look = () => {
     const id = terminalId()

@@ -7,7 +7,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EARS } from '@elmdb/ears';
-import { createActor } from 'xstate';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-app-reset-'));
 process.env.APACK_ENV = 'test';
@@ -106,7 +105,7 @@ it('restores unfinished onboarding and resumes it only after an explicit restart
   const unsubscribe = rootEvents.onOutgoing(({ to, event }) => {
     if (to === 'default-setup/threads' && event.type === 'SHOW_THREAD') opened.push(event);
   });
-  const bus = createActor(createAppBus(packs), { systemId: HOST.bus }).start();
+  const bus = createAppBus(packs).start();
   const threadId = () => untypedQuery.all().withRole('assistant_birth').ids()[0];
   const context = () => threadId() && untypedQuery.ids(threadId()).pickOne(['context'])?.context;
   try {
@@ -123,8 +122,8 @@ it('restores unfinished onboarding and resumes it only after an explicit restart
     services.onboarding.complete();
 
     await services.appData.importBackup(backup);
-    const brain = bus.system.get('default-setup/brain');
-    expect(brain.getSnapshot().matches('stopped')).toBe(true);
+    const brain = bus.getSystem('default-setup/brain')!;
+    expect(brain.read()?.at).toBe('stopped');
     expect(context()).toEqual(progress);
     expect(services.onboarding.isComplete()).toBe(false);
     rootEvents.emitPackClientConnected('default-setup');

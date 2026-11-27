@@ -47,7 +47,7 @@ export async function terminalResizeScenario({ app, appPage, electronApp }: Para
     // One terminal for the whole run: resizing is the measured action, opening one is not
     const terminalId = await appPage.evaluate(async () => {
       const win = window as unknown as PerformanceWindow;
-      const code = () => win.applicationState.system.get('default-setup/code');
+      const code = () => win.applicationState.surface('default-setup/code');
       win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/code', events: [{ type: 'terminal.CREATE' }] });
       for (let i = 0; i < 100 && !code().getSnapshot().context.panelTerminalId; i++) await new Promise(r => setTimeout(r, 50));
       return code().getSnapshot().context.panelTerminalId ?? null;
@@ -60,8 +60,8 @@ export async function terminalResizeScenario({ app, appPage, electronApp }: Para
       const result = await appPage.evaluate(async ({ mode, fixtureId, terminalId, resizes }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
-        const sizeOf = (id: string) => win.applicationState.system.get('default-setup/code')
-          .getSnapshot().children?.terminal?.getSnapshot().context.terminals?.find(t => t.id === id)?.cols;
+        const sizeOf = (id: string) => win.applicationState.system.snapshot()['default-setup/code/terminal']
+          ?.data?.terminals?.find(t => t.id === id)?.cols;
         await recording.start(mode);
 
         const started = performance.now();
@@ -77,10 +77,9 @@ export async function terminalResizeScenario({ app, appPage, electronApp }: Para
             accept: () => false,
             // A resize changes no view and mutates no DOM — the emulator draws to a canvas — so the surface that
             // records the new size is what says readiness may have changed
-            subscribe: notify => {
-              const subscription = win.applicationState.system.get('default-setup/code').subscribe(notify);
-              return () => subscription.unsubscribe();
-            },
+            subscribe: notify => win.applicationState.system.subscribe(changed => {
+              if (changed.includes('default-setup/code/terminal')) notify();
+            }),
             check: () => {
               const cols = sizeOf(terminalId);
               work.observedCols = cols ?? -1;
@@ -132,9 +131,10 @@ export async function terminalResizeScenario({ app, appPage, electronApp }: Para
         win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/code',
           events: [{ type: 'terminal.RESIZE', terminalId: id, cols: 80, rows: 24 }, { type: 'terminal.REFRESH_LIST' }] });
       }, terminalId);
-      await appPage.waitForFunction(id => (window as unknown as PerformanceWindow).applicationState
-        .system.get('default-setup/code').getSnapshot().children?.terminal?.getSnapshot()
-        .context.terminals?.find(t => t.id === id)?.cols === 80, terminalId);
+      await appPage.waitForFunction(id => {
+        const snap = (window as unknown as PerformanceWindow).applicationState.system.snapshot()['default-setup/code/terminal'];
+        return snap?.data?.terminals?.find(t => t.id === id)?.cols === 80;
+      }, terminalId);
     }
   } finally { run.close(); }
 }

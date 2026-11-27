@@ -161,7 +161,7 @@
                 :title="`Runs on ${terminal.target.label}`"
                 data-terminal-on
               >{{ terminal.target.label }}</span>
-              <TerminalActivityBadge :activity="terminalState.data.activity[terminal.id]" :kept="terminal.kept === true" :status="statusToShow(terminal.statuses)" />
+              <TerminalActivityBadge :activity="terminalState?.data.activity[terminal.id]" :kept="terminal.kept === true" :status="statusToShow(terminal.statuses)" />
               <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
                    if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
                    no reason for the screen having stopped. -->
@@ -229,9 +229,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { useSettings } from '#generated/settings-fe.ts'
+import { useState } from '#generated/state-fe.ts'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ChevronRight, ChevronDown, Plus, X, Edit, Trash2, PanelTop, PanelBottom, Terminal as TerminalIcon, Ellipsis, Square, Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Server } from 'lucide-vue-next'
 import {
@@ -249,7 +248,6 @@ import {
 } from 'reka-ui'
 import TrackedContextMenuRoot from '@apackdev/ui/design/TrackedContextMenuRoot'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPARATOR_CLASS } from '#features/code/fe/features/explorer/constants.ts'
-import type { CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from './state.ts'
 import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
 import { terminalNameFor } from '#features/code/fe/utils/terminal-name.ts'
@@ -264,20 +262,16 @@ import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
 import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
-import { panelChild } from '../children.ts';
 
 const props = withDefaults(defineProps<{ height?: number }>(), { height: 256 })
 
-// Actors
-const codeActor: CodeState = useSurface()
-const terminalActor = panelChild(codeActor, 'terminal')!
-
 // State selectors
-const { state: code, send: sendCode } = useState(codeActor)
-const { state: terminalState, send } = useState(terminalActor)
+const { state: code, send: sendCode, child } = useState('code')
+const { state: terminalState, send } = useState(() => child('terminal'))
+const { send: sendExplorer } = useState(() => child('explorer'))
 const panelTerminalId = computed(() => code.value.data.panelTerminalId)
-useStatusSeen(terminalActor, () => panelTerminalId.value ?? undefined)
-const terminals = computed(() => terminalState.value.data.terminals)
+useStatusSeen(() => panelTerminalId.value ?? undefined)
+const terminals = computed(() => terminalState.value?.data.terminals ?? [])
 
 
 const featureSettings = useSettings('code')
@@ -287,7 +281,7 @@ const closeTerminalOnTabClose = computed(() => storedCodeSettings.value?.closeTe
 const terminalScripts = computed(() => (storedCodeSettings.value?.terminalScripts ?? []) as TerminalScript[])
 const terminalTargets = computed(() => storedCodeSettings.value?.terminalTargets ?? [])
 
-const { getTerminalDisplayName, } = useTerminalActions(terminalActor, confirmTerminalClose, closeTerminalOnTabClose)
+const { getTerminalDisplayName, } = useTerminalActions(send, confirmTerminalClose, closeTerminalOnTabClose)
 
 // Section visibility context menu
 const codeSettings = computed(() => code.value.data.settings)
@@ -363,7 +357,7 @@ const attachTerminal = (terminalId: string) => {
       onSelectionChange: has => { hasSelection.value = has },
       // A path a program printed opens as the file it names, where the explorer opens every other
       onOpenPath: (path, at) => {
-      panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
+      sendExplorer({ type: 'explorer.OPEN_FILE', path })
       // Shown at the line the program named, once the file is the one showing
       if (at) sendCode({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
     },

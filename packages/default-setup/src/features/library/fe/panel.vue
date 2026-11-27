@@ -241,14 +241,12 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
-
 import { computed, ref } from 'vue'
 import type { FieldContent, ListContent, MarkdownContent, TextContent } from '#features/library/be/types.ts'
-import type { LibraryActor } from './state.ts'
 import { useView } from '#generated/fe.ts'
+import { useState } from '#generated/state-fe.ts'
 
-const { state: library } = useState<LibraryActor>()
+const { state: library } = useState('library')
 
 // Individual selectors for each context property
 const indexView = useView('library', 'index')

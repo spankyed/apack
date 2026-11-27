@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@apackdev/host": "*",
+    "@apackdev/link": "0.1.0",
     "@apackdev/pack-build": "*",
     "@apackdev/pack-format": "*",
     "@apackdev/sdk": "*",
@@ -54,11 +55,9 @@
     "@vitejs/plugin-vue": "^6.0.1"
   },
   "devDependencies": {
-    "@trpc/server": "^11.1.2",
     "@vitejs/plugin-vue": "^6.0.1",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.12",
-    "ws": "^8.18.2"
+    "vitest": "^4.1.12"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {

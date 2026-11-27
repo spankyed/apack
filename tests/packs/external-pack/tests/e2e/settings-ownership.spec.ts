@@ -13,12 +13,12 @@ const companion = fileURLToPath(new URL('../../../bundled-ui-pack/', import.meta
 test('backup import restores all settings owners and updates an open window', async ({ app, appPage, electronApp }) => {
   const backups = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-settings-restore-'));
   let second: Awaited<ReturnType<typeof electronApp.firstWindow>> | undefined;
-  const toggleCompanion = () => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
+  const toggleCompanion = () => appPage.evaluate(() => (window as any).applicationState.surface('host/packs')
     .send({ type: 'UI.TOGGLE_ENABLED', packId: 'bundled-ui-fixture' }));
   const openJson = async () => {
     await app.navigate('host/settings');
     await appPage.evaluate(() => {
-      const actor = (window as any).applicationState.system.get('host/settings');
+      const actor = (window as any).applicationState.surface('host/settings');
       actor.send({ type: 'TAB.SELECT', tab: 'general' });
       actor.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
     });
@@ -44,8 +44,7 @@ test('backup import restores all settings owners and updates an open window', as
     await expect(appPage.getByText('Saved', { exact: true })).toBeVisible();
     return original;
   };
-  const backupResult = () => appPage.evaluate(() => (window as any).applicationState.system
-    .get('default-setup/database').getSnapshot().context.backupResult);
+  const backupResult = () => appPage.evaluate(() => (window as any).applicationState.surface('default-setup/database').getSnapshot().context.backupResult);
   try {
     await app.send('host/packs', { type: 'INSTALL_PACK', packSlug: companion, sourceKind: 'local' });
     await app.waitForSurface('bundled-ui-fixture/scribbles');
@@ -72,7 +71,7 @@ test('backup import restores all settings owners and updates an open window', as
       await expect.poll(backupResult).toEqual({ operation: 'export' });
     } catch (error) {
       const state = await appPage.evaluate(() => {
-        const snapshot = (window as any).applicationState.system.get('default-setup/database').getSnapshot();
+        const snapshot = (window as any).applicationState.surface('default-setup/database').getSnapshot();
         return { status: snapshot.status, state: snapshot.value,
           exporting: snapshot.context.exporting, backupResult: snapshot.context.backupResult };
       });
@@ -87,8 +86,8 @@ test('backup import restores all settings owners and updates an open window', as
       if (process.env.DEBUG_E2E === 'sample' && process.platform === 'darwin') {
         try {
           const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'));
-          const { apiPortFile } = resolveAppEnvironment({ env: 'test', userDataDir });
-          const { pid } = JSON.parse(fs.readFileSync(apiPortFile, 'utf8'));
+          const { appDir } = resolveAppEnvironment({ env: 'test', userDataDir });
+          const { pid } = JSON.parse(fs.readFileSync(path.join(appDir, 'api-runtime.json'), 'utf8'));
           const parent = Number(execFileSync('/bin/ps', ['-p', String(pid), '-o', 'ppid='], { encoding: 'utf8' }));
           if (parent !== electronApp.process().pid) throw new Error('The recorded API is not this fixture’s child');
           const sample = test.info().outputPath('backup-api.sample.txt');
@@ -168,7 +167,7 @@ test('two external assistant groups survive independent edits, disable, reset an
   await scribbles.fill('Sydney'); await scribbles.blur();
   await expect(appPage.getByText('Settings saved', { exact: true })).toBeVisible();
 
-  const toggle = (packId: string) => appPage.evaluate(packId => (window as any).applicationState.system.get('host/packs')
+  const toggle = (packId: string) => appPage.evaluate(packId => (window as any).applicationState.surface('host/packs')
     .send({ type: 'UI.TOGGLE_ENABLED', packId }), packId);
   for (const owner of ['e2e-fixture', 'bundled-ui-fixture']) {
     await select(owner);
@@ -219,7 +218,7 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
   // event, however long the operation takes on this machine, rather than for a clock
   const nextEvent = (match: (event: Record<string, unknown>) => boolean) => connection.next(match);
   const target = (groupId: string) => ({ kind: 'pack', packId: 'bundled-ui-fixture', groupId });
-  const toggle = () => appPage.evaluate(packId => (window as any).applicationState.system.get('host/packs')
+  const toggle = () => appPage.evaluate(packId => (window as any).applicationState.surface('host/packs')
     .send({ type: 'UI.TOGGLE_ENABLED', packId }), id);
   try {
     await app.send('host/packs', { type: 'INSTALL_PACK', packSlug: companion, sourceKind: 'local' });

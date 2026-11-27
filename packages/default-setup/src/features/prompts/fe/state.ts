@@ -1,28 +1,18 @@
-import { entityIs, freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
-import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
-import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
-import { safeEvents } from '@apackdev/sdk/fe'
-import {
-  targetIs,
-  TRAIL_CLICK,
-  type TrailClickEvent,
-} from '@apackdev/sdk/fe'
-import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
-import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
-import type { EARS } from '#generated/ears.ts'
-import { fromAsk } from '#generated/events.ts'
-import { Trash2 } from 'lucide-vue-next'
-import { contextMenuFn } from '@apackdev/sdk/fe'
+import type { OutcomeOf, Read, Value } from '@apackdev/state';
+import type { OpenEntity } from '@apackdev/sdk/events';
+import { entityIs, type SurfaceChrome, type TrailClickEvent } from '@apackdev/sdk/fe';
+import type { PromptEntity, TemplateInput } from '@apackdev/sdk';
+import { Trash2 } from 'lucide-vue-next';
+import type { EARS } from '#generated/ears.ts';
+import { state, type PackNet } from '#generated/state.ts';
+import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts';
 
-/* ─────────────────────────────────────────────────────────── */
-/* Machine Types                                               */
-/* ─────────────────────────────────────────────────────────── */
 export const id = 'prompts' as const;
-export type PromptsState = ActorRefFrom<typeof promptsState>
 
 /** How many more prompts the list shows each time the user reaches its end */
-export const PROMPTS_PAGE_SIZE = 20
+export const PROMPTS_PAGE_SIZE = 20;
+
+type PromptsAsks = PackNet['systems']['prompts']['asks'];
 
 type UIEvent =
   | { type: 'CLEAR_WRITE_ERROR' }
@@ -51,260 +41,117 @@ type UIEvent =
   | { type: 'PROMPTS.IMPORT'; prompts: unknown }
   | { type: 'PROMPTS.FORGET_IMPORT' }
   | { type: 'PROMPTS.EXPORT'; directory: string }
-  | { type: 'PROMPTS.FORGET_EXPORT' }
+  | { type: 'PROMPTS.FORGET_EXPORT' };
 
-/**
- * The asks this window makes. Each write is asked on its own, so one refused says so whatever else is under way; an
- * import and an export are one at a time
- */
-const made = makes(({ one, each }) => ({
-  createPrompt: each(fromAsk('prompts', 'CREATE_PROMPT')),
-  updatePrompt: each(fromAsk('prompts', 'UPDATE_PROMPT')),
-  deletePrompt: each(fromAsk('prompts', 'DELETE_PROMPT')),
-  importPrompts: one(fromAsk('prompts', 'IMPORT_PROMPTS')),
-  exportPrompts: one(fromAsk('prompts', 'EXPORT_PROMPTS')),
-}))
-
-/** How an ask the machine made ended */
-type Made = MadeEvent<typeof made>
-
-/** What the machine holds: what the surface publishes, the asks under way, and how the last import and export ended */
-type PromptsMachineContext = PromptsContext & {
-  /** Which of the asks the machine makes (`made`) are under way */
-  making: Making<typeof made>
+/** What the machine holds: what the surface publishes, and how the last import and export ended */
+type PromptsData = Omit<PromptsContext, 'selectedPromptId' | 'selectedLabel' | 'formFor'> & {
+  selectedPromptId: EARS.EntityId | undefined;
+  selectedLabel: string | undefined;
+  formFor: EARS.EntityId | undefined;
   /** How the last import ended, until another file is picked */
-  imported?: Extract<Made, { type: 'made.importPrompts' }>['outcome']
+  imported: OutcomeOf<PromptsAsks['IMPORT_PROMPTS']> | undefined;
   /** How the last export ended, until another is made */
-  exported?: Extract<Made, { type: 'made.exportPrompts' }>['outcome']
+  exported: OutcomeOf<PromptsAsks['EXPORT_PROMPTS']> | undefined;
+};
+
+type PromptsShape = {
+  data: PromptsData;
+  calls: {
+    createPrompt: { readonly many: PromptsAsks['CREATE_PROMPT']['args'] };
+    updatePrompt: { readonly many: PromptsAsks['UPDATE_PROMPT']['args'] };
+    deletePrompt: { readonly many: PromptsAsks['DELETE_PROMPT']['args'] };
+    importPrompts: { readonly one: PromptsAsks['IMPORT_PROMPTS']['args'] };
+    exportPrompts: { readonly one: PromptsAsks['EXPORT_PROMPTS']['args'] };
+  };
+  states: {
+    list: {};
+    create: {};
+    detail: {};
+  };
+};
+
+export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent;
+
+// The list shows no prompt, so reopening one fills its form afresh from what its view reads then
+const CLEAR_SELECTED = {
+  selectedPromptId: undefined,
+  selectedLabel: undefined,
+  formFor: undefined,
+} as const;
+
+const CREATE_FORM_DATA = {
+  label: '',
+  description: '',
+  category: '',
+  inputs: {},
+  templateFn: '// Your template function body here\nreturn `Your prompt template`;',
+  outputSchema: undefined,
+};
+
+function selectPromptData(currentId: EARS.EntityId | undefined, promptId: EARS.EntityId) {
+  if (currentId === promptId) return undefined;
+  return { selectedPromptId: promptId, selectedLabel: undefined, formFor: undefined };
 }
 
-export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent | Made
+const formUpdateHandlers = {
+  'FORM.UPDATE_LABEL': (event: Extract<PromptsEvents, { type: 'FORM.UPDATE_LABEL' }>, { data }: { data: Read<PromptsData> }) => ({
+    data: { formData: { ...data.formData, label: event.label } },
+  }),
+  'FORM.UPDATE_DESCRIPTION': (event: Extract<PromptsEvents, { type: 'FORM.UPDATE_DESCRIPTION' }>, { data }: { data: Read<PromptsData> }) => ({
+    data: { formData: { ...data.formData, description: event.description } },
+  }),
+  'FORM.UPDATE_INPUTS': (event: Extract<PromptsEvents, { type: 'FORM.UPDATE_INPUTS' }>, { data }: { data: Read<PromptsData> }) => ({
+    data: { formData: { ...data.formData, inputs: event.inputs } },
+  }),
+  'FORM.UPDATE_TEMPLATE': (event: Extract<PromptsEvents, { type: 'FORM.UPDATE_TEMPLATE' }>, { data }: { data: Read<PromptsData> }) => ({
+    data: { formData: { ...data.formData, templateFn: event.templateFn } },
+  }),
+  'FORM.UPDATE_OUTPUT_SCHEMA': (event: Extract<PromptsEvents, { type: 'FORM.UPDATE_OUTPUT_SCHEMA' }>, { data }: { data: Read<PromptsData> }) => ({
+    data: { formData: { ...data.formData, outputSchema: event.outputSchema } },
+  }),
+  'FORM.UPDATE_CATEGORY': (event: Extract<PromptsEvents, { type: 'FORM.UPDATE_CATEGORY' }>, { data }: { data: Read<PromptsData> }) => ({
+    data: { formData: { ...data.formData, category: event.category } },
+  }),
+};
 
-const typeOf = safeEvents<PromptsEvents>()
-
-const promptsState = setup({
-  types: {
-    context: {} as PromptsMachineContext,
-    events: {} as PromptsEvents,
+export const promptsChrome: SurfaceChrome<Value<PromptsShape>> = {
+  default: { label: 'Prompts', target: 'list' },
+  states: {
+    list: {
+      breadcrumb: { label: 'Prompts', target: 'list' },
+    },
+    create: {
+      breadcrumb: { label: 'New Prompt', target: 'create' },
+    },
+    detail: {
+      breadcrumb: ({ data }) => ({
+        label: data.selectedLabel || data.selectedPromptId || '',
+        target: 'detail',
+      }),
+      menu: ({ data }) => [
+        {
+          label: 'Delete Prompt',
+          icon: Trash2,
+          event: { type: 'PROMPT.DELETE' as const, promptId: data.selectedPromptId! },
+          iconColor: 'text-red-400',
+          confirm: `Are you sure you want to delete "${data.selectedLabel || 'this prompt'}"?`,
+        },
+      ],
+    },
   },
-  actors: made.actors,
-  actions: {
-    // The list shows no prompt, so reopening one fills its form afresh from what its view reads then
-    clearSelectedPrompt: assign({ selectedPromptId: undefined, selectedLabel: undefined, formFor: undefined }),
+};
 
-    /* ── prompt interactions ────────────────────────────── */
-    selectPrompt: assign(({ event, context }) => {
-      const promptId = event.type === 'OPEN_ENTITY' ? event.id as EARS.EntityId : typeOf('PROMPT.SELECT', event).promptId;
-      if (context.selectedPromptId === promptId) return {};
-      return { selectedPromptId: promptId, selectedLabel: undefined, formFor: undefined };
-    }),
-
-    showLoadedPrompt: assign(({ event, context }) => {
-      const { promptId, prompt } = typeOf('PROMPT.LOADED', event);
-      if (!prompt) return {};
-      // The form is filled once per opening: a change the view brings later (another window's edit) leaves what the
-      // user is typing alone, and saving writes the form as it stands
-      if (context.formFor === promptId) return { selectedLabel: prompt.label };
-      return {
-        selectedLabel: prompt.label,
-        formFor: promptId,
-        formData: {
-          label: prompt.label,
-          description: prompt.description,
-          category: prompt.category,
-          inputs: prompt.inputs,
-          templateFn: prompt.templateFn,
-          outputSchema: prompt.outputSchema,
-        },
-      };
-    }),
-
-    initCreateForm: assign({
-      formData: {
-        label: '',
-        description: '',
-        category: '',
-        inputs: {},
-        templateFn: '// Your template function body here\nreturn `Your prompt template`;',
-        outputSchema: undefined,
-      },
-      selectedPromptId: undefined,
-      selectedLabel: undefined,
-      formFor: undefined,
-    }),
-
-    sendSavePrompt: enqueueActions(({ context, enqueue }) => {
-      // Creating or updating, by whether one is open
-      if (!context.selectedPromptId) made.make(enqueue, 'createPrompt', freshKey(), context.formData)
-      else made.make(enqueue, 'updatePrompt', freshKey(), { promptId: context.selectedPromptId, ...context.formData })
-    }),
-
-    sendDeletePrompt: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('PROMPT.DELETE', event);
-      made.make(enqueue, 'deletePrompt', freshKey(), { promptId: ev.promptId })
-    }),
-
-    updatePromptInputs: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('PROMPT.UPDATE_INPUTS', event);
-      made.make(enqueue, 'updatePrompt', freshKey(), { promptId: ev.promptId, inputs: ev.inputs })
-    }),
-
-    createPromptInline: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('PROMPT.CREATE_INLINE', event);
-      made.make(enqueue, 'createPrompt', freshKey(), { label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs })
-    }),
-
-    updatePromptLabel: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('PROMPT.UPDATE_LABEL', event);
-      made.make(enqueue, 'updatePrompt', freshKey(), { promptId: ev.promptId, label: ev.label })
-    }),
-
-    /** A write this window asked for and did not get, shown until dismissed */
-    showRefusal: assign(({ event }) => {
-      const { outcome } = typeOf(['made.createPrompt', 'made.updatePrompt', 'made.deletePrompt'], event)
-      return outcome.ok ? {} : { writeError: outcome.failure.message }
-    }),
-
-    /* ── import and export ───────────────────────────────── */
-    importPrompts: enqueueActions(({ event, enqueue }) => {
-      enqueue.assign({ imported: undefined })
-      made.make(enqueue, 'importPrompts', { prompts: typeOf('PROMPTS.IMPORT', event).prompts })
-    }),
-
-    exportPrompts: enqueueActions(({ event, enqueue }) => {
-      enqueue.assign({ exported: undefined })
-      made.make(enqueue, 'exportPrompts', { directory: typeOf('PROMPTS.EXPORT', event).directory })
-    }),
-
-    /* ── form updates ────────────────────────────────────── */
-    updateFormLabel: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_LABEL', event);
-      return {
-        formData: {
-          ...context.formData,
-          label: ev.label,
-        },
-      };
-    }),
-
-    updateFormDescription: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_DESCRIPTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          description: ev.description,
-        },
-      };
-    }),
-
-    updateFormInputs: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_INPUTS', event);
-      return {
-        formData: {
-          ...context.formData,
-          inputs: ev.inputs,
-        },
-      };
-    }),
-
-    updateFormTemplate: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_TEMPLATE', event);
-      return {
-        formData: {
-          ...context.formData,
-          templateFn: ev.templateFn,
-        },
-      };
-    }),
-
-    updateFormOutputSchema: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_OUTPUT_SCHEMA', event);
-      return {
-        formData: {
-          ...context.formData,
-          outputSchema: ev.outputSchema,
-        },
-      };
-    }),
-
-    updateFormCategory: assign(({ event, context }) => {
-      const ev = typeOf('FORM.UPDATE_CATEGORY', event);
-      return {
-        formData: {
-          ...context.formData,
-          category: ev.category,
-        },
-      };
-    }),
-
-    toggleInputsSection: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_INPUTS_SECTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          inputsExpanded: ev.show,
-        },
-      };
-    }),
-
-    toggleOutputSection: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_OUTPUT_SECTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          outputExpanded: ev.show,
-        },
-      };
-    }),
-
-    toggleMetadataSection: assign(({ event, context }) => {
-      const ev = typeOf('TOGGLE_METADATA_SECTION', event);
-      return {
-        formData: {
-          ...context.formData,
-          metadataExpanded: ev.show,
-        },
-      };
-    }),
-
-    /* ── the list ─────────────────────────────────────────── */
-    showMore: assign(({ context }) => ({ listLimit: context.listLimit + PROMPTS_PAGE_SIZE })),
-
-    /* ── filter actions ──────────────────────────────────── */
-    toggleCategoryFilter: assign(({ event, context }) => {
-      const ev = typeOf('FILTER.TOGGLE_CATEGORY', event);
-      const categoryName = ev.categoryName;
-      const isSelected = context.selectedCategories.includes(categoryName);
-
-      return {
-        selectedCategories: isSelected
-          ? context.selectedCategories.filter(c => c !== categoryName)
-          : [...context.selectedCategories, categoryName]
-      };
-    }),
-
-    clearCategoryFilters: assign({
-      selectedCategories: []
-    }),
-  },
-  guards: { entityIs: entityIs<Contract['opens']>,
-    targetIs,
-    /** Whether what was loaded is the prompt open now, rather than one the user has since moved on from */
-    loadsSelected: ({ context, event }) => typeOf('PROMPT.LOADED', event).promptId === context.selectedPromptId,
-    /** Whether the open prompt is gone */
-    loadsNothing: ({ event }) => typeOf('PROMPT.LOADED', event).prompt === null,
-  },
-}).createMachine({
-  id,
+const promptsState = state<PromptsShape, PromptsEvents>()({
   initial: 'list',
-  context: {
+  data: {
     selectedPromptId: undefined,
     selectedLabel: undefined,
     formFor: undefined,
+    imported: undefined,
+    exported: undefined,
     listLimit: PROMPTS_PAGE_SIZE,
     writeError: null,
-    making: made.none(),
-    selectedCategories: [], // Filter state
+    selectedCategories: [],
     formData: {
       label: '',
       description: '',
@@ -314,105 +161,147 @@ const promptsState = setup({
       outputSchema: undefined,
     },
   },
+  calls: ({ one, many }) => ({
+    // What a write changed reaches every window through the views, so a landed one needs nothing here;
+    // a refused write is shown until dismissed.
+    createPrompt: many('prompts', 'CREATE_PROMPT', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    updatePrompt: many('prompts', 'UPDATE_PROMPT', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    deletePrompt: many('prompts', 'DELETE_PROMPT', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    importPrompts: one('prompts', 'IMPORT_PROMPTS', {
+      done: (outcome) => ({ data: { imported: outcome } }),
+    }),
+    exportPrompts: one('prompts', 'EXPORT_PROMPTS', {
+      done: (outcome) => ({ data: { exported: outcome } }),
+    }),
+  }),
   on: {
-    // What a write changed reaches every window through the views, so a landed one needs nothing here
-    [made.done]: { actions: made.settle() },
-    'made.createPrompt': { actions: 'showRefusal' },
-    'made.updatePrompt': { actions: 'showRefusal' },
-    'made.deletePrompt': { actions: 'showRefusal' },
-    'PROMPTS.IMPORT': { actions: 'importPrompts' },
-    'PROMPTS.FORGET_IMPORT': { actions: assign({ imported: undefined }) },
-    'made.importPrompts': { actions: assign(({ event }) => ({ imported: event.outcome })) },
-    'PROMPTS.EXPORT': { actions: 'exportPrompts' },
-    'PROMPTS.FORGET_EXPORT': { actions: assign({ exported: undefined }) },
-    'made.exportPrompts': { actions: assign(({ event }) => ({ exported: event.outcome })) },
-    CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
-    OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
-    'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },
-    'VIEW_LIST': {
-      target: '.list',
+    'PROMPTS.IMPORT': (event, { call }) => {
+      call('importPrompts', { prompts: event.prompts });
+      return { data: { imported: undefined } };
     },
-    TOGGLE_INPUTS_SECTION: { actions: 'toggleInputsSection' },
-    TOGGLE_OUTPUT_SECTION: { actions: 'toggleOutputSection' },
-    TOGGLE_METADATA_SECTION: { actions: 'toggleMetadataSection' },
-    'PROMPTS.LOAD_MORE': { actions: 'showMore' },
-    'FILTER.TOGGLE_CATEGORY': { actions: 'toggleCategoryFilter' },
-    'FILTER.CLEAR': { actions: 'clearCategoryFilters' },
-    'PROMPT.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
-    'PROMPT.CREATE_INLINE': { actions: 'createPromptInline' },
-    'PROMPT.UPDATE_LABEL': { actions: 'updatePromptLabel' },
-    ...TRAIL_CLICK([
-      ['.list', 'list'],
-      ['.create', 'create'],
-      ['.detail', 'detail'],
-    ]),
+    'PROMPTS.FORGET_IMPORT': () => ({ data: { imported: undefined } }),
+    'PROMPTS.EXPORT': (event, { call }) => {
+      call('exportPrompts', { directory: event.directory });
+      return { data: { exported: undefined } };
+    },
+    'PROMPTS.FORGET_EXPORT': () => ({ data: { exported: undefined } }),
+    CLEAR_WRITE_ERROR: () => ({ data: { writeError: null } }),
+    OPEN_ENTITY: (event, { data }) => {
+      if (!entityIs<Contract['opens']>({ event }, { entity: 'Prompt' })) return;
+      const updates = selectPromptData(data.selectedPromptId, event.id as EARS.EntityId);
+      return updates ? { at: 'detail', data: updates } : { at: 'detail' };
+    },
+    'PROMPT.SELECT': (event, { data }) => {
+      const updates = selectPromptData(data.selectedPromptId, event.promptId);
+      return updates ? { at: 'detail', data: updates } : { at: 'detail' };
+    },
+    VIEW_LIST: () => ({ at: 'list', data: CLEAR_SELECTED }),
+    TOGGLE_INPUTS_SECTION: (event, { data }) => ({
+      data: { formData: { ...data.formData, inputsExpanded: event.show } },
+    }),
+    TOGGLE_OUTPUT_SECTION: (event, { data }) => ({
+      data: { formData: { ...data.formData, outputExpanded: event.show } },
+    }),
+    TOGGLE_METADATA_SECTION: (event, { data }) => ({
+      data: { formData: { ...data.formData, metadataExpanded: event.show } },
+    }),
+    'PROMPTS.LOAD_MORE': (_event, { data }) => ({
+      data: { listLimit: data.listLimit + PROMPTS_PAGE_SIZE },
+    }),
+    'FILTER.TOGGLE_CATEGORY': (event, { data }) => {
+      const categoryName = event.categoryName;
+      const isSelected = data.selectedCategories.includes(categoryName);
+      return {
+        data: {
+          selectedCategories: isSelected
+            ? data.selectedCategories.filter(c => c !== categoryName)
+            : [...data.selectedCategories, categoryName],
+        },
+      };
+    },
+    'FILTER.CLEAR': () => ({ data: { selectedCategories: [] } }),
+    'PROMPT.UPDATE_INPUTS': (event, { call }) => {
+      call('updatePrompt', { promptId: event.promptId, inputs: event.inputs });
+    },
+    'PROMPT.CREATE_INLINE': (event, { call }) => {
+      call('createPrompt', { label: event.label, templateFn: event.templateFn, inputs: event.inputs });
+    },
+    'PROMPT.UPDATE_LABEL': (event, { call }) => {
+      call('updatePrompt', { promptId: event.promptId, label: event.label });
+    },
+    TRAIL_CLICK: (event) => {
+      if (event.target === 'list') return { at: 'list', data: CLEAR_SELECTED };
+      if (event.target === 'create') return { at: 'create' };
+      if (event.target === 'detail') return { at: 'detail' };
+    },
   },
   states: {
     list: {
-      entry: 'clearSelectedPrompt',
-      tags: ['list-prompts'],
-      meta: { ...breadcrumb('list', 'Prompts', true) },
       on: {
-        'PROMPT.CREATE': {
-          actions: 'initCreateForm',
-          target: 'create',
+        'PROMPT.CREATE': () => ({
+          at: 'create',
+          data: {
+            formData: CREATE_FORM_DATA,
+            ...CLEAR_SELECTED,
+          },
+        }),
+        'PROMPT.DELETE': (event, { call }) => {
+          call('deletePrompt', { promptId: event.promptId });
         },
-        'PROMPT.DELETE': {
-          actions: 'sendDeletePrompt',
-        },
-      }
+      },
     },
     create: {
-      tags: ['create-prompt'],
-      meta: { ...breadcrumb('create', 'New Prompt') },
       on: {
-        'FORM.UPDATE_LABEL': { actions: 'updateFormLabel' },
-        'FORM.UPDATE_DESCRIPTION': { actions: 'updateFormDescription' },
-        'FORM.UPDATE_INPUTS': { actions: 'updateFormInputs' },
-        'FORM.UPDATE_TEMPLATE': { actions: 'updateFormTemplate' },
-        'FORM.UPDATE_OUTPUT_SCHEMA': { actions: 'updateFormOutputSchema' },
-        'FORM.UPDATE_CATEGORY': { actions: 'updateFormCategory' },
-        'PROMPT.SAVE': {
-          actions: 'sendSavePrompt',
-          target: 'list',
+        ...formUpdateHandlers,
+        'PROMPT.SAVE': (_event, { data, call }) => {
+          if (!data.selectedPromptId) call('createPrompt', data.formData);
+          else call('updatePrompt', { promptId: data.selectedPromptId, ...data.formData });
+          return { at: 'list', data: CLEAR_SELECTED };
         },
       },
     },
     detail: {
-      tags: ['detail-prompt'],
-      meta: {
-        ...breadcrumbWithParams<PromptsContext>({
-          target: 'detail',
-          getLabel: (ctx) => {
-            return ctx.selectedLabel || ctx.selectedPromptId || '';
-          }
-        }),
-        ...contextMenuFn<PromptsContext>((ctx) => [
-          { label: 'Delete Prompt', icon: Trash2, event: { type: 'PROMPT.DELETE' as const, promptId: ctx.selectedPromptId! }, iconColor: 'text-red-400', confirm: `Are you sure you want to delete "${ctx.selectedLabel || 'this prompt'}"?` },
-        ]),
-      },
       on: {
         // The open prompt deleted, here or in another window: there is nothing left to show
-        'PROMPT.LOADED': [
-          { guard: and(['loadsSelected', 'loadsNothing']), target: 'list' },
-          { guard: 'loadsSelected', actions: 'showLoadedPrompt' },
-        ],
-        'FORM.UPDATE_LABEL': { actions: 'updateFormLabel' },
-        'FORM.UPDATE_DESCRIPTION': { actions: 'updateFormDescription' },
-        'FORM.UPDATE_INPUTS': { actions: 'updateFormInputs' },
-        'FORM.UPDATE_TEMPLATE': { actions: 'updateFormTemplate' },
-        'FORM.UPDATE_OUTPUT_SCHEMA': { actions: 'updateFormOutputSchema' },
-        'FORM.UPDATE_CATEGORY': { actions: 'updateFormCategory' },
-        'PROMPT.SAVE': {
-          actions: 'sendSavePrompt',
-          target: 'list',
+        'PROMPT.LOADED': (event, { data }) => {
+          if (event.promptId !== data.selectedPromptId) return;
+          if (event.prompt === null) return { at: 'list', data: CLEAR_SELECTED };
+          // The form is filled once per opening: a change the view brings later (another window's edit) leaves what the
+          // user is typing alone, and saving writes the form as it stands
+          if (data.formFor === event.promptId) return { data: { selectedLabel: event.prompt.label } };
+          return {
+            data: {
+              selectedLabel: event.prompt.label,
+              formFor: event.promptId,
+              formData: {
+                label: event.prompt.label,
+                description: event.prompt.description,
+                category: event.prompt.category,
+                inputs: event.prompt.inputs,
+                templateFn: event.prompt.templateFn,
+                outputSchema: event.prompt.outputSchema,
+              },
+            },
+          };
         },
-        'PROMPT.DELETE': {
-          actions: 'sendDeletePrompt',
+        ...formUpdateHandlers,
+        'PROMPT.SAVE': (_event, { data, call }) => {
+          if (!data.selectedPromptId) call('createPrompt', data.formData);
+          else call('updatePrompt', { promptId: data.selectedPromptId, ...data.formData });
+          return { at: 'list', data: CLEAR_SELECTED };
+        },
+        'PROMPT.DELETE': (event, { call }) => {
+          call('deletePrompt', { promptId: event.promptId });
         },
       },
     },
   },
-})
+});
 
-export default promptsState
+export default promptsState;

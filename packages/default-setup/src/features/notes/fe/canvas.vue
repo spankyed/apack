@@ -296,9 +296,9 @@ import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDra
 import type { NoteSummary } from '#generated/types.ts'
 import { useView } from '#generated/fe.ts'
 import { useSettings } from '#generated/settings-fe.ts'
-import { type NotesState } from './state.ts'
+import { useState } from '#generated/state-fe.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
-import { EXTRA_BLOCK_ITEMS_KEY, type BlockItem, useState, useSurface } from '@apackdev/sdk/fe'
+import { EXTRA_BLOCK_ITEMS_KEY, type BlockItem } from '@apackdev/sdk/fe'
 import { NotebookText, FileText, ListChecks, CircleCheck, Search, Clock, ChevronLeft, ChevronRight, Star, Plus } from 'lucide-vue-next'
 import EmojiPicker from '@apackdev/ui/design/EmojiPicker'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
@@ -309,8 +309,7 @@ import TaskListPanel from './components/TaskListPanel.vue'
 import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import TiptapSearchBar from '@apackdev/ui/components/tiptap/TiptapSearchBar'
 
-const actor: NotesState = useSurface()
-const { state: notesMachine, send } = useState(actor)
+const { state: notesMachine, send } = useState('notes')
 const settings = useSettings('notes')
 const notesSettings = computed(() => settings.value.value ?? { tasklistPanelPosition: 'left' as const, showCollapseIcon: false })
 const isTaskList = computed(() => notesMachine.value.data.currentNote?.noteType === 'tasklist')
@@ -333,7 +332,7 @@ watch(() => notesMachine.value.data.writes.refreshes, () => { tree.refresh(); op
 
 const localTitle = ref(editingNote.value?.title ?? '')
 
-const scrollContainerRef = useNoteScroll(actor, () => editingNote.value?.id)
+const scrollContainerRef = useNoteScroll(() => editingNote.value?.id)
 
 watch(() => editingNote.value?.id, () => {
   localTitle.value = editingNote.value?.title ?? ''
@@ -453,8 +452,8 @@ watch(() => notesMachine.value.at === 'welcome', (isWelcome) => {
 onMounted(() => nextTick(() => { updateScrollState(); updateFavScrollState() }))
 
 // Composables
-useNoteFocus(actor, titleRef, editorRef)
-useSubDocumentInsert(actor, editorRef, editingNote)
+useNoteFocus(titleRef, editorRef)
+useSubDocumentInsert(editorRef, editingNote)
 
 // Debounced handlers
 const SAVE_DEBOUNCE_MS = 150

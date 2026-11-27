@@ -64,13 +64,13 @@
 
 <script setup lang="ts">
 import { HardDriveDownload } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsDraft } from '@apackdev/sdk/fe'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 import KeyboardShortcutInput from '@apackdev/ui/components/KeyboardShortcutInput'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
 import { openSurface } from '#generated/fe.ts'
-import type { DatabaseState } from './state.ts'
+import { useState } from '#generated/state-fe.ts'
 
 interface Props {
   settings?: SettingsOf<'database'>
@@ -95,8 +95,7 @@ const openBackupRestore = () => {
   openSurface('database', { type: 'VIEW_BACKUP' })
 }
 
-// Resolved during setup: useSurface reads the SurfaceScope this settings panel renders in, which a click handler can't reach
-const databaseActor: DatabaseState = useSurface()
+const { send } = useState('database')
 
 // Reset database function
 const handleResetDatabase = () => {
@@ -104,6 +103,6 @@ const handleResetDatabase = () => {
     'Are you sure you want to reset the database? This will permanently delete all data and create a new root flow. This action cannot be undone.'
   )
 
-  if (confirmed) databaseActor.send({ type: 'DATABASE.RESET' })
+  if (confirmed) send({ type: 'DATABASE.RESET' })
 }
 </script>

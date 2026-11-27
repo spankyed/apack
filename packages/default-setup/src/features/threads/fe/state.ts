@@ -1,44 +1,73 @@
-import { surfaceStorage } from '@apackdev/sdk/fe'
-import { ref as featureRef } from '#generated/ref.ts'
+import { given, type Each, type Read, type Value } from '@apackdev/state';
+import type { OpenEntity } from '@apackdev/sdk/events';
+import {
+  canGoBack,
+  canGoForward,
+  createNavHistory,
+  entityIs,
+  freshKey,
+  goBack,
+  goForward,
+  processHotkeys,
+  pushNavHistory,
+  surfaceStorage,
+  untypedOpenSurface,
+  viewRead,
+  viewWrites,
+  writeEnded,
+  writeSent,
+  writing,
+  type HotkeyEvent,
+  type HotkeysMap,
+  type SurfaceChrome,
+  type SurfaceLifecycleEvent,
+  type TrailClickEvent,
+} from '@apackdev/sdk/fe';
+import { resolveName } from '@apackdev/sdk/ids';
+import type { EARS } from '@apackdev/sdk';
+import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
+import { ref as featureRef } from '#generated/ref.ts';
+import { state, type PackNet } from '#generated/state.ts';
+import type {
+  AgentMode as AgentModeConfig,
+  AgentSettings,
+  AgentThreadData,
+  BlockResponse,
+  ChatPage,
+  ChatStart,
+  MessageEntity,
+  MessageReferences,
+  MessageSearchResult,
+  Tab,
+  ThreadCreateData,
+  ThreadDetailView,
+  ThreadEditFields,
+  ThreadEntity,
+  ThreadExtended,
+  ThreadsSettings,
+  ThreadTabView,
+  ThreadViewData,
+} from '#generated/types.ts';
+import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
+import type { RecentThreadsSortOrder } from '#features/threads/be/repository/index.ts';
+import { getNextAvailableColor, type TabGroupColor, type ThreadTabGroup } from '#features/threads/fe/canvas/agent/tabs/types.ts';
+import { loadThreadTabGroups, saveThreadTabGroups } from '#features/threads/fe/canvas/agent/tabs/tab-groups.ts';
 import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText, runCaughtUp } from './message-text.ts';
+import type { ChatState, Contract, ThreadListItem, ThreadsContext, ThreadsInboxEvent } from './contract.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
-const storage = surfaceStorage(featureRef('threads'))
-import { entityIs } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
-import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe';
-import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
-import { safeEvents } from '@apackdev/sdk/fe';
-import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject } from 'xstate';
-import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
-import type { ActorRefFrom } from 'xstate';
-import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
-import { freshKey, makes, viewRead, viewWrites, writeEnded, writeSent, writing, type MadeEvent, type Making, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
-import { fromView } from '#generated/fe.ts';
-import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
-import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
-import { fromAsk, tell } from '#generated/events.ts';
-import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
-import { contextMenuFn } from '@apackdev/sdk/fe';
-import { untypedOpenSurface } from '@apackdev/sdk/fe'
-import { resolveName } from '@apackdev/sdk/ids'
-
+const storage = surfaceStorage(featureRef('threads'));
 const HOST_SETTINGS = resolveName('settings', 'host');
-import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
-import type { ThreadTabGroup, TabGroupColor } from '#features/threads/fe/canvas/agent/tabs/types.ts';
-import { getNextAvailableColor } from '#features/threads/fe/canvas/agent/tabs/types.ts';
-import { saveThreadTabGroups, loadThreadTabGroups } from '#features/threads/fe/canvas/agent/tabs/tab-groups.ts';
-import type { EARS } from '@apackdev/sdk';
 
 export const id = 'threads' as const;
 
 // The threads surface over its views. It is drawn in several places — the list, the board, a thread's page and the
-// dashboard as canvas routes, and the chat beside every surface — so no one component holds its views: the machine
-// follows each as a child actor (`fromView`), spawned with its arguments and replaced when they change. The list, the
-// recent threads and the archived ones are three views from which the thread map is derived; the open thread's chat,
-// its detail page and each open tab are one view each; and each message either lists is its own view, so a reply
-// streaming into one message re-runs that message's view alone. This window's thread writes hold the thread-level
-// views back until each is answered (`ViewWrites`), so a result from before an edit never undoes it on screen.
+// dashboard as canvas routes, and the chat beside every surface — so no one component holds its views: the state
+// follows each declaratively via `follows`, reacting to its data as arguments change. The list, the recent threads
+// and the archived ones are three views from which the thread map is derived; the open thread's chat, its detail
+// page and each open tab are one view each; and each message either lists is its own view, so a reply streaming into
+// one message re-runs that message's view alone. This window's thread writes hold the thread-level views back until
+// each is answered (`ViewWrites`), so a result from before an edit never undoes it on screen.
 //
 // What it starts from — the thread to open, the tabs every window opens, the settings — is asked for when the shell
 // starts the surface (`SURFACE_STARTED`), in a delivery naming it, which is what lets the system answer.
@@ -46,19 +75,18 @@ export const id = 'threads' as const;
 /** How many messages a page of the chat holds, and how many more each `LOAD_MORE_MESSAGES` asks for */
 const MESSAGE_PAGE_SIZE = 50;
 
+/** Duration (ms) a freshly created thread stays marked `isNew` for its list entrance animation. */
+const NEW_THREAD_ANIMATION_MS = 1000;
+
 /**
  * Where the pointer was, for the one thing that needs it: a hotkey carries no coordinates, so the quick
  * prompt opens at the last position the pointer was seen (`quickPromptCursor`).
  *
- * **The listener is owned by `pointerTracker` below, not installed here.** Added at module scope it was
- * never removed, so every replacement of this pack's frontend left another one behind writing into a module
- * nothing could still reach — and it touched `window` at *import*, which is why a pure helper of this file
- * had to be split out before a test could import it. Two numbers at module scope are fine; a listener is
- * not, and this repo's rule is that a concern owning one is a child actor.
+ * The listener is owned by the root `listen` below, not installed at module scope, so importing this file
+ * touches nothing on `window` and stopping the surface removes its listener cleanly.
  */
 let mouseX = 0;
 let mouseY = 0;
-
 
 function getInitialView(): 'list' | 'kanban' | 'dashboard' {
   try {
@@ -69,13 +97,12 @@ function getInitialView(): 'list' | 'kanban' | 'dashboard' {
   return 'list';
 }
 
-
 interface StoredTabData {
   tabs: { id: string; label: string; groupId?: string }[];
   activeTabId: string;
 }
 
-function saveTabsToStorage(tabs: Tab[], activeTabId: string) {
+function saveTabsToStorage(tabs: readonly Tab[], activeTabId: string) {
   try {
     storage.set('open-tabs', JSON.stringify({
       tabs: tabs.filter(t => !t.pinned).map(t => ({ id: t.id, label: t.label, ...(t.groupId && { groupId: t.groupId }) })),
@@ -104,7 +131,7 @@ function extractChatSettings(chatSettings: AgentSettings) {
 
 export function resolveDefaultModePhase(
   settings: AgentSettings | undefined,
-  modes: AgentModeConfig[],
+  modes: readonly AgentModeConfig[],
   fallbackMode: string,
   fallbackPhase: string | undefined,
 ): { mode: string; phase: string | undefined } {
@@ -131,14 +158,12 @@ export function resolveDefaultModePhase(
   return { mode, phase };
 }
 
-export type ThreadsState = ActorRefFrom<typeof threadsState>;
-
 const defaultThread: ThreadCreateData | ThreadViewData = {
   topic: '',
   instructions: '',
   tags: [],
   linkedThreads: [],
-}
+};
 
 const defaultChatThread: AgentThreadData = {
   id: undefined,
@@ -150,58 +175,58 @@ const defaultChatThread: AgentThreadData = {
   artifacts: [],
 };
 
-// ---- Event types ----
+export type { ChatState, ThreadListItem } from './contract.ts';
 
-/**
- * What the machine asks the threads system, each under the name it is made by. Any number of each are under way at
- * once, every one under a key of its own (`freshKey`), so every one asked for is done and answered.
- */
-const made = makes(({ each }) => ({
-  chatStart: each(fromAsk(id, 'GET_CHAT_START')),
-  created: each(fromAsk(id, 'CREATE_THREAD')),
-  opened: each(fromAsk(id, 'OPEN_THREAD_CHAT')),
-  /** A message, which may have started a thread */
-  sent: each(fromAsk(id, 'USER_MSG')),
-  /** A command, which may have started a thread */
-  sentCommand: each(fromAsk(id, 'USER_COMMAND')),
-  forked: each(fromAsk(id, 'FORK_THREAD')),
-  imported: each(fromAsk(id, 'IMPORT_THREADS')),
-  exported: each(fromAsk(id, 'EXPORT_THREADS')),
-  // The writes whose answer is only that it was done
-  statusWrite: each(fromAsk(id, 'UPDATE_THREAD_STATUS')),
-  fieldWrite: each(fromAsk(id, 'UPDATE_THREAD_FIELD')),
-  deleteWrite: each(fromAsk(id, 'DELETE_THREAD')),
-  parentWrite: each(fromAsk(id, 'SET_THREAD_PARENT')),
-}))
+// ---- Types ----
 
-/** The asks that are writes the views are held behind: each is recorded in `writes` under the key it is made with */
-const WRITES = ['made.created', 'made.statusWrite', 'made.fieldWrite', 'made.deleteWrite', 'made.parentWrite'] as const
+type ThreadsAsks = PackNet['systems']['threads']['asks'];
 
-/** The surface's context, and which of the asks the machine makes (`made`) are under way */
-type MachineContext = ThreadsContext & { making: Making<typeof made> }
+type ChatFollowupEvent =
+  | { type: 'LOAD_MORE_MESSAGES' }
+  | { type: 'OPEN_THREAD_CHAT'; threadId: string };
+
+type RecentViewArgs = { limit: number; sortOrder: RecentThreadsSortOrder };
+
+type ThreadsData = Omit<
+  ThreadsContext,
+  'selectedThreadCode' | 'pendingActionId' | 'pendingThreadCwd' | 'pendingForceDirectoryPicker'
+> & {
+  selectedThreadCode: string | undefined;
+  pendingActionId: string | undefined;
+  pendingThreadCwd: string | undefined;
+  pendingForceDirectoryPicker: boolean | undefined;
+  /** Whether `SURFACE_STARTED` has run and the list view should be followed. */
+  started: boolean;
+  /** Incremented when a held/refused write settles so thread-level views re-subscribe cleanly. */
+  viewRefresh: number;
+  /** Arguments for `archived` and `recent` views, populated once settings arrive. */
+  recentViewArgs: RecentViewArgs | null;
+  /** The thread followed by the `detail` view while in `view`. */
+  detailThreadId: string | null;
+  /** The thread followed by the `chat` view (kept separate from `currentThread` so chat reads never re-trigger `chat`). */
+  chatThreadId: string | null;
+  /** Versioned keys (`${viewRefresh}:${threadId}`) driving `follows.tabs` so `viewRefresh` re-subscribes open tabs. */
+  tabViewKeys: string[];
+  /** Trimmed search query driving `follows.messageSearch`. */
+  searchQuery: string;
+  /** Active chat-state override timers, keyed by `${threadId}:${seq}` so a later flash cancels the earlier timer. */
+  overrideTimers: Record<string, { threadId: string; durationMs: number }>;
+  /** Monotonic sequence for versioned timer and follow-up keys. */
+  timerSeq: number;
+  /** Deferred microtask follow-ups scheduled from a `chat` view delivery so they execute in a fresh step. */
+  chatFollowups: Record<string, { event: ChatFollowupEvent }>;
+};
+
+const _feContractCheck: ThreadsData extends ThreadsContext ? true : never = true;
+void _feContractCheck;
 
 type SystemEvent =
   | OutgoingThreadsEvents
-  | MadeEvent<typeof made>
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ThreadsSettings }
-  | SurfaceLifecycleEvent
-
-/** What the views this surface follows hand it: each one's result, or that it failed (kept showing what it showed) */
-type ViewEvent =
-  | { type: 'THREADS.READ'; threads: ThreadExtended[] }
-  | { type: 'ARCHIVED.READ'; threads: Partial<ThreadEntity>[] }
-  | { type: 'RECENT.READ'; threads: Partial<ThreadEntity>[] }
-  | { type: 'DETAIL.READ'; id: string; detail: ThreadDetailView | null }
-  | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
-  | { type: 'CHAT.FAILURES_TOLD'; told: readonly { readonly message: string }[] }
-  | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
-  | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
-  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; blockId: string; at: number; text: string; done?: true }
-  | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
-  | { type: 'SEARCH.READ'; query: string; results: MessageSearchResult[] }
-  | { type: 'VIEW.FAILED'; view: string; error: string }
+  | Extract<SurfaceLifecycleEvent, { type: 'SURFACE_STARTED' }>;
 
 type UIEvent =
+  | Exclude<ThreadsInboxEvent, { type: 'OPEN_THREAD_CHAT' }>
   // Thread management events
   | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
   | { type: 'SHOW_CREATE_FORM' }
@@ -256,7 +281,7 @@ type UIEvent =
   | { type: 'SET_MODE'; mode: string }
   | { type: 'SET_PHASE'; phase: string }
   | { type: 'RESPOND_TO_BLOCK_INTERACTION'; messageId: string; response: BlockResponse }
-  | { type: 'HOTKEY_PRESSED'; } & HotkeyEvent
+  | ({ type: 'HOTKEY_PRESSED' } & HotkeyEvent)
   | { type: 'OPEN_QUICK_PROMPTS' }
   | { type: 'CLOSE_QUICK_PROMPTS' }
   | { type: 'TOGGLE_QUICK_PROMPTS' }
@@ -271,6 +296,7 @@ type UIEvent =
   | { type: 'SEARCH_MESSAGES'; query: string }
   | { type: 'OPEN_MESSAGE'; threadId: string; messageId: string }
   | { type: 'FOCUSED_MESSAGE_SHOWN' }
+  | { type: 'CHAT.FAILURES_TOLD'; told: readonly { readonly message: string }[] }
   | { type: 'RENAME_THREAD'; threadId: string; topic: string }
   // Tab reorder & group events
   | { type: 'REORDER_TABS'; fromIndex: number; toIndex: number }
@@ -289,40 +315,94 @@ type UIEvent =
   | { type: 'PIN_TAB_GROUP'; groupId: string }
   | { type: 'UNPIN_TAB_GROUP'; groupId: string }
   | { type: 'NAVIGATE_BACK' }
-  | { type: 'NAVIGATE_FORWARD' }
+  | { type: 'NAVIGATE_FORWARD' };
 
-type ThreadEvents =
-  | OpenEntity
-  | UIEvent
-  | SystemEvent
-  | ViewEvent
-  | TrailClickEvent;
+export type ThreadsEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent;
 
-const typeOf = safeEvents<ThreadEvents>()
+// ---- Child timer & microtask states ----
 
-/** The thread this window asked to open and the system found gone, where that is how the ask ended */
-function goneOnOpen(event: ThreadEvents): string | undefined {
-  const { outcome } = typeOf('made.opened', event)
-  return !outcome.ok && outcome.failure.kind === 'not-found' ? outcome.failure.threadId : undefined
-}
+const newThreadFlagTimerState = state<
+  { data: { threadId: string }; reports: { type: 'CLEAR_NEW_THREAD_FLAG'; id: string } },
+  never
+>()({
+  data: { threadId: given },
+  run: async ({ data, sleep, report }) => {
+    await sleep(NEW_THREAD_ANIMATION_MS);
+    report({ type: 'CLEAR_NEW_THREAD_FLAG', id: data.threadId });
+  },
+  failed: () => {},
+});
 
-export type { ChatState, ThreadListItem } from './contract.ts';
+const chatStateOverrideTimerState = state<
+  { data: { threadId: string; durationMs: number }; reports: { type: 'CLEAR_CHAT_STATE_OVERRIDE'; threadId: string } },
+  never
+>()({
+  data: { threadId: given, durationMs: given },
+  run: async ({ data, sleep, report }) => {
+    await sleep(data.durationMs);
+    report({ type: 'CLEAR_CHAT_STATE_OVERRIDE', threadId: data.threadId });
+  },
+  failed: () => {},
+});
 
-// ---- Context ----
+const chatFollowupState = state<
+  { data: { event: ChatFollowupEvent }; reports: ChatFollowupEvent },
+  never
+>()({
+  data: { event: given },
+  run: async ({ data, report }) => {
+    await Promise.resolve();
+    report(data.event);
+  },
+  failed: () => {},
+});
+
+type ThreadsShape = {
+  data: ThreadsData;
+  calls: {
+    chatStart: 'one';
+    created: { readonly each: ThreadsAsks['CREATE_THREAD']['args'] };
+    opened: { readonly many: ThreadsAsks['OPEN_THREAD_CHAT']['args'] };
+    sent: { readonly many: ThreadsAsks['USER_MSG']['args'] };
+    sentCommand: { readonly many: ThreadsAsks['USER_COMMAND']['args'] };
+    forked: { readonly many: ThreadsAsks['FORK_THREAD']['args'] };
+    imported: { readonly many: ThreadsAsks['IMPORT_THREADS']['args'] };
+    exported: { readonly many: ThreadsAsks['EXPORT_THREADS']['args'] };
+    statusWrite: { readonly each: ThreadsAsks['UPDATE_THREAD_STATUS']['args'] };
+    fieldWrite: { readonly each: ThreadsAsks['UPDATE_THREAD_FIELD']['args'] };
+    deleteWrite: { readonly each: ThreadsAsks['DELETE_THREAD']['args'] };
+    parentWrite: { readonly each: ThreadsAsks['SET_THREAD_PARENT']['args'] };
+  };
+  starts: {
+    newThreadTimers: Each<typeof newThreadFlagTimerState>;
+    overrideTimers: Each<typeof chatStateOverrideTimerState>;
+    chatFollowups: Each<typeof chatFollowupState>;
+  };
+  states: {
+    dashboard: {};
+    list: {};
+    kanban: {};
+    create: {};
+    view: {};
+  };
+};
 
 // ---- Helpers ----
 
 type ThreadLike = Partial<ThreadEntity> & { id: string };
 
-export function threadsFromStore<T>(threadMap: Record<string, T>, threadIds: readonly string[]): T[] {
+export function threadsFromStore<T>(threadMap: Readonly<Record<string, T>>, threadIds: readonly string[]): T[] {
   return threadIds.map(id => threadMap[id]).filter((thread): thread is T => Boolean(thread));
 }
 
-function threadIdsFrom(threads: ThreadLike[]): string[] {
+function threadIdsFrom(threads: readonly ThreadLike[]): string[] {
   return threads.map(t => t.id);
 }
 
-function mergeThreadMap(threadMap: Record<string, ThreadListItem>, threads: ThreadLike[]): Record<string, ThreadListItem> {
+function mergeThreadMap(
+  threadMap: Readonly<Record<string, ThreadListItem>>,
+  threads: readonly ThreadLike[],
+): Record<string, ThreadListItem> {
   const next = { ...threadMap };
   for (const thread of threads) {
     next[thread.id] = { ...next[thread.id], ...thread } as ThreadListItem;
@@ -331,26 +411,26 @@ function mergeThreadMap(threadMap: Record<string, ThreadListItem>, threads: Thre
 }
 
 /** Update a single thread in the map (no-op if not found) */
-function patchThread(ctx: ThreadsContext, threadId: string, patch: Partial<ThreadListItem>) {
-  const existing = ctx.threadMap[threadId];
-  if (!existing) return { threadMap: ctx.threadMap };
-  return { threadMap: { ...ctx.threadMap, [threadId]: { ...existing, ...patch } } };
+function patchThread(data: Read<ThreadsData>, threadId: string, patch: Partial<ThreadListItem>) {
+  const existing = data.threadMap[threadId];
+  if (!existing) return { threadMap: { ...data.threadMap } };
+  return { threadMap: { ...data.threadMap, [threadId]: { ...existing, ...patch } } };
 }
 
 /** Remove a thread from the map and id list */
-function removeThread(ctx: ThreadsContext, threadId: string) {
-  const { [threadId]: _, ...rest } = ctx.threadMap;
-  return { threadMap: rest, threadIds: ctx.threadIds.filter(id => id !== threadId) };
+function removeThread(data: Read<ThreadsData>, threadId: string) {
+  const { [threadId]: _, ...rest } = data.threadMap;
+  return { threadMap: rest, threadIds: data.threadIds.filter(id => id !== threadId) };
 }
 
 /** A thread's field as the user set it, shown at once: `write` is the ask that stores it, which the views are held behind */
-function optimisticFieldUpdate(context: ThreadsContext, write: string, threadId: string, key: string, value: unknown) {
+function optimisticFieldUpdate(data: Read<ThreadsData>, write: string, threadId: string, key: string, value: unknown) {
   return {
-    writes: writeSent(context.writes, write),
-    ...patchThread(context, threadId, { [key]: value } as any),
-    tabs: context.tabs.map(t => t.id === threadId ? { ...t, [key]: value, ...(key === 'topic' ? { label: value as string } : {}) } : t),
-    ...(context.currentThread?.id === threadId ? { currentThread: { ...context.currentThread, [key]: value } } : {}),
-    ...(context.view.id === threadId ? { view: { ...context.view, [key]: value } } : {}),
+    writes: writeSent(data.writes, write),
+    ...patchThread(data, threadId, { [key]: value } as Partial<ThreadListItem>),
+    tabs: data.tabs.map(t => t.id === threadId ? { ...t, [key]: value, ...(key === 'topic' ? { label: value as string } : {}) } : t),
+    ...(data.currentThread?.id === threadId ? { currentThread: { ...data.currentThread, [key]: value } } : {}),
+    ...(data.view.id === threadId ? { view: { ...data.view, [key]: value } } : {}),
   };
 }
 
@@ -358,9 +438,13 @@ function optimisticFieldUpdate(context: ThreadsContext, write: string, threadId:
  * The thread map and the lists the surface shows, derived from what the list, recent and archived views last gave:
  * a thread deleted anywhere leaves all three, and so the map
  */
-function threadStore(ctx: ThreadsContext, lists: ThreadsContext['lists']): Partial<ThreadsContext> {
+function threadStore(
+  freshThreadIds: readonly string[],
+  showArchived: boolean,
+  lists: ThreadsData['lists'],
+): Partial<ThreadsData> {
   const threadMap = mergeThreadMap({}, [...lists.archived, ...lists.recent, ...lists.list] as ThreadLike[]);
-  for (const fresh of ctx.freshThreadIds) {
+  for (const fresh of freshThreadIds) {
     if (threadMap[fresh]) threadMap[fresh] = { ...threadMap[fresh], isNew: true };
   }
   const chatStates: Record<string, ChatState> = {};
@@ -371,1233 +455,410 @@ function threadStore(ctx: ThreadsContext, lists: ThreadsContext['lists']): Parti
     lists,
     threadMap,
     chatStates,
-    threadIds: threadIdsFrom((ctx.showArchived ? lists.archived : lists.list) as ThreadLike[]),
+    threadIds: threadIdsFrom((showArchived ? lists.archived : lists.list) as ThreadLike[]),
     recentThreadIds: threadIdsFrom(lists.recent as ThreadLike[]),
     sidebarArchivedThreads: lists.archived as ThreadListItem[],
   };
 }
 
 /** The messages `ids` name: the row each view last gave, with a streamed reply's run spliced in (G1) */
-function messagesOf(ctx: ThreadsContext, ids: string[]): Partial<MessageEntity>[] {
+function messagesOf(
+  messageContents: Readonly<Record<string, Partial<MessageEntity>>>,
+  messageStreams: Readonly<Record<string, { readonly at: number; readonly text: string }>>,
+  messageBlockStreams: Readonly<Record<string, { readonly blockId: string; readonly at: number; readonly text: string }>>,
+  ids: readonly string[],
+): Partial<MessageEntity>[] {
   return ids.flatMap((messageId) => {
-    const row = ctx.messageContents[messageId];
+    const row = messageContents[messageId];
     if (!row) return [];
-    const shown = messageStreamText(row.text, ctx.messageStreams[messageId]);
-    const blocks = messageStreamBlocks(row.blocks, ctx.messageBlockStreams[messageId]);
+    const shown = messageStreamText(row.text, messageStreams[messageId]);
+    const blocks = messageStreamBlocks(row.blocks, messageBlockStreams[messageId]);
     if (shown === row.text && blocks === row.blocks) return [row];
     return [{ ...row, ...(shown === row.text ? {} : { text: shown }), ...(blocks === row.blocks ? {} : { blocks }) }];
   });
 }
 
 /** The chat's and the detail page's messages, composed again from their ids and each message's view */
-function composedMessages(ctx: ThreadsContext): Partial<ThreadsContext> {
+function composedMessages(
+  currentThread: Read<AgentThreadData> | null,
+  view: Read<ThreadViewData>,
+  chatMessageIds: readonly string[],
+  detailMessageIds: readonly string[],
+  messageContents: Readonly<Record<string, Partial<MessageEntity>>>,
+  messageStreams: Readonly<Record<string, { readonly at: number; readonly text: string }>>,
+  messageBlockStreams: Readonly<Record<string, { readonly blockId: string; readonly at: number; readonly text: string }>>,
+) {
   return {
-    currentThread: ctx.currentThread ? { ...ctx.currentThread, messages: messagesOf(ctx, ctx.chatMessageIds) } : ctx.currentThread,
-    view: { ...ctx.view, messages: messagesOf(ctx, ctx.detailMessageIds) },
+    currentThread: currentThread
+      ? { ...currentThread, messages: messagesOf(messageContents, messageStreams, messageBlockStreams, chatMessageIds) }
+      : currentThread,
+    view: { ...view, messages: messagesOf(messageContents, messageStreams, messageBlockStreams, detailMessageIds) },
   };
 }
 
-/** What the surface's views are spawned as: one id per view, and one per open tab and per listed message */
-const viewChild = {
-  list: 'view.list',
-  archived: 'view.archived',
-  recent: 'view.recent',
-  detail: 'view.detail',
-  chat: 'view.chat',
-  tab: (threadId: string) => `view.tab:${threadId}`,
-  message: (messageId: string) => `view.message:${messageId}`,
-  search: 'view.search',
-} as const;
+/** Synchronizes `messageViews` with the listed chat + detail messages, pruning unfollowed rows/streams and recomposing messages. */
+function syncMessages(
+  data: Read<ThreadsData>,
+  chatMessageIds: readonly string[],
+  detailMessageIds: readonly string[],
+  currentThread: Read<AgentThreadData> | null = data.currentThread,
+  view: Read<ThreadViewData> = data.view,
+) {
+  const listed = [...new Set([...chatMessageIds, ...detailMessageIds])];
+  const messageContents = Object.fromEntries(
+    listed.flatMap(messageId => (data.messageContents[messageId] ? [[messageId, data.messageContents[messageId]]] : [])),
+  );
+  // A streamed run is pruned with the row it splices onto; a window that stops listing a message holds
+  // neither, and nothing accumulates across a long session
+  const messageStreams = Object.fromEntries(
+    listed.flatMap(messageId => (data.messageStreams[messageId] ? [[messageId, data.messageStreams[messageId]]] : [])),
+  );
+  const messageBlockStreams = Object.fromEntries(
+    listed.flatMap(messageId => (data.messageBlockStreams[messageId] ? [[messageId, data.messageBlockStreams[messageId]]] : [])),
+  );
+  return {
+    chatMessageIds: [...chatMessageIds],
+    detailMessageIds: [...detailMessageIds],
+    messageViews: listed,
+    messageContents,
+    messageStreams,
+    messageBlockStreams,
+    ...composedMessages(currentThread, view, chatMessageIds, detailMessageIds, messageContents, messageStreams, messageBlockStreams),
+  };
+}
+
+function makeTabViewKeys(tabs: readonly Tab[], viewRefresh: number): string[] {
+  return tabs.map(tab => `${viewRefresh}:${tab.id}`);
+}
+
+function threadIdFromTabKey(key: string): string {
+  const cut = key.indexOf(':');
+  return cut >= 0 ? key.slice(cut + 1) : key;
+}
+
+/** Updates tab view tracking (`tabViews`, `tabViewKeys`, `tabsRead`) and persists open tabs to window storage. */
+function syncTabs(
+  tabs: readonly Tab[],
+  activeTabId: string,
+  tabsRead: readonly string[],
+  viewRefresh: number,
+) {
+  saveTabsToStorage(tabs, activeTabId);
+  const open = tabs.map(tab => tab.id);
+  return {
+    tabs: [...tabs],
+    activeTabId,
+    tabViews: open,
+    tabViewKeys: makeTabViewKeys(tabs, viewRefresh),
+    tabsRead: tabsRead.filter(threadId => open.includes(threadId)),
+  };
+}
+
+/** Removes any tab groups with no remaining tabs and persists groups to storage. */
+function cleanupAndPersistGroups(tabs: readonly Tab[], tabGroups: readonly ThreadTabGroup[]): ThreadTabGroup[] {
+  const tabGroupIds = new Set(tabs.map(t => t.groupId).filter(Boolean));
+  const nextGroups = tabGroups.filter(g => tabGroupIds.has(g.id));
+  saveThreadTabGroups(nextGroups);
+  return nextGroups;
+}
+
+/** Clears detail-view tracking when leaving the `view` state so its messages are pruned. */
+function leaveDetailData(data: Read<ThreadsData>) {
+  if (data.detailThreadId === null && data.detailMessageIds.length === 0) return {};
+  return {
+    detailThreadId: null,
+    ...syncMessages(data, data.chatMessageIds, []),
+  };
+}
 
 /** The recent threads' limit and order, as the settings hold them */
-function recentArgs(settings: ThreadsSettings | null) {
+function recentArgs(settings: Read<ThreadsSettings> | null): RecentViewArgs {
   const limit = settings?.recentThreadsLimit;
   const sortOrder = settings?.recentThreadsSortOrder;
   return {
     limit: typeof limit === 'number' && limit > 0 ? limit : 7,
-    sortOrder: sortOrder === 'visited' || sortOrder === 'message' ? sortOrder : 'created' as const,
+    sortOrder: sortOrder === 'visited' || sortOrder === 'message' ? sortOrder : 'created',
   };
 }
 
-/** A view's failure: it keeps showing what it showed, and the failure is reported to nothing but the console */
-const failed = (view: string, error: string) => ({ type: 'VIEW.FAILED' as const, view, error });
+function persistListView() { try { storage.set('view-preference', 'list'); } catch {} }
+function persistKanbanView() { try { storage.set('view-preference', 'kanban'); } catch {} }
+function persistDashboardView() { try { storage.set('view-preference', 'dashboard'); } catch {} }
 
-// ---- State machine ----
-
-/*
- * The timers below are callback actors, which never finish on their own: the handler of the event a timer sends
- * stops it, or it would stay among the surface's children for the session. Spawning one stops the thread's
- * earlier timer first, since a spawn under an id already taken replaces the entry without stopping the actor,
- * which would then fire early.
- */
-const newThreadFlagTimer = (threadId: string) => `clear-new-thread-flag-${threadId}`;
-const chatStateOverrideTimer = (threadId: string) => `clear-expired-override-${threadId}`;
-
-const threadsState = setup({
-  types: { context: {} as MachineContext, events: {} as ThreadEvents },
-  actors: {
-    ...made.actors,
-    /**
-     * Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
-     *
-     * It sends nothing: a transition per pointer move would be thousands of them for a value read once.
-     * What it owns is the listener's *lifetime* — the leak was never the two numbers.
-     */
-    pointerTracker: fromCallback(() => {
-      const follow = (event: MouseEvent) => { mouseX = event.clientX; mouseY = event.clientY; };
-      window.addEventListener('mousemove', follow, { passive: true });
-      return () => window.removeEventListener('mousemove', follow);
-    }),
-    clearNewThreadFlag: fromCallback<AnyEventObject, { id: string }>(({ input, sendBack }) => {
-      const ANIMATION_DURATION = 1000;
-      const timer = setTimeout(() => sendBack({ type: 'CLEAR_NEW_THREAD_FLAG', id: input.id }), ANIMATION_DURATION);
-      return () => clearTimeout(timer);
-    }),
-    clearExpiredOverride: fromCallback<AnyEventObject, { threadId: string; durationMs: number }>(({ input, sendBack }) => {
-      const timer = setTimeout(() => sendBack({ type: 'CLEAR_CHAT_STATE_OVERRIDE', threadId: input.threadId }), input.durationMs);
-      return () => clearTimeout(timer);
-    }),
-    listView: fromView('threads', 'list', (update) =>
-      (update.ok ? { type: 'THREADS.READ' as const, threads: update.value } : failed('list', update.error))),
-    archivedView: fromView('threads', 'archived', (update) =>
-      (update.ok ? { type: 'ARCHIVED.READ' as const, threads: update.value } : failed('archived', update.error))),
-    recentView: fromView('threads', 'recent', (update) =>
-      (update.ok ? { type: 'RECENT.READ' as const, threads: update.value } : failed('recent', update.error))),
-    detailView: fromView('threads', 'detail', (update, args) =>
-      (update.ok ? { type: 'DETAIL.READ' as const, id: args.id, detail: update.value } : failed('detail', update.error))),
-    chatView: fromView('threads', 'chat', (update, args) =>
-      (update.ok ? { type: 'CHAT.READ' as const, threadId: args.threadId, chat: update.value } : failed('chat', update.error))),
-    messageView: fromView('threads', 'message', (update, args) =>
-      (update.ok ? { type: 'MESSAGE.READ' as const, id: args.id, message: update.value } : failed('message', update.error))),
-    tabView: fromView('threads', 'tab', (update, args) =>
-      (update.ok ? { type: 'TAB.READ' as const, threadId: args.threadId, tab: update.value } : failed('tab', update.error))),
-    messageSearchView: fromView('threads', 'messageSearch', (update, args) =>
-      (update.ok ? { type: 'SEARCH.READ' as const, query: args.query, results: update.value } : failed('messageSearch', update.error))),
-  },
-  actions: {
-    // ---- Following the views ----
-    /** Asks for what the chat starts from, and follows the list, as the shell starts the surface */
-    startSurface: enqueueActions(({ enqueue }) => {
-      made.make(enqueue, 'chatStart', freshKey(), {});
-      enqueue('followList');
-    }),
-    followList: enqueueActions(({ enqueue }) => {
-      enqueue.stopChild(viewChild.list);
-      enqueue.spawnChild('listView', { id: viewChild.list });
-    }),
-    /** The archived and the recent threads, whose order and number the settings hold */
-    followSettingsViews: enqueueActions(({ context, enqueue }) => {
-      enqueue.stopChild(viewChild.archived);
-      enqueue.stopChild(viewChild.recent);
-      if (!context.settings) return;
-      const args = recentArgs(context.settings);
-      enqueue.spawnChild('archivedView', { id: viewChild.archived, input: { sortOrder: args.sortOrder } });
-      enqueue.spawnChild('recentView', { id: viewChild.recent, input: args });
-    }),
-    followDetail: enqueueActions(({ context, enqueue }) => {
-      enqueue.stopChild(viewChild.detail);
-      if (context.view.id) enqueue.spawnChild('detailView', { id: viewChild.detail, input: { id: context.view.id } });
-    }),
-    stopDetail: enqueueActions(({ enqueue }) => {
-      enqueue.stopChild(viewChild.detail);
-      enqueue.assign({ detailMessageIds: [] });
-      enqueue('followMessages');
-    }),
-    followChat: enqueueActions(({ context, enqueue }) => {
-      enqueue.stopChild(viewChild.chat);
-      const threadId = context.currentThread?.id;
-      if (threadId) enqueue.spawnChild('chatView', { id: viewChild.chat, input: { threadId, limit: context.chatLimit } });
-    }),
-    /** A view per open tab: spawned as a tab opens, stopped as it closes */
-    followTabs: enqueueActions(({ context, enqueue }) => {
-      const open = context.tabs.map(tab => tab.id);
-      for (const threadId of context.tabViews) {
-        if (!open.includes(threadId)) enqueue.stopChild(viewChild.tab(threadId));
-      }
-      for (const threadId of open) {
-        if (!context.tabViews.includes(threadId)) enqueue.spawnChild('tabView', { id: viewChild.tab(threadId), input: { threadId } });
-      }
-      enqueue.assign({ tabViews: open, tabsRead: context.tabsRead.filter(threadId => open.includes(threadId)) });
-    }),
-    /** A view per message the chat or the detail page lists, and nothing kept of a message neither lists any more */
-    followMessages: enqueueActions(({ context, enqueue }) => {
-      const listed = [...new Set([...context.chatMessageIds, ...context.detailMessageIds])];
-      for (const messageId of context.messageViews) {
-        if (!listed.includes(messageId)) enqueue.stopChild(viewChild.message(messageId));
-      }
-      for (const messageId of listed) {
-        if (!context.messageViews.includes(messageId)) enqueue.spawnChild('messageView', { id: viewChild.message(messageId), input: { id: messageId } });
-      }
-      enqueue.assign({
-        messageViews: listed,
-        messageContents: Object.fromEntries(listed.flatMap(messageId => (context.messageContents[messageId] ? [[messageId, context.messageContents[messageId]]] : []))),
-        // A streamed run is pruned with the row it splices onto; a window that stops listing a message holds
-        // neither, and nothing accumulates across a long session
-        messageStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageStreams[messageId] ? [[messageId, context.messageStreams[messageId]]] : []))),
-        messageBlockStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageBlockStreams[messageId] ? [[messageId, context.messageBlockStreams[messageId]]] : []))),
-      });
-    }),
-    /**
-     * Reads every thread-level view again, once this window's writes are answered and a result was held behind them
-     * or one was refused: a fresh subscription's first result is computed after every answered write
-     */
-    refollowThreadViews: enqueueActions(({ context, enqueue }) => {
-      enqueue('followList');
-      enqueue('followSettingsViews');
-      enqueue('followDetail');
-      enqueue('followChat');
-      for (const threadId of context.tabViews) {
-        enqueue.stopChild(viewChild.tab(threadId));
-        enqueue.spawnChild('tabView', { id: viewChild.tab(threadId), input: { threadId } });
-      }
-    }),
-    /** One of this window's writes ended */
-    settleWrite: enqueueActions(({ context, event, enqueue }) => {
-      const { key: ask, outcome } = typeOf(WRITES, event);
-      const writes = writeEnded(context.writes, ask, !outcome.ok);
-      enqueue.assign({ writes });
-      if (context.linkSave !== null && context.linkSave === ask) {
-        enqueue.assign({ linkSave: null, linkRefusal: outcome.ok ? null : outcome.failure.message });
-      }
-      if (writes.refreshes !== context.writes.refreshes) enqueue('refollowThreadViews');
-    }),
-
-    // ---- What the views gave ----
-    readThreads: enqueueActions(({ context, event, enqueue }) => {
-      const { threads } = typeOf('THREADS.READ', event);
-      const { writes, apply } = viewRead(context.writes);
-      enqueue.assign({ writes });
-      if (apply) enqueue.assign(({ context }) => threadStore(context, { ...context.lists, list: threads }));
-    }),
-    readArchived: enqueueActions(({ context, event, enqueue }) => {
-      const { threads } = typeOf('ARCHIVED.READ', event);
-      const { writes, apply } = viewRead(context.writes);
-      enqueue.assign({ writes });
-      if (apply) enqueue.assign(({ context }) => threadStore(context, { ...context.lists, archived: threads }));
-    }),
-    readRecent: enqueueActions(({ context, event, enqueue }) => {
-      const { threads } = typeOf('RECENT.READ', event);
-      const { writes, apply } = viewRead(context.writes);
-      enqueue.assign({ writes });
-      if (apply) enqueue.assign(({ context }) => threadStore(context, { ...context.lists, recent: threads }));
-    }),
-    readDetail: enqueueActions(({ context, event, enqueue }) => {
-      const { id: threadId, detail } = typeOf('DETAIL.READ', event);
-      if (threadId !== context.view.id || !detail) return;
-      const { writes, apply } = viewRead(context.writes);
-      enqueue.assign({ writes });
-      if (!apply) return;
-      const { messageIds, ...fields } = detail;
-      enqueue.assign(({ context }) => ({
-        view: { ...context.view, ...fields, id: detail.id } as ThreadViewData,
-        detailMessageIds: messageIds as string[],
-      }));
-      enqueue('followMessages');
-      enqueue.assign(({ context }) => composedMessages(context));
-    }),
-    readChat: enqueueActions(({ context, event, enqueue }) => {
-      const { threadId, chat } = typeOf('CHAT.READ', event);
-      if (threadId !== context.currentThread?.id || !chat) return;
-      const { writes, apply } = viewRead(context.writes);
-      enqueue.assign({ writes });
-      if (!apply) return;
-      const { messageIds, hasMore, ...header } = chat;
-      enqueue.assign(({ context }) => ({
-        currentThread: { ...context.currentThread!, ...header },
-        chatMessageIds: messageIds as string[],
-        messagePagination: { hasMore, isLoading: false },
-        chatStates: { ...context.chatStates, [threadId]: ((header.chatState as ChatState | undefined) ?? 'idle') },
-      }));
-      // The thread this window just opened takes its forced mode once, as it opens
-      if (context.openedThreadId === threadId) {
-        enqueue.assign(({ context }) => {
-          const forcedMode = header.forcedMode;
-          if (!forcedMode) return { openedThreadId: null };
-          const modeConfig = context.modes.find(m => m.name === forcedMode);
-          const phase = modeConfig?.phases?.length
-            ? (forcedMode in context.phaseByModeName ? context.phaseByModeName[forcedMode] : modeConfig.phases[0].name)
-            : undefined;
-          return { openedThreadId: null, mode: forcedMode, phase: phase ?? '' };
-        });
-      }
-      enqueue('followMessages');
-      enqueue.assign(({ context }) => composedMessages(context));
-    }),
-    readMessage: assign(({ context, event }) => {
-      const { id: messageId, message } = typeOf('MESSAGE.READ', event);
-      if (!context.messageViews.includes(messageId)) return {};
-      const { [messageId]: _gone, ...rest } = context.messageContents;
-      // A durable write caught the row up to the run, so the run has nothing left to add. Dropped here
-      // rather than left to grow: this is the only place that learns what the row now holds
-      const run = context.messageStreams[messageId];
-      const caughtUp = runCaughtUp(message?.text, run);
-      const { [messageId]: _spliced, ...streams } = context.messageStreams;
-      const blockRun = context.messageBlockStreams[messageId];
-      const blockCaughtUp = blockRunCaughtUp(message?.blocks, blockRun);
-      const { [messageId]: _splicedBlock, ...blockStreams } = context.messageBlockStreams;
-      const next = {
-        ...context,
-        messageContents: message ? { ...rest, [messageId]: message } : rest,
-        messageStreams: caughtUp || !message ? streams : context.messageStreams,
-        messageBlockStreams: blockCaughtUp || !message ? blockStreams : context.messageBlockStreams,
-      };
-      return {
-        messageContents: next.messageContents,
-        messageStreams: next.messageStreams,
-        messageBlockStreams: next.messageBlockStreams,
-        ...composedMessages(next),
-      };
-    }),
-
-    /**
-     * A streamed reply's next characters (G1): the feed beside the row, spliced by `messageStreamText`.
-     *
-     * A run is extended only where the event continues it exactly. A gap means this window missed an event,
-     * and the honest answer is to start a fresh run at the offset that just arrived — which the splice then
-     * ignores until the row reaches it, rather than showing text with a hole in it. `done` drops the run,
-     * and the writer has already written the row by then, which is why that order is its contract.
-     */
-    appendMessageText: assign(({ context, event }) => {
-      const ev = typeOf('MESSAGE_TEXT_APPENDED', event);
-      const { [ev.messageId]: held, ...others } = context.messageStreams;
-      // **`done` is taken whether or not this window is still following the message.** A run held from when
-      // it was followed has to end with the stream it belongs to: dropping the event with the guard below
-      // left the run in place, and a `finalize` that *replaced* the text — the warning a failed turn ends
-      // with — was then spliced away by the abandoned partial reply, with the error never shown.
-      if (ev.done) {
-        if (!held) return {};
-        // **The last event carries the tail, and dropping the run threw it away.** The writer sends what it
-        // had not fed yet beside `done`, having written the row first — but the row reaches a window through
-        // its view subscription and this through the bus, two channels nothing orders. So the window that
-        // dropped its run on `done` rendered the row as it last knew it, without the tail, until the view
-        // caught up: the end of a reply visibly missing and then appearing.
-        //
-        // `finishedRun` is the rule, beside the splice it feeds, so a spec for it needs no window
-        const completed = finishedRun(held, ev);
-        const finished = completed ? { ...others, [ev.messageId]: completed } : others;
-        const next = { ...context, messageStreams: finished };
-        return { messageStreams: finished, ...composedMessages(next) };
-      }
-      if (!context.messageViews.includes(ev.messageId)) return {};
-      const continues = held !== undefined && held.at + held.text.length === ev.at;
-      const run = continues ? { at: held.at, text: held.text + ev.text } : { at: ev.at, text: ev.text };
-      const messageStreams = { ...others, [ev.messageId]: run };
-      return { messageStreams, ...composedMessages({ ...context, messageStreams }) };
-    }),
-    /**
-     * The same rule as the text's run, for a block that grows.
-     *
-     * A run only continues when the delta starts exactly where the last one ended **and names the same
-     * block's row**: a message holds several, and two blocks' runs under one message id would otherwise
-     * splice each other's characters into whichever block arrived last. The row rather than the type,
-     * because a message may hold two blocks of one type and a type matches the first of them.
-     */
-    appendMessageBlockText: assign(({ context, event }) => {
-      const ev = typeOf('MESSAGE_BLOCK_TEXT_APPENDED', event);
-      const { [ev.messageId]: held, ...others } = context.messageBlockStreams;
-      // Taken whether or not this window still follows the message, as the text's `done` is: a run left in
-      // place would splice itself over whatever the row says next, and the writer has written the row by now
-      if (ev.done) {
-        if (!held) return {};
-        const next = { ...context, messageBlockStreams: others };
-        return { messageBlockStreams: others, ...composedMessages(next) };
-      }
-      if (!context.messageViews.includes(ev.messageId)) return {};
-      const continues = held !== undefined && held.blockId === ev.blockId && held.at + held.text.length === ev.at;
-      const run = continues
-        ? { blockId: ev.blockId, at: held.at, text: held.text + ev.text }
-        : { blockId: ev.blockId, at: ev.at, text: ev.text };
-      const messageBlockStreams = { ...others, [ev.messageId]: run };
-      return { messageBlockStreams, ...composedMessages({ ...context, messageBlockStreams }) };
-    }),
-
-    readTab: enqueueActions(({ context, event, enqueue }) => {
-      const { threadId, tab } = typeOf('TAB.READ', event);
-      if (!tab || !context.tabs.some(t => t.id === threadId)) return;
-      const { writes, apply } = viewRead(context.writes);
-      enqueue.assign({ writes });
-      if (!apply) return;
-      enqueue.assign(({ context }) => {
-        const firstRead = !context.tabsRead.includes(threadId);
-        const tabs = context.tabs.map((existing) => {
-          if (existing.id !== threadId) return existing;
-          const known = new Set(existing.artifacts.map(a => a.id));
-          // An artifact added since the tab was last read is the one to show; otherwise what was selected stays
-          const added = firstRead ? undefined : tab.artifacts.find(a => !known.has(a.id));
-          const kept = tab.artifacts.some(a => a.id === existing.selectedArtifactId) ? existing.selectedArtifactId : tab.artifacts[0]?.id;
-          return {
-            ...existing,
-            label: tab.topic || existing.label,
-            artifacts: tab.artifacts as Tab['artifacts'],
-            selectedArtifactId: added?.id ?? kept,
-            pinned: tab.pinned ?? false,
-          };
-        });
-        return {
-          tabs,
-          tabsRead: firstRead ? [...context.tabsRead, threadId] : context.tabsRead,
-          ...(context.currentThread?.id === threadId
-            ? { currentThread: { ...context.currentThread, artifacts: tab.artifacts as unknown as AgentThreadData['artifacts'] } }
-            : {}),
-        };
-      });
-      enqueue('persistTabs');
-    }),
-    /**
-     * A thread this window shows is gone — deleted here or elsewhere, or it could not be opened: its tab closes, the
-     * chat leaves it, and the next tab opens in its place
-     */
-    dropThread: enqueueActions(({ context, event, enqueue, self }) => {
-      // A thread whose view says it is gone, or one that was gone when this window asked to open it
-      const threadId = event.type === 'CHAT.READ' || event.type === 'TAB.READ' ? event.threadId : goneOnOpen(event);
-      if (!threadId) return;
-      const index = context.tabs.findIndex(t => t.id === threadId);
-      const tabs = context.tabs.filter(t => t.id !== threadId);
-      let activeTabId = context.activeTabId;
-      if (context.activeTabId === threadId) {
-        const nextTab = context.tabs[index + 1] ?? context.tabs[index - 1];
-        activeTabId = nextTab && nextTab.id !== threadId ? nextTab.id : '';
-      }
-      enqueue.assign({ tabs, activeTabId });
-      if (context.currentThread?.id === threadId) {
-        enqueue.assign({ currentThread: { ...defaultChatThread, messages: [] }, chatMessageIds: [] });
-        enqueue('followChat');
-        enqueue('followMessages');
-      }
-      if (activeTabId && activeTabId !== context.activeTabId) {
-        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: activeTabId }));
-      }
-      enqueue('cleanupEmptyGroups');
-      enqueue('tabsChanged');
-      enqueue('persistTabGroups');
-    }),
-    /** The detail page's thread is gone, so the page closes */
-    leaveGoneDetail: assign(() => ({
-      view: { ...defaultThread, id: '' as EARS.EntityId, shortCode: '', status: '', timestamp: 0 } as ThreadViewData,
+function selectedThreadData(data: Read<ThreadsData>, threadId: string) {
+  const selectedThread = data.threadMap[threadId];
+  if (!selectedThread) {
+    // Thread not in threadMap (e.g. archived, or tab restored from storage).
+    // Reset view to defaults with the target id, for its detail view to fill.
+    return {
       selectedThreadCode: undefined,
-    })),
+      linkSave: null,
+      linkRefusal: null,
+      view: {
+        ...defaultThread,
+        id: threadId as ThreadEntity['id'],
+        shortCode: '' as const,
+        status: '',
+        timestamp: 0,
+      },
+    };
+  }
 
-    // ---- Thread management actions ----
-    /**
-     * Opens a thread in the chat: the thread this window asked to open (`OPEN_THREAD_CHAT`, which also tells the
-     * system it was visited), or one the system says to show (`SHOW_THREAD`: the thread a first message started, a
-     * fork, or a flow's). Its tab opens and becomes the active one, and its chat view follows it.
-     */
-    openThread: enqueueActions(({ context, event, enqueue, self }) => {
-      const { threadId, restore } = typeOf(['OPEN_THREAD_CHAT', 'SHOW_THREAD'], event);
-      enqueue(() => self.send({ type: 'VIEW_DASHBOARD' }));
-      if (event.type === 'OPEN_THREAD_CHAT') {
-        made.make(enqueue, 'opened', freshKey(), { threadId, ...(restore && { restore }) });
-      }
-      const known = context.threadMap[threadId];
-      const label = known?.topic || context.tabs.find(t => t.id === threadId)?.label || `Thread ${known?.shortCode || ''}`.trim();
-      if (!context.tabs.some(t => t.id === threadId)) {
-        enqueue.assign({ tabs: [...context.tabs, { id: threadId, label, artifacts: [], ...(known?.pinned && { pinned: true }) }] });
-      }
-      enqueue.assign({ activeTabId: threadId });
-      if (context.currentThread?.id !== threadId) {
-        enqueue.assign({
-          currentThread: { ...defaultChatThread, ...(known && { topic: known.topic, shortCode: known.shortCode, status: known.status }), id: threadId as EARS.EntityId, messages: [] },
-          chatLimit: MESSAGE_PAGE_SIZE,
-          chatMessageIds: [],
-          messagePagination: { hasMore: false, isLoading: true },
-          openedThreadId: threadId,
-          // A message sought in another thread is no longer the one to bring into view
-          ...(context.focusMessage && context.focusMessage.threadId !== threadId && { focusMessage: null }),
-        });
-        enqueue('followChat');
-        enqueue('followMessages');
-      }
-      enqueue('tabsChanged');
-    }),
-    setupParentThread: assign(({ event, context }) => {
-      const typedEvent = typeOf('SHOW_CREATE_FORM_AS_CHILD', event);
-      const parentThread = context.threadMap[typedEvent.parentThreadId];
-
-      if (!parentThread) {
-        console.warn(`Parent thread with id ${typedEvent.parentThreadId} not found`);
-        return {};
-      }
-
-      return {
-        create: {
-          ...defaultThread,
-          parentThreadId: parentThread.id,
-          parentThread: parentThread
-        }
-      };
-    }),
-    /**
-     * Opens the thread this window's message or command started, or its fork: as a thread the system says to show,
-     * which every window handles alike
-     */
-    /** A message, command or fork of this window's that was not done, kept for the chat to tell the person */
-    noteSendFailure: assign(({ context, event }) => {
-      const { outcome } = typeOf(['made.sent', 'made.sentCommand', 'made.forked'], event);
-      return outcome.ok ? {} : { sendFailures: [...context.sendFailures, { message: outcome.failure.message }] };
-    }),
-    showStartedThread: enqueueActions(({ event, enqueue }) => {
-      const { outcome } = typeOf(['made.sent', 'made.sentCommand'], event);
-      if (outcome.ok && outcome.value.started) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
-    }),
-    showFork: enqueueActions(({ event, enqueue }) => {
-      const { outcome } = typeOf('made.forked', event);
-      if (outcome.ok) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
-    }),
-    /**
-     * The create this window asked for ended: its write settles, and the thread it made is marked new until its flag
-     * clears
-     */
-    threadCreated: enqueueActions(({ event, enqueue }) => {
-      const { outcome } = typeOf('made.created', event);
-      enqueue('settleWrite');
-      if (!outcome.ok) return;
-      const created: string = outcome.value.id;
-      enqueue('markCreated');
-      enqueue.stopChild(newThreadFlagTimer(created));
-      enqueue.spawnChild('clearNewThreadFlag', { id: newThreadFlagTimer(created), input: { id: created } });
-    }),
-    /** The thread this window created: marked new in the list, for its animation, and the form emptied */
-    markCreated: assign(({ context, event }) => {
-      const { outcome } = typeOf('made.created', event);
-      if (!outcome.ok) return {};
-      const freshThreadIds = [...context.freshThreadIds, outcome.value.id];
-      return { freshThreadIds, create: defaultThread, ...threadStore({ ...context, freshThreadIds }, context.lists) };
-    }),
-    sendCreateThread: enqueueActions(({ context, enqueue }) => {
-      const { parentThread: _parentThread, ...createData } = context.create;
-      const write = freshKey();
-      made.make(enqueue, 'created', write, {
-        ...createData,
-        parentThreadId: context.create.parentThreadId,
-      });
-      enqueue.assign({ writes: writeSent(context.writes, write) });
-    }),
-    recordThreadNavigation: assign(({ context, event }) => ({
-      navHistory: pushNavHistory(context.navHistory, `view:${typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id}`),
-    })),
-    sendViewThread: ({ event }) => {
-      const threadId = typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id;
-      tell(id, {
-        type: 'VIEW_THREAD',
-        threadId,
-      });
+  const { id: tid, shortCode, status, timestamp, topic, instructions, tags, pinned } = selectedThread;
+  return {
+    selectedThreadCode: shortCode,
+    linkSave: null,
+    linkRefusal: null,
+    view: {
+      ...defaultThread,
+      id: tid,
+      shortCode,
+      status,
+      timestamp,
+      topic,
+      instructions,
+      tags: tags ? [...tags] : [],
+      pinned,
     },
-    setSelectedThread: assign(({ event, context }) => {
-      const typedEvent = typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event);
-      const selectedThread = context.threadMap[typedEvent.id];
-      if (!selectedThread) {
-        // Thread not in threadMap (e.g. archived, or tab restored from storage).
-        // Reset view to defaults with the target id, for its detail view to fill.
-        return {
-          selectedThreadCode: undefined,
-          linkSave: null,
-          linkRefusal: null,
-          view: {
-            ...defaultThread,
-            id: typedEvent.id as ThreadEntity['id'],
-            shortCode: '' as const,
-            status: '',
-            timestamp: 0,
+  };
+}
+
+function applySettings(settings: ThreadsSettings) {
+  const chat = (settings as unknown as { chat?: AgentSettings })?.chat;
+  return {
+    settings,
+    availableTags: settings?.tags || [],
+    ...(chat ? extractChatSettings(chat) : {}),
+    recentViewArgs: settings ? recentArgs(settings) : null,
+  };
+}
+
+/** Settles one of this window's writes; increments `viewRefresh` when held/refused writes require fresh views. */
+function settleWrite(
+  data: Read<ThreadsData>,
+  ask: string,
+  outcome: { readonly ok: true } | { readonly ok: false; readonly failure: { readonly message: string } },
+) {
+  const writes = writeEnded(data.writes, ask, !outcome.ok);
+  const refreshed = writes.refreshes !== data.writes.refreshes;
+  const viewRefresh = refreshed ? data.viewRefresh + 1 : data.viewRefresh;
+  return {
+    writes,
+    ...(data.linkSave !== null && data.linkSave === ask
+      ? { linkSave: null, linkRefusal: outcome.ok ? null : outcome.failure.message }
+      : {}),
+    ...(refreshed ? { viewRefresh, tabViewKeys: makeTabViewKeys(data.tabs, viewRefresh) } : {}),
+  };
+}
+
+/** Drops a gone thread from open tabs and chat; defers next-tab open when called from `chat.updated` to avoid view cycle. */
+function dropThreadData(
+  data: Read<ThreadsData>,
+  threadId: string,
+  deferNextOpen: boolean,
+  send: (event: Read<ThreadsEvents>) => void,
+) {
+  const index = data.tabs.findIndex(t => t.id === threadId);
+  const tabs = data.tabs.filter(t => t.id !== threadId);
+  let activeTabId = data.activeTabId;
+  if (data.activeTabId === threadId) {
+    const nextTab = data.tabs[index + 1] ?? data.tabs[index - 1];
+    activeTabId = nextTab && nextTab.id !== threadId ? nextTab.id : '';
+  }
+  const tabGroups = cleanupAndPersistGroups(tabs, data.tabGroups);
+  const closingChat = data.currentThread?.id === threadId;
+  const nextCurrentThread = closingChat ? { ...defaultChatThread, messages: [] } : data.currentThread;
+  const shouldOpenNext = Boolean(activeTabId && activeTabId !== data.activeTabId);
+
+  let chatFollowups: Record<string, { event: ChatFollowupEvent }> = {};
+  let timerSeq = data.timerSeq;
+  if (shouldOpenNext) {
+    if (deferNextOpen) {
+      timerSeq += 1;
+      chatFollowups = { [`open:${activeTabId}:${timerSeq}`]: { event: { type: 'OPEN_THREAD_CHAT', threadId: activeTabId } } };
+    } else {
+      send({ type: 'OPEN_THREAD_CHAT', threadId: activeTabId });
+    }
+  }
+
+  return {
+    ...syncTabs(tabs, activeTabId, data.tabsRead, data.viewRefresh),
+    tabGroups,
+    ...(closingChat
+      ? {
+          chatThreadId: null,
+          ...syncMessages(data, [], data.detailMessageIds, nextCurrentThread),
+        }
+      : {}),
+    ...(deferNextOpen ? { chatFollowups, timerSeq } : {}),
+  };
+}
+
+/** Removes all timer entries belonging to `threadId` from `overrideTimers`. */
+function withoutOverrideTimer(
+  timers: Readonly<Record<string, { readonly threadId: string; readonly durationMs: number }>>,
+  threadId: string,
+): Record<string, { threadId: string; durationMs: number }> {
+  const next: Record<string, { threadId: string; durationMs: number }> = {};
+  for (const [k, v] of Object.entries(timers)) {
+    if (v.threadId !== threadId) next[k] = { threadId: v.threadId, durationMs: v.durationMs };
+  }
+  return next;
+}
+
+function openThreadTransition(
+  data: Read<ThreadsData>,
+  threadId: string,
+  restore: boolean | undefined,
+  isOpenChatAsk: boolean,
+  call: (name: 'opened', input: Read<ThreadsAsks['OPEN_THREAD_CHAT']['args']>) => void,
+) {
+  if (isOpenChatAsk) {
+    call('opened', { threadId, ...(restore && { restore }) });
+  }
+  const known = data.threadMap[threadId];
+  const label = known?.topic || data.tabs.find(t => t.id === threadId)?.label || `Thread ${known?.shortCode || ''}`.trim();
+  const tabs = data.tabs.some(t => t.id === threadId)
+    ? data.tabs
+    : [...data.tabs, { id: threadId, label, artifacts: [], ...(known?.pinned && { pinned: true }) }];
+
+  const switchingChat = data.currentThread?.id !== threadId;
+  const nextCurrentThread: AgentThreadData | null = switchingChat
+    ? {
+        ...defaultChatThread,
+        ...(known && { topic: known.topic, shortCode: known.shortCode, status: known.status }),
+        id: threadId as EARS.EntityId,
+        messages: [],
+      }
+    : (data.currentThread as AgentThreadData | null);
+
+  return {
+    at: 'dashboard' as const,
+    data: {
+      ...leaveDetailData(data),
+      navHistory: pushNavHistory(data.navHistory, 'dashboard'),
+      ...syncTabs(tabs, threadId, data.tabsRead, data.viewRefresh),
+      chatFollowups: {},
+      ...(switchingChat
+        ? {
+            chatThreadId: threadId,
+            chatLimit: MESSAGE_PAGE_SIZE,
+            messagePagination: { hasMore: false, isLoading: true },
+            openedThreadId: threadId,
+            // A message sought in another thread is no longer the one to bring into view
+            ...(data.focusMessage && data.focusMessage.threadId !== threadId ? { focusMessage: null } : {}),
+            ...syncMessages(data, [], data.detailThreadId === null ? [] : data.detailMessageIds, nextCurrentThread),
+          }
+        : {}),
+    },
+  };
+}
+
+function navigateHistory(
+  data: Read<ThreadsData>,
+  direction: 'back' | 'forward',
+  tell: (to: 'threads', event: { type: 'VIEW_THREAD'; threadId: string }) => void,
+) {
+  const canMove = direction === 'back' ? canGoBack(data.navHistory) : canGoForward(data.navHistory);
+  if (!canMove) return undefined;
+  const result = direction === 'back' ? goBack(data.navHistory) : goForward(data.navHistory);
+  if (!result) return undefined;
+
+  if (result.entry.startsWith('view:')) {
+    const threadId = result.entry.replace('view:', '');
+    const selectedThread = data.threadMap[threadId];
+    tell('threads', { type: 'VIEW_THREAD', threadId });
+    return {
+      at: 'view' as const,
+      data: {
+        navHistory: result.history,
+        detailThreadId: threadId,
+        view: (selectedThread
+          ? { ...data.view, ...selectedThread, id: threadId }
+          : { ...data.view, id: threadId }) as ThreadViewData,
+      },
+    };
+  }
+  const entry = result.entry;
+  const navData = { ...leaveDetailData(data), navHistory: result.history };
+  if (entry === 'list') return { at: 'list' as const, data: navData };
+  if (entry === 'kanban') return { at: 'kanban' as const, data: navData };
+  if (entry === 'dashboard') return { at: 'dashboard' as const, data: navData };
+  if (entry === 'create') return { at: 'create' as const, data: navData };
+  return undefined;
+}
+
+// ---- Declarative Chrome ----
+
+export const threadsChrome: SurfaceChrome<Value<ThreadsShape>> = {
+  default: { label: 'Threads', target: 'list' },
+  states: {
+    list: {
+      breadcrumb: { label: 'Threads', target: 'list' },
+    },
+    dashboard: {
+      breadcrumb: { label: 'Dashboard', target: 'dashboard' },
+    },
+    kanban: {
+      breadcrumb: { label: 'Board', target: 'kanban' },
+    },
+    create: {
+      breadcrumb: { label: 'New Thread', target: 'create' },
+    },
+    view: {
+      breadcrumb: ({ data }) => ({
+        label: data.view.topic || 'Untitled Thread',
+        target: 'view',
+      }),
+      menu: ({ data }) => {
+        if (!data.view?.id) return [];
+        return [
+          ...(data.view.pinned ? [{
+            label: 'Unpin Thread',
+            icon: Pin,
+            event: { type: 'UNPIN_THREAD' as const, threadId: data.view.id },
+          }] : [{
+            label: 'Pin Thread',
+            icon: Pin,
+            event: { type: 'PIN_THREAD' as const, threadId: data.view.id },
+          }]),
+          ...(data.view.archived ? [{
+            label: 'Unarchive Thread',
+            icon: Archive,
+            event: { type: 'UNARCHIVE_THREAD' as const, threadId: data.view.id },
+          }] : !data.view.pinned ? [{
+            label: 'Archive Thread',
+            icon: Archive,
+            event: { type: 'ARCHIVE_THREAD' as const, threadId: data.view.id },
+            confirm: `Archive thread "${data.view.topic || 'Untitled'}"? It will be hidden from all lists.`,
+          }] : []),
+          ...(!data.view.pinned ? [{
+            label: 'Delete Thread',
+            icon: Trash2,
+            event: { type: 'DELETE_THREAD' as const, threadId: data.view.id },
+            iconColor: 'text-red-400',
+            confirm: `Are you sure you want to delete thread "${data.view.topic || 'Untitled'}"? This will permanently delete all messages and other data associated.`,
+          }] : []),
+          {
+            label: 'Copy Id',
+            icon: Copy,
+            event: { type: 'APP_COPY_TO_CLIPBOARD' as const, text: data.view.id },
+            separator: true,
           },
-        };
-      }
-
-      const { id, shortCode, status, timestamp, topic, instructions, tags, pinned } = selectedThread;
-
-      return {
-        selectedThreadCode: shortCode,
-        linkSave: null,
-        linkRefusal: null,
-        view: {
-          ...defaultThread,
-          id, shortCode, status, timestamp, topic, instructions,
-          tags: tags as string[],
-          pinned,
-        },
-      };
-    }),
-    updateThreadData: assign(({ event, context }) => {
-      const typedEvent = typeOf('UPDATE_THREAD_FIELD', event);
-      const { key, value, state } = typedEvent;
-
-      return {
-        [state]: {
-          ...context[state],
-          [key]: value,
-        },
-      } as Pick<typeof context, typeof state>;
-    }),
-    updateThreadInThreads: assign(({ event, context }) => {
-      const typedEvent = typeOf('UPDATE_THREAD_FIELD', event);
-
-      const { messages: _messages, linkedThreads: _linkedThreads, ...rest } = context.view;
-      (rest as any)[typedEvent.key] = typedEvent.value as any;
-      const newThread = rest as ThreadListItem;
-      return {
-        threadMap: { ...context.threadMap, [context.view.id]: { ...context.threadMap[context.view.id], ...newThread } },
-      };
-    }),
-    updateCurrentThread: assign(({ event, context }) => {
-      const typedEvent = typeOf('UPDATE_THREAD_FIELD', event);
-      if (!context.currentThread || context.currentThread.id !== context.view.id) return {};
-      return {
-        currentThread: {
-          ...context.currentThread,
-          [typedEvent.key]: typedEvent.value,
-        },
-      };
-    }),
-    clearNewThreadFlag: assign(({ context, event }) => {
-      const clearId = typeOf('CLEAR_NEW_THREAD_FLAG', event).id;
-      return { ...patchThread(context, clearId, { isNew: false }), freshThreadIds: context.freshThreadIds.filter(fresh => fresh !== clearId) };
-    }),
-    updateThreadStatus: enqueueActions(({ context, event, enqueue }) => {
-      const typedEvent = typeOf('UPDATE_THREAD_STATUS', event);
-      const write = freshKey();
-      made.make(enqueue, 'statusWrite', write, {
-        threadId: typedEvent.id,
-        status: typedEvent.status,
-      });
-      enqueue.assign({ writes: writeSent(context.writes, write) });
-    }),
-    sendUpdateThreadField: enqueueActions(({ event, context, enqueue }) => {
-      const { key, value } = typeOf('UPDATE_THREAD_FIELD', event);
-      const write = freshKey();
-      made.make(enqueue, 'fieldWrite', write, {
-        threadId: context.view.id,
-        key,
-        value,
-      });
-      enqueue.assign({
-        writes: writeSent(context.writes, write),
-        ...(key === 'linkedThreads' && { linkSave: write, linkRefusal: null }),
-      });
-    }),
-    renameThread: enqueueActions(({ event, context, enqueue }) => {
-      const { threadId, topic } = typeOf('RENAME_THREAD', event);
-      const write = freshKey();
-      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'topic', value: topic });
-      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'topic', topic));
-    }),
-    /** The feature's settings: the ones the chat starts from, or the ones they were changed to */
-    setThreadsSettings: assign(({ event }) => {
-      const start = event.type === 'FEATURE_SETTINGS_UPDATED' ? undefined : typeOf('made.chatStart', event).outcome;
-      if (start && !start.ok) return {};
-      const settings = start ? start.value.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
-      const chat = (settings as any)?.chat as AgentSettings | undefined;
-      return {
-        settings,
-        availableTags: settings?.tags || [],
-        ...(chat ? extractChatSettings(chat) : {}),
-      };
-    }),
-    deleteThread: enqueueActions(({ context, event, enqueue }) => {
-      const { threadId } = typeOf('DELETE_THREAD', event);
-      const write = freshKey();
-      made.make(enqueue, 'deleteWrite', write, { threadId });
-      enqueue.assign({ writes: writeSent(context.writes, write) });
-    }),
-    archiveThread: enqueueActions(({ context, event, enqueue }) => {
-      const { threadId } = typeOf('ARCHIVE_THREAD', event);
-      const write = freshKey();
-      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'archived', value: true });
-      enqueue.assign({ writes: writeSent(context.writes, write) });
-    }),
-    unpinThread: enqueueActions(({ event, context, enqueue }) => {
-      const { threadId } = typeOf('UNPIN_THREAD', event);
-      const write = freshKey();
-      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'pinned', value: false });
-      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'pinned', false));
-    }),
-    pinThread: enqueueActions(({ event, context, enqueue }) => {
-      const { threadId } = typeOf('PIN_THREAD', event);
-      const write = freshKey();
-      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'pinned', value: true });
-      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'pinned', true));
-    }),
-    toggleViewArchive: assign(({ context }) => {
-      const next = { ...context, showArchived: !context.showArchived };
-      return { showArchived: next.showArchived, ...threadStore(next, context.lists) };
-    }),
-    unarchiveThread: enqueueActions(({ context, event, enqueue }) => {
-      const { threadId } = typeOf('UNARCHIVE_THREAD', event);
-      const write = freshKey();
-      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'archived', value: false });
-      enqueue.assign({ writes: writeSent(context.writes, write) });
-    }),
-    removeUnarchivedThread: assign(({ event, context }) => {
-      const { threadId } = typeOf('UNARCHIVE_THREAD', event);
-      return removeThread(context, threadId);
-    }),
-    removeArchivedThread: assign(({ event, context }) => {
-      const { threadId } = typeOf('ARCHIVE_THREAD', event);
-      const tabs = context.tabs.filter(t => t.id !== threadId);
-      const activeTabId = context.activeTabId === threadId
-        ? (tabs[tabs.length - 1]?.id ?? '')
-        : context.activeTabId;
-      return {
-        ...removeThread(context, threadId),
-        tabs,
-        activeTabId,
-      };
-    }),
-    persistListView: () => { try { storage.set('view-preference', 'list'); } catch {} },
-    persistKanbanView: () => { try { storage.set('view-preference', 'kanban'); } catch {} },
-    persistDashboardView: () => { try { storage.set('view-preference', 'dashboard'); } catch {} },
-    /* ── Threads Import actions ────────────────────────────── */
-    setImportingThreads: assign(({ context }) => ({
-      threadsImport: { ...context.threadsImport, status: 'importing' as const },
-    })),
-    sendImportThreads: enqueueActions(({ event, enqueue }) => {
-      made.make(enqueue, 'imported', freshKey(), { directory: typeOf('THREADS.IMPORT', event).directory });
-    }),
-    /** An import's answer is its status */
-    handleThreadsImportEnded: assign(({ event }) => {
-      const { outcome } = typeOf('made.imported', event)
-      return {
-        threadsImport: outcome.ok
-          ? { status: 'success' as const, errors: outcome.value.errors || [], importedCount: outcome.value.count }
-          : { status: 'error' as const, errors: outcome.failure.message.split('\n'), importedCount: 0 },
-      }
-    }),
-    resetImportThreadsStatus: assign({
-      threadsImport: { status: 'idle' as const, errors: [] as string[], importedCount: 0 },
-    }),
-
-    /* ── Threads Export actions ────────────────────────────── */
-    setExportingThreads: assign(({ context }) => ({
-      threadsExport: { ...context.threadsExport, status: 'exporting' as const },
-    })),
-    sendExportThreads: enqueueActions(({ event, enqueue }) => {
-      made.make(enqueue, 'exported', freshKey(), { directory: typeOf('THREADS.EXPORT', event).directory });
-    }),
-    /** An export's answer is its status */
-    handleThreadsExportEnded: assign(({ event }) => {
-      const { outcome } = typeOf('made.exported', event)
-      return {
-        threadsExport: outcome.ok
-          ? { status: 'success' as const, errors: [] as string[], filePath: outcome.value.filePath, threadCount: outcome.value.threadCount }
-          : { status: 'error' as const, errors: [outcome.failure.message], filePath: '', threadCount: 0 },
-      }
-    }),
-    resetExportThreadsStatus: assign({
-      threadsExport: { status: 'idle' as const, errors: [] as string[], filePath: '', threadCount: 0 },
-    }),
-
-    /* ── Filter actions ────────────────────────────────────── */
-    toggleFilterStatus: assign(({ context, event }) => {
-      const status = typeOf('TOGGLE_FILTER_STATUS', event).status;
-      const current = context.filters.statuses;
-      return {
-        filters: { ...context.filters, statuses: current.includes(status) ? current.filter(s => s !== status) : [...current, status] },
-      };
-    }),
-    toggleFilterTag: assign(({ context, event }) => {
-      const tag = typeOf('TOGGLE_FILTER_TAG', event).tag;
-      const current = context.filters.tags;
-      return {
-        filters: { ...context.filters, tags: current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag] },
-      };
-    }),
-    toggleFilterChatState: assign(({ context, event }) => {
-      const chatState = typeOf('TOGGLE_FILTER_CHAT_STATE', event).chatState;
-      const current = context.filters.chatStates;
-      return {
-        filters: { ...context.filters, chatStates: current.includes(chatState) ? current.filter(s => s !== chatState) : [...current, chatState] },
-      };
-    }),
-    setSearch: assign(({ context, event }) => ({
-      filters: { ...context.filters, search: typeOf('SET_SEARCH', event).keyword },
-    })),
-    clearFilters: assign(({ context }) => ({
-      filters: { statuses: [] as string[], tags: [] as string[], chatStates: [] as string[], search: '', showRootOnly: context.filters.showRootOnly },
-    })),
-
-    /* ── Selection & drag-drop actions ─────────────────────── */
-    selectThreadItems: assign(({ event }) => ({
-      selectedThreadIds: typeOf('SELECT_THREAD_ITEMS', event).itemIds,
-    })),
-    toggleRootOnlyFilter: assign(({ context }) => ({
-      filters: { ...context.filters, showRootOnly: !context.filters.showRootOnly },
-    })),
-    sendSetThreadParent: enqueueActions(({ context, event, enqueue }) => {
-      const { childIds, parentId } = typeOf('SET_THREAD_PARENT', event);
-      const write = freshKey();
-      made.make(enqueue, 'parentWrite', write, { childIds, parentId });
-      enqueue.assign({ writes: writeSent(context.writes, write) });
-    }),
-
-    // ---- Chat/agent actions ----
-    flashChatState: assign(({ context, event }) => {
-      const { threadId, stateId, durationMs } = typeOf('FLASH_CHAT_STATE', event);
-      const expiresAt = Date.now() + (durationMs ?? 3000);
-      return { chatStateOverrides: { ...context.chatStateOverrides, [threadId]: { id: stateId, expiresAt } } };
-    }),
-    setMode: assign(({ context, event }) => {
-      const newMode = typeOf('SET_MODE', event).mode;
-      const modeConfig = context.modes.find(m => m.name === newMode);
-
-      const updatedPhaseByModeName = { ...context.phaseByModeName, [context.mode]: context.phase };
-      const newPhase = modeConfig?.phases?.length
-        ? (newMode in updatedPhaseByModeName ? updatedPhaseByModeName[newMode] : modeConfig.phases[0].name)
-        : undefined;
-
-      return { mode: newMode, phase: newPhase, phaseByModeName: updatedPhaseByModeName };
-    }),
-    setPhase: assign(({ context, event }) => {
-      const newPhase = typeOf('SET_PHASE', event).phase;
-      return {
-        phase: newPhase,
-        phaseByModeName: { ...context.phaseByModeName, [context.mode]: newPhase }
-      };
-    }),
-    navigateToSecrets: () => {
-      untypedOpenSurface(HOST_SETTINGS, [
-        { type: 'TAB.SELECT', tab: 'general' },
-        { type: 'GENERAL_NAV.SELECT', item: 'secrets' }
-      ]);
-    },
-    sendMessage: enqueueActions(({ enqueue, context, event }) => {
-      const { text, references } = typeOf('SEND_MESSAGE', event);
-      made.make(enqueue, 'sent', freshKey(), {
-        text,
-        mode: context.mode,
-        phase: context.phase,
-        threadId: context.currentThread?.id,
-        ...(references && { references }),
-        ...(context.pendingThreadCwd && { cwdOverride: context.pendingThreadCwd }),
-        ...(context.pendingForceDirectoryPicker && { forceDirectoryPicker: true }),
-      });
-      if (context.pendingThreadCwd || context.pendingForceDirectoryPicker) {
-        enqueue.assign({ pendingThreadCwd: undefined, pendingForceDirectoryPicker: undefined });
-      }
-    }),
-    sendCommand: enqueueActions(({ enqueue, context, event }) => {
-      const { command, text, references } = typeOf('SEND_COMMAND', event);
-      made.make(enqueue, 'sentCommand', freshKey(), {
-        command,
-        text,
-        mode: context.mode,
-        phase: context.phase,
-        threadId: context.currentThread?.id,
-        ...(references && { references }),
-        ...(context.pendingThreadCwd && { cwdOverride: context.pendingThreadCwd }),
-      });
-      if (context.pendingThreadCwd) {
-        enqueue.assign({ pendingThreadCwd: undefined });
-      }
-    }),
-    clearThread: assign(({ context }) => {
-      const { mode, phase } = resolveDefaultModePhase(
-        context.chatSettings, context.modes, context.mode, context.phase,
-      );
-      return {
-        currentThread: { ...defaultChatThread, messages: [] },
-        chatMessageIds: [] as string[],
-        openedThreadId: null,
-        mode,
-        phase: phase ?? '',
-        phaseByModeName: { ...context.phaseByModeName, [mode]: phase },
-        pendingThreadCwd: undefined,
-        pendingForceDirectoryPicker: undefined,
-      };
-    }),
-    newThreadInProject: assign(({ context, event }) => {
-      const { directory } = typeOf('NEW_THREAD_IN_PROJECT', event);
-      const { mode, phase } = resolveDefaultModePhase(
-        context.chatSettings, context.modes, context.mode, context.phase,
-      );
-      return {
-        currentThread: { ...defaultChatThread, messages: [] },
-        chatMessageIds: [] as string[],
-        openedThreadId: null,
-        mode,
-        phase: phase ?? '',
-        phaseByModeName: { ...context.phaseByModeName, [mode]: phase },
-        pendingThreadCwd: directory,
-        pendingForceDirectoryPicker: undefined,
-      };
-    }),
-    newThreadNoProject: assign(({ context }) => {
-      const { mode, phase } = resolveDefaultModePhase(
-        context.chatSettings, context.modes, context.mode, context.phase,
-      );
-      return {
-        currentThread: { ...defaultChatThread, messages: [] },
-        chatMessageIds: [] as string[],
-        openedThreadId: null,
-        mode,
-        phase: phase ?? '',
-        phaseByModeName: { ...context.phaseByModeName, [mode]: phase },
-        pendingThreadCwd: undefined,
-        pendingForceDirectoryPicker: true,
-      };
-    }),
-    /**
-     * What the chat starts from, which the system answered the shell's start with: the settings, the mode, the tabs —
-     * the ones this window kept and the ones every window opens — and the thread to open
-     */
-    startChat: enqueueActions(({ enqueue, context, event, self }) => {
-      const { outcome } = typeOf('made.chatStart', event);
-      if (!outcome.ok) return;
-      const start: ChatStart = outcome.value;
-      const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
-      const visibleModes = extracted.modes.filter(m => !m.hidden);
-      const { mode, phase } = resolveDefaultModePhase(
-        extracted.chatSettings, extracted.modes, visibleModes[0]?.name ?? context.mode, visibleModes[0]?.phases?.[0]?.name,
-      );
-
-      // The tabs this window kept in its storage, after the ones every window opens; a thread gone since closes its
-      // tab when the tab's view says so
-      const backendTabs: Tab[] = start.tabs.map(tab => ({ id: tab.id, label: tab.label, artifacts: [], ...(tab.pinned && { pinned: true }) }));
-      const stored = loadTabsFromStorage();
-      const tabs: Tab[] = [...backendTabs];
-      for (const storedTab of stored?.tabs ?? []) {
-        const backend = tabs.find(t => t.id === storedTab.id);
-        if (backend) {
-          if (storedTab.groupId && !backend.groupId) backend.groupId = storedTab.groupId;
-        } else {
-          tabs.push({ id: storedTab.id, label: storedTab.label || 'Thread', artifacts: [], ...(storedTab.groupId && { groupId: storedTab.groupId }) });
-        }
-      }
-      const activeTabId = stored?.activeTabId && tabs.some(t => t.id === stored.activeTabId)
-        ? stored.activeTabId
-        : (start.currentThreadId ?? tabs[0]?.id ?? '');
-
-      enqueue('setThreadsSettings');
-      enqueue.assign({ tabs, activeTabId, tabGroups: loadThreadTabGroups(), mode, phase: phase ?? '' });
-      enqueue('followSettingsViews');
-      enqueue('tabsChanged');
-      const threadToLoad = activeTabId || start.currentThreadId;
-      if (threadToLoad) enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: threadToLoad, restore: true }));
-    }),
-    sendOpenThreadView: ({ self, event }) => {
-      const threadId = typeOf('VIEW_THREAD', event).threadId;
-      self.send({ type: 'SELECT_THREAD', id: threadId });
-    },
-    createChildThread: ({ self, event }) => {
-      const parentThreadId = typeOf('CREATE_CHILD_THREAD', event).parentThreadId;
-      self.send({ type: 'SHOW_CREATE_FORM_AS_CHILD', parentThreadId });
-    },
-    selectTab: assign(({ event }) => ({
-      activeTabId: typeOf('SELECT_TAB', event).tabId
-    })),
-    closeTab: enqueueActions(({ enqueue, context, event, self }) => {
-      const tabId = typeOf('CLOSE_TAB', event).tabId;
-      const tab = context.tabs.find(t => t.id === tabId);
-      if (!tab || tab.pinned) return;
-
-      const idx = context.tabs.findIndex(t => t.id === tabId);
-      const newTabs = context.tabs.filter(t => t.id !== tabId);
-
-      let newActiveTabId = context.activeTabId;
-      if (context.activeTabId === tabId) {
-        const nextTab = context.tabs[idx + 1] ?? context.tabs[idx - 1];
-        newActiveTabId = nextTab?.id ?? '';
-      }
-
-      enqueue(assign({ tabs: newTabs, activeTabId: newActiveTabId }));
-      if (context.activeTabId === tabId && newActiveTabId) {
-        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId }));
-      }
-    }),
-    closeActiveTab: enqueueActions(({ enqueue, context, self }) => {
-      const tabId = context.activeTabId;
-      if (!tabId) return;
-      const tab = context.tabs.find(t => t.id === tabId);
-      if (!tab || tab.pinned) return;
-
-      const idx = context.tabs.findIndex(t => t.id === tabId);
-      const newTabs = context.tabs.filter(t => t.id !== tabId);
-      const nextTab = context.tabs[idx + 1] ?? context.tabs[idx - 1];
-      const newActiveTabId = nextTab?.id ?? '';
-
-      enqueue(assign({ tabs: newTabs, activeTabId: newActiveTabId }));
-      if (newActiveTabId) {
-        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId }));
-      }
-    }),
-    persistTabs: ({ context }) => saveTabsToStorage(context.tabs, context.activeTabId),
-    /** The open tabs changed: kept in this window's storage, and each open one's view followed */
-    tabsChanged: enqueueActions(({ enqueue }) => {
-      enqueue('persistTabs');
-      enqueue('followTabs');
-    }),
-    persistTabGroups: ({ context }) => saveThreadTabGroups(context.tabGroups),
-
-    // ---- Tab reorder & group actions ----
-    reorderTabs: assign(({ context, event }) => {
-      const { fromIndex, toIndex } = typeOf('REORDER_TABS', event);
-      const tabs = [...context.tabs];
-      const [moved] = tabs.splice(fromIndex, 1);
-      tabs.splice(toIndex, 0, moved);
-      return { tabs };
-    }),
-    pinTabAt: assign(({ context, event }) => {
-      const { tabId, targetTabId, side } = typeOf('PIN_TAB_AT', event);
-      const tabs = context.tabs.map(t => t.id === tabId ? { ...t, pinned: true, groupId: undefined } : t);
-      const sourceIdx = tabs.findIndex(t => t.id === tabId);
-      const [moved] = tabs.splice(sourceIdx, 1);
-      const targetIdx = tabs.findIndex(t => t.id === targetTabId);
-      const insertIdx = side === 'left' ? targetIdx : targetIdx + 1;
-      tabs.splice(insertIdx, 0, moved);
-      return { tabs };
-    }),
-    unpinTabAt: assign(({ context, event }) => {
-      const { tabId, targetTabId, side } = typeOf('UNPIN_TAB_AT', event);
-      const tabs = context.tabs.map(t => t.id === tabId ? { ...t, pinned: false, groupId: undefined } : t);
-      const sourceIdx = tabs.findIndex(t => t.id === tabId);
-      const [moved] = tabs.splice(sourceIdx, 1);
-      const targetIdx = tabs.findIndex(t => t.id === targetTabId);
-      const insertIdx = side === 'left' ? targetIdx : targetIdx + 1;
-      tabs.splice(insertIdx, 0, moved);
-      return { tabs };
-    }),
-    createTabGroup: assign(({ context, event }) => {
-      const { tabIds } = typeOf('CREATE_TAB_GROUP', event);
-      const firstTab = tabIds?.[0] ? context.tabs.find(t => t.id === tabIds[0]) : undefined;
-      const isPinned = firstTab?.pinned || false;
-      const color = getNextAvailableColor(context.tabGroups, isPinned);
-      const newGroup: ThreadTabGroup = {
-        id: crypto.randomUUID(),
-        name: 'New Group',
-        color,
-        isCollapsed: false,
-        order: context.tabGroups.length,
-        isPinned: isPinned || undefined,
-      };
-      const tabs = tabIds
-        ? context.tabs.map(t => tabIds.includes(t.id) ? { ...t, groupId: newGroup.id } : t)
-        : context.tabs;
-      return { tabGroups: [...context.tabGroups, newGroup], tabs };
-    }),
-    renameTabGroup: assign(({ context, event }) => {
-      const { groupId, name } = typeOf('RENAME_TAB_GROUP', event);
-      return {
-        tabGroups: context.tabGroups.map(g => g.id === groupId ? { ...g, name } : g),
-      };
-    }),
-    changeTabGroupColor: assign(({ context, event }) => {
-      const { groupId, color } = typeOf('CHANGE_TAB_GROUP_COLOR', event);
-      return {
-        tabGroups: context.tabGroups.map(g => g.id === groupId ? { ...g, color } : g),
-      };
-    }),
-    deleteTabGroup: assign(({ context, event }) => {
-      const { groupId } = typeOf('DELETE_TAB_GROUP', event);
-      return {
-        tabGroups: context.tabGroups.filter(g => g.id !== groupId),
-        tabs: context.tabs.map(t => t.groupId === groupId ? { ...t, groupId: undefined } : t),
-      };
-    }),
-    toggleTabGroupCollapse: assign(({ context, event }) => {
-      const { groupId } = typeOf('TOGGLE_TAB_GROUP_COLLAPSE', event);
-      return {
-        tabGroups: context.tabGroups.map(g => g.id === groupId ? { ...g, isCollapsed: !g.isCollapsed } : g),
-      };
-    }),
-    addTabToGroup: assign(({ context, event }) => {
-      const { tabId, groupId } = typeOf('ADD_TAB_TO_GROUP', event);
-      const group = context.tabGroups.find(g => g.id === groupId);
-      if (!group) return {};
-      return {
-        tabs: context.tabs.map(t => t.id === tabId ? { ...t, groupId, pinned: group.isPinned || false } : t),
-      };
-    }),
-    addTabToGroupAt: assign(({ context, event }) => {
-      const { tabId, groupId, targetTabId, side } = typeOf('ADD_TAB_TO_GROUP_AT', event);
-      const group = context.tabGroups.find(g => g.id === groupId);
-      if (!group) return {};
-      const tabs = context.tabs.map(t => t.id === tabId ? { ...t, groupId, pinned: group.isPinned || false } : t);
-      const sourceIdx = tabs.findIndex(t => t.id === tabId);
-      const [moved] = tabs.splice(sourceIdx, 1);
-      const targetIdx = tabs.findIndex(t => t.id === targetTabId);
-      const insertIdx = side === 'left' ? targetIdx : targetIdx + 1;
-      tabs.splice(insertIdx, 0, moved);
-      return { tabs };
-    }),
-    removeTabFromGroup: assign(({ context, event }) => {
-      const { tabId } = typeOf('REMOVE_TAB_FROM_GROUP', event);
-      return {
-        tabs: context.tabs.map(t => t.id === tabId ? { ...t, groupId: undefined } : t),
-      };
-    }),
-    ungroupAllInGroup: assign(({ context, event }) => {
-      const { groupId } = typeOf('UNGROUP_ALL_IN_GROUP', event);
-      return {
-        tabGroups: context.tabGroups.filter(g => g.id !== groupId),
-        tabs: context.tabs.map(t => t.groupId === groupId ? { ...t, groupId: undefined } : t),
-      };
-    }),
-    closeAllInGroup: enqueueActions(({ enqueue, context, event, self }) => {
-      const { groupId } = typeOf('CLOSE_ALL_IN_GROUP', event);
-      const tabsInGroup = context.tabs.filter(t => t.groupId === groupId);
-      const remainingTabs = context.tabs.filter(t => t.groupId !== groupId);
-      const needNewActive = tabsInGroup.some(t => t.id === context.activeTabId);
-      const newActiveTabId = needNewActive
-        ? (remainingTabs[remainingTabs.length - 1]?.id ?? '')
-        : context.activeTabId;
-
-      enqueue(assign({
-        tabs: remainingTabs,
-        activeTabId: newActiveTabId,
-        tabGroups: context.tabGroups.filter(g => g.id !== groupId),
-      }));
-
-      if (needNewActive && newActiveTabId) {
-        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId }));
-      }
-    }),
-    pinTabGroup: assign(({ context, event }) => {
-      const { groupId } = typeOf('PIN_TAB_GROUP', event);
-      return {
-        tabGroups: context.tabGroups.map(g => g.id === groupId ? { ...g, isPinned: true } : g),
-        tabs: context.tabs.map(t => t.groupId === groupId ? { ...t, pinned: true } : t),
-      };
-    }),
-    unpinTabGroup: assign(({ context, event }) => {
-      const { groupId } = typeOf('UNPIN_TAB_GROUP', event);
-      return {
-        tabGroups: context.tabGroups.map(g => g.id === groupId ? { ...g, isPinned: undefined } : g),
-        tabs: context.tabs.map(t => t.groupId === groupId ? { ...t, pinned: false } : t),
-      };
-    }),
-    cleanupEmptyGroups: assign(({ context }) => {
-      const tabGroupIds = new Set(context.tabs.map(t => t.groupId).filter(Boolean));
-      const tabGroups = context.tabGroups.filter(g => tabGroupIds.has(g.id));
-      return { tabGroups };
-    }),
-
-    selectArtifact: assign(({ context, event }) => {
-      const artifactId = typeOf('SELECT_ARTIFACT', event).artifactId;
-      const tabs = context.tabs.map(tab =>
-        tab.id === context.activeTabId ? { ...tab, selectedArtifactId: artifactId } : tab
-      );
-      return { tabs };
-    }),
-    handleHotkey: createHotkeyProcessor({
-      quickPrompts: 'TOGGLE_QUICK_PROMPTS',
-      closeTab: 'CLOSE_ACTIVE_TAB',
-    }),
-    openQuickPromptsAtCursor: assign(() => ({
-      quickPromptCursor: { x: mouseX, y: mouseY },
-    })),
-    closeQuickPrompts: assign({ quickPromptCursor: null }),
-    respondToBlockInteraction: ({ context, event }) => {
-      const { messageId, response } = typeOf('RESPOND_TO_BLOCK_INTERACTION', event);
-
-      if (!context.currentThread?.id) {
-        console.error('Cannot respond to block interaction: no current thread');
-        return;
-      }
-
-      tell(id, {
-        type: 'INTERACTIVE_MSG_RESPONSE',
-        messageId,
-        threadId: context.currentThread.id,
-        response,
-      });
-    },
-    dismissMessage: assign(({ context, event }) => {
-      const { messageId } = typeOf('DISMISS_MESSAGE', event);
-      const next = { ...context, chatMessageIds: context.chatMessageIds.filter(listed => listed !== messageId) };
-      return { chatMessageIds: next.chatMessageIds, ...composedMessages(next) };
-    }),
-    /** The chat's view asks for a page more of the open thread's messages */
-    loadMoreMessages: enqueueActions(({ context, enqueue }) => {
-      const { hasMore, isLoading } = context.messagePagination;
-      if (!context.currentThread?.id || !hasMore || isLoading) return;
-      enqueue.assign({ chatLimit: context.chatLimit + MESSAGE_PAGE_SIZE, messagePagination: { hasMore, isLoading: true } });
-      enqueue('followChat');
-    }),
-    /** The search box's query: its view follows it, and an empty box follows none */
-    searchMessages: enqueueActions(({ enqueue, event }) => {
-      const query = typeOf('SEARCH_MESSAGES', event).query.trim();
-      enqueue.stopChild(viewChild.search);
-      enqueue.assign({ messageSearch: { query, results: [], searching: query !== '' } });
-      if (query) enqueue.spawnChild('messageSearchView', { id: viewChild.search, input: { query } });
-    }),
-    /** The results for the query in the box, and for no query it replaced */
-    readMessageSearch: assign(({ context, event }) => {
-      const { query, results } = typeOf('SEARCH.READ', event);
-      if (query !== context.messageSearch.query) return {};
-      return { messageSearch: { query, results, searching: false } };
-    }),
-    /** A search that failed ends as finding nothing, rather than searching on */
-    endMessageSearch: assign(({ context }) => ({ messageSearch: { ...context.messageSearch, searching: false } })),
-    /**
-     * Opens a message's thread and brings the message into view. The thread already open is sought at once; another is
-     * sought as its chat view first answers
-     */
-    openMessage: enqueueActions(({ context, enqueue, event, self }) => {
-      const { threadId, messageId } = typeOf('OPEN_MESSAGE', event);
-      enqueue.assign({ focusMessage: { threadId, messageId } });
-      enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId }));
-      if (context.currentThread?.id === threadId) enqueue('seekFocusedMessage');
-    }),
-    /**
-     * A focused message the chat's page doesn't list is an older one: the page grows a step at a time until it lists it
-     * or the thread has no more. A read of another thread, one still loading, or one held behind this window's writes
-     * leaves the seek for the next read
-     */
-    seekFocusedMessage: enqueueActions(({ context, enqueue }) => {
-      const wanted = context.focusMessage;
-      if (!wanted || context.currentThread?.id !== wanted.threadId || context.messagePagination.isLoading) return;
-      if (context.chatMessageIds.includes(wanted.messageId)) return;
-      if (context.messagePagination.hasMore) enqueue('loadMoreMessages');
-      else enqueue.assign({ focusMessage: null });
-    }),
-    forkThread: enqueueActions(({ event, enqueue }) => {
-      const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
-      made.make(enqueue, 'forked', freshKey(), { messageId, threadId, threadTopic });
-    }),
-    revertThread: ({ event }) => {
-      const { messageId, threadId, restoreFiles, userCliUuid } = typeOf('REVERT_THREAD', event);
-      tell(id, {
-        type: 'REVERT_THREAD',
-        messageId,
-        threadId,
-        ...(restoreFiles !== undefined && { restoreFiles }),
-        ...(userCliUuid !== undefined && { userCliUuid }),
-      });
-    },
-    summarizeThread: ({ event }) => {
-      const { messageId, threadId } = typeOf('SUMMARIZE_THREAD', event);
-      tell(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
-    },
-    pauseTurn: ({ event }) => {
-      const { threadId } = typeOf('PAUSE_TURN', event);
-      tell(id, { type: 'PAUSE_TURN', threadId });
-    },
-    unqueueMessage: ({ event }) => {
-      const { threadId, messageId } = typeOf('UNQUEUE_MESSAGE', event);
-      tell(id, { type: 'FORWARD_BRAIN_EVENT', eventType: 'user.thread.unqueue', payload: { threadId, messageId } });
-    },
-    persistDismissMessage: ({ event }) => {
-      const { messageId } = typeOf('DISMISS_MESSAGE', event);
-      tell(id, { type: 'DELETE_MESSAGE', messageId });
+        ];
+      },
     },
   },
-  guards: { entityIs: entityIs<Contract['opens']>,
-    targetIs,
-    quickPromptsOpen: ({ context }) => context.quickPromptCursor !== null,
-    /** A read saying a thread this window shows is gone — and nothing of this window's is unanswered that a result was held behind */
-    detailGone: ({ context, event }) => event.type === 'DETAIL.READ' && event.id === context.view.id && event.detail === null && !writing(context.writes),
-    chatGone: ({ context, event }) => event.type === 'CHAT.READ' && event.threadId === context.currentThread?.id && event.chat === null && !writing(context.writes),
-    tabGone: ({ event }) => event.type === 'TAB.READ' && event.tab === null,
-    /** Whether the thread this window asked to open was gone */
-    openedGone: ({ event }) => goneOnOpen(event) !== undefined,
-  }
-}).createMachine({
-  id,
-  initial: getInitialView(),
-  // At the root, so it runs for exactly as long as this surface does and its cleanup is what stopping it runs
-  invoke: { src: 'pointerTracker', id: 'pointerTracker' },
-  context: () => ({
+};
+
+// ---- State Machine ----
+
+const threadsState = state<ThreadsShape, ThreadsEvents>()({
+  initial: 'list',
+  data: {
     // Thread management (normalized)
-    threadMap: {} as Record<string, ThreadListItem>,
-    threadIds: [] as string[],
+    threadMap: {},
+    threadIds: [],
     selectedThreadIds: [],
     selectedThreadCode: undefined,
     view: {
@@ -1612,14 +873,15 @@ const threadsState = setup({
     settings: null,
     showArchived: false,
     filters: { statuses: [], tags: [], chatStates: [], search: '', showRootOnly: true },
-    threadsImport: { status: 'idle' as const, errors: [], importedCount: 0 },
-    threadsExport: { status: 'idle' as const, errors: [], filePath: '', threadCount: 0 },
+    threadsImport: { status: 'idle', errors: [], importedCount: 0 },
+    threadsExport: { status: 'idle', errors: [], filePath: '', threadCount: 0 },
     // Chat/agent
     currentThread: defaultChatThread,
-    recentThreadIds: [] as string[],
-    messageInput: "",
-    chatStates: {} as Record<string, ChatState>,
-    chatStateOverrides: {} as Record<string, { id: string; expiresAt: number }>,
+    recentThreadIds: [],
+    messageInput: '',
+    pendingActionId: undefined,
+    chatStates: {},
+    chatStateOverrides: {},
     tabs: [],
     activeTabId: '',
     tabGroups: [],
@@ -1630,7 +892,9 @@ const threadsState = setup({
     hotkeys: {},
     chatSettings: { modes: [], hotkeys: {} },
     quickPromptCursor: null,
-    navHistory: createNavHistory(getInitialView()),
+    pendingThreadCwd: undefined,
+    pendingForceDirectoryPicker: undefined,
+    navHistory: createNavHistory('list'),
     messagePagination: { hasMore: false, isLoading: false },
     sidebarArchivedThreads: [],
     messageSearch: { query: '', results: [], searching: false },
@@ -1647,430 +911,1234 @@ const threadsState = setup({
     tabsRead: [],
     openedThreadId: null,
     freshThreadIds: [],
-    making: made.none(),
     writes: viewWrites(),
     linkSave: null,
     linkRefusal: null,
     sendFailures: [],
+    // View & timer orchestration
+    started: false,
+    viewRefresh: 0,
+    recentViewArgs: null,
+    detailThreadId: null,
+    chatThreadId: null,
+    tabViewKeys: [],
+    searchQuery: '',
+    overrideTimers: {},
+    timerSeq: 0,
+    chatFollowups: {},
+  },
+  run: () => {
+    const initial = getInitialView();
+    if (initial !== 'list') {
+      return { at: initial, data: { navHistory: createNavHistory(initial) } };
+    }
+  },
+  // Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
+  listen: () => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    const follow = (event: MouseEvent) => { mouseX = event.clientX; mouseY = event.clientY; };
+    window.addEventListener('mousemove', follow, { passive: true });
+    return () => window.removeEventListener('mousemove', follow);
+  },
+  starts: (start) => ({
+    newThreadTimers: start(newThreadFlagTimerState, {
+      each: 'freshThreadIds',
+      given: (threadId) => ({ threadId }),
+    }),
+    overrideTimers: start(chatStateOverrideTimerState, {
+      each: 'overrideTimers',
+      given: (key, data) => {
+        const entry = data.overrideTimers[key];
+        return { threadId: entry?.threadId ?? key, durationMs: entry?.durationMs ?? 3000 };
+      },
+    }),
+    chatFollowups: start(chatFollowupState, {
+      each: 'chatFollowups',
+      given: (key, data) => ({ event: data.chatFollowups[key]!.event }),
+    }),
+  }),
+  follows: (follow) => ({
+    list: follow('threads', 'list', {
+      from: ['started', 'viewRefresh'],
+      args: ({ started }) => (started ? {} : false),
+      updated: (update, { data }) => {
+        if (!update.ok) return;
+        const { writes, apply } = viewRead(data.writes);
+        if (!apply) return { data: { writes } };
+        return {
+          data: {
+            writes,
+            ...threadStore(data.freshThreadIds, data.showArchived, {
+              list: update.value as ThreadExtended[],
+              recent: [...data.lists.recent],
+              archived: [...data.lists.archived],
+            }),
+          },
+        };
+      },
+    }),
+    archived: follow('threads', 'archived', {
+      from: ['recentViewArgs', 'viewRefresh'],
+      args: ({ recentViewArgs }) => (recentViewArgs ? { sortOrder: recentViewArgs.sortOrder } : false),
+      updated: (update, { data }) => {
+        if (!update.ok) return;
+        const { writes, apply } = viewRead(data.writes);
+        if (!apply) return { data: { writes } };
+        return {
+          data: {
+            writes,
+            ...threadStore(data.freshThreadIds, data.showArchived, {
+              list: [...data.lists.list],
+              recent: [...data.lists.recent],
+              archived: update.value as Partial<ThreadEntity>[],
+            }),
+          },
+        };
+      },
+    }),
+    recent: follow('threads', 'recent', {
+      from: ['recentViewArgs', 'viewRefresh'],
+      args: ({ recentViewArgs }) => (recentViewArgs ? { limit: recentViewArgs.limit, sortOrder: recentViewArgs.sortOrder } : false),
+      updated: (update, { data }) => {
+        if (!update.ok) return;
+        const { writes, apply } = viewRead(data.writes);
+        if (!apply) return { data: { writes } };
+        return {
+          data: {
+            writes,
+            ...threadStore(data.freshThreadIds, data.showArchived, {
+              list: [...data.lists.list],
+              recent: update.value as Partial<ThreadEntity>[],
+              archived: [...data.lists.archived],
+            }),
+          },
+        };
+      },
+    }),
+    chat: follow('threads', 'chat', {
+      from: ['chatThreadId', 'chatLimit', 'viewRefresh'],
+      args: ({ chatThreadId, chatLimit }) => (chatThreadId ? { threadId: chatThreadId, limit: chatLimit } : false),
+      updated: (update, { data, send }) => {
+        if (!update.ok) return;
+        const threadId = data.chatThreadId;
+        if (!threadId || threadId !== data.currentThread?.id) return;
+        const chat = update.value as ChatPage | null;
+        if (chat === null) {
+          if (writing(data.writes)) return;
+          return { data: dropThreadData(data, threadId, true, send) };
+        }
+        const { writes, apply } = viewRead(data.writes);
+        if (!apply) return { data: { writes } };
+        const { messageIds, hasMore, ...header } = chat;
+        const nextCurrentThread: AgentThreadData = { ...data.currentThread, ...header };
+        const nextChatIds = messageIds as string[];
+
+        // The thread this window just opened takes its forced mode once, as it opens
+        let modePatch: Partial<ThreadsData> = {};
+        if (data.openedThreadId === threadId) {
+          const forcedMode = header.forcedMode;
+          if (!forcedMode) {
+            modePatch = { openedThreadId: null };
+          } else {
+            const modeConfig = data.modes.find(m => m.name === forcedMode);
+            const phase = modeConfig?.phases?.length
+              ? (forcedMode in data.phaseByModeName ? data.phaseByModeName[forcedMode] : modeConfig.phases[0].name)
+              : undefined;
+            modePatch = { openedThreadId: null, mode: forcedMode, phase: phase ?? '' };
+          }
+        }
+
+        // Seek focused message: if not yet in this page, schedule next page in a fresh step (or give up if no more)
+        let seekPatch: Partial<ThreadsData> = {};
+        const wanted = data.focusMessage;
+        if (wanted && wanted.threadId === threadId && !nextChatIds.includes(wanted.messageId)) {
+          if (hasMore) {
+            const seq = data.timerSeq + 1;
+            seekPatch = {
+              timerSeq: seq,
+              chatFollowups: { [`seek:${threadId}:${data.chatLimit}:${seq}`]: { event: { type: 'LOAD_MORE_MESSAGES' } } },
+            };
+          } else {
+            seekPatch = { focusMessage: null };
+          }
+        }
+
+        return {
+          data: {
+            writes,
+            messagePagination: { hasMore, isLoading: false },
+            chatStates: { ...data.chatStates, [threadId]: ((header.chatState as ChatState | undefined) ?? 'idle') },
+            ...modePatch,
+            ...syncMessages(data, nextChatIds, data.detailMessageIds, nextCurrentThread),
+            ...seekPatch,
+          },
+        };
+      },
+    }),
+    tabs: follow('threads', 'tab', {
+      each: 'tabViewKeys',
+      args: (key) => ({ threadId: threadIdFromTabKey(key) }),
+      updated: (update, { key, data, send }) => {
+        if (!update.ok) return;
+        const threadId = threadIdFromTabKey(key);
+        const tab = update.value as ThreadTabView | null;
+        if (tab === null) {
+          if (writing(data.writes)) return;
+          return { data: dropThreadData(data, threadId, false, send) };
+        }
+        if (!data.tabs.some(t => t.id === threadId)) return;
+        const { writes, apply } = viewRead(data.writes);
+        if (!apply) return { data: { writes } };
+        const firstRead = !data.tabsRead.includes(threadId);
+        const tabs = data.tabs.map((existing) => {
+          if (existing.id !== threadId) return existing;
+          const known = new Set(existing.artifacts.map(a => a.id));
+          // An artifact added since the tab was last read is the one to show; otherwise what was selected stays
+          const added = firstRead ? undefined : tab.artifacts.find(a => !known.has(a.id));
+          const kept = tab.artifacts.some(a => a.id === existing.selectedArtifactId) ? existing.selectedArtifactId : tab.artifacts[0]?.id;
+          return {
+            ...existing,
+            label: tab.topic || existing.label,
+            artifacts: tab.artifacts as Tab['artifacts'],
+            selectedArtifactId: added?.id ?? kept,
+            pinned: tab.pinned ?? false,
+          };
+        });
+        saveTabsToStorage(tabs, data.activeTabId);
+        return {
+          data: {
+            writes,
+            tabs,
+            tabsRead: firstRead ? [...data.tabsRead, threadId] : [...data.tabsRead],
+            ...(data.currentThread?.id === threadId
+              ? { currentThread: { ...data.currentThread, artifacts: tab.artifacts as unknown as AgentThreadData['artifacts'] } }
+              : {}),
+          },
+        };
+      },
+    }),
+    messages: follow('threads', 'message', {
+      each: 'messageViews',
+      args: (messageId) => ({ id: messageId }),
+      updated: (update, { key: messageId, data }) => {
+        if (!update.ok) return;
+        if (!data.messageViews.includes(messageId)) return;
+        const message = update.value as MessageEntity | null;
+        const { [messageId]: _gone, ...rest } = data.messageContents;
+        // A durable write caught the row up to the run, so the run has nothing left to add.
+        const run = data.messageStreams[messageId];
+        const caughtUp = runCaughtUp(message?.text, run);
+        const { [messageId]: _spliced, ...streams } = data.messageStreams;
+        const blockRun = data.messageBlockStreams[messageId];
+        const blockCaughtUp = blockRunCaughtUp(message?.blocks, blockRun);
+        const { [messageId]: _splicedBlock, ...blockStreams } = data.messageBlockStreams;
+        const messageContents = message ? { ...rest, [messageId]: message } : rest;
+        const messageStreams = caughtUp || !message ? streams : data.messageStreams;
+        const messageBlockStreams = blockCaughtUp || !message ? blockStreams : data.messageBlockStreams;
+        return {
+          data: {
+            messageContents,
+            messageStreams,
+            messageBlockStreams,
+            ...composedMessages(
+              data.currentThread,
+              data.view,
+              data.chatMessageIds,
+              data.detailMessageIds,
+              messageContents,
+              messageStreams,
+              messageBlockStreams,
+            ),
+          },
+        };
+      },
+    }),
+    messageSearch: follow('threads', 'messageSearch', {
+      from: ['searchQuery'],
+      args: ({ searchQuery }) => (searchQuery ? { query: searchQuery } : false),
+      updated: (update, { data }) => {
+        if (!update.ok) {
+          return { data: { messageSearch: { ...data.messageSearch, searching: false } } };
+        }
+        return {
+          data: {
+            messageSearch: {
+              query: data.searchQuery,
+              results: update.value as MessageSearchResult[],
+              searching: false,
+            },
+          },
+        };
+      },
+    }),
+  }),
+  calls: ({ one, each, many }) => ({
+    chatStart: one('threads', 'GET_CHAT_START', {
+      done: (outcome, { data, send }) => {
+        if (!outcome.ok) return;
+        const start: ChatStart = outcome.value;
+        const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
+        const visibleModes = extracted.modes.filter(m => !m.hidden);
+        const { mode, phase } = resolveDefaultModePhase(
+          extracted.chatSettings,
+          extracted.modes,
+          visibleModes[0]?.name ?? data.mode,
+          visibleModes[0]?.phases?.[0]?.name,
+        );
+
+        // The tabs this window kept in its storage, after the ones every window opens; a thread gone since closes its
+        // tab when the tab's view says so
+        const backendTabs: Tab[] = start.tabs.map(tab => ({ id: tab.id, label: tab.label, artifacts: [], ...(tab.pinned && { pinned: true }) }));
+        const stored = loadTabsFromStorage();
+        const tabs: Tab[] = [...backendTabs];
+        for (const storedTab of stored?.tabs ?? []) {
+          const backend = tabs.find(t => t.id === storedTab.id);
+          if (backend) {
+            if (storedTab.groupId && !backend.groupId) backend.groupId = storedTab.groupId;
+          } else {
+            tabs.push({ id: storedTab.id, label: storedTab.label || 'Thread', artifacts: [], ...(storedTab.groupId && { groupId: storedTab.groupId }) });
+          }
+        }
+        const activeTabId = stored?.activeTabId && tabs.some(t => t.id === stored.activeTabId)
+          ? stored.activeTabId
+          : (start.currentThreadId ?? tabs[0]?.id ?? '');
+
+        const threadToLoad = activeTabId || start.currentThreadId;
+        if (threadToLoad) send({ type: 'OPEN_THREAD_CHAT', threadId: threadToLoad, restore: true });
+
+        return {
+          data: {
+            ...applySettings(start.settings),
+            ...syncTabs(tabs, activeTabId, data.tabsRead, data.viewRefresh),
+            tabGroups: loadThreadTabGroups(),
+            mode,
+            phase: phase ?? '',
+          },
+        };
+      },
+    }),
+    created: each('threads', 'CREATE_THREAD', {
+      args: (_key, input) => input,
+      done: (outcome, { key, data }) => {
+        const settled = settleWrite(data, key, outcome);
+        if (!outcome.ok) return { data: settled };
+        const freshThreadIds = data.freshThreadIds.includes(outcome.value.id)
+          ? [...data.freshThreadIds]
+          : [...data.freshThreadIds, outcome.value.id];
+        return {
+          data: {
+            ...settled,
+            freshThreadIds,
+            create: { ...defaultThread },
+            ...threadStore(freshThreadIds, data.showArchived, {
+              list: [...data.lists.list],
+              recent: [...data.lists.recent],
+              archived: [...data.lists.archived],
+            }),
+          },
+        };
+      },
+    }),
+    opened: many('threads', 'OPEN_THREAD_CHAT', {
+      done: (outcome, { data, send }) => {
+        if (!outcome.ok && outcome.failure.kind === 'not-found') {
+          return { data: dropThreadData(data, outcome.failure.threadId, false, send) };
+        }
+      },
+    }),
+    sent: many('threads', 'USER_MSG', {
+      done: (outcome, { data, send }) => {
+        if (!outcome.ok) {
+          return { data: { sendFailures: [...data.sendFailures, { message: outcome.failure.message }] } };
+        }
+        if (outcome.value.started) {
+          send({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
+        }
+      },
+    }),
+    sentCommand: many('threads', 'USER_COMMAND', {
+      done: (outcome, { data, send }) => {
+        if (!outcome.ok) {
+          return { data: { sendFailures: [...data.sendFailures, { message: outcome.failure.message }] } };
+        }
+        if (outcome.value.started) {
+          send({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
+        }
+      },
+    }),
+    forked: many('threads', 'FORK_THREAD', {
+      done: (outcome, { data, send }) => {
+        if (!outcome.ok) {
+          return { data: { sendFailures: [...data.sendFailures, { message: outcome.failure.message }] } };
+        }
+        send({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
+      },
+    }),
+    imported: many('threads', 'IMPORT_THREADS', {
+      done: (outcome) => ({
+        data: {
+          threadsImport: outcome.ok
+            ? { status: 'success' as const, errors: outcome.value.errors || [], importedCount: outcome.value.count }
+            : { status: 'error' as const, errors: outcome.failure.message.split('\n'), importedCount: 0 },
+        },
+      }),
+    }),
+    exported: many('threads', 'EXPORT_THREADS', {
+      done: (outcome) => ({
+        data: {
+          threadsExport: outcome.ok
+            ? { status: 'success' as const, errors: [], filePath: outcome.value.filePath, threadCount: outcome.value.threadCount }
+            : { status: 'error' as const, errors: [outcome.failure.message], filePath: '', threadCount: 0 },
+        },
+      }),
+    }),
+    statusWrite: each('threads', 'UPDATE_THREAD_STATUS', {
+      args: (_key, input) => input,
+      done: (outcome, { key, data }) => ({ data: settleWrite(data, key, outcome) }),
+    }),
+    fieldWrite: each('threads', 'UPDATE_THREAD_FIELD', {
+      args: (_key, input) => input,
+      done: (outcome, { key, data }) => ({ data: settleWrite(data, key, outcome) }),
+    }),
+    deleteWrite: each('threads', 'DELETE_THREAD', {
+      args: (_key, input) => input,
+      done: (outcome, { key, data }) => ({ data: settleWrite(data, key, outcome) }),
+    }),
+    parentWrite: each('threads', 'SET_THREAD_PARENT', {
+      args: (_key, input) => input,
+      done: (outcome, { key, data }) => ({ data: settleWrite(data, key, outcome) }),
+    }),
   }),
   on: {
-    OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation', 'followDetail'] },
-    SURFACE_STARTED: { actions: 'startSurface' },
-    // What the views gave
-    'THREADS.READ': { actions: 'readThreads' },
-    'ARCHIVED.READ': { actions: 'readArchived' },
-    'RECENT.READ': { actions: 'readRecent' },
-    'DETAIL.READ': [
-      { guard: 'detailGone', target: '.list', actions: 'leaveGoneDetail' },
-      { actions: 'readDetail' },
-    ],
-    'CHAT.READ': [
-      { guard: 'chatGone', actions: 'dropThread' },
-      { actions: ['readChat', 'seekFocusedMessage'] },
-    ],
-    'SEARCH.READ': { actions: 'readMessageSearch' },
-    'VIEW.FAILED': { guard: ({ event }) => event.view === 'messageSearch', actions: 'endMessageSearch' },
-    'MESSAGE.READ': { actions: 'readMessage' },
-    MESSAGE_TEXT_APPENDED: { actions: 'appendMessageText' },
-    MESSAGE_BLOCK_TEXT_APPENDED: { actions: 'appendMessageBlockText' },
-    'TAB.READ': [
-      { guard: 'tabGone', actions: 'dropThread' },
-      { actions: 'readTab' },
-    ],
-    [made.done]: { actions: made.settle() },
-    // How each of this window's asks ended, by the name it was made under (`made`): its writes settle, and a thread a
-    // message or a fork made opens
-    'made.chatStart': { actions: 'startChat' },
-    'made.created': { actions: 'threadCreated' },
-    'made.opened': { guard: 'openedGone', actions: 'dropThread' },
-    'made.sent': { actions: ['noteSendFailure', 'showStartedThread'] },
-    'made.sentCommand': { actions: ['noteSendFailure', 'showStartedThread'] },
-    'made.forked': { actions: ['noteSendFailure', 'showFork'] },
-    // The chat told the person of these, so they are held no longer
-    'CHAT.FAILURES_TOLD': { actions: assign(({ context, event }) => ({ sendFailures: context.sendFailures.filter(failure => !event.told.includes(failure)) })) },
-    'made.imported': { actions: 'handleThreadsImportEnded' },
-    'made.exported': { actions: 'handleThreadsExportEnded' },
-    'made.statusWrite': { actions: 'settleWrite' },
-    'made.fieldWrite': { actions: 'settleWrite' },
-    'made.deleteWrite': { actions: 'settleWrite' },
-    'made.parentWrite': { actions: 'settleWrite' },
-    SHOW_THREAD: { actions: 'openThread' },
+    OPEN_ENTITY: (event, { data, tell }) => {
+      if (!entityIs<Contract['opens']>({ event }, { entity: 'Thread' })) return;
+      tell('threads', { type: 'VIEW_THREAD', threadId: event.id });
+      return {
+        at: 'view',
+        data: {
+          ...selectedThreadData(data, event.id),
+          detailThreadId: event.id,
+          navHistory: pushNavHistory(data.navHistory, `view:${event.id}`),
+        },
+      };
+    },
+    SURFACE_STARTED: (_event, { call }) => {
+      call('chatStart');
+      return { data: { started: true } };
+    },
+    MESSAGE_TEXT_APPENDED: (ev, { data }) => {
+      const { [ev.messageId]: held, ...others } = data.messageStreams;
+      // `done` is taken whether or not this window is still following the message, so a finalized text is never
+      // spliced over by an abandoned partial reply.
+      if (ev.done) {
+        if (!held) return;
+        const completed = finishedRun(held, ev);
+        const finished = completed ? { ...others, [ev.messageId]: completed } : others;
+        return {
+          data: {
+            messageStreams: finished,
+            ...composedMessages(
+              data.currentThread,
+              data.view,
+              data.chatMessageIds,
+              data.detailMessageIds,
+              data.messageContents,
+              finished,
+              data.messageBlockStreams,
+            ),
+          },
+        };
+      }
+      if (!data.messageViews.includes(ev.messageId)) return;
+      const continues = held !== undefined && held.at + held.text.length === ev.at;
+      const run = continues ? { at: held.at, text: held.text + ev.text } : { at: ev.at, text: ev.text };
+      const messageStreams = { ...others, [ev.messageId]: run };
+      return {
+        data: {
+          messageStreams,
+          ...composedMessages(
+            data.currentThread,
+            data.view,
+            data.chatMessageIds,
+            data.detailMessageIds,
+            data.messageContents,
+            messageStreams,
+            data.messageBlockStreams,
+          ),
+        },
+      };
+    },
+    MESSAGE_BLOCK_TEXT_APPENDED: (ev, { data }) => {
+      const { [ev.messageId]: held, ...others } = data.messageBlockStreams;
+      if (ev.done) {
+        if (!held) return;
+        return {
+          data: {
+            messageBlockStreams: others,
+            ...composedMessages(
+              data.currentThread,
+              data.view,
+              data.chatMessageIds,
+              data.detailMessageIds,
+              data.messageContents,
+              data.messageStreams,
+              others,
+            ),
+          },
+        };
+      }
+      if (!data.messageViews.includes(ev.messageId)) return;
+      const continues = held !== undefined && held.blockId === ev.blockId && held.at + held.text.length === ev.at;
+      const run = continues
+        ? { blockId: ev.blockId, at: held.at, text: held.text + ev.text }
+        : { blockId: ev.blockId, at: ev.at, text: ev.text };
+      const messageBlockStreams = { ...others, [ev.messageId]: run };
+      return {
+        data: {
+          messageBlockStreams,
+          ...composedMessages(
+            data.currentThread,
+            data.view,
+            data.chatMessageIds,
+            data.detailMessageIds,
+            data.messageContents,
+            data.messageStreams,
+            messageBlockStreams,
+          ),
+        },
+      };
+    },
+    'CHAT.FAILURES_TOLD': (event, { data }) => ({
+      data: { sendFailures: data.sendFailures.filter(failure => !event.told.includes(failure)) },
+    }),
+    SHOW_THREAD: (event, { data, call }) => openThreadTransition(data, event.threadId, event.restore, false, call),
+    OPEN_THREAD_CHAT: (event, { data, call }) => openThreadTransition(data, event.threadId, event.restore, true, call),
     // Thread management events
-    SHOW_CREATE_FORM: {
-      target: '.create',
-      actions: assign(({ context }) => ({
+    SHOW_CREATE_FORM: (_event, { data }) => ({
+      at: 'create',
+      data: {
+        ...leaveDetailData(data),
         create: { ...defaultThread },
-        navHistory: pushNavHistory(context.navHistory, 'create'),
-      }))
+        navHistory: pushNavHistory(data.navHistory, 'create'),
+      },
+    }),
+    SHOW_CREATE_FORM_AS_CHILD: (event, { data }) => {
+      const parentThread = data.threadMap[event.parentThreadId];
+      if (!parentThread) {
+        console.warn(`Parent thread with id ${event.parentThreadId} not found`);
+        return {
+          at: 'create',
+          data: leaveDetailData(data),
+        };
+      }
+      return {
+        at: 'create',
+        data: {
+          ...leaveDetailData(data),
+          create: {
+            ...defaultThread,
+            parentThreadId: parentThread.id,
+            parentThread: { ...parentThread },
+          },
+        },
+      };
     },
-    UPDATE_THREAD_STATUS: {
-      actions: 'updateThreadStatus',
+    UPDATE_THREAD_STATUS: (event, { data, call }) => {
+      const write = freshKey();
+      call('statusWrite', write, { threadId: event.id, status: event.status });
+      return { data: { writes: writeSent(data.writes, write) } };
     },
-    VIEW_LIST: { target: '.list', actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'list') })) },
-    VIEW_KANBAN: { target: '.kanban', actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'kanban') })) },
-    VIEW_DASHBOARD: { target: '.dashboard', actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'dashboard') })) },
-    OPEN_THREAD_CHAT: {
-      actions: 'openThread'
+    VIEW_LIST: (_event, { data }) => ({
+      at: 'list',
+      data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'list') },
+    }),
+    VIEW_KANBAN: (_event, { data }) => ({
+      at: 'kanban',
+      data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'kanban') },
+    }),
+    VIEW_DASHBOARD: (_event, { data }) => ({
+      at: 'dashboard',
+      data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'dashboard') },
+    }),
+    CLEAR_NEW_THREAD_FLAG: (event, { data }) => ({
+      data: {
+        ...patchThread(data, event.id, { isNew: false }),
+        freshThreadIds: data.freshThreadIds.filter(fresh => fresh !== event.id),
+      },
+    }),
+    RENAME_THREAD: (event, { data, call }) => {
+      const write = freshKey();
+      call('fieldWrite', write, { threadId: event.threadId, key: 'topic', value: event.topic });
+      return { data: optimisticFieldUpdate(data, write, event.threadId, 'topic', event.topic) };
     },
-    CLEAR_NEW_THREAD_FLAG: {
-      actions: ['clearNewThreadFlag', stopChild(({ event }) => newThreadFlagTimer(typeOf('CLEAR_NEW_THREAD_FLAG', event).id))]
+    FEATURE_SETTINGS_UPDATED: (event) => ({
+      data: applySettings(event.settings),
+    }),
+    DELETE_THREAD: (event, { data, call }) => {
+      const write = freshKey();
+      call('deleteWrite', write, { threadId: event.threadId });
+      return { data: { writes: writeSent(data.writes, write) } };
     },
-    RENAME_THREAD: {
-      actions: 'renameThread',
+    TOGGLE_VIEW_ARCHIVE: (_event, { data }) => {
+      const showArchived = !data.showArchived;
+      return {
+        at: 'list',
+        data: {
+          ...leaveDetailData(data),
+          showArchived,
+          ...threadStore(data.freshThreadIds, showArchived, {
+            list: [...data.lists.list],
+            recent: [...data.lists.recent],
+            archived: [...data.lists.archived],
+          }),
+        },
+      };
     },
-    FEATURE_SETTINGS_UPDATED: {
-      actions: ['setThreadsSettings', 'followSettingsViews'],
+    ARCHIVE_THREAD: (event, { data, call }) => {
+      const write = freshKey();
+      call('fieldWrite', write, { threadId: event.threadId, key: 'archived', value: true });
+      const tabs = data.tabs.filter(t => t.id !== event.threadId);
+      const activeTabId = data.activeTabId === event.threadId
+        ? (tabs[tabs.length - 1]?.id ?? '')
+        : data.activeTabId;
+      const tabGroups = cleanupAndPersistGroups(tabs, data.tabGroups);
+      return {
+        data: {
+          writes: writeSent(data.writes, write),
+          ...removeThread(data, event.threadId),
+          ...syncTabs(tabs, activeTabId, data.tabsRead, data.viewRefresh),
+          tabGroups,
+        },
+      };
     },
-    DELETE_THREAD: {
-      actions: 'deleteThread',
+    UNARCHIVE_THREAD: (event, { data, call }) => {
+      const write = freshKey();
+      call('fieldWrite', write, { threadId: event.threadId, key: 'archived', value: false });
+      return {
+        data: {
+          writes: writeSent(data.writes, write),
+          ...removeThread(data, event.threadId),
+        },
+      };
     },
-    TOGGLE_VIEW_ARCHIVE: {
-      actions: 'toggleViewArchive',
-      target: '.list',
+    UNPIN_THREAD: (event, { data, call }) => {
+      const write = freshKey();
+      call('fieldWrite', write, { threadId: event.threadId, key: 'pinned', value: false });
+      return { data: optimisticFieldUpdate(data, write, event.threadId, 'pinned', false) };
     },
-    ARCHIVE_THREAD: {
-      actions: ['archiveThread', 'removeArchivedThread', 'cleanupEmptyGroups', 'tabsChanged', 'persistTabGroups'],
+    PIN_THREAD: (event, { data, call }) => {
+      const write = freshKey();
+      call('fieldWrite', write, { threadId: event.threadId, key: 'pinned', value: true });
+      return { data: optimisticFieldUpdate(data, write, event.threadId, 'pinned', true) };
     },
-    UNARCHIVE_THREAD: {
-      actions: ['unarchiveThread', 'removeUnarchivedThread'],
-    },
-    UNPIN_THREAD: {
-      actions: 'unpinThread',
-    },
-    PIN_THREAD: {
-      actions: 'pinThread',
-    },
-
     // Import/Export events
-    'THREADS.IMPORT': {
-      actions: ['setImportingThreads', 'sendImportThreads'],
+    'THREADS.IMPORT': (event, { data, call }) => {
+      call('imported', { directory: event.directory });
+      return { data: { threadsImport: { ...data.threadsImport, status: 'importing' } } };
     },
-    'THREADS.RESET_IMPORT_STATUS': {
-      actions: 'resetImportThreadsStatus',
+    'THREADS.RESET_IMPORT_STATUS': () => ({
+      data: { threadsImport: { status: 'idle', errors: [], importedCount: 0 } },
+    }),
+    'THREADS.EXPORT': (event, { data, call }) => {
+      call('exported', { directory: event.directory });
+      return { data: { threadsExport: { ...data.threadsExport, status: 'exporting' } } };
     },
-    'THREADS.EXPORT': {
-      actions: ['setExportingThreads', 'sendExportThreads'],
-    },
-    'THREADS.RESET_EXPORT_STATUS': {
-      actions: 'resetExportThreadsStatus',
-    },
-
+    'THREADS.RESET_EXPORT_STATUS': () => ({
+      data: { threadsExport: { status: 'idle', errors: [], filePath: '', threadCount: 0 } },
+    }),
     // Filter events
-    TOGGLE_FILTER_STATUS: { actions: 'toggleFilterStatus' },
-    TOGGLE_FILTER_TAG: { actions: 'toggleFilterTag' },
-    TOGGLE_FILTER_CHAT_STATE: { actions: 'toggleFilterChatState' },
-    SET_SEARCH: { actions: 'setSearch' },
-    CLEAR_FILTERS: { actions: 'clearFilters' },
-    TOGGLE_ROOT_ONLY_FILTER: { actions: 'toggleRootOnlyFilter' },
-    SELECT_THREAD_ITEMS: { actions: 'selectThreadItems' },
-    SET_THREAD_PARENT: { actions: 'sendSetThreadParent' },
-
-    NAVIGATE_BACK: [
-      {
-        guard: ({ context }) => canGoBack(context.navHistory) && context.navHistory.stack[context.navHistory.index - 1].startsWith('view:'),
-        target: '.view',
-        actions: [
-          assign(({ context }) => {
-            const result = goBack(context.navHistory)!;
-            const threadId = result.entry.replace('view:', '');
-            const selectedThread = context.threadMap[threadId];
-            return {
-              navHistory: result.history,
-              view: selectedThread
-                ? { ...context.view, ...selectedThread, id: threadId }
-                : { ...context.view, id: threadId },
-            } as any;
-          }),
-          ({ context }) => {
-            tell(id, { type: 'VIEW_THREAD', threadId: context.view.id });
+    TOGGLE_FILTER_STATUS: (event, { data }) => {
+      const current = data.filters.statuses;
+      return {
+        data: {
+          filters: {
+            ...data.filters,
+            statuses: current.includes(event.status) ? current.filter(s => s !== event.status) : [...current, event.status],
           },
-          'followDetail',
-        ],
-      },
-      {
-        guard: ({ context }) => canGoBack(context.navHistory) && context.navHistory.stack[context.navHistory.index - 1] === 'list',
-        target: '.list',
-        actions: assign(({ context }) => ({ navHistory: goBack(context.navHistory)!.history })),
-      },
-      {
-        guard: ({ context }) => canGoBack(context.navHistory) && context.navHistory.stack[context.navHistory.index - 1] === 'kanban',
-        target: '.kanban',
-        actions: assign(({ context }) => ({ navHistory: goBack(context.navHistory)!.history })),
-      },
-      {
-        guard: ({ context }) => canGoBack(context.navHistory) && context.navHistory.stack[context.navHistory.index - 1] === 'dashboard',
-        target: '.dashboard',
-        actions: assign(({ context }) => ({ navHistory: goBack(context.navHistory)!.history })),
-      },
-      {
-        guard: ({ context }) => canGoBack(context.navHistory) && context.navHistory.stack[context.navHistory.index - 1] === 'create',
-        target: '.create',
-        actions: assign(({ context }) => ({ navHistory: goBack(context.navHistory)!.history })),
-      },
-    ],
-    NAVIGATE_FORWARD: [
-      {
-        guard: ({ context }) => canGoForward(context.navHistory) && context.navHistory.stack[context.navHistory.index + 1].startsWith('view:'),
-        target: '.view',
-        actions: [
-          assign(({ context }) => {
-            const result = goForward(context.navHistory)!;
-            const threadId = result.entry.replace('view:', '');
-            const selectedThread = context.threadMap[threadId];
-            return {
-              navHistory: result.history,
-              view: selectedThread
-                ? { ...context.view, ...selectedThread, id: threadId }
-                : { ...context.view, id: threadId },
-            } as any;
-          }),
-          ({ context }) => {
-            tell(id, { type: 'VIEW_THREAD', threadId: context.view.id });
+        },
+      };
+    },
+    TOGGLE_FILTER_TAG: (event, { data }) => {
+      const current = data.filters.tags;
+      return {
+        data: {
+          filters: {
+            ...data.filters,
+            tags: current.includes(event.tag) ? current.filter(t => t !== event.tag) : [...current, event.tag],
           },
-          'followDetail',
-        ],
-      },
-      {
-        guard: ({ context }) => canGoForward(context.navHistory) && context.navHistory.stack[context.navHistory.index + 1] === 'list',
-        target: '.list',
-        actions: assign(({ context }) => ({ navHistory: goForward(context.navHistory)!.history })),
-      },
-      {
-        guard: ({ context }) => canGoForward(context.navHistory) && context.navHistory.stack[context.navHistory.index + 1] === 'kanban',
-        target: '.kanban',
-        actions: assign(({ context }) => ({ navHistory: goForward(context.navHistory)!.history })),
-      },
-      {
-        guard: ({ context }) => canGoForward(context.navHistory) && context.navHistory.stack[context.navHistory.index + 1] === 'dashboard',
-        target: '.dashboard',
-        actions: assign(({ context }) => ({ navHistory: goForward(context.navHistory)!.history })),
-      },
-      {
-        guard: ({ context }) => canGoForward(context.navHistory) && context.navHistory.stack[context.navHistory.index + 1] === 'create',
-        target: '.create',
-        actions: assign(({ context }) => ({ navHistory: goForward(context.navHistory)!.history })),
-      },
-    ],
-    // Breadcrumb trail clicks
-    TRAIL_CLICK: [
-      {
-        guard: { type: 'targetIs', params: { view: 'list' } },
-        target: '.list',
-        actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'list') })),
-      },
-      {
-        guard: { type: 'targetIs', params: { view: 'kanban' } },
-        target: '.kanban',
-        actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'kanban') })),
-      },
-      {
-        guard: { type: 'targetIs', params: { view: 'create' } },
-        target: '.create',
-        actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'create') })),
-      },
-      {
-        guard: { type: 'targetIs', params: { view: 'view' } },
-        target: '.view',
-      },
-      {
-        guard: { type: 'targetIs', params: { view: 'dashboard' } },
-        target: '.dashboard',
-        actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'dashboard') })),
-      },
-    ],
-    SELECT_THREAD: {
-      target: '.view',
-      actions: [
-        'setSelectedThread',
-        'sendViewThread',
-        'recordThreadNavigation',
-        'followDetail',
-      ],
+        },
+      };
     },
-
-    // ---- Chat/agent events (always active regardless of view state) ----
-    HOTKEY_PRESSED: { actions: ['handleHotkey'] },
-    OPEN_QUICK_PROMPTS: { actions: 'openQuickPromptsAtCursor' },
-    CLOSE_QUICK_PROMPTS: { actions: 'closeQuickPrompts' },
-    TOGGLE_QUICK_PROMPTS: [
-      { guard: 'quickPromptsOpen', actions: 'closeQuickPrompts' },
-      { actions: 'openQuickPromptsAtCursor' },
-    ],
-    VIEW_THREAD: { actions: 'sendOpenThreadView' },
-    NAVIGATE_TO_SECRETS: { actions: 'navigateToSecrets' },
-    RESPOND_TO_BLOCK_INTERACTION: {
-      actions: [
-        'respondToBlockInteraction',
-      ],
+    TOGGLE_FILTER_CHAT_STATE: (event, { data }) => {
+      const current = data.filters.chatStates;
+      return {
+        data: {
+          filters: {
+            ...data.filters,
+            chatStates: current.includes(event.chatState) ? current.filter(s => s !== event.chatState) : [...current, event.chatState],
+          },
+        },
+      };
     },
-    LOAD_MORE_MESSAGES: { actions: 'loadMoreMessages' },
-    SEARCH_MESSAGES: { actions: 'searchMessages' },
-    OPEN_MESSAGE: { actions: 'openMessage' },
-    FOCUSED_MESSAGE_SHOWN: { actions: assign({ focusMessage: null }) },
-    SEND_MESSAGE: { actions: 'sendMessage' },
-    SEND_COMMAND: { actions: 'sendCommand' },
-    FLASH_CHAT_STATE: {
-      actions: [
-        'flashChatState',
-        stopChild(({ event }) => chatStateOverrideTimer(typeOf('FLASH_CHAT_STATE', event).threadId)),
-        spawnChild('clearExpiredOverride', {
-          // Per thread: without an id two flashes at once share a key and the first is left untracked
-          id: ({ event }: any) => chatStateOverrideTimer(event.threadId),
-          input: ({ event }: any) => ({
-            threadId: event.threadId,
-            durationMs: event.durationMs ?? 3000,
-          }),
-        }),
-      ],
+    SET_SEARCH: (event, { data }) => ({
+      data: { filters: { ...data.filters, search: event.keyword } },
+    }),
+    CLEAR_FILTERS: (_event, { data }) => ({
+      data: { filters: { statuses: [], tags: [], chatStates: [], search: '', showRootOnly: data.filters.showRootOnly } },
+    }),
+    TOGGLE_ROOT_ONLY_FILTER: (_event, { data }) => ({
+      data: { filters: { ...data.filters, showRootOnly: !data.filters.showRootOnly } },
+    }),
+    SELECT_THREAD_ITEMS: (event) => ({
+      data: { selectedThreadIds: event.itemIds },
+    }),
+    SET_THREAD_PARENT: (event, { data, call }) => {
+      const write = freshKey();
+      call('parentWrite', write, { childIds: event.childIds, parentId: event.parentId });
+      return { data: { writes: writeSent(data.writes, write) } };
     },
-    CLEAR_CHAT_STATE_OVERRIDE: {
-      actions: [
-        assign(({ context, event }) => {
-          const { threadId } = typeOf('CLEAR_CHAT_STATE_OVERRIDE', event);
-          const { [threadId]: _, ...rest } = context.chatStateOverrides;
-          return { chatStateOverrides: rest };
-        }),
-        stopChild(({ event }) => chatStateOverrideTimer(typeOf('CLEAR_CHAT_STATE_OVERRIDE', event).threadId)),
-      ],
+    NAVIGATE_BACK: (_event, { data, tell }) => navigateHistory(data, 'back', tell),
+    NAVIGATE_FORWARD: (_event, { data, tell }) => navigateHistory(data, 'forward', tell),
+    TRAIL_CLICK: (event, { data }) => {
+      if (event.target === 'list') {
+        return { at: 'list', data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'list') } };
+      }
+      if (event.target === 'kanban') {
+        return { at: 'kanban', data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'kanban') } };
+      }
+      if (event.target === 'create') {
+        return { at: 'create', data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'create') } };
+      }
+      if (event.target === 'view') {
+        return { at: 'view' };
+      }
+      if (event.target === 'dashboard') {
+        return { at: 'dashboard', data: { ...leaveDetailData(data), navHistory: pushNavHistory(data.navHistory, 'dashboard') } };
+      }
     },
-    SET_MODE: { actions: 'setMode' },
-    SET_PHASE: { actions: 'setPhase' },
-    CLEAR_THREAD: { actions: ['clearThread', 'followChat', 'followMessages'] },
-    NEW_THREAD_IN_PROJECT: { actions: ['newThreadInProject', 'followChat', 'followMessages'] },
-    NEW_THREAD_NO_PROJECT: { actions: ['newThreadNoProject', 'followChat', 'followMessages'] },
-    CREATE_CHILD_THREAD: { actions: 'createChildThread' },
-    FORK_THREAD: { actions: 'forkThread' },
-    REVERT_THREAD: { actions: 'revertThread' },
-    SUMMARIZE_THREAD: { actions: 'summarizeThread' },
-    PAUSE_TURN: {
-      actions: 'pauseTurn',
+    SELECT_THREAD: (event, { data, tell }) => {
+      tell('threads', { type: 'VIEW_THREAD', threadId: event.id });
+      return {
+        at: 'view',
+        data: {
+          ...selectedThreadData(data, event.id),
+          detailThreadId: event.id,
+          navHistory: pushNavHistory(data.navHistory, `view:${event.id}`),
+        },
+      };
     },
-    UNQUEUE_MESSAGE: {
-      actions: 'unqueueMessage',
+    // Chat/agent events (always active regardless of view state)
+    HOTKEY_PRESSED: (event, { data, send }) => {
+      const actionType = processHotkeys(event, data.hotkeys, {
+        quickPrompts: 'TOGGLE_QUICK_PROMPTS',
+        closeTab: 'CLOSE_ACTIVE_TAB',
+      });
+      if (actionType) send({ type: actionType });
     },
-    DISMISS_MESSAGE: { actions: ['dismissMessage', 'followMessages', 'persistDismissMessage'] },
-    SELECT_TAB: { actions: ['selectTab', 'persistTabs'] },
-    CLOSE_TAB: { actions: ['closeTab', 'cleanupEmptyGroups', 'tabsChanged', 'persistTabGroups'] },
-    CLOSE_ACTIVE_TAB: { actions: ['closeActiveTab', 'cleanupEmptyGroups', 'tabsChanged', 'persistTabGroups'] },
+    OPEN_QUICK_PROMPTS: () => ({ data: { quickPromptCursor: { x: mouseX, y: mouseY } } }),
+    CLOSE_QUICK_PROMPTS: () => ({ data: { quickPromptCursor: null } }),
+    TOGGLE_QUICK_PROMPTS: (_event, { data }) => ({
+      data: { quickPromptCursor: data.quickPromptCursor !== null ? null : { x: mouseX, y: mouseY } },
+    }),
+    VIEW_THREAD: (event, { send }) => {
+      send({ type: 'SELECT_THREAD', id: event.threadId });
+    },
+    NAVIGATE_TO_SECRETS: () => {
+      untypedOpenSurface(HOST_SETTINGS, [
+        { type: 'TAB.SELECT', tab: 'general' },
+        { type: 'GENERAL_NAV.SELECT', item: 'secrets' },
+      ]);
+    },
+    RESPOND_TO_BLOCK_INTERACTION: (event, { data, tell }) => {
+      if (!data.currentThread?.id) {
+        console.error('Cannot respond to block interaction: no current thread');
+        return;
+      }
+      tell('threads', {
+        type: 'INTERACTIVE_MSG_RESPONSE',
+        messageId: event.messageId,
+        threadId: data.currentThread.id,
+        response: event.response,
+      });
+    },
+    LOAD_MORE_MESSAGES: (_event, { data }) => {
+      const { hasMore, isLoading } = data.messagePagination;
+      if (!data.currentThread?.id || !hasMore || isLoading) {
+        return Object.keys(data.chatFollowups).length > 0 ? { data: { chatFollowups: {} } } : undefined;
+      }
+      return {
+        data: {
+          chatFollowups: {},
+          chatLimit: data.chatLimit + MESSAGE_PAGE_SIZE,
+          messagePagination: { hasMore, isLoading: true },
+        },
+      };
+    },
+    SEARCH_MESSAGES: (event) => {
+      const query = event.query.trim();
+      return {
+        data: {
+          searchQuery: query,
+          messageSearch: { query, results: [], searching: query !== '' },
+        },
+      };
+    },
+    OPEN_MESSAGE: (event, { data, send }) => {
+      send({ type: 'OPEN_THREAD_CHAT', threadId: event.threadId });
+      const alreadyOpen = data.currentThread?.id === event.threadId;
+      if (!alreadyOpen || data.messagePagination.isLoading || data.chatMessageIds.includes(event.messageId)) {
+        return { data: { focusMessage: { threadId: event.threadId, messageId: event.messageId } } };
+      }
+      if (data.messagePagination.hasMore) {
+        return {
+          data: {
+            focusMessage: { threadId: event.threadId, messageId: event.messageId },
+            chatLimit: data.chatLimit + MESSAGE_PAGE_SIZE,
+            messagePagination: { hasMore: true, isLoading: true },
+          },
+        };
+      }
+      return { data: { focusMessage: null } };
+    },
+    FOCUSED_MESSAGE_SHOWN: () => ({ data: { focusMessage: null } }),
+    SEND_MESSAGE: (event, { data, call }) => {
+      call('sent', {
+        text: event.text,
+        mode: data.mode,
+        phase: data.phase,
+        threadId: data.currentThread?.id,
+        ...(event.references && { references: event.references }),
+        ...(data.pendingThreadCwd && { cwdOverride: data.pendingThreadCwd }),
+        ...(data.pendingForceDirectoryPicker && { forceDirectoryPicker: true }),
+      });
+      if (data.pendingThreadCwd || data.pendingForceDirectoryPicker) {
+        return { data: { pendingThreadCwd: undefined, pendingForceDirectoryPicker: undefined } };
+      }
+    },
+    SEND_COMMAND: (event, { data, call }) => {
+      call('sentCommand', {
+        command: event.command,
+        text: event.text,
+        mode: data.mode,
+        phase: data.phase,
+        threadId: data.currentThread?.id,
+        ...(event.references && { references: event.references }),
+        ...(data.pendingThreadCwd && { cwdOverride: data.pendingThreadCwd }),
+      });
+      if (data.pendingThreadCwd) {
+        return { data: { pendingThreadCwd: undefined } };
+      }
+    },
+    FLASH_CHAT_STATE: (event, { data, now }) => {
+      const durationMs = event.durationMs ?? 3000;
+      const expiresAt = now + durationMs;
+      const nextSeq = data.timerSeq + 1;
+      const timers = withoutOverrideTimer(data.overrideTimers, event.threadId);
+      timers[`${event.threadId}:${nextSeq}`] = { threadId: event.threadId, durationMs };
+      return {
+        data: {
+          chatStateOverrides: { ...data.chatStateOverrides, [event.threadId]: { id: event.stateId, expiresAt } },
+          overrideTimers: timers,
+          timerSeq: nextSeq,
+        },
+      };
+    },
+    CLEAR_CHAT_STATE_OVERRIDE: (event, { data }) => {
+      const { [event.threadId]: _, ...rest } = data.chatStateOverrides;
+      return {
+        data: {
+          chatStateOverrides: rest,
+          overrideTimers: withoutOverrideTimer(data.overrideTimers, event.threadId),
+        },
+      };
+    },
+    SET_MODE: (event, { data }) => {
+      const newMode = event.mode;
+      const modeConfig = data.modes.find(m => m.name === newMode);
+      const updatedPhaseByModeName = { ...data.phaseByModeName, [data.mode]: data.phase };
+      const newPhase = modeConfig?.phases?.length
+        ? (newMode in updatedPhaseByModeName ? updatedPhaseByModeName[newMode] : modeConfig.phases[0].name)
+        : undefined;
+      return { data: { mode: newMode, phase: newPhase ?? '', phaseByModeName: updatedPhaseByModeName } };
+    },
+    SET_PHASE: (event, { data }) => ({
+      data: {
+        phase: event.phase,
+        phaseByModeName: { ...data.phaseByModeName, [data.mode]: event.phase },
+      },
+    }),
+    CLEAR_THREAD: (_event, { data }) => {
+      const { mode, phase } = resolveDefaultModePhase(data.chatSettings, data.modes, data.mode, data.phase);
+      const nextThread = { ...defaultChatThread, messages: [] };
+      return {
+        data: {
+          chatThreadId: null,
+          chatFollowups: {},
+          openedThreadId: null,
+          mode,
+          phase: phase ?? '',
+          phaseByModeName: { ...data.phaseByModeName, [mode]: phase },
+          pendingThreadCwd: undefined,
+          pendingForceDirectoryPicker: undefined,
+          ...syncMessages(data, [], data.detailMessageIds, nextThread),
+        },
+      };
+    },
+    NEW_THREAD_IN_PROJECT: (event, { data }) => {
+      const { mode, phase } = resolveDefaultModePhase(data.chatSettings, data.modes, data.mode, data.phase);
+      const nextThread = { ...defaultChatThread, messages: [] };
+      return {
+        data: {
+          chatThreadId: null,
+          chatFollowups: {},
+          openedThreadId: null,
+          mode,
+          phase: phase ?? '',
+          phaseByModeName: { ...data.phaseByModeName, [mode]: phase },
+          pendingThreadCwd: event.directory,
+          pendingForceDirectoryPicker: undefined,
+          ...syncMessages(data, [], data.detailMessageIds, nextThread),
+        },
+      };
+    },
+    NEW_THREAD_NO_PROJECT: (_event, { data }) => {
+      const { mode, phase } = resolveDefaultModePhase(data.chatSettings, data.modes, data.mode, data.phase);
+      const nextThread = { ...defaultChatThread, messages: [] };
+      return {
+        data: {
+          chatThreadId: null,
+          chatFollowups: {},
+          openedThreadId: null,
+          mode,
+          phase: phase ?? '',
+          phaseByModeName: { ...data.phaseByModeName, [mode]: phase },
+          pendingThreadCwd: undefined,
+          pendingForceDirectoryPicker: true,
+          ...syncMessages(data, [], data.detailMessageIds, nextThread),
+        },
+      };
+    },
+    CREATE_CHILD_THREAD: (event, { send }) => {
+      send({ type: 'SHOW_CREATE_FORM_AS_CHILD', parentThreadId: event.parentThreadId });
+    },
+    FORK_THREAD: (event, { call }) => {
+      call('forked', { messageId: event.messageId, threadId: event.threadId, threadTopic: event.threadTopic });
+    },
+    REVERT_THREAD: (event, { tell }) => {
+      tell('threads', {
+        type: 'REVERT_THREAD',
+        messageId: event.messageId,
+        threadId: event.threadId,
+        ...(event.restoreFiles !== undefined && { restoreFiles: event.restoreFiles }),
+        ...(event.userCliUuid !== undefined && { userCliUuid: event.userCliUuid }),
+      });
+    },
+    SUMMARIZE_THREAD: (event, { tell }) => {
+      tell('threads', { type: 'SUMMARIZE_THREAD', messageId: event.messageId, threadId: event.threadId });
+    },
+    PAUSE_TURN: (event, { tell }) => {
+      tell('threads', { type: 'PAUSE_TURN', threadId: event.threadId });
+    },
+    UNQUEUE_MESSAGE: (event, { tell }) => {
+      tell('threads', {
+        type: 'FORWARD_BRAIN_EVENT',
+        eventType: 'user.thread.unqueue',
+        payload: { threadId: event.threadId, messageId: event.messageId },
+      });
+    },
+    DISMISS_MESSAGE: (event, { data, tell }) => {
+      tell('threads', { type: 'DELETE_MESSAGE', messageId: event.messageId });
+      const nextChatIds = data.chatMessageIds.filter(listed => listed !== event.messageId);
+      return { data: syncMessages(data, nextChatIds, data.detailMessageIds) };
+    },
+    SELECT_TAB: (event, { data }) => {
+      saveTabsToStorage(data.tabs, event.tabId);
+      return { data: { activeTabId: event.tabId } };
+    },
+    CLOSE_TAB: (event, { data, send }) => {
+      const tab = data.tabs.find(t => t.id === event.tabId);
+      if (!tab || tab.pinned) return;
+      const idx = data.tabs.findIndex(t => t.id === event.tabId);
+      const newTabs = data.tabs.filter(t => t.id !== event.tabId);
+      let newActiveTabId = data.activeTabId;
+      if (data.activeTabId === event.tabId) {
+        const nextTab = data.tabs[idx + 1] ?? data.tabs[idx - 1];
+        newActiveTabId = nextTab?.id ?? '';
+      }
+      if (data.activeTabId === event.tabId && newActiveTabId) {
+        send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId });
+      }
+      const tabGroups = cleanupAndPersistGroups(newTabs, data.tabGroups);
+      return {
+        data: {
+          ...syncTabs(newTabs, newActiveTabId, data.tabsRead, data.viewRefresh),
+          tabGroups,
+        },
+      };
+    },
+    CLOSE_ACTIVE_TAB: (_event, { data, send }) => {
+      const tabId = data.activeTabId;
+      if (!tabId) return;
+      const tab = data.tabs.find(t => t.id === tabId);
+      if (!tab || tab.pinned) return;
+      const idx = data.tabs.findIndex(t => t.id === tabId);
+      const newTabs = data.tabs.filter(t => t.id !== tabId);
+      const nextTab = data.tabs[idx + 1] ?? data.tabs[idx - 1];
+      const newActiveTabId = nextTab?.id ?? '';
+      if (newActiveTabId) {
+        send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId });
+      }
+      const tabGroups = cleanupAndPersistGroups(newTabs, data.tabGroups);
+      return {
+        data: {
+          ...syncTabs(newTabs, newActiveTabId, data.tabsRead, data.viewRefresh),
+          tabGroups,
+        },
+      };
+    },
     // Tab reorder & group events
-    REORDER_TABS: { actions: ['reorderTabs', 'persistTabs'] },
-    PIN_TAB_AT: { actions: ['pinTabAt', 'persistTabs'] },
-    UNPIN_TAB_AT: { actions: ['unpinTabAt', 'persistTabs'] },
-    CREATE_TAB_GROUP: { actions: ['createTabGroup', 'persistTabs', 'persistTabGroups'] },
-    RENAME_TAB_GROUP: { actions: ['renameTabGroup', 'persistTabGroups'] },
-    CHANGE_TAB_GROUP_COLOR: { actions: ['changeTabGroupColor', 'persistTabGroups'] },
-    DELETE_TAB_GROUP: { actions: ['deleteTabGroup', 'persistTabs', 'persistTabGroups'] },
-    TOGGLE_TAB_GROUP_COLLAPSE: { actions: ['toggleTabGroupCollapse', 'persistTabGroups'] },
-    ADD_TAB_TO_GROUP: { actions: ['addTabToGroup', 'persistTabs', 'persistTabGroups'] },
-    ADD_TAB_TO_GROUP_AT: { actions: ['addTabToGroupAt', 'persistTabs', 'persistTabGroups'] },
-    REMOVE_TAB_FROM_GROUP: { actions: ['removeTabFromGroup', 'persistTabs'] },
-    UNGROUP_ALL_IN_GROUP: { actions: ['ungroupAllInGroup', 'persistTabs', 'persistTabGroups'] },
-    CLOSE_ALL_IN_GROUP: { actions: ['closeAllInGroup', 'tabsChanged', 'persistTabGroups'] },
-    PIN_TAB_GROUP: { actions: ['pinTabGroup', 'persistTabs', 'persistTabGroups'] },
-    UNPIN_TAB_GROUP: { actions: ['unpinTabGroup', 'persistTabs', 'persistTabGroups'] },
-    SELECT_ARTIFACT: { actions: 'selectArtifact' },
+    REORDER_TABS: (event, { data }) => {
+      const tabs = [...data.tabs];
+      const [moved] = tabs.splice(event.fromIndex, 1);
+      tabs.splice(event.toIndex, 0, moved);
+      saveTabsToStorage(tabs, data.activeTabId);
+      return { data: { tabs } };
+    },
+    PIN_TAB_AT: (event, { data }) => {
+      const tabs = data.tabs.map(t => t.id === event.tabId ? { ...t, pinned: true, groupId: undefined } : t);
+      const sourceIdx = tabs.findIndex(t => t.id === event.tabId);
+      const [moved] = tabs.splice(sourceIdx, 1);
+      const targetIdx = tabs.findIndex(t => t.id === event.targetTabId);
+      const insertIdx = event.side === 'left' ? targetIdx : targetIdx + 1;
+      tabs.splice(insertIdx, 0, moved);
+      saveTabsToStorage(tabs, data.activeTabId);
+      return { data: { tabs } };
+    },
+    UNPIN_TAB_AT: (event, { data }) => {
+      const tabs = data.tabs.map(t => t.id === event.tabId ? { ...t, pinned: false, groupId: undefined } : t);
+      const sourceIdx = tabs.findIndex(t => t.id === event.tabId);
+      const [moved] = tabs.splice(sourceIdx, 1);
+      const targetIdx = tabs.findIndex(t => t.id === event.targetTabId);
+      const insertIdx = event.side === 'left' ? targetIdx : targetIdx + 1;
+      tabs.splice(insertIdx, 0, moved);
+      saveTabsToStorage(tabs, data.activeTabId);
+      return { data: { tabs } };
+    },
+    CREATE_TAB_GROUP: (event, { data }) => {
+      const firstTab = event.tabIds?.[0] ? data.tabs.find(t => t.id === event.tabIds![0]) : undefined;
+      const isPinned = firstTab?.pinned || false;
+      const color = getNextAvailableColor(data.tabGroups, isPinned);
+      const newGroup: ThreadTabGroup = {
+        id: crypto.randomUUID(),
+        name: 'New Group',
+        color,
+        isCollapsed: false,
+        order: data.tabGroups.length,
+        isPinned: isPinned || undefined,
+      };
+      const tabs = event.tabIds
+        ? data.tabs.map(t => event.tabIds!.includes(t.id) ? { ...t, groupId: newGroup.id } : t)
+        : [...data.tabs];
+      const tabGroups = [...data.tabGroups, newGroup];
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups, tabs } };
+    },
+    RENAME_TAB_GROUP: (event, { data }) => {
+      const tabGroups = data.tabGroups.map(g => g.id === event.groupId ? { ...g, name: event.name } : g);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups } };
+    },
+    CHANGE_TAB_GROUP_COLOR: (event, { data }) => {
+      const tabGroups = data.tabGroups.map(g => g.id === event.groupId ? { ...g, color: event.color } : g);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups } };
+    },
+    DELETE_TAB_GROUP: (event, { data }) => {
+      const tabGroups = data.tabGroups.filter(g => g.id !== event.groupId);
+      const tabs = data.tabs.map(t => t.groupId === event.groupId ? { ...t, groupId: undefined } : t);
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups, tabs } };
+    },
+    TOGGLE_TAB_GROUP_COLLAPSE: (event, { data }) => {
+      const tabGroups = data.tabGroups.map(g => g.id === event.groupId ? { ...g, isCollapsed: !g.isCollapsed } : g);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups } };
+    },
+    ADD_TAB_TO_GROUP: (event, { data }) => {
+      const group = data.tabGroups.find(g => g.id === event.groupId);
+      if (!group) return;
+      const tabs = data.tabs.map(t => t.id === event.tabId ? { ...t, groupId: event.groupId, pinned: group.isPinned || false } : t);
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups([...data.tabGroups]);
+      return { data: { tabs } };
+    },
+    ADD_TAB_TO_GROUP_AT: (event, { data }) => {
+      const group = data.tabGroups.find(g => g.id === event.groupId);
+      if (!group) return;
+      const tabs = data.tabs.map(t => t.id === event.tabId ? { ...t, groupId: event.groupId, pinned: group.isPinned || false } : t);
+      const sourceIdx = tabs.findIndex(t => t.id === event.tabId);
+      const [moved] = tabs.splice(sourceIdx, 1);
+      const targetIdx = tabs.findIndex(t => t.id === event.targetTabId);
+      const insertIdx = event.side === 'left' ? targetIdx : targetIdx + 1;
+      tabs.splice(insertIdx, 0, moved);
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups([...data.tabGroups]);
+      return { data: { tabs } };
+    },
+    REMOVE_TAB_FROM_GROUP: (event, { data }) => {
+      const tabs = data.tabs.map(t => t.id === event.tabId ? { ...t, groupId: undefined } : t);
+      saveTabsToStorage(tabs, data.activeTabId);
+      return { data: { tabs } };
+    },
+    UNGROUP_ALL_IN_GROUP: (event, { data }) => {
+      const tabGroups = data.tabGroups.filter(g => g.id !== event.groupId);
+      const tabs = data.tabs.map(t => t.groupId === event.groupId ? { ...t, groupId: undefined } : t);
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups, tabs } };
+    },
+    CLOSE_ALL_IN_GROUP: (event, { data, send }) => {
+      const tabsInGroup = data.tabs.filter(t => t.groupId === event.groupId);
+      const remainingTabs = data.tabs.filter(t => t.groupId !== event.groupId);
+      const needNewActive = tabsInGroup.some(t => t.id === data.activeTabId);
+      const newActiveTabId = needNewActive
+        ? (remainingTabs[remainingTabs.length - 1]?.id ?? '')
+        : data.activeTabId;
+      const tabGroups = data.tabGroups.filter(g => g.id !== event.groupId);
+      if (needNewActive && newActiveTabId) {
+        send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId });
+      }
+      saveThreadTabGroups(tabGroups);
+      return {
+        data: {
+          ...syncTabs(remainingTabs, newActiveTabId, data.tabsRead, data.viewRefresh),
+          tabGroups,
+        },
+      };
+    },
+    PIN_TAB_GROUP: (event, { data }) => {
+      const tabGroups = data.tabGroups.map(g => g.id === event.groupId ? { ...g, isPinned: true } : g);
+      const tabs = data.tabs.map(t => t.groupId === event.groupId ? { ...t, pinned: true } : t);
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups, tabs } };
+    },
+    UNPIN_TAB_GROUP: (event, { data }) => {
+      const tabGroups = data.tabGroups.map(g => g.id === event.groupId ? { ...g, isPinned: undefined } : g);
+      const tabs = data.tabs.map(t => t.groupId === event.groupId ? { ...t, pinned: false } : t);
+      saveTabsToStorage(tabs, data.activeTabId);
+      saveThreadTabGroups(tabGroups);
+      return { data: { tabGroups, tabs } };
+    },
+    SELECT_ARTIFACT: (event, { data }) => ({
+      data: {
+        tabs: data.tabs.map(tab =>
+          tab.id === data.activeTabId ? { ...tab, selectedArtifactId: event.artifactId } : tab,
+        ),
+      },
+    }),
   },
   states: {
-    'dashboard': {
-      entry: 'persistDashboardView',
-      meta: { ...breadcrumb('dashboard', 'Dashboard') },
-      on: {},
+    dashboard: {
+      run: () => { persistDashboardView(); },
     },
-    'list': {
-      entry: 'persistListView',
-      meta: { ...breadcrumb('list', 'Threads', true) },
-      on: {},
+    list: {
+      run: () => { persistListView(); },
     },
-    'kanban': {
-      entry: 'persistKanbanView',
-      meta: { ...breadcrumb('kanban', 'Board') },
+    kanban: {
+      run: () => { persistKanbanView(); },
+    },
+    create: {
       on: {
-        UPDATE_THREAD_STATUS: {
-          actions: 'updateThreadStatus',
+        CREATE_THREAD: (_event, { data, call }) => {
+          const { parentThread: _parentThread, ...createData } = data.create;
+          const write = freshKey();
+          call('created', write, {
+            ...createData,
+            parentThreadId: data.create.parentThreadId,
+          });
+          return { at: 'list', data: { writes: writeSent(data.writes, write) } };
         },
-      },
-    },
-    'create': {
-      meta: { ...breadcrumb('create', 'New Thread') },
-      on: {
-        CREATE_THREAD: {
-          target: 'list',
-          actions: 'sendCreateThread',
-        },
-        CANCEL_CREATE: { target: 'list' },
-        UPDATE_THREAD_FIELD: {
-          actions: 'updateThreadData',
-        },
-        TOGGLE_TAGS_SECTION: {
-          actions: assign({
-            create: ({ context, event }) => ({
-              ...context.create,
-              tagsExpanded: typeOf('TOGGLE_TAGS_SECTION', event).show
-            })
-          })
-        },
-        TOGGLE_LINKED_SECTION: {
-          actions: assign({
-            create: ({ context, event }) => ({
-              ...context.create,
-              linkedExpanded: typeOf('TOGGLE_LINKED_SECTION', event).show
-            })
-          })
-        },
-      },
-    },
-    'view': {
-      exit: 'stopDetail',
-      meta: {
-        ...breadcrumbWithParams<ThreadsContext>({
-          target: 'view',
-          getLabel: (ctx) => ctx.view.topic || 'Untitled Thread'
-        }),
-        ...contextMenuFn<ThreadsContext>((ctx) => {
-          if (!ctx.view?.id) return []
-          return [
-            ...(ctx.view.pinned ? [{
-              label: 'Unpin Thread',
-              icon: Pin,
-              event: { type: 'UNPIN_THREAD' as const, threadId: ctx.view.id },
-            }] : [{
-              label: 'Pin Thread',
-              icon: Pin,
-              event: { type: 'PIN_THREAD' as const, threadId: ctx.view.id },
-            }]),
-            ...(ctx.view.archived ? [{
-              label: 'Unarchive Thread',
-              icon: Archive,
-              event: { type: 'UNARCHIVE_THREAD' as const, threadId: ctx.view.id },
-            }] : !ctx.view.pinned ? [{
-              label: 'Archive Thread',
-              icon: Archive,
-              event: { type: 'ARCHIVE_THREAD' as const, threadId: ctx.view.id },
-              confirm: `Archive thread "${ctx.view.topic || 'Untitled'}"? It will be hidden from all lists.`,
-            }] : []),
-            ...(!ctx.view.pinned ? [{
-              label: 'Delete Thread',
-              icon: Trash2,
-              event: { type: 'DELETE_THREAD' as const, threadId: ctx.view.id },
-              iconColor: 'text-red-400',
-              confirm: `Are you sure you want to delete thread "${ctx.view.topic || 'Untitled'}"? This will permanently delete all messages and other data associated.`,
-            }] : []),
-            {
-              label: 'Copy Id',
-              icon: Copy,
-              event: { type: 'APP_COPY_TO_CLIPBOARD' as const, text: ctx.view.id },
-              separator: true,
+        CANCEL_CREATE: () => ({ at: 'list' }),
+        UPDATE_THREAD_FIELD: (event, { data }) => ({
+          data: {
+            [event.state]: {
+              ...data[event.state],
+              [event.key]: event.value,
             },
-          ]
+          },
+        }),
+        TOGGLE_TAGS_SECTION: (event, { data }) => ({
+          data: { create: { ...data.create, tagsExpanded: event.show } },
+        }),
+        TOGGLE_LINKED_SECTION: (event, { data }) => ({
+          data: { create: { ...data.create, linkedExpanded: event.show } },
         }),
       },
+    },
+    view: {
+      follows: (follow) => ({
+        detail: follow('threads', 'detail', {
+          from: ['detailThreadId', 'viewRefresh'],
+          args: ({ detailThreadId }) => (detailThreadId ? { id: detailThreadId } : false),
+          updated: (update, { data }) => {
+            if (!update.ok) return;
+            const threadId = data.detailThreadId;
+            if (!threadId || threadId !== data.view.id) return;
+            const detail = update.value as ThreadDetailView | null;
+            if (detail === null) {
+              if (writing(data.writes)) return;
+              const emptyView = { ...defaultThread, id: '' as EARS.EntityId, shortCode: '', status: '', timestamp: 0 } as ThreadViewData;
+              return {
+                at: 'list',
+                data: {
+                  detailThreadId: null,
+                  selectedThreadCode: undefined,
+                  ...syncMessages(data, data.chatMessageIds, [], data.currentThread, emptyView),
+                },
+              };
+            }
+            const { writes, apply } = viewRead(data.writes);
+            if (!apply) return { data: { writes } };
+            const { messageIds, ...fields } = detail;
+            const nextView = { ...data.view, ...fields, id: detail.id } as ThreadViewData;
+            return {
+              data: {
+                writes,
+                ...syncMessages(data, data.chatMessageIds, messageIds as string[], data.currentThread, nextView),
+              },
+            };
+          },
+        }),
+      }),
       on: {
-        SHOW_CREATE_FORM_AS_CHILD: {
-          target: 'create',
-          actions: 'setupParentThread'
-        },
-        UPDATE_THREAD_FIELD: {
-          actions: ['updateThreadData', 'updateThreadInThreads', 'updateCurrentThread', 'sendUpdateThreadField'],
+        UPDATE_THREAD_FIELD: (event, { data, call }) => {
+          const { key, value, state: slice } = event;
+          const write = freshKey();
+          call('fieldWrite', write, {
+            threadId: data.view.id,
+            key,
+            value,
+          });
+          const { messages: _messages, linkedThreads: _linkedThreads, ...rest } = data.view;
+          const updatedViewSlice = { ...data[slice], [key]: value };
+          const updatedThreadFields = { ...rest, [key]: value } as ThreadListItem;
+          return {
+            data: {
+              [slice]: updatedViewSlice,
+              threadMap: {
+                ...data.threadMap,
+                [data.view.id]: { ...data.threadMap[data.view.id], ...updatedThreadFields },
+              },
+              ...(data.currentThread && data.currentThread.id === data.view.id
+                ? { currentThread: { ...data.currentThread, [key]: value } }
+                : {}),
+              writes: writeSent(data.writes, write),
+              ...(key === 'linkedThreads' ? { linkSave: write, linkRefusal: null } : {}),
+            },
+          };
         },
       },
     },

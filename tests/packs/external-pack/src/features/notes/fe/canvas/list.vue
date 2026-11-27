@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe';
-import type { NotesState } from '../state.ts';
+import { useState } from '#generated/state-fe.ts';
 
-const actor: NotesState = useSurface();
-const { state: notes } = useState(actor);
+const { state: notes } = useState('notes');
 </script>
 
 <template>

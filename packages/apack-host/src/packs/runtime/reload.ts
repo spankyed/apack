@@ -9,7 +9,7 @@ import { PACK_SNAPSHOT_FORMAT } from '@apackdev/pack-format';
 import { loadSingleExternalPack, clearPackRequireCache, registerExternalPacks } from './loader.ts';
 import { runPackMigrations } from '../../migrations/index.ts';
 import { applyPacks } from './apply.ts';
-import { acceptInstalledPack, replacePackRuntime } from './lifecycle.ts';
+import { acceptInstalledPack, replacePackRuntime, type PackBusTarget } from './lifecycle.ts';
 
 const logger = createLogger('pack-reload');
 
@@ -30,7 +30,7 @@ interface FreshPack {
 async function reloadPack(
   registry: PackRegistry,
   packId: string,
-  backendActor: import('xstate').AnyActorRef,
+  backendActor: PackBusTarget,
   loadFresh: () => FreshPack,
   cacheDir: string,
 ): Promise<void> {
@@ -82,7 +82,7 @@ async function reloadPack(
 export async function reloadPackById(
   registry: PackRegistry,
   packId: string,
-  backendActor: import('xstate').AnyActorRef,
+  backendActor: PackBusTarget,
 ): Promise<void> {
   const { packsDir } = resolveAppEnvironment();
   const packDir = path.join(packsDir, packId);

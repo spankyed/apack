@@ -5,17 +5,35 @@ import { startFeTestRuntime } from '@apackdev/sdk/testing';
 import type { Message } from '@apackdev/sdk/events';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 
-const { send, openHost, openPack, close } = vi.hoisted(() => ({
-  send: vi.fn(async (_message: Message & { settingsCredential?: string }) => {}),
-  openHost: vi.fn(async () => 'host-access'), openPack: vi.fn(async () => 'pack-access'), close: vi.fn(async () => {}),
+const { linkSend, openHost, openPack, close, mutate, sessionOpen, dispatchControl } = vi.hoisted(() => {
+  const linkSend = vi.fn(async (_message: Message) => {});
+  const openHost = vi.fn(async () => ({ credential: 'host-access' }));
+  const openPack = vi.fn(async (_input?: unknown) => ({ credential: 'pack-access' }));
+  const close = vi.fn(async (_input: { credential: string }) => {});
+  const mutate = vi.fn(async (_input: { credential: string; event: Record<string, unknown>; sender?: string; call?: string; from?: string }) => {});
+  const sessionOpen = { current: true };
+  const dispatchControl = (method: string, input?: unknown) => {
+    switch (method) {
+      case 'settings.openHost': return openHost();
+      case 'settings.openPack': return openPack(input as never);
+      case 'settings.close': return close(input as never);
+      case 'settings.mutate': return mutate(input as never);
+      default: return Promise.reject(new Error(`Unexpected method: ${method}`));
+    }
+  };
+  return { linkSend, openHost, openPack, close, mutate, sessionOpen, dispatchControl };
+});
+vi.mock('@/transport', () => ({
+  windowTransport: {
+    linkSend,
+    controlCall: dispatchControl,
+    tryControlCall: (method: string, input?: unknown) =>
+      sessionOpen.current ? dispatchControl(method, input) : Promise.resolve(undefined),
+  },
 }));
-vi.mock('@/transport', () => ({ trpc: {
-  bus: { send: { mutate: send } },
-  settings: { openHost: { mutate: openHost }, openPack: { mutate: openPack }, close: { mutate: close } },
-} }));
 import { windowSettings, settingsPort, connectWindowSettings, disconnectWindowSettings, settingsForPack } from '../../src/runtime/settings';
 
-afterEach(async () => { disconnectWindowSettings(); await flush(); vi.clearAllMocks(); });
+afterEach(async () => { sessionOpen.current = true; disconnectWindowSettings(); await flush(); vi.clearAllMocks(); });
 const snapshot: SettingsSnapshot = {
   runId: 'test-run', revision: 0, status: 'ready',
   values: { app: { hotkeys: {}, personal: {}, projects: [] }, packs: { example: { assistant: { name: 'Ada' } } }, features: { 'example/code': { limit: 3 } } },
@@ -25,7 +43,7 @@ const flush = async () => { for (let index = 0; index < 6; index++) await Promis
 async function connect() {
   const ready = connectWindowSettings();
   await flush();
-  windowSettings.receive({ to: 'host/settings', answering: send.mock.calls.at(-1)![0].call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } } });
+  windowSettings.receive({ to: 'host/settings', answering: linkSend.mock.calls.at(-1)![0].call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } } });
   expect(await ready).toBe(true);
 }
 
@@ -42,13 +60,16 @@ it('binds shared settings without finding or starting the Settings view', async 
   stop();
 });
 
-it('writes directly through the transport and resolves only the correlated result', async () => {
+it('writes through the Control Lane settings.mutate RPC and resolves only the correlated result', async () => {
   await connect();
   const write = settingsPort.update({ kind: 'app' }, ['personal', 'name'], 'Grace');
   await flush();
-  const request = send.mock.calls.at(-1)![0];
-  expect(request).toMatchObject({ to: 'host/settings', sender: 'host/settings', event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Grace' } });
-  expect(request.settingsCredential).toBe('host-access');
+  const request = mutate.mock.calls.at(-1)![0];
+  expect(request).toMatchObject({
+    credential: 'host-access',
+    sender: 'host/settings',
+    event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Grace' },
+  });
   windowSettings.receive({ to: 'host/settings', answering: request.call, event: { type: 'ASK_FAILED', asked: 'UPDATE_SETTINGS', failure: { kind: 'refused', message: 'refused', problems: ['invalid'] } } });
   expect(await write).toEqual({ status: 'refused', problems: ['invalid'] });
   expect(settingsPort.get({ kind: 'app' })).toEqual(snapshot.values.app);
@@ -62,9 +83,10 @@ it('issues loader-bound pack access from accepted identities and sends its crede
   expect(openPack).toHaveBeenCalledWith({ id: 'example', registrationId: 'runtime', declarationRevision: 'declarations', buildRevision: 'build' });
   const write = binding.port.reset({ kind: 'feature', featureRef: 'example/code' });
   await flush();
-  const request = send.mock.calls.at(-1)![0];
-  expect(request.settingsCredential).toBe('pack-access');
+  const request = mutate.mock.calls.at(-1)![0];
+  expect(request.credential).toBe('pack-access');
   expect(request.event).not.toHaveProperty('settingsCredential');
+  expect(request.event).not.toHaveProperty('credential');
   windowSettings.receive({ to: 'host/settings', answering: request.call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: windowSettings.getSnapshot() } } });
   expect(await write).toEqual({ status: 'saved' });
   binding.dispose(); binding.dispose();
@@ -82,12 +104,12 @@ it('requires installed build identity and never falls back to host access', asyn
 
 it('discards a provisional pack credential if its connection changes during issuance', async () => {
   await connect();
-  let release!: (credential: string) => void;
+  let release!: (result: { credential: string }) => void;
   openPack.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
   const loading = settingsForPack(acceptedPack);
   await flush();
   disconnectWindowSettings();
-  release('stale-access');
+  release({ credential: 'stale-access' });
   await expect(loading).rejects.toThrow('connection changed');
   expect(close).toHaveBeenCalledWith({ credential: 'stale-access' });
 });
@@ -99,7 +121,7 @@ it('keeps bootstrap pending until a validated correlated snapshot arrives', asyn
   await flush();
   expect(settled).toBe(false);
   expect(openHost).toHaveBeenCalledOnce();
-  const call = send.mock.calls.at(-1)![0].call;
+  const call = linkSend.mock.calls.at(-1)![0].call;
   windowSettings.receive({ to: 'host/settings', answering: 'other-read', event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } } });
   await flush();
   expect(settled).toBe(false);
@@ -112,5 +134,13 @@ it('does not report a dropped bootstrap as a new connected shell', async () => {
   disconnectWindowSettings();
   expect(await ready).toBe(false);
   await flush();
-  expect(send).not.toHaveBeenCalled();
+  expect(linkSend).not.toHaveBeenCalled();
+});
+
+it('does not queue settings.close when disconnecting after transport teardown', async () => {
+  await connect();
+  sessionOpen.current = false;
+  disconnectWindowSettings();
+  await flush();
+  expect(close).not.toHaveBeenCalled();
 });

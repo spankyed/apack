@@ -55,26 +55,24 @@ import { contentRuntime } from '../src/__generated__/content-runtime';
 import { registration } from '../src/__generated__/pack-entry';
 await setupPackTests({ contentRuntime, registration });`);
   write(root, 'tests/memos-surface.ts', `
-import { setup } from 'xstate';
-export default setup({}).createMachine({});`);
+import { state } from '@apackdev/state';
+export default state()({});`);
   write(root, 'tests/memos-system.ts', `
-import { setup } from 'xstate';
+import { state } from '@apackdev/state';
 import { untypedBroadcast } from '@apackdev/sdk/events';
 import { reportError } from '@apackdev/sdk/logger';
-import { defineSystem } from '@apackdev/sdk/framework';
 export type Contract = {
   incoming: { type: 'SAVE' } | { type: 'NOTIFY' };
   outgoing: { type: 'MEMOS_STARTED' } | { type: 'MEMOS_NOTIFIED' };
 };
-const spec = defineSystem<Contract>();
-const machine = setup({ types: spec.types }).createMachine({
-  entry: () => untypedBroadcast('dependent-pack/memos', { type: 'MEMOS_STARTED' }),
+const memos = state<{}, Contract['incoming']>()({
+  run: () => { untypedBroadcast('dependent-pack/memos', { type: 'MEMOS_STARTED' }); },
   on: {
-    NOTIFY: { actions: () => untypedBroadcast('dependent-pack/memos', { type: 'MEMOS_NOTIFIED' }) },
-    SAVE: { actions: () => reportError({ error: new Error('lost memo'), source: 'memos' }) },
+    NOTIFY: () => { untypedBroadcast('dependent-pack/memos', { type: 'MEMOS_NOTIFIED' }); },
+    SAVE: () => { reportError({ error: new Error('lost memo'), source: 'memos' }); },
   },
 });
-export default { spec, machine };`);
+export default memos;`);
   const dependency = readCachedDependency(root, 'default-setup')!;
   const files = await generatePackFiles(manifest, { packRoot: root,
     depSnapshots: new Map([['default-setup', dependency.snapshot]]) });

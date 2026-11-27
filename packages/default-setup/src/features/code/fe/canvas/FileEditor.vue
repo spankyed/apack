@@ -197,9 +197,7 @@ import { nativeVideoExtensions } from '#features/code/fe/utils/file-icons.ts'
 import type { ActionTab } from '#features/code/fe/features/actions/state.ts'
 import type { PromptTab } from '#features/code/fe/features/prompts/state.ts'
 import type { GitDiff } from '#features/code/fe/features/commit/state.ts'
-import { useState, useSurface } from '@apackdev/sdk/fe'
-import type { CodeState } from '#features/code/fe/state.ts'
-import { panelChild } from '#features/code/fe/features/children.ts'
+import { useState } from '#generated/state-fe.ts'
 
 // Props
 const props = defineProps<{
@@ -308,10 +306,10 @@ const getDiffContent = (file: OpenFile | TerminalTab | ActionTab | PromptTab | u
 }
 
 // Who last changed each line of the file shown, when blame was asked for it: its path is from the top of the folder
-const codeActor: CodeState = useSurface()
-const { state: git } = useState(panelChild(codeActor, 'commit')!)
+const { child } = useState('code')
+const { state: git } = useState(() => child('commit'))
 const blameLabels = computed(() => {
-  const asked = git.value.data.blame
+  const asked = git.value?.at === 'open' ? git.value.data.blame : null
   const base = props.baseDirectory
   if (!asked || !props.activeFilePath || !base || props.activeFilePath !== `${base}/${asked.path}`) return undefined
   return asked.lines.map(({ line, author, date, summary, commit }) => ({

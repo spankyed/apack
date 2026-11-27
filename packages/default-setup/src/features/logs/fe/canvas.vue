@@ -340,13 +340,13 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
 import { computed, ref, reactive, watch, onMounted, onUnmounted } from 'vue';
 import { Search, ChevronRight, AlertCircle, Info, AlertTriangle, Bug, FileWarning, Terminal, X, Trash, Radio, Copy, Check } from 'lucide-vue-next';
-import type { LogsState, LogEntry } from './state.ts';
+import type { LogEntry } from './state.ts';
 import DataRenderer from '@apackdev/ui/components/DataRenderer';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
+import { useState } from '#generated/state-fe.ts'
 
 const HOST_SETTINGS = resolveName('settings', 'host')
 import { useSettings } from '#generated/settings-fe.ts'
@@ -397,7 +397,7 @@ const contextMenu = reactive({
   source: ''
 });
 
-const { state: logsMachine, send } = useState<LogsState>()
+const { state: logsMachine, send } = useState('logs')
 
 const filteredLogs = computed(() => {
   let filtered = logsMachine.value.data.logs;

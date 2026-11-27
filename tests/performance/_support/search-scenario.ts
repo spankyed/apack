@@ -38,7 +38,7 @@ export async function searchScenario({ app, appPage, electronApp }: Parameters<t
         try {
           await win.__waitForPerformanceView({
             check: () => {
-              const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+              const context = win.applicationState.surface('default-setup/threads').getSnapshot().context;
               const search = context.messageSearch;
               if (search.query !== query || search.searching) return false;
               work.observedResults = search.results.length;

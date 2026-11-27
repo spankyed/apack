@@ -1,16 +1,24 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick, type App } from 'vue';
-import { createActor, createMachine } from 'xstate';
+import { system } from '@apackdev/state';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { SurfaceScope, type ArtifactFrontendBinding, type BlockFrontendBinding } from '@apackdev/sdk/fe';
 import type { ArtifactCatalogEntry, BlockCatalogEntry } from '@apackdev/sdk/framework';
 import ContentViewer from '#features/threads/fe/canvas/agent/content-viewer.vue';
 import ChatMessage from '#features/threads/fe/chat/message.vue';
+import threadsState from '#features/threads/fe/state.ts';
+import { provide as providePackState } from '#generated/state-fe.ts';
 import type { MessageEntity } from '#generated/types.ts';
 import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer';
 
 let app: App | undefined;
-afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); });
+let stateSys: ReturnType<typeof system> | undefined;
+afterEach(() => {
+  app?.unmount(); app = undefined;
+  stateSys?.stop(); stateSys = undefined;
+  document.body.replaceChildren();
+  stopFeTestRuntime();
+});
 
 function fixture() {
   const owner = { packId: 'external', origin: 'native' as const, enabled: true };
@@ -19,9 +27,9 @@ function fixture() {
   const state = { artifacts: [artifact], blocks: [block] };
   const artifacts = new Map<string, ArtifactFrontendBinding>(); const blocks = new Map<string, BlockFrontendBinding>();
   const catalogListeners = new Set<() => void>(); const bindingListeners = new Set<() => void>();
-  const actor = createActor(createMachine({}));
+  const actor = { id: 'external/threads', sessionId: 'surface-1', getSnapshot: () => ({ status: 'active' as const, value: '', context: {} }), subscribe: () => ({ unsubscribe() {} }), send: () => {} };
   startFeTestRuntime({
-    application: { system: { get: () => actor }, subscribe: () => ({ unsubscribe() {} }) } as never,
+    application: { surface: () => actor, subscribe: () => ({ unsubscribe() {} }) } as never,
     catalog: { status: () => 'ready', problem: () => undefined, references: () => [], frontend: () => [], steps: () => [],
       artifacts: () => state.artifacts, blocks: () => state.blocks, events: () => [], dsl: () => [],
       subscribe(listener) { catalogListeners.add(listener); return () => { catalogListeners.delete(listener); }; } },
@@ -58,11 +66,14 @@ it('renders current block bindings inside conversation node views and drops disa
   const message: MessageEntity = { id: 'Message-block', entityType: 'Message', timestamp: 0, createdAt: 0,
     sender: 'assistant', text: 'Body', blocks: [{ id: 'Block-approval', type: 'approval', props: {} }], responseTimestamp: 1,
     blockResponse: { approved: true } };
+  stateSys = system({ side: 'window' });
+  stateSys.start('default-setup/threads', threadsState);
   app = createApp({ render: () => h(SurfaceScope, { surface: 'external/threads' }, {
     default: () => h(ConversationViewer, { messages: [message] }, {
       default: ({ content }: { content: object }) => h(ChatMessage, { message }, { default: () => h(content) }),
     }),
   }) });
+  providePackState(app, stateSys);
   app.mount(f.root);
   await vi.waitFor(() => expect(f.root.querySelector('[data-message-id="Message-block"]')).not.toBeNull());
   expect(f.root.querySelector('.custom-input')).toBeNull();

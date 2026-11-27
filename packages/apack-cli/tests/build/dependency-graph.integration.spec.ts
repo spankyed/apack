@@ -43,14 +43,13 @@ const NOTIFIER_SOURCES = {
     "export type Contract = { incoming: { type: 'NOTIFY' }; outgoing: OutgoingNotifierEvents };",
   ].join('\n') + '\n',
   'src/system.ts': [
-    "import { setup } from 'xstate';",
-    "import { defineSystem } from '@apackdev/sdk/framework';",
+    "import { state } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './system.contract.ts';",
-    'export const notifierSpec = defineSystem<Contract>();',
-    'const entry = { spec: notifierSpec, machine: setup({ types: notifierSpec.types }).createMachine({ id: "notifier" }) };',
+    'const entry = state<{}, IncomingOnlyEventsOf<Contract>>()({});',
     'export default entry;',
   ].join('\n'),
-  'src/surface.ts': "import type { AnyStateMachine } from 'xstate';\nexport default { id: 'notifier' } as unknown as AnyStateMachine;\n",
+  'src/surface.ts': "import { state } from '@apackdev/state';\nexport default state()({});\n",
 };
 
 const DEEP = 'deep-pack';

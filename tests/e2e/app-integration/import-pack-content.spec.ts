@@ -73,11 +73,11 @@ test('previews a compiled content directory by its content.json and imports the 
     await app.navigate('host/settings');
 
     const send = (event: Record<string, unknown>) => appPage.evaluate((e) => {
-      (window as any).applicationState.system.get('host/settings').send(e);
+      (window as any).applicationState.surface('host/settings').send(e);
     }, event);
-    const importState = () => appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').getSnapshot().context.packContentImport) as Promise<PackContentImport>;
+    const importState = () => appPage.evaluate(() => (window as any).applicationState.surface('host/settings').getSnapshot().context.packContentImport) as Promise<PackContentImport>;
     const waitForStatus = (status: string) => appPage.waitForFunction(
-      (s) => ['error', s].includes((window as any).applicationState.system.get('host/settings').getSnapshot().context.packContentImport.status),
+      (s) => ['error', s].includes((window as any).applicationState.surface('host/settings').getSnapshot().context.packContentImport.status),
       status,
     );
 

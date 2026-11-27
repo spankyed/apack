@@ -40,18 +40,16 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
-
 import { computed, watch } from 'vue';
-import type { ActionsState } from './state.ts';
 import ActionsList from './components/ActionsList.vue';
 import ActionDetail from './components/ActionDetail.vue';
 import type { EARS } from '@apackdev/sdk';
 import type { ActionParameter } from '@apackdev/sdk';
 import { useView } from '#generated/fe.ts';
 import { useSettings } from '#generated/settings-fe.ts';
+import { useState } from '#generated/state-fe.ts';
 
-const { state: actions, send } = useState<ActionsState>();
+const { state: actions, send } = useState('actions');
 const showingList = computed(() => actions.value.at === 'list');
 const showingDetail = computed(() => actions.value.at === 'detail');
 

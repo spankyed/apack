@@ -6,32 +6,30 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
-import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { test, expect } from '@apackdev/testing';
 
 interface Received { surface: string; type: string; data?: unknown; asked?: string; answer?: { savedBookmarks?: Array<{ url: string }> } }
 
 type RecordingWindow = {
   __received?: Received[];
-  applicationState: { system: { inspect(observer: (event: { type: string; actorRef: { id: string }; event: Received }) => void): void } };
+  applicationState: { onEvent(observer: (record: { to: string; event: Received }) => void): void };
 };
 
 /**
- * The id a built-in feature's system and surface run under. This spec reads the surfaces' actors by id, which pack
+ * The id a built-in feature's system and surface run under. This spec reads the surfaces by id, which pack
  * code can't, so it writes the ids rather than the names.
  */
 const builtIn = (feature: string) => `default-setup/${feature}`;
 
-/** Records every event the code and browser surface actors receive from here on */
+/** Records every event the code and browser surfaces receive from here on */
 async function recordSurfaceEvents(appPage: Page): Promise<void> {
   await appPage.evaluate((ids) => {
     const win = window as unknown as RecordingWindow;
     if (win.__received) return;
     win.__received = [];
-    win.applicationState.system.inspect((inspection) => {
-      const surface = inspection.actorRef?.id;
-      if (inspection.type === '@xstate.event' && (surface === ids.code || surface === ids.browser)) {
-        win.__received!.push({ ...(JSON.parse(JSON.stringify(inspection.event)) as Received), surface });
+    win.applicationState.onEvent(({ to, event }) => {
+      if (to === ids.code || to === ids.browser) {
+        win.__received!.push({ ...(JSON.parse(JSON.stringify(event)) as Received), surface: to });
       }
     });
   }, { code: builtIn('code'), browser: builtIn('browser') });
@@ -89,33 +87,22 @@ test("the code system's file watcher and a terminal's news reach the code surfac
   }
 });
 
-test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ app, appPage }) => {
+test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ app, appPage, connection }) => {
   const url = `https://example.com/e2e-surface-sends-${Date.now()}`;
   await recordSurfaceEvents(appPage);
   await app.send(builtIn('browser'), { type: 'SYNC_BOOKMARKS', bookmarks: [{ url, title: 'E2E bookmark', displayOrder: 0 }] });
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
-  });
-  expect(apiPort, 'the renderer knows the API port').toBeTruthy();
-  expect(apiToken, 'the renderer knows the API token').toBeTruthy();
 
   try {
     // The reload restarts the pack's systems and replaces its frontend's actors, each of which the shell starts
     // Asked once and awaited to its answer: a reload loads the pack's runtime from disk, which a busy disk makes
     // slow, and an assertion's backstop around the request would give up on one still in flight
-    const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
-      body: JSON.stringify({ packId: 'default-setup' }),
-    });
-    expect(response.status, await response.text()).toBe(200);
+    await connection.reloadPack('default-setup');
 
     // The answer is no event of the surface's: it is the output of the ask its machine invoked, so what shows it
     // arrived is the surface holding the bookmark
     await expect.poll(() => appPage.evaluate((ref) => {
-      const surface = (window as unknown as { applicationState: { system: { get(id: string): { getSnapshot(): { context: { bookmarks: { url: string }[] } } } | undefined } } })
-        .applicationState.system.get(ref);
+      const surface = (window as unknown as { applicationState: { surface(id: string): { getSnapshot(): { context: { bookmarks: { url: string }[] } } } | undefined } })
+        .applicationState.surface(ref);
       return (surface?.getSnapshot().context.bookmarks ?? []).map((bookmark) => bookmark.url);
     }, builtIn('browser'))).toContain(url);
   } finally {

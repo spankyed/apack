@@ -1,21 +1,23 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createActor, createMachine, type Actor } from 'xstate';
+import { state } from '@apackdev/state';
 import { resolveName } from '@apackdev/sdk/ids';
 import type { NativePackDeclaration } from '@apackdev/sdk/framework';
 import { createFePackRegistry } from '../../../../src/fe/pack-store.ts';
-import { createShellMachine, type ShellMachine } from '../../../../src/features/application/fe/machine.ts';
+import { createShell, type ShellRuntime } from '../../../../src/features/application/fe/machine.ts';
 import type { SurfaceCatalogEntry } from '../../../../src/packs/catalog.ts';
 import { fakeShell } from './fakes.ts';
 
-let app: Actor<ShellMachine> | undefined;
+let app: ShellRuntime | undefined;
 afterEach(() => { app?.stop(); app = undefined; });
+
+const emptyState = () => state<{}, never>()({});
 
 function fixture() {
   const packs = createFePackRegistry();
   const native: NativePackDeclaration = { id: 'host', features: { settings: { description: 'Host settings.',
     surface: { label: 'Settings', state: 'native/state.ts', canvas: 'native/settings.vue' } } } };
   packs.registerPackFE({ kind: 'native', declaration: native }, { id: 'host', features: {
-    settings: { surface: { label: 'Settings', state: createMachine({}), canvas: {} } },
+    settings: { surface: { label: 'Settings', state: emptyState(), canvas: {} } },
   } });
   const shell = fakeShell({ surfaces: packs.getRegisteredSurfaces() });
   const entries: SurfaceCatalogEntry[] = [{ featureRef: resolveName('settings', 'host'), packId: 'host', origin: 'native', enabled: true,
@@ -23,9 +25,7 @@ function fixture() {
   const listeners = new Set<() => void>();
   const catalog = { status: vi.fn<() => 'loading' | 'ready' | 'disconnected'>(() => 'ready'), surfaces: () => entries,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; } };
-  app = createActor(createShellMachine({ ...shell.options, packs, catalog }), {
-    systemId: 'host/application', input: {},
-  }).start();
+  app = createShell({ ...shell.options, packs, catalog }, {}).start();
   const publish = () => { for (const listener of listeners) listener(); };
   const candidate = (id: string, isDefault = false, enabled = true) => {
     const declaration = { label: id, state: 'src/state.ts', canvas: 'src/view.vue', ...(isDefault && { default: true as const }) };
@@ -34,7 +34,7 @@ function fixture() {
     const entry: SurfaceCatalogEntry = { featureRef: resolveName('view', id), packId: id, declaration, origin: 'installed', enabled,
       declarationRevision: pack.declarationRevision, buildRevision: pack.buildRevision };
     const registration = { id, declarationRevision: pack.declarationRevision, features: { view: {
-      surface: { label: id, state: createMachine({}), canvas: {} }, ...(isDefault && { default: true as const }),
+      surface: { label: id, state: emptyState(), canvas: {} }, ...(isDefault && { default: true as const }),
     } } };
     return { entry, pack, registration, declare() { entries.push(entry); publish(); },
       accept() { const surfaces = packs.registerPackFE({ kind: 'loaded', pack }, registration);
@@ -84,12 +84,12 @@ it('distinguishes unknown, disabled and failed destinations, without waiting for
 it('reconciles admission before the catalog frame and rejects a stale completion without replacing the current actor', () => {
   const f = fixture(); const next = f.candidate('external', true);
   f.catalog.status.mockReturnValue('loading'); const surfaces = next.accept();
-  expect(app!.system.get('external/view')).toBeUndefined();
+  expect(app!.surface('external/view')).toBeUndefined();
   f.entries.push(next.entry); f.catalog.status.mockReturnValue('ready'); f.publish();
-  const actor = app!.system.get('external/view'); expect(actor).toBeDefined();
+  const actor = app!.surface('external/view'); expect(actor).toBeDefined();
   expect(app!.getSnapshot().context.activeSurface.id).toBe('external/view');
   app!.send({ type: 'PACK_FRONTEND_LOADED', packId: 'external', registrationId: 'retired', surfaces });
-  expect(app!.system.get('external/view')).toBe(actor);
+  expect(app!.surface('external/view')).toBe(actor);
   expect(app!.getSnapshot().context.acceptedPackRuntimes.external).toBe(next.pack.registrationId);
   f.catalog.status.mockReturnValue('disconnected'); f.publish();
   app!.send({ type: 'SELECT_SURFACE', surface: 'host/settings' });
@@ -100,7 +100,7 @@ it('reconciles admission before the catalog frame and rejects a stale completion
 
 it('does not route new requests to an actor while its replacement binding awaits shell admission', () => {
   const f = fixture(); const next = f.candidate('external'); next.declare(); next.accept();
-  const old = app!.system.get('external/view')!; const sent = vi.spyOn(old, 'send');
+  const old = app!.surface('external/view')!; const sent = vi.spyOn(old, 'send');
   f.packs.replacePackFE({ kind: 'loaded', pack: { ...next.pack, registrationId: 'replacement' } }, next.registration);
   app!.send({ type: 'SELECT_SURFACE', surface: 'external/view' });
   expect(app!.getSnapshot().context.activeSurface.id).toBe('host/settings');
@@ -125,10 +125,32 @@ it('takes back a frontend whose pack the catalog disabled while it loaded, and i
   disabled.declare();
   disabled.accept();
   expect(f.shell.packFrontends.unload).toHaveBeenCalledWith('gone');
-  expect(app!.system.get('gone/view')).toBeUndefined();
+  expect(app!.surface('gone/view')).toBeUndefined();
   expect(app!.getSnapshot().context.acceptedPackRuntimes).not.toHaveProperty('gone');
   f.catalog.status.mockReturnValue('loading');
   settling.declare();
   settling.accept();
   expect(f.shell.packFrontends.unload).not.toHaveBeenCalledWith('later');
+});
+
+it('starts every newly loaded surface actor before notifying shell subscribers', async () => {
+  const f = fixture();
+  const next = f.candidate('external');
+  next.declare();
+  f.shell.client.loadedPacks.mockResolvedValue([next.pack as any]);
+  f.shell.packFrontends.load.mockImplementation(async () => f.packs.registerPackFE({ kind: 'loaded', pack: next.pack }, next.registration));
+
+  const missingOnNotify: string[] = [];
+  const sub = app!.subscribe((snapshot) => {
+    for (const surface of snapshot.context.surfaces) {
+      if (!app!.surface(surface.id)) missingOnNotify.push(surface.id);
+    }
+  });
+  try {
+    f.shell.client.connect();
+    await vi.waitFor(() => expect(app!.getSnapshot().context.surfaces.some((s) => s.id === resolveName('view', 'external'))).toBe(true));
+    expect(missingOnNotify).toEqual([]);
+  } finally {
+    sub.unsubscribe();
+  }
 });

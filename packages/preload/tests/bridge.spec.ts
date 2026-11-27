@@ -25,7 +25,6 @@ async function load(argv: string[] = []): Promise<{
   process.argv = ['electron', 'app', ...argv];
   vi.resetModules();
   const { contextBridge, ipcRenderer } = await import('../tests/electron-stub');
-  ipcRenderer.syncAnswers.set('api:token', 'a-token-from-main');
   await import('../src/index.ts');
   return {
     api: contextBridge.exposed.get('electronAPI') as Record<string, any>,
@@ -34,46 +33,14 @@ async function load(argv: string[] = []): Promise<{
   };
 }
 
-describe('the API token', () => {
-  /**
-   * **It is read from main, never from the command line**, and that is the whole of why this case exists:
-   * `process.argv` is readable by any process on the machine, so a token passed that way would be a token
-   * every other process on the box has. Main sends it over a synchronous channel as the preload loads.
-   */
-  it('comes from main over api:token', async () => {
-    const { api } = await load();
+describe('host transport isolation', () => {
+  it('exposes backendPort and never exposes apiPort or apiToken to the window', async () => {
+    const { api } = await load(['--api-port=3099', '--api-token=secret']);
 
-    expect(api.apiToken).toBe('a-token-from-main');
-  });
-
-  /** The firing case for that claim: an argument offering one is not where the token comes from. */
-  it('is not taken from an argument, however the argument is spelled', async () => {
-    const { api } = await load(['--api-token=from-the-command-line', '--apiToken=from-the-command-line']);
-
-    expect(api.apiToken).toBe('a-token-from-main');
-  });
-});
-
-describe('the API port', () => {
-  it('is the one main passed', async () => {
-    expect((await load(['--api-port=3099'])).api.apiPort).toBe(3099);
-  });
-
-  it('falls back to 3001 when no argument names one', async () => {
-    expect((await load()).api.apiPort).toBe(3001);
-  });
-
-  /**
-   * A port is a port or it is the default. Main builds this argument from a number it already has
-   * (`WindowManager`), so nothing reachable from the UI produces a malformed one — which makes this an
-   * assertion about the pair rather than a gate on input. **The edit that makes it fire** is dropping the
-   * guard: `parseInt` answers `NaN` for an empty or non-numeric value, and a window would then connect to
-   * `ws://localhost:NaN` and fail with a message about the URL rather than about the argument.
-   */
-  it('is the default rather than a number that is not one', async () => {
-    for (const value of ['', 'abc', '-1', '0']) {
-      expect((await load([`--api-port=${value}`])).api.apiPort, value).toBe(3001);
-    }
+    expect(api.backendPort).toBeDefined();
+    expect(typeof api.backendPort.connect).toBe('function');
+    expect('apiPort' in api).toBe(false);
+    expect('apiToken' in api).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { DeclarationData, PackManifest, SurfaceDeclaration, SettingsDefinition, ReferenceDeclarations, StepFrontendDeclaration } from '@apackdev/sdk/framework';
-import type { PackFERegistration, PackFEFeature, SurfaceDefinition, TextEditorExtensions } from '@apackdev/sdk/fe';
+import { isState, type PackFERegistration, type PackFEFeature, type SurfaceDefinition, type TextEditorExtensions } from '@apackdev/sdk/fe';
 import { isPlainObject, hasOwn } from '@apackdev/sdk/utils/pure';
 import { namedBindings, sameKeys } from '../packs/binding-shape.ts';
 import { isEqual } from '../features/settings/document.ts';
@@ -10,19 +10,22 @@ const REGISTRATION_KEYS = {
 } satisfies Record<keyof PackFERegistration, true>;
 
 const FEATURE_KEYS = { surface: true, settingsForm: true, designation: true, default: true, references: true } satisfies Record<keyof PackFEFeature, true>;
-const SURFACE_KEYS = { label: true, state: true, icon: true, canvas: true, panel: true, chat: true,
+const SURFACE_KEYS = { label: true, state: true, chrome: true, icon: true, canvas: true, panel: true, chat: true,
   isPinned: true, hotkeys: true, options: true, fallbackPanel: true } satisfies Record<keyof SurfaceDefinition, true>;
 const TIPTAP_KEYS = { extensions: true, popups: true, isSuggestionActive: true } satisfies Record<keyof TextEditorExtensions, true>;
 const optionalKeys = (actual: unknown, keys: string[]) => sameKeys(actual === undefined ? {} : actual, keys);
 const isComponent = (value: unknown) => typeof value === 'function' || isPlainObject(value);
+const isSurfaceState = (value: unknown) =>
+  isState(value) || (isPlainObject(value) && typeof value.transition === 'function' && typeof value.getInitialSnapshot === 'function');
 
 /** Compare a bound surface to its data without executing its views or predicates. */
 function surfaceBindingProblem(declaration: SurfaceDeclaration, surface: unknown): string | undefined {
   const problem = (field = '') => `surface${field ? '.' + field : ''}`;
   if (!isPlainObject(surface) || typeof surface.label !== 'string' || !surface.label.trim()
-    || !isPlainObject(surface.state) || typeof surface.state.transition !== 'function'
-    || typeof surface.state.getInitialSnapshot !== 'function') return problem();
+    || !isSurfaceState(surface.state)) return problem();
   for (const key of Object.keys(surface)) if (!hasOwn(SURFACE_KEYS, key)) return problem(key);
+  if ((surface.chrome !== undefined) !== (declaration.chrome !== undefined)
+    || (declaration.chrome !== undefined && !isPlainObject(surface.chrome))) return problem('chrome');
   for (const field of ['label', 'isPinned'] as const) if (surface[field] !== declaration[field]) return problem(field);
   for (const field of ['icon', 'panel', 'chat'] as const) {
     if ((surface[field] !== undefined) !== (declaration[field] !== undefined)

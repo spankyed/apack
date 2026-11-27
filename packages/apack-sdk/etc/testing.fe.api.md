@@ -4,9 +4,8 @@
 
 ```ts
 
-import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
-import type { AnyStateMachine } from 'xstate';
+import type { AnyState } from '@apackdev/state';
 import type { Component } from 'vue';
 import { EARS } from '@elmdb/ears';
 import type { EditorState } from '@tiptap/pm/state';
@@ -14,6 +13,7 @@ import type { EmbedDeclaration } from '@elmdb/ears';
 import type { RankDeclaration } from '@elmdb/ears';
 import type { Ref } from 'vue';
 import type { SearchDeclaration } from '@elmdb/ears';
+import type { System } from '@apackdev/state';
 
 // @public (undocumented)
 export interface FakeSettings extends SettingsPort {

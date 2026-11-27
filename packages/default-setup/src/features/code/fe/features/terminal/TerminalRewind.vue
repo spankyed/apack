@@ -31,24 +31,21 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { History } from 'lucide-vue-next'
-import { type CodeState } from '#features/code/fe/state.ts'
 import { rewindViewId, type TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
 import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
-import { panelChild } from '../children.ts'
+import { useState } from '#generated/state-fe.ts'
 
 /** How often a drag of the moment asks for another: each is a screen rebuilt and sent */
 const SEEK_EVERY_MS = 50
 
 const props = defineProps<{ terminalInfo: TerminalInfo }>()
 
-const codeActor: CodeState = useSurface()
-const terminalActor = panelChild(codeActor, 'terminal')!
-const { state: terminals, send } = useState(terminalActor)
+const { child } = useState('code')
+const { state: terminals, send } = useState(() => child('terminal'))
 const rewind = computed(() =>
-  terminals.value.data.rewind?.terminalId === props.terminalInfo.id ? terminals.value.data.rewind : null)
+  terminals.value?.data.rewind?.terminalId === props.terminalInfo.id ? terminals.value.data.rewind : null)
 const container = ref<HTMLElement>()
 
 const shown = computed(() => rewind.value ? new Date(rewind.value.at).toLocaleTimeString() : '')

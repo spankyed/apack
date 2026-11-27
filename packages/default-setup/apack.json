@@ -498,6 +498,7 @@
         "label": "Threads",
         "icon": "BotMessageSquare",
         "state": "src/features/threads/fe/state.ts",
+        "chrome": "src/features/threads/fe/state.ts#threadsChrome",
         "canvas": {
           "routes": {
             "list": "src/features/threads/fe/canvas/list.vue",
@@ -924,6 +925,7 @@
         "label": "Code",
         "icon": "Code2",
         "state": "src/features/code/fe/state.ts",
+        "chrome": "src/features/code/fe/state.ts#codeChrome",
         "canvas": {
           "entry": "src/features/code/fe/canvas/canvas.vue",
           "load": "lazy"
@@ -1011,6 +1013,7 @@
         "label": "Notes",
         "icon": "NotebookText",
         "state": "src/features/notes/fe/state.ts",
+        "chrome": "src/features/notes/fe/state.ts#notesChrome",
         "canvas": "src/features/notes/fe/canvas.vue",
         "panel": "src/features/notes/fe/panel.vue"
       },
@@ -1278,6 +1281,7 @@
         "label": "Library",
         "icon": "Library",
         "state": "src/features/library/fe/state.ts#librarySystem",
+        "chrome": "src/features/library/fe/state.ts#libraryChrome",
         "canvas": "src/features/library/fe/canvas.vue",
         "panel": "src/features/library/fe/panel.vue",
         "isPinned": true
@@ -1377,6 +1381,7 @@
         "label": "Flows",
         "icon": "Network",
         "state": "src/features/flows/fe/state.ts",
+        "chrome": "src/features/flows/fe/state.ts#flowsChrome",
         "canvas": {
           "entry": "src/features/flows/fe/canvas/flow-canvas.vue",
           "load": "lazy"
@@ -1461,6 +1466,7 @@
         "label": "Actions",
         "icon": "Play",
         "state": "src/features/actions/fe/state.ts",
+        "chrome": "src/features/actions/fe/state.ts#actionsChrome",
         "canvas": "src/features/actions/fe/canvas.vue",
         "isPinned": true,
         "options": {}
@@ -1544,6 +1550,7 @@
         "label": "Prompts",
         "icon": "Sparkle",
         "state": "src/features/prompts/fe/state.ts",
+        "chrome": "src/features/prompts/fe/state.ts#promptsChrome",
         "canvas": "src/features/prompts/fe/canvas.vue",
         "isPinned": true,
         "options": {}
@@ -1591,6 +1598,7 @@
         "label": "Brain",
         "icon": "Brain",
         "state": "src/features/brain/fe/state.ts",
+        "chrome": "src/features/brain/fe/state.ts#brainChrome",
         "canvas": {
           "entry": "src/features/brain/fe/canvas.vue",
           "load": "lazy"
@@ -1686,6 +1694,7 @@
         "label": "Database",
         "icon": "Database",
         "state": "src/features/database/fe/state.ts",
+        "chrome": "src/features/database/fe/state.ts#databaseChrome",
         "canvas": "src/features/database/fe/canvas.vue",
         "isPinned": true
       },

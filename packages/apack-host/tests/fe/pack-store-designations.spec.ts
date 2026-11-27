@@ -1,4 +1,4 @@
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 // The renderer resolves each role to the surface that plays it; a pack claiming a role another plays is refused, as
 // the backend registry refuses it.
@@ -10,7 +10,7 @@ import { bindFeHost } from '@apackdev/sdk/runtime';
 const { registerFixture, unregisterPackFE, ...registry } = createNativeFrontendTestRegistry();
 bindFeHost({ catalog: {} as never, application: {} as never, secrets: {} as never, settings: {} as never, client: {} as never, packs: registry });
 
-const surface = (label: string) => ({ label, state: createMachine({}) }) satisfies SurfaceDefinition;
+const surface = (label: string) => ({ label, state: state()({}) }) satisfies SurfaceDefinition;
 
 const packs: string[] = [];
 afterEach(() => {

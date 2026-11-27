@@ -129,7 +129,6 @@ const newExclusion = ref<string>('')
 // Common exclusion patterns
 const commonExclusions = [
   'app-events',
-  'xstate.*',
   'debug.*',
   'trace.*',
   'verbose.*',

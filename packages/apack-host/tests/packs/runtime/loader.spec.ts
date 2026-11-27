@@ -245,11 +245,10 @@ describe('pack-loader', () => {
       fs.writeFileSync(path.join(packDir, 'runtime', 'index.cjs'), [
         "const zod = require('zod');",
         "const { z } = require('zod/v4');",
-        "const { createMachine } = require('xstate');",
-        "const { and } = require('xstate/guards');",
+        "const { state } = require('@apackdev/state');",
         `module.exports = { registration: { id: 'zod-pack', declarationRevision: '${_declarationRevision({ id: 'zod-pack', name: 'Zod', version: '1.0.0' })}' }, parsed: z.string().parse('ok'),`,
         "  sameZod: require('zod/v4') === require('zod/v4'), hostZod: zod === require('zod'),",
-        "  machine: typeof createMachine, guard: typeof and };",
+        "  stateFn: typeof state };",
       ].join('\n'));
       sealPack(packDir);
       const [pack] = loadExternalPacks(registry);
@@ -257,7 +256,7 @@ describe('pack-loader', () => {
 
       // The modules the runtime got are the host's own, not a second copy
       const runtime = require(path.join(packDir, 'runtime', 'index.cjs')) as Record<string, unknown>;
-      expect(runtime).toMatchObject({ parsed: 'ok', sameZod: true, hostZod: true, machine: 'function', guard: 'function' });
+      expect(runtime).toMatchObject({ parsed: 'ok', sameZod: true, hostZod: true, stateFn: 'function' });
       expect(runtime.zodIsHost ?? require('zod/v4')).toBe(require('zod/v4'));
     });
 

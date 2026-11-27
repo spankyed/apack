@@ -3,9 +3,16 @@
 // host feature's frontend. The features' halves are named here rather than each keeping a `public.ts` of its own:
 // this is the package's export surface, which is why naming a feature's frontend from here is not the crossing
 // `check:specifiers` refuses. A feature's modules are otherwise its own, exactly as a pack's are.
+import { vueBinding } from '@apackdev/state/vue';
+import { HOST_PACK_ID, resolveName } from '@apackdev/sdk/ids';
+import type { ShellState } from '../features/application/fe/machine.ts';
+import type packsMachineRef from '../features/packs/fe/machine.ts';
+import type { createSettingsMachine as createSettingsMachineRef } from '../features/settings/fe/machine.ts';
+
 export type { Surface } from '@apackdev/sdk/fe';
 export { createFePackRegistry, type FePackRegistry, type FrontendSettingsBinding, type PreparedFrontend } from './pack-store.ts';
 export { HOST } from '../refs.ts';
+export { hostState, type HostNet } from '../state.ts';
 export { hostDeclaration, hostSurfaceDeclarations } from '../features/declaration.ts';
 export type { PackFERegistration } from '@apackdev/sdk/fe';
 export { describeFailure, type ShellClient, type ShellConnection, type ShellFailure } from './client.ts';
@@ -14,11 +21,19 @@ export { runWindowStorageMigrations, type WindowStorageMigration, type WindowSto
 export type { ShellPackFrontends } from './pack-frontends.ts';
 
 // The app shell (`features/application/fe/`)
-export { createShellMachine, type ShellMachine } from '../features/application/fe/machine.ts';
+export {
+  createShell,
+  createShellState,
+  type ShellObserver,
+  type ShellRuntime,
+  type ShellShape,
+  type ShellSnapshot,
+  type ShellState,
+} from '../features/application/fe/machine.ts';
 export { withHostLast } from '../features/application/fe/surfaces.ts';
 export { surfaceNavigationItems, type SurfaceNavigationItem } from './surface-navigation.ts';
-export { notifySurfaceActor, sendToSurfaceActor } from './surface-delivery.ts';
-export { computeCrumbs, type BreadcrumbItem } from '../features/application/fe/trail.ts';
+export { notifySurfaceActor, sendToSurfaceActor, type SurfaceEventTarget } from './surface-delivery.ts';
+export { computeCrumbs, type BreadcrumbItem, type TrailSurfaceState } from '../features/application/fe/trail.ts';
 export {
   computeTrail,
   topLevelState,
@@ -27,16 +42,48 @@ export {
   type SurfaceStateChrome,
   type SurfaceStateValue,
 } from '../features/application/fe/chrome.ts';
-export type { ShellNotify, ShellOptions, ShellStorage } from '../features/application/fe/types.ts';
+export type { ShellNotify, ShellOptions, ShellParams, ShellStorage } from '../features/application/fe/types.ts';
 
 // The Packs surface, the pack-frontend loader the shell is given, and the install a deep link asks for
 // (`features/packs/fe/`)
-export { default as packsMachine, type PacksContext, type PacksState, type InstalledPackSummary, type AppPackSourceSummary } from '../features/packs/fe/machine.ts';
+export { default as packsMachine, packsChrome, type PacksContext, type PacksState, type InstalledPackSummary, type AppPackSourceSummary } from '../features/packs/fe/machine.ts';
 export { createPackFrontends, loadPackFEEntry, type DevPackFrontends, type PackFrontendIO, type PackFrontendStyles, type PackFrontendStyle } from '../features/packs/fe/frontends.ts';
 export { installFromProtocol, packInstallRequest, requestPackInstall, type PackInstallRequest } from '../features/packs/fe/install-url.ts';
 
 // The Settings view's machine, as the renderer pairs it with the view's components (`features/settings/fe/`)
-export { createSettingsMachine, type SettingsContext, type SettingsEvents, type SettingsIO, type SettingsState } from '../features/settings/fe/machine.ts';
+export { createSettingsMachine, settingsChrome, type SettingsContext, type SettingsEvents, type SettingsIO, type SettingsState } from '../features/settings/fe/machine.ts';
+
+export type HostSurfaces = {
+  application: ShellState;
+  packs: typeof packsMachineRef;
+  settings: ReturnType<typeof createSettingsMachineRef>;
+};
+
+const hostBinding = /*#__PURE__*/ vueBinding<HostSurfaces>(
+  (name) => resolveName(name, HOST_PACK_ID),
+);
+
+export const provideHostState = hostBinding.provide;
+
+/**
+ * Vue binding for host surfaces and their started children.
+ * Top-level surfaces retain their last committed snapshot across Vue's unmount tick after a synchronous stop.
+ */
+export const useHostState: typeof hostBinding.useState = ((source: unknown) => {
+  const bound = (hostBinding.useState as (s: unknown) => { readonly state: { readonly value: unknown } })(source);
+  if (typeof source !== 'string') return bound;
+  let last: unknown = bound.state.value;
+  const state = {
+    __v_isRef: true,
+    __v_isReadonly: true,
+    get value() {
+      const now = bound.state.value;
+      if (now !== undefined) last = now;
+      return now !== undefined ? now : last;
+    },
+  };
+  return { ...bound, state };
+}) as typeof hostBinding.useState;
 
 export { createWindowSettingsRuntime, type WindowSettingsIO } from './settings-runtime.ts';
 export { settingsProblems, isEqual } from '../features/settings/document.ts';

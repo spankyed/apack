@@ -93,13 +93,6 @@ export function recordIsStale(file: string, pid: number): boolean {
   return at === null || at < bootTime();
 }
 
-/** What a running API publishes about itself in `AppEnvironment.apiPortFile`, so local tools find it */
-export interface ApiEndpoint {
-  port: number;
-  /** The API process. A file whose process is gone is one a crash left behind, not a running app */
-  pid: number;
-}
-
 /** What a process writes about itself in a record: enough to tell its own leftover from a later holder's */
 export interface WriterRecord {
   pid: number;
@@ -114,25 +107,3 @@ export interface WriterRecord {
  */
 export const sameWriter = (a: WriterRecord | null, b: WriterRecord | null): boolean =>
   a !== null && b !== null && a.pid === b.pid && a.machine === b.machine && a.since === b.since;
-
-/**
- * The API running on this data dir, from the file it published, or `null` when there is none: no file, one that
- * can't be read, or one a crashed run left behind. A process this user may not signal counts as running.
- * Whether the API answers is the caller's to check.
- *
- * "Left behind" is the pid *and* the boot it was written in: pids are recycled, so after a reboot a crashed
- * run's file names an unrelated live process and would otherwise report an API that isn't there.
- */
-export function readApiEndpoint(apiPortFile: string): ApiEndpoint | null {
-  let published: { port?: unknown; pid?: unknown };
-  try {
-    published = JSON.parse(fs.readFileSync(apiPortFile, 'utf-8')) as typeof published;
-  } catch {
-    return null;
-  }
-  const { port, pid } = published;
-  if (!Number.isInteger(port) || (port as number) <= 0 || (port as number) > 65535) return null;
-  if (!Number.isInteger(pid) || (pid as number) <= 0) return null;
-  if (recordIsStale(apiPortFile, pid as number)) return null;
-  return { port: port as number, pid: pid as number };
-}

@@ -25,13 +25,19 @@ it('answers a file read to the window that asked, and to no other', async () => 
   await app.settle()
 
   const sent: Array<{ type: string; client?: string }> = []
-  const stop = testRootEvents.onSurfaceSend((message) => {
-    if (message.event.type === 'ASK_ANSWERED' || message.event.type === 'explorer.FILE_CHANGED_EXTERNALLY') sent.push({ type: message.event.type, client: message.client })
+  const stopSurface = testRootEvents.onSurfaceSend((message) => {
+    if (message.event.type === 'ASK_ANSWERED') sent.push({ type: message.event.type, client: message.client })
+  })
+  const stopOutgoing = testRootEvents.onOutgoing((message) => {
+    if (message.event.type === 'explorer.FILE_CHANGED_EXTERNALLY') sent.push({ type: message.event.type, client: message.client })
   })
   try {
     expect(await app.ask('code', { type: 'explorer.READ_FILE', path: file }, { client: MAIN })).toMatchObject({ ok: true, value: expect.objectContaining({ content: 'hello' }) })
     expect(sent, 'the asker alone').toEqual([{ type: 'ASK_ANSWERED', client: MAIN }])
-  } finally { stop() }
+  } finally {
+    stopSurface()
+    stopOutgoing()
+  }
 })
 
 it("answers what a window's code surface starts from to it alone, and sends every window only news of a move", async () => {
@@ -40,9 +46,12 @@ it("answers what a window's code surface starts from to it alone, and sends ever
   const app = await startApp({ systems: ['code'] })
   await app.connect()
   const sent: Array<{ type: string; client?: string }> = []
-  const stop = testRootEvents.onSurfaceSend((message) => {
+  const stopSurface = testRootEvents.onSurfaceSend((message) => {
     // The answer is addressed to whoever asked, which in a spec is the harness rather than the surface
-    if (message.to === CODE || message.event.type === 'ASK_ANSWERED') sent.push({ type: message.event.type, client: message.client })
+    if (message.event.type === 'ASK_ANSWERED') sent.push({ type: message.event.type, client: message.client })
+  })
+  const stopOutgoing = testRootEvents.onOutgoing((message) => {
+    if (message.to === CODE) sent.push({ type: message.event.type, client: message.client })
   })
   try {
     await app.send('code', { type: 'SET_BASE_DIRECTORY', path: dir })
@@ -53,5 +62,8 @@ it("answers what a window's code surface starts from to it alone, and sends ever
     sent.length = 0
     expect(await app.ask('code', { type: 'GET_CODE_START' }, { client: MAIN })).toMatchObject({ ok: true, value: { baseDirectory: dir } })
     expect(sent, 'the directory, to the asker alone').toEqual([{ type: 'ASK_ANSWERED', client: MAIN }])
-  } finally { stop() }
+  } finally {
+    stopSurface()
+    stopOutgoing()
+  }
 })

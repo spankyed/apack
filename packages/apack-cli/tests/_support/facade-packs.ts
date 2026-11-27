@@ -88,16 +88,15 @@ const BASE_PACK = {
     "export type Contract = { incoming: { type: 'ADD_TAG'; name: string }; outgoing: OutgoingThreadsEvents };",
   ].join('\n') + '\n',
   'src/system.ts': [
-    "import { setup } from 'xstate';",
-    "import { defineSystem } from '@apackdev/sdk/framework';",
+    "import { state } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './system.contract.ts';",
-    'export const threadsSpec = defineSystem<Contract>();',
-    'const entry = { spec: threadsSpec, machine: setup({ types: threadsSpec.types }).createMachine({ id: "calendar" }) };',
+    'const entry = state<{}, IncomingOnlyEventsOf<Contract>>()({});',
     'export default entry;',
   ].join('\n'),
   'src/surface.ts': [
-    "import type { AnyStateMachine } from 'xstate';",
-    "export default { id: 'calendar' } as unknown as AnyStateMachine;",
+    "import { state } from '@apackdev/state';",
+    'export default state<{ data: { tags: string[] } }>()({ data: { tags: [] } });',
   ].join('\n') + '\n',
   // The surface's contract: a declared type in a leaf the surface's own module never imports, which is what the
   // dependent's facade carries as this surface's published inbox
@@ -107,14 +106,13 @@ const BASE_PACK = {
     "export type Contract = { incoming: { type: 'FETCH_MAIL' }; outgoing: OutgoingInboxEvents };",
   ].join('\n') + '\n',
   'src/inbox.ts': [
-    "import { setup } from 'xstate';",
-    "import { defineSystem } from '@apackdev/sdk/framework';",
+    "import { state } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './inbox.contract.ts';",
-    'export const inboxSpec = defineSystem<Contract>();',
-    'const entry = { spec: inboxSpec, machine: setup({ types: inboxSpec.types }).createMachine({ id: "inbox" }) };',
+    'const entry = state<{}, IncomingOnlyEventsOf<Contract>>()({});',
     'export default entry;',
   ].join('\n'),
-  'src/inbox-surface.ts': "import type { AnyStateMachine } from 'xstate';\nexport default { id: 'inbox' } as unknown as AnyStateMachine;\n",
+  'src/inbox-surface.ts': "import { state } from '@apackdev/state';\nexport default state()({});\n",
   'src/search.ts': 'export const searchService = { query: (q: string): string[] => [q] };\n',
   'src/repository.ts': [
     "import { query, EARS } from '#generated/ears.ts';",
@@ -135,18 +133,17 @@ const APP_PACK = {
     features: { memos: { description: 'Feature declaration fixture.', system: { entry: 'src/system.ts', contract: 'src/system.contract.ts#Contract' }, surface: { label: 'Fixture', state: 'src/surface.ts' } } },
   }),
   'src/types.ts': 'export interface ItemEntity { text: string; pinned: boolean; note?: string }\n',
-  'src/surface.ts': "import type { AnyStateMachine } from 'xstate';\nexport default { id: 'memos' } as unknown as AnyStateMachine;\n",
+  'src/surface.ts': "import { state } from '@apackdev/state';\nexport default state()({});\n",
   'src/system.contract.ts': [
     "export type OutgoingMemosEvents = { type: 'MEMO_ADDED'; text: string };",
     "export type IncomingMemosEvents = { type: 'ADD_MEMO'; text: string } | { type: 'CLEAR_MEMOS' } | { type: 'PIN_MEMO' | 'UNPIN_MEMO'; id: string };",
     'export type Contract = { incoming: IncomingMemosEvents; outgoing: OutgoingMemosEvents };',
   ].join('\n') + '\n',
   'src/system.ts': [
-    "import { setup } from 'xstate';",
-    "import { defineSystem } from '@apackdev/sdk/framework';",
+    "import { state } from '@apackdev/state';",
+    "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
     "import type { Contract } from './system.contract.ts';",
-    'export const memosSpec = defineSystem<Contract>();',
-    'const entry = { spec: memosSpec, machine: setup({ types: memosSpec.types }).createMachine({ id: "memos" }) };',
+    'const entry = state<{}, IncomingOnlyEventsOf<Contract>>()({});',
     'export default entry;',
   ].join('\n'),
 };

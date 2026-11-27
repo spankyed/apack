@@ -10,6 +10,11 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('pack-lifecycle');
 
+/** The subset of the backend bus that pack lifecycle operations need: sending pack control events. */
+export interface PackBusTarget {
+  send(event: { type: string; [key: string]: unknown }): void;
+}
+
 /**
  * Unregister and revoke a pack only after the bus finishes stopping its actors and subscriptions. Resolves once
  * that has happened, so a caller holding the pack's claim can keep it until the pack is gone.
@@ -17,7 +22,7 @@ const logger = createLogger('pack-lifecycle');
 export function teardownPack(
   registry: PackRegistry,
   packId: string,
-  busActor: import('xstate').AnyActorRef,
+  busActor: PackBusTarget,
 ): Promise<void> {
   const systemIds = registry.getRegisteredPackSystemIds(packId);
 
@@ -59,7 +64,7 @@ export function teardownPack(
 }
 
 /** Publish checked bindings first; revoke the incumbent only after its actors finish cleanup. */
-export function replacePackRuntime(registry: PackRegistry, pack: LoadedPack, busActor: import('xstate').AnyActorRef): string[] {
+export function replacePackRuntime(registry: PackRegistry, pack: LoadedPack, busActor: PackBusTarget): string[] {
   const systemIds = registry.getRegisteredPackSystemIds(pack.registration.id);
   return registry.replacePack(pack.registration, pack.origin, { retireBinding: dispose => {
     busActor.send({ type: 'TEARDOWN_PACK', packId: pack.registration.id, systemIds,
@@ -78,7 +83,7 @@ export function replacePackRuntime(registry: PackRegistry, pack: LoadedPack, bus
 export function activatePack(
   registry: PackRegistry,
   packId: string,
-  busActor: import('xstate').AnyActorRef,
+  busActor: PackBusTarget,
 ): boolean {
   const { packsDir } = resolveAppEnvironment();
   registry.refreshCatalog(packsDir);
@@ -112,7 +117,7 @@ export function activatePack(
 export function acceptInstalledPack(
   registry: PackRegistry,
   packId: string,
-  busActor: import('xstate').AnyActorRef,
+  busActor: PackBusTarget,
 ): () => boolean {
   const packDir = path.join(resolveAppEnvironment().packsDir, packId);
   const previous = registry.getPackRegistration(packId);
@@ -143,7 +148,7 @@ export function acceptInstalledPack(
 function startAcceptedPack(
   registry: PackRegistry,
   pack: LoadedPack,
-  busActor: import('xstate').AnyActorRef,
+  busActor: PackBusTarget,
   previousSystemIds?: string[],
 ): boolean {
   const packId = pack.registration.id;

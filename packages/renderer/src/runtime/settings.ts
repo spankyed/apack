@@ -2,7 +2,7 @@ import { getCurrentScope, onScopeDispose, readonly, shallowRef } from 'vue';
 // One settings resource per window, created before the shell and any pack frontend.
 import { createWindowSettingsRuntime, type LoadedPackEntry, type FrontendSettingsBinding } from '@apackdev/host/fe';
 import { newCall, type Message } from '@apackdev/sdk/events';
-import { trpc } from '@/transport';
+import { windowTransport } from '@/transport';
 
 interface SettingsConnection {
   credential: Promise<string>;
@@ -10,12 +10,31 @@ interface SettingsConnection {
 }
 let connection: SettingsConnection | undefined;
 
+async function sendSettingsMessage(message: Message, credential: string): Promise<void> {
+  if (message.event.type === 'GET_SETTINGS') {
+    await windowTransport.linkSend(message);
+    return;
+  }
+  await windowTransport.controlCall('settings.mutate', {
+    credential,
+    event: message.event,
+    ...(message.sender ? { sender: message.sender } : {}),
+    ...(message.call ? { call: message.call } : {}),
+    ...(message.from ? { from: message.from } : {}),
+  });
+}
+
 async function sendHostSettings(message: Message): Promise<void> {
   const accepted = connection;
   if (!accepted) throw new Error('The settings connection is unavailable.');
+  if (message.event.type === 'GET_SETTINGS') {
+    assertConnected(accepted);
+    await windowTransport.linkSend(message);
+    return;
+  }
   const settingsCredential = await accepted.credential;
   assertConnected(accepted);
-  await trpc.bus.send.mutate({ ...message, settingsCredential });
+  await sendSettingsMessage(message, settingsCredential);
 }
 
 export const windowSettings = createWindowSettingsRuntime({
@@ -32,7 +51,9 @@ function assertConnected(accepted: SettingsConnection): void {
 }
 
 function releaseCredential(credential: string): void {
-  void trpc.settings.close.mutate({ credential }).catch(error => console.error('Could not release settings access', error));
+  // Only close on an already-open session; after transport teardown the server's `lane.onClose` has already
+  // revoked every lease on that connection, so we must never queue an orphaned `settings.close` onto the next session.
+  void windowTransport.tryControlCall('settings.close', { credential }).catch(error => console.error('Could not release settings access', error));
 }
 
 function snapshotReady(accepted: SettingsConnection, allowRecovery = false): Promise<void> {
@@ -56,7 +77,10 @@ function snapshotReady(accepted: SettingsConnection, allowRecovery = false): Pro
 /** Trusted window bootstrap; pack loading starts only after authority and the validated snapshot arrive. */
 export async function connectWindowSettings(): Promise<boolean> {
   disconnectWindowSettings();
-  const accepted: SettingsConnection = { credential: trpc.settings.openHost.mutate(), closed: new AbortController() };
+  const accepted: SettingsConnection = {
+    credential: windowTransport.controlCall('settings.openHost').then(({ credential }) => credential),
+    closed: new AbortController(),
+  };
   connection = accepted;
   windowSettings.connected();
   try {
@@ -84,15 +108,18 @@ export async function settingsForPack(pack: LoadedPackEntry): Promise<FrontendSe
   const accepted = connection;
   if (!accepted) throw new Error('The settings connection is unavailable.');
   await snapshotReady(accepted);
-  const credential = await trpc.settings.openPack.mutate({
-    id: pack.id, registrationId: pack.registrationId, declarationRevision: pack.declarationRevision, buildRevision: pack.buildRevision,
+  const { credential } = await windowTransport.controlCall('settings.openPack', {
+    id: pack.id,
+    registrationId: pack.registrationId,
+    declarationRevision: pack.declarationRevision,
+    buildRevision: pack.buildRevision,
   });
   const close = () => releaseCredential(credential);
   try {
     assertConnected(accepted);
     const binding = windowSettings.bindPort(pack.id, async message => {
       assertConnected(accepted);
-      await trpc.bus.send.mutate({ ...message, settingsCredential: credential });
+      await sendSettingsMessage(message, credential);
     });
     let active = true;
     return {
@@ -118,7 +145,6 @@ export function useWindowSettingsSnapshot() {
   onScopeDispose(stop);
   return readonly(snapshot);
 }
-
 
 /** Recovery is host-owned and remains visible until the repaired app is relaunched. */
 export function useSettingsRecovery() {

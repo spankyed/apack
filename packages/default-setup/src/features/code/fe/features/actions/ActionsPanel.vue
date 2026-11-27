@@ -234,11 +234,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-
 import { ref, computed, watch, nextTick } from 'vue'
 import { openEntity } from '@apackdev/sdk/fe'
-import type { CodeState } from '#features/code/fe/state.ts'
+import { useState } from '#generated/state-fe.ts'
 import { useView } from '#generated/fe.ts'
 import { ExternalLink, Plus, X, Pencil, Trash2, Play, Search, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
@@ -255,11 +253,10 @@ import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS } from '../explorer/constants.ts'
 import { useInfiniteScroll } from '@apackdev/ui/composables/useInfiniteScroll'
 import Button from '@apackdev/ui/design/button'
 import uFuzzy from '@leeoniya/ufuzzy'
-import { panelChild } from '../children.ts';
 
-// The code surface's actor, and its codeActions child for tab management
-const codeActor: CodeState = useSurface()
-const codeActionsActor = panelChild(codeActor, 'codeActions')!
+// The code surface's codeActions child for tab management
+const { child } = useState('code')
+const { send: sendCodeActions } = useState(() => child('codeActions'))
 
 // The actions, as the actions feature's list view reads them: this panel's own page of it, a page more each time it's
 // read to the end and all of it while searching
@@ -349,7 +346,7 @@ function confirmAddParameter(action: ActionEntity) {
       ...action.input,
       [paramKey]: { type: 'any' as const, required: false }
     }
-    codeActionsActor.send({
+    sendCodeActions({
       type: 'codeActions.UPDATE_INPUT',
       actionId: action.id,
       input: updatedInput
@@ -388,7 +385,7 @@ function confirmEditParameter(action: ActionEntity) {
         ...updatedInput[oldKey]
       }
       delete updatedInput[oldKey]
-      codeActionsActor.send({
+      sendCodeActions({
         type: 'codeActions.UPDATE_INPUT',
         actionId: action.id,
         input: updatedInput
@@ -408,7 +405,7 @@ function removeParameter(action: ActionEntity, key: string) {
   if (action.input) {
     const updatedInput = { ...action.input }
     delete updatedInput[key]
-    codeActionsActor.send({
+    sendCodeActions({
       type: 'codeActions.UPDATE_INPUT',
       actionId: action.id,
       input: updatedInput
@@ -430,7 +427,7 @@ function confirmEditName(action: ActionEntity) {
   if (editingNameForAction.value && editedName.value.trim()) {
     const newName = editedName.value.trim()
     if (newName !== action.label) {
-      codeActionsActor.send({
+      sendCodeActions({
         type: 'codeActions.UPDATE_LABEL',
         actionId: action.id,
         label: newName
@@ -447,7 +444,7 @@ function cancelEditName() {
 }
 
 function deleteAction(action: ActionEntity) {
-  codeActionsActor.send({
+  sendCodeActions({
     type: 'codeActions.DELETE',
     actionId: action.id
   })
@@ -461,7 +458,7 @@ const { onScroll } = useInfiniteScroll({
 
 // Event handlers
 const selectAction = (action: ActionEntity) => {
-  codeActionsActor.send({ type: 'codeActions.OPEN_ACTION', actionId: action.id })
+  sendCodeActions({ type: 'codeActions.OPEN_ACTION', actionId: action.id })
 }
 
 const goToAction = (action: ActionEntity) => {
@@ -471,7 +468,7 @@ const goToAction = (action: ActionEntity) => {
 const createActionInline = () => {
   const defaultLabel = `Action ${actions.value.length + 1}`
   pendingRename.value = true
-  codeActionsActor.send({
+  sendCodeActions({
     type: 'codeActions.CREATE_INLINE',
     label: defaultLabel,
     actionFn: '// Your action function body here\nreturn { success: true };',

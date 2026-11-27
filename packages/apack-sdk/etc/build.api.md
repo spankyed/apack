@@ -4,7 +4,6 @@
 
 ```ts
 
-import type { AnyActorRef } from 'xstate';
 import { Ears } from '@elmdb/ears';
 import { EARS as EARS_2 } from '@elmdb/ears';
 

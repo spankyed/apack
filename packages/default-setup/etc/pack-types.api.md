@@ -11,7 +11,7 @@ import * as _apackdev_sdk_ears from '@apackdev/sdk/ears';
 import * as _elmdb_ears from '@apackdev/sdk/ears';
 import { ShortCode } from '@apackdev/sdk/ears';
 import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToWindow, TypedTell } from '@apackdev/sdk/events';
-import { HotkeysMap, MakingOf, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
+import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -480,7 +480,6 @@ interface BrainContext {
 }
 
 interface BrainContext$1 {
-    brainActor?: any;
     eventQueue: Array<{
         eventType: string;
         payload?: any;
@@ -506,30 +505,55 @@ interface BrainEventPayload {
     targetFlowId?: string;
 }
 
+interface BrainFlowSpec {
+    readonly flowRunNodeId: RunNodeId;
+    readonly flowId: EARS.EntityId;
+    readonly flowLabel: string;
+    readonly isRootFlow: boolean;
+    readonly parentFlowRunNodeId?: RunNodeId;
+    readonly parentEventRunNodeId?: RunNodeId;
+    readonly flowStepNodeId?: EARS.EntityId;
+    readonly flowStepLabel?: string;
+    readonly isFinalStep: boolean;
+    readonly entryData?: Record<string, unknown>;
+    readonly entrySteps: Pick<ExecutionContext, 'lastStep' | 'steps'>;
+    readonly eventNodes: readonly BrainTriggerNode[];
+    readonly hasPersistentTriggers: boolean;
+    readonly startPaused: boolean;
+}
+
 type BrainInternalEvents = {
-    type: 'RUN_NODE_SPAWNED';
-    runNode: RunNode;
-    parentId?: EARS.EntityId;
-    eventRunNodeId?: RunNodeId;
-    flowRunNodeId: EARS.EntityId;
+    type: 'SPAWN_SUBFLOW';
+    spec: BrainFlowSpec;
 } | {
-    type: 'RUN_NODE_UPDATED';
-    data: RunNodeUpdate;
+    type: 'FLOW_COMPLETED';
+    flowRunNodeId: RunNodeId;
+    isRootFlow: boolean;
+    parentFlowRunNodeId?: RunNodeId;
+    parentEventRunNodeId?: RunNodeId;
+    flowStepNodeId?: EARS.EntityId;
+    flowStepLabel?: string;
+    result?: unknown;
+    final: boolean;
 } | {
-    type: 'CHILD_COMPLETED';
-    stepId?: EARS.EntityId;
-    runNodeId?: RunNodeId;
-    stepLabel?: string;
-    result?: any;
-    final?: boolean;
-    eventRunNodeId?: RunNodeId;
-    isFlow?: boolean;
+    type: 'KILL_FLOW';
+    flowRunNodeId: RunNodeId;
 };
 
 /** What the brain's state is, as every window hears it */
 type BrainStateEvent = Extract<OutgoingBrainEvents, {
     type: 'BRAIN_STATE';
 }>;
+
+interface BrainTriggerNode {
+    id?: string;
+    label?: string;
+    eventType?: string;
+    triggerType: string;
+    scope?: string;
+    cronExpression?: string;
+    trackKey?: string;
+}
 
 /** How a local branch stands against the branch it follows */
 interface BranchStandingOf {
@@ -838,16 +862,16 @@ type CodeContext = {
     isLoading: boolean;
     error: string | null;
     selectedPanel: PanelType;
-    tabsRestored?: boolean;
-    pendingTabOrder?: Array<{
+    tabsRestored: boolean;
+    pendingTabOrder: Array<{
         path: string;
         order: number;
-    }>;
-    pendingPersistedMetadata?: Map<string, {
+    }> | undefined;
+    pendingPersistedMetadata: Map<string, {
         groupId?: string;
         isPinned?: boolean;
         isPreview?: boolean;
-    }>;
+    }> | undefined;
     tabGroups: TabGroup[];
     isQuickOpenVisible: boolean;
     quickOpenQuery: string;
@@ -857,7 +881,7 @@ type CodeContext = {
     recentlyOpenedFiles: string[];
     tabViewHistory: string[];
     hotkeys: HotkeysMap;
-    settings?: CodeSettings;
+    settings: CodeSettings | undefined;
     pendingRevealLine: {
         filePath: string;
         line: number;
@@ -868,7 +892,7 @@ type CodeContext = {
     searchPrefillText: string;
     panelTerminalId: string | null;
     panelTerminalExpanded: boolean;
-    pendingTerminalTabIds?: string[];
+    pendingTerminalTabIds: string[] | undefined;
     panelNavHistory: NavHistory<PanelType>;
 };
 
@@ -1974,22 +1998,6 @@ type DatabaseAsks = {
 };
 
 interface DatabaseContext {
-    /**
-     * Which of the asks this window makes are under way, by the name the machine makes each under. A node's details
-     * are asked for per node, so those are the ids of the nodes being read
-     */
-    making: MakingOf<{
-        query: 'one';
-        transaction: 'one';
-        aiQuery: 'one';
-        flowRuns: 'one';
-        flowEvents: 'one';
-        backupInfo: 'one';
-        export: 'one';
-        import: 'one';
-        reset: 'one';
-        nodeDetails: 'each';
-    }>;
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;

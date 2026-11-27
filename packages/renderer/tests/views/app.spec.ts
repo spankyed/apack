@@ -9,17 +9,11 @@
 // about. The registry is the real one (`@/runtime/packs`), and the pack registers through it as the loader does.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp, defineComponent, h, type App as VueApp } from 'vue';
+import { state, system } from '@apackdev/state';
+import { HOST, provideHostState } from '@apackdev/host/fe';
 import { fePacks } from '@/runtime/packs';
 import App from '@/views/App.vue';
 
-// The shell as this window sees it during onboarding, at the letter: a real actor, so `useState` is the real
-// one. Built inside the factory because a `vi.mock` factory is hoisted above the module body.
-vi.mock('@/main', async () => {
-  const { createActor, createMachine } = await import('xstate');
-  const shell = createActor(createMachine({ id: 'shell', initial: 'onboarding', states: { onboarding: { initial: 'letter', states: { letter: {} } } } }));
-  shell.start();
-  return { applicationState: shell };
-});
 vi.mock('@/views/WebApp.vue', () => ({ default: defineComponent({ render: () => h('div', { class: 'web-app' }) }) }));
 vi.mock('@/views/SurfacePopoutApp.vue', () => ({ default: defineComponent({ render: () => h('div', { class: 'popout' }) }) }));
 vi.mock('@/views/settings/SettingsRecovery.vue', () => ({ default: defineComponent({ render: () => h('div', { class: 'recovery' }) }) }));
@@ -31,6 +25,18 @@ vi.mock('@/runtime/settings', async () => {
 });
 
 const Welcome = defineComponent({ render: () => h('div', { class: 'pack-welcome' }, 'Hello') });
+
+const stubShellState = state<{
+  states: { onboarding: { states: { letter: Record<string, never> } } };
+}, never>()({
+  initial: 'onboarding',
+  states: {
+    onboarding: {
+      initial: 'letter',
+      states: { letter: {} },
+    },
+  },
+});
 
 /** A pack's frontend loading, as the loader does it: the declared slot, and the component bound to it */
 function registerWelcomePack(): void {
@@ -44,10 +50,14 @@ function registerWelcomePack(): void {
 }
 
 let app: VueApp | undefined;
+let stateSys: ReturnType<typeof system> | undefined;
 
 function render(): HTMLElement {
   const el = document.createElement('div');
+  stateSys = system({ side: 'window' });
+  stateSys.start(HOST.application, stubShellState);
   app = createApp(App);
+  provideHostState(app, stateSys);
   app.mount(el);
   return el;
 }
@@ -57,6 +67,8 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 afterEach(() => {
   app?.unmount();
   app = undefined;
+  stateSys?.stop();
+  stateSys = undefined;
   if (fePacks.getAppExtension('welcome')) fePacks.unregisterPackFE('welcome-pack');
 });
 

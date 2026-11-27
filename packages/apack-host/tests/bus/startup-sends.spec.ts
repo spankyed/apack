@@ -2,22 +2,24 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // A system sends as it starts — to another system, or its surface's first report — and the bus hears the root
 // events before it starts any system, so nothing a system sends while starting is lost.
 import { afterEach, expect, it } from 'vitest';
-import { assign, createActor, setup, type AnyActorRef } from 'xstate';
+import { state } from '@apackdev/state';
 import { untypedTell } from '@apackdev/sdk/events';
 import { startTestRuntime } from '@apackdev/sdk/testing';
-import { createAppBus } from '../../src/bus/index.ts';
+import { createAppBus, type BackendBus } from '../../src/bus/index.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 
 const registry = createNativePackTestRegistry();
 startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 
-const sender = setup({}).createMachine({ entry: () => untypedTell('boot-pack/receiver', { type: 'PING' }) });
-const receiver = setup({ types: { context: {} as { pings: number } } }).createMachine({
-  context: { pings: 0 },
-  on: { PING: { actions: assign({ pings: ({ context }) => context.pings + 1 }) } },
+const sender = state()({
+  run: () => { untypedTell('boot-pack/receiver', { type: 'PING' }); },
+});
+const receiver = state<{ data: { pings: number } }, { type: 'PING' }>()({
+  data: { pings: 0 },
+  on: { PING: (_ev, { data }) => ({ data: { pings: data.pings + 1 } }) },
 });
 
-let bus: AnyActorRef | undefined;
+let bus: BackendBus | undefined;
 
 afterEach(() => {
   bus?.stop();
@@ -33,8 +35,8 @@ it("delivers what a system sends as it starts to the system it's for", async () 
       sender: { system: { machine: sender, receives: [] } },
     },
   });
-  bus = createActor(createAppBus(registry), { systemId: 'host/bus' }).start();
+  bus = createAppBus(registry).start();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  expect(bus.system.get('boot-pack/receiver').getSnapshot().context.pings).toBe(1);
+  expect(bus.read('boot-pack/receiver')?.data.pings).toBe(1);
 });

@@ -2,7 +2,7 @@ import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 // Loading a pack's frontend: the URL its files are at (with the revision, so an updated pack isn't served from the
 // cache), what a default export has to declare to count as a registration, and what unloading takes back. The
 // window's part — the import and the stylesheet — is a fake here, so these are the rules alone.
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { PackFERegistration, Surface, SettingsPort } from '@apackdev/sdk/fe';
 import { createPackFrontends, loadPackFEEntry, type PackFrontendIO } from '../../../../src/fe/index.ts';
@@ -233,7 +233,7 @@ describe("a pack's frontend", () => {
   });
 
   it('registers what its entry exports, and answers with the surfaces it added', async () => {
-    const registration = { id: 'memo-pack', declarationRevision: 'current', features: { memos: { surface: { label: 'Memos', state: createMachine({}) } } } };
+    const registration = { id: 'memo-pack', declarationRevision: 'current', features: { memos: { surface: { label: 'Memos', state: state()({}) } } } };
     const { io } = fakeIO({ [`pack://memo-pack/builds/${buildRevision}/runtime/fe.js`]: registration });
     const { registry, registered } = fakeRegistry();
 

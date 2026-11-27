@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiServer } from '../src/modules/api-server/ApiServer.ts';
-import { ProcessManager } from '../src/modules/api-server/process-manager.ts';
-import { API_CONFIG } from '../src/modules/api-server/config.ts';
+import { ProcessManager, broadcastEvent } from '../src/modules/api-server/process-manager.ts';
+import { API_CONFIG, API_EVENTS } from '../src/modules/api-server/config.ts';
 import { IDLE_MS } from '@apackdev/sdk/progress';
 
 vi.mock('../src/modules/api-server/logger.ts', () => ({
@@ -21,7 +21,7 @@ function server() {
   const api = new ApiServer() as unknown as {
     startApiServer(): Promise<void>;
     handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void;
-    handleServerReady(port: number): void;
+    handleServerReady(socket?: string): void;
     waitForReady(): Promise<void>;
     launchApiServer(apiPath: string): Promise<void>;
     cleanupOrphanedApiChildren(apiPath: string): Promise<void>;
@@ -61,7 +61,7 @@ it("resolves the window's wait when a launch after a crash becomes ready", async
   await api.startApiServer();
   api.handleProcessExit(1, null);
   await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
-  api.handleServerReady(3000);
+  api.handleServerReady();
   expect(await outcome).toBe('ready');
 });
 
@@ -118,4 +118,54 @@ it('runs out of restarts for an API that dies soon after each launch', async () 
     await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
   }
   expect(await outcome).toBe(REFUSAL);
+});
+
+it('cancels a pending crash-restart timer when reloadApiServer() runs', async () => {
+  vi.spyOn(ProcessManager.prototype, 'getFatalErrors').mockReturnValue([{ message: 'crashed once' }]);
+  vi.spyOn(ProcessManager.prototype, 'stop').mockResolvedValue();
+  const { api, crash } = supervised();
+  await api.startApiServer();
+  expect(api.launchApiServer).toHaveBeenCalledTimes(1);
+
+  // Crash schedules a delayed restart timer; reload before it fires cancels that timer
+  crash();
+  await (api as unknown as { reloadApiServer(): Promise<void> }).reloadApiServer();
+  expect(api.launchApiServer).toHaveBeenCalledTimes(2);
+
+  // Advancing past RESTART_DELAY must NOT trigger a second launch from the old crash timer
+  await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY * 2);
+  expect(api.launchApiServer).toHaveBeenCalledTimes(2);
+});
+
+it('serializes concurrent startApiServer() calls across async orphan cleanup', async () => {
+  const running = vi.spyOn(ProcessManager.prototype, 'isRunning').mockReturnValue(false);
+  const api = server();
+  let finishCleanup!: () => void;
+  api.cleanupOrphanedApiChildren = vi.fn(() => new Promise<void>((resolve) => { finishCleanup = resolve; }));
+  api.launchApiServer = vi.fn(async () => { running.mockReturnValue(true); });
+
+  const first = api.startApiServer();
+  const second = api.startApiServer();
+  finishCleanup();
+  await Promise.all([first, second]);
+
+  expect(api.cleanupOrphanedApiChildren).toHaveBeenCalledTimes(1);
+  expect(api.launchApiServer).toHaveBeenCalledTimes(1);
+});
+
+it('does not broadcast terminal api:error from handleProcessError while automatic restarts can still recover', () => {
+  vi.mocked(broadcastEvent).mockClear();
+  const api = server() as ReturnType<typeof server> & {
+    handleProcessError(error: Error): void;
+    restartAttempts: number;
+  };
+
+  api.handleProcessError(new Error('transient v8 failure'));
+  expect(vi.mocked(broadcastEvent).mock.calls.filter(([ev]) => ev === API_EVENTS.ERROR)).toEqual([]);
+
+  api.restartAttempts = API_CONFIG.MAX_RESTART_ATTEMPTS;
+  api.handleProcessError(new Error('final v8 failure'));
+  expect(vi.mocked(broadcastEvent).mock.calls.filter(([ev]) => ev === API_EVENTS.ERROR)).toEqual([
+    [API_EVENTS.ERROR, { error: 'final v8 failure' }],
+  ]);
 });

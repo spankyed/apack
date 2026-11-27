@@ -21,10 +21,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { computed } from 'vue';
-import { type ThreadsState } from '#features/threads/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 import TabBar from '#features/threads/fe/canvas/agent/tabs/tab-bar.vue';
 import ContentViewer from '#features/threads/fe/canvas/agent/content-viewer.vue';
 import ThreadsHeader from '#features/threads/fe/canvas/components/ThreadsHeader.vue';
@@ -33,9 +31,7 @@ defineProps<{
   inline?: boolean;
 }>();
 
-const actor: ThreadsState = useSurface();
-
-const { state: threads, send } = useState(actor);
+const { state: threads, send } = useState('threads');
 
 const currentTab = computed(() => threads.value.data.tabs.find(tab => tab.id === threads.value.data.activeTabId));
 </script>

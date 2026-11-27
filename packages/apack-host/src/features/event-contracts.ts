@@ -11,7 +11,20 @@ export type ApplicationClientEvent =
   | { type: 'SET_LAST_ACTIVE_SURFACE'; surface: string }
   // The feature playing the `commands` designation wrote; the system reads the list again and publishes it
   | { type: 'COMMANDS_CHANGED' };
-export const APPLICATION_SYSTEM_EVENTS = eventTypes<ApplicationClientEvent>()('SET_SURFACE_VISIBILITY', 'SET_LAST_ACTIVE_SURFACE', 'COMMANDS_CHANGED');
+
+/** The asks the host `application` system answers. */
+export type ApplicationAsks = {
+  ENTITY_EXISTS: { args: { id: string }; answer: { exists: boolean } };
+};
+
+export const applicationAsks = {
+  ENTITY_EXISTS: [],
+} as const satisfies { readonly [K in keyof ApplicationAsks]: readonly DeclaredFailureKind<ApplicationAsks[K]>[] };
+
+export const APPLICATION_SYSTEM_EVENTS = [
+  ...eventTypes<ApplicationClientEvent>()('SET_SURFACE_VISIBILITY', 'SET_LAST_ACTIVE_SURFACE', 'COMMANDS_CHANGED'),
+  ...Object.keys(applicationAsks) as (keyof typeof applicationAsks)[],
+];
 export type HelpOutgoing = { type: 'HELP_CATALOG'; catalog: HelpCatalog };
 export const helpEvents = ['GET_HELP', 'CLIENT_CONNECTED'] as const;
 
@@ -103,7 +116,11 @@ export const SETTINGS_SURFACE_EVENT_TYPES = eventTypes<SettingsSurfaceEvents>()(
 /** Native endpoint metadata includes the shell inbox without advertising it as a sidebar pane. */
 export const hostEventContracts = {
   application: {
-    system: { incoming: APPLICATION_SYSTEM_EVENTS, outgoing: ['PACK_RUNTIMES_UPDATED', 'SURFACE_VISIBILITY_UPDATED'] },
+    system: {
+      incoming: APPLICATION_SYSTEM_EVENTS,
+      outgoing: ['PACK_RUNTIMES_UPDATED', 'SURFACE_VISIBILITY_UPDATED'],
+      asks: applicationAsks,
+    },
     surface: { receives: [...HOST_SURFACE_EVENT_TYPES['host/application'], ...APPLICATION_SURFACE_EVENT_TYPES] },
   },
   help: { system: { incoming: helpEvents, outgoing: ['HELP_CATALOG'] } },

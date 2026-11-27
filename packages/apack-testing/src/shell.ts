@@ -1,18 +1,18 @@
 import { boundEars } from '@apackdev/sdk/ears';
-// The app shell in a pack's unit tests: the host's own shell machine, run over the in-memory bus the harness's test
-// apps use, with the test pack's surfaces registered, so a pack's frontend (navigation, the shell's state, sends to
-// its systems) is tested as the app runs it rather than against a stand-in.
-import { createActor, type AnyActorRef, type AnyStateMachine } from 'xstate';
-import { createFePackRegistry, createShellMachine, describeFailure, HOST, type ShellClient, type ShellConnection } from '@apackdev/host/fe';
+// The app shell in a pack's unit tests: the host's own `@apackdev/state` shell, run over the in-memory bus the
+// harness's test apps use, with the test pack's surfaces registered, so a pack's frontend (navigation, the shell's
+// state, sends to its systems) is tested as the app runs it rather than against a stand-in.
+import type { System } from '@apackdev/state';
+import { createFePackRegistry, createShell, describeFailure, HOST, type ShellClient, type ShellConnection } from '@apackdev/host/fe';
 import type { Message } from '@apackdev/sdk/events';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
-import type { HostShell, SurfaceDefinition, PackFERegistration } from '@apackdev/sdk/fe';
+import type { HostShell, HostShellSurfaceRef, SurfaceDefinition, PackFERegistration } from '@apackdev/sdk/fe';
 import { nativeFrontendDeclarationFixture, startFeTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
 import { _isFeHostBound, type FePackRegistryView, type PackExtensionsView } from '@apackdev/sdk/runtime';
 import { testViews } from './app.ts';
 
-/** One of the pack's surfaces, as a test registers it: its state machine, and whatever else of its definition it needs */
-export type TestSurface = { state: AnyStateMachine } & Partial<Omit<SurfaceDefinition, 'state'>>;
+/** One of the pack's surfaces, as a test registers it: its state machine or `@apackdev/state` `State`, and whatever else of its definition it needs */
+export type TestSurface = { state: SurfaceDefinition['state'] } & Partial<Omit<SurfaceDefinition, 'state'>>;
 
 export interface StartShellOptions {
   /**
@@ -32,10 +32,12 @@ export interface TestShell {
    * packages, and the shell's machine is the host's
    */
   actor: HostShell;
+  /** The per-window `@apackdev/state` `System` owned by this shell, for `vueBinding` `provide` and direct inspection */
+  readonly stateSystem: System;
   /** The ref of the surface open */
   opened(): string;
-  /** A surface's running actor, named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`) */
-  surface(name: string): AnyActorRef;
+  /** A surface's running handle, named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`) */
+  surface(name: string): HostShellSurfaceRef;
   /** What the shell told the user went wrong: `title` and `detail`, a toast or the error page, in order */
   notices: Array<{ title: string; detail?: string }>;
   /** Stops the shell and forgets the frontend host it bound; the harness does it after each test */
@@ -153,7 +155,7 @@ export async function startShell(packId: string, options: StartShellOptions, bac
   };
 
   const notices: TestShell['notices'] = [];
-  const actor = createActor(createShellMachine({
+  const runtime = createShell({
     packs,
     catalog: { status: () => 'ready', subscribe: () => () => {}, surfaces: () => [...packs.surfaceBindings()].map(([featureRef, accepted]) => ({
       featureRef: featureRef as FeatureRef, packId: accepted.packId, origin: 'native' as const, enabled: true, declaration: accepted.declaration, opens: accepted.opens,
@@ -167,19 +169,20 @@ export async function startShell(packId: string, options: StartShellOptions, bac
       // A page taken down is no longer something the user was told: its notice goes with it
       clearErrorPage: (title) => { for (let at = notices.length - 1; at >= 0; at--) if (notices[at]!.title === title) notices.splice(at, 1); },
     },
-  }), { systemId: HOST.application, input: { ownsLastActiveSurface: false } });
-  // Bound before the shell starts: starting it spawns the surfaces' actors, which may reach the frontend host
-  stops.defer(startFeTestRuntime({ application: actor, client, packs: backendFirst(packs, backend) }));
-  const started = actor.start();
+  }, { ownsLastActiveSurface: false });
+  // Bound before the shell starts: starting it starts the surfaces' states, which may reach the frontend host
+  stops.defer(startFeTestRuntime({ application: runtime, client, packs: backendFirst(packs, backend) }));
+  const started = runtime.start();
   stops.defer(() => started.stop());
 
   const ownedStops = stops.move();
   const shell: TestShell = {
     actor: started,
+    stateSystem: started.system,
     opened: () => started.getSnapshot().context.activeSurface.id,
     surface: (name) => {
       const ref = resolveName(name, packId);
-      const surface = started.system.get(ref) as AnyActorRef | undefined;
+      const surface = started.surface(ref);
       if (!surface) throw new Error(`No surface is running at "${ref}"`);
       return surface;
     },

@@ -26,6 +26,7 @@ function fakeApi(options: { refuse?: (message: Sent) => string | undefined } = {
     sendSettings: async () => { throw new Error('not used by the connection'); },
     loadedPacks: async () => [],
     openPackSettings: async () => 'access',
+    reloadPack: async () => {},
     onMessage: (listener) => { order.push('listen'); listeners.add(listener); return () => listeners.delete(listener); },
     onFinished: (listener) => { finishListeners.add(listener); return () => finishListeners.delete(listener); },
     get failure() { return failure; },

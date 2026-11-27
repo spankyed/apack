@@ -31,9 +31,9 @@ When a test worker starts, the fixture runs this sequence:
 
 3. **Launch Electron** — for a checkout, resolves `electron` from the checkout's `node_modules` (so external packs don't need `electron` installed) and launches `_electron.launch({ executablePath, args: [<appRoot>], cwd: appRoot })`; a packaged app launches its executable with no args. The env is the runner's minus `ELECTRON_RUN_AS_NODE` (inherited from an app-bundled `apack`, it would start Electron as plain Node) and minus the `@apackdev/source` condition in `NODE_OPTIONS`, plus `PLAYWRIGHT_TEST=true` and `APACK_USER_DATA_DIR=<worker dir>` (`src/launch-env.ts`). `PLAYWRIGHT_TEST` selects the `test` environment, a packaged build included; the app runs headless (no window display or splash screen) and crashes on uncaught exceptions.
 
-4. **Find main window** — `findMainWindow()` polls all Electron windows for `window.applicationState` (the XState actor exposed on the renderer's `window`). This distinguishes the main renderer from the splash screen. Timeout: 45s. The viewport is then pinned to 1400×900, since the window's default size differs between dev and production builds of main.
+4. **Find main window** — `findMainWindow()` polls all Electron windows for `window.applicationState` (the app shell exposed on the renderer's `window`). This distinguishes the main renderer from the splash screen. Timeout: 45s. The viewport is then pinned to 1400×900, since the window's default size differs between dev and production builds of main.
 
-5. **Wait for connected state** — `page.waitForFunction()` checks `applicationState.getSnapshot().value` for `{ running: 'connected' }` or `{ onboarding: ... }` (45s). If onboarding is detected, calls `window.__disableOnboardingUI()` then waits for `running.connected`.
+5. **Wait for connected state** — `page.waitForFunction()` checks `applicationState.getSnapshot().value` for `'running.connected'` or an onboarding state (45s). If onboarding is detected, calls `window.__disableOnboardingUI()` then waits for `'running.connected'`.
 
 6. **Check the pack's applying** (only when `PACK_DIR` is set) — if the pack's entry in the test data dir's `installed-packs.json` has a `lastError` (its data failed to apply), the fixture fails with it.
 
@@ -62,7 +62,7 @@ Three fixtures are provided, each at a different scope:
 app.screenshot(name)             // Save a PNG under .apack/drive/screenshots/ when driving,
                                  // or .apack/tests/screenshots/ under `apack pack test`
 app.navigate(surfaceId)           // Send SELECT_SURFACE + wait for activeSurface match + 500ms render delay
-app.getState()                   // Returns snapshot.value (e.g. { running: 'connected' })
+app.getState()                   // Returns snapshot.value (e.g. 'running.connected')
 app.getContext()                 // Returns { activeSurfaceId, surfaceIds }
 app.sendEvent(event)             // Send any event to applicationState
 app.waitForState(check, ms?)     // Wait for dot-separated state path (e.g. 'running.connected')
@@ -253,7 +253,7 @@ Surface IDs are the keys of the pack's `apack.json` `features` entries that decl
 
 The renderer exposes on `window`:
 
-- `applicationState` — full XState actor (`.send()`, `.getSnapshot()`, `.system`)
+- `applicationState` — app shell runtime (`.send()`, `.getSnapshot()`, `.surface()`, `.onEvent()`, `.system`)
 - `__disableOnboardingUI()` — sends `ONBOARDING_COMPLETE` (fixture calls this automatically)
 - `__e2eSystems` — the door `app.send` and `app.ask` call; a spec never does (`packages/renderer/src/transport/e2e-door.ts`)
 

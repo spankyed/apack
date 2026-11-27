@@ -14,11 +14,11 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface, getBlockBinding, useBlockDeclarations } from '@apackdev/sdk/fe'
+import { getBlockBinding, useBlockDeclarations } from '@apackdev/sdk/fe'
 
 import type { BlockConfig } from '#generated/types.ts'
 import { ref, computed } from 'vue'
-import type { ThreadsState } from '../../state.ts'
+import { useState } from '#generated/state-fe.ts'
 
 interface Props {
   blocks: BlockConfig[]
@@ -31,7 +31,7 @@ const props = withDefaults(defineProps<Props>(), {
   isDisabled: false
 })
 
-const threadsActor: ThreadsState = useSurface()
+const { send } = useState('threads')
 
 // ─── Block component resolution ─────────────────────────────────────
 const declarations = useBlockDeclarations()
@@ -75,7 +75,7 @@ const responseForBlock = (blockType: string) => {
 
 // ─── Event handlers ─────────────────────────────────────────────────
 const handleBlockResponse = (response: any) => {
-  threadsActor.send({
+  send({
     type: 'RESPOND_TO_BLOCK_INTERACTION',
     messageId: props.messageId,
     response

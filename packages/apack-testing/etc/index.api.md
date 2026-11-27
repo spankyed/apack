@@ -28,6 +28,7 @@ export interface AppConnection {
     readonly name: string;
     next(match: (event: SystemEvent_2) => boolean, what?: string): Promise<SystemEvent_2>;
     openPackSettings(runtime: PackRuntime): Promise<string>;
+    reloadPack(packId: string): Promise<void>;
     send(system: string, event: SystemEvent_2, options?: {
         settingsCredential?: string;
     }): Promise<void>;
@@ -80,6 +81,7 @@ export function attachedSession(options: AttachedSessionOptions): Promise<Attach
 
 // @public (undocumented)
 export interface AttachedSessionOptions {
+    readonly dataDir: string;
     readonly debugPort: number;
     readonly logPath?: string;
     readonly screenshotDir: string;

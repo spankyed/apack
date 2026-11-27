@@ -1,10 +1,9 @@
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
-import { useState } from '@apackdev/sdk/fe'
-import type { NotesState } from '../state.ts'
+import { useState } from '#generated/state-fe.ts'
 
-export function useNoteScroll(actor: NotesState, getNoteId: () => string | undefined) {
+export function useNoteScroll(getNoteId: () => string | undefined) {
   const scrollContainerRef = ref<HTMLElement | null>(null)
-  const { state: notes, send } = useState(actor)
+  const { state: notes, send } = useState('notes')
 
   const save = (noteId: string) => {
     const el = scrollContainerRef.value

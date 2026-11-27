@@ -171,7 +171,7 @@ it('typechecks only consumed host APIs and directly owned dependency service mem
 });
 
 describe('generated views compile', () => {
-  it("type useView and fromView by each feature's declaration: its names, its arguments and its result", async () => {
+  it("type useView by each feature's declaration: its names, its arguments and its result", async () => {
     write('src/features/notes/be/views.ts', [
       "import { defineViews } from '@apackdev/sdk/framework';",
       'export const noteViews = defineViews({',
@@ -203,10 +203,6 @@ describe('generated views compile', () => {
       "useView('notes', 'page', { page: 'one' });",
       '// @ts-expect-error a view the feature does not declare',
       "useView('notes', 'missing');",
-      "import { fromView } from './__generated__/fe.ts';",
-      "fromView('notes', 'page', (update, args) => ({ type: 'PAGE.READ', page: args.page, titles: update.ok ? update.value.titles : [] }));",
-      '// @ts-expect-error a machine reads the result the view declares',
-      "fromView('notes', 'all', (update) => ({ type: 'ALL.READ', count: update.ok ? update.value.length + update.value.nope : 0 }));",
       'void all; void page;',
     ].join('\n'));
     expect(typecheck(files, ['src/probe.ts', 'src/__generated__/pack-entry.ts'])).toEqual([]);
@@ -233,9 +229,15 @@ describe('generated #generated/state compiles', () => {
       '};',
     ].join('\n'));
     write('src/features/notes/be/system.ts', [
-      "import { defineSystem } from '@apackdev/sdk/framework';",
+      "import { state } from '@apackdev/state';",
+      "import type { ContractAsks, IncomingOnlyEventsOf, NormalizeAsks } from '@apackdev/sdk/events';",
       "import type { Contract } from './contract.ts';",
-      'export default { spec: defineSystem<Contract>(), machine: undefined as never };',
+      'export default state<{ asks: NormalizeAsks<ContractAsks<Contract>> }, IncomingOnlyEventsOf<Contract>>()({',
+      '  answers: {',
+      "    GET_NOTE: () => ({ title: 'ok' }),",
+      '    EMPTY_TRASH: () => undefined,',
+      '  },',
+      '});',
     ].join('\n'));
     write('src/features/notes/be/views.ts', [
       "import { defineViews } from '@apackdev/sdk/framework';",
@@ -337,7 +339,7 @@ describe('generated #generated/state compiles', () => {
 });
 
 describe('generated #generated/state-fe compiles', () => {
-  it('binds @apackdev/state surfaces (default & named exports, children) while filtering out unmigrated XState surfaces', async () => {
+  it('binds @apackdev/state surfaces (default & named exports, children) while filtering out non-State exports', async () => {
     write('src/features/notes/fe/state.ts', [
       "import { given, state } from '@apackdev/state';",
       "import type { Each } from '@apackdev/state';",
@@ -370,8 +372,8 @@ describe('generated #generated/state-fe compiles', () => {
       '});',
     ].join('\n'));
     write('src/features/legacy/fe/state.ts', [
-      'const legacyXStateMachine = { id: "legacy", transition: () => ({}) };',
-      'export default legacyXStateMachine;',
+      'const nonStateExport = { id: "legacy", transition: () => ({}) };',
+      'export default nonStateExport;',
     ].join('\n'));
 
     const files = await generatePackFiles(manifest({
@@ -404,7 +406,7 @@ describe('generated #generated/state-fe compiles', () => {
       'const board = useState("board");',
       'const count: number = board.state.value.data.count;',
       'board.send({ type: "INC" });',
-      '// @ts-expect-error unmigrated XState surface is excluded from PackSurfaces',
+      '// @ts-expect-error non-State export is excluded from PackSurfaces',
       'useState("legacy");',
       '// @ts-expect-error bare feature ids only, not qualified own refs',
       'useState("demo-pack/notes");',

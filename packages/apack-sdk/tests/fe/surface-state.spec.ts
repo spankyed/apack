@@ -3,7 +3,7 @@
 // comes from the shell's registry, so nothing keeps its own, and the shell's snapshot is what says to look again.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { effectScope, watchSyncEffect, type Ref } from 'vue';
-import type { AnyActorRef } from 'xstate';
+import type { HostShellSurfaceRef } from '../../src/fe/shell.ts';
 import { _replyTo, _sendToLocalSurface, untypedBroadcast } from '../../src/events/index.ts';
 import { _runDelivery } from '../../src/events/delivery.ts';
 import { readUntypedSurfaceState, useUntypedSurfaceState } from '../../src/fe/surface-state.ts';
@@ -23,7 +23,7 @@ function fakeSurface(notes: string[]) {
         listeners.add(fn);
         return { unsubscribe: () => listeners.delete(fn) };
       },
-    } as unknown as AnyActorRef,
+    } as unknown as HostShellSurfaceRef,
     change(next: string[]) {
       snapshot = { context: { notes: next } };
       for (const fn of listeners) fn(snapshot);
@@ -34,7 +34,7 @@ function fakeSurface(notes: string[]) {
 
 let notes: ReturnType<typeof fakeSurface>;
 /** The shell's registry of running surfaces, and its snapshot stream: a pack's frontend loading changes both */
-let running: Record<string, AnyActorRef>;
+let running: Record<string, HostShellSurfaceRef>;
 let shellChanged: () => void;
 
 beforeEach(() => {
@@ -47,7 +47,7 @@ beforeEach(() => {
   shellChanged = () => { for (const fn of [...shellListeners]) fn(); };
   bindFeHost({ catalog: {} as never,
     application: {
-      system: { get: (ref: string) => running[ref] },
+      surface: (ref: string) => running[ref],
       subscribe: (fn: () => void) => { shellListeners.add(fn); return { unsubscribe: () => shellListeners.delete(fn) }; },
     } as never,
     secrets: {} as never,
@@ -194,7 +194,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never,
       settings: {} as never,
       client: { send() {}, watchView: () => () => {} },
@@ -240,7 +240,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
@@ -270,7 +270,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
@@ -311,7 +311,7 @@ describe('_sendToLocalSurface', () => {
     const sent: unknown[] = [];
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
-      application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
+      application: { send: (event: unknown) => sent.push(event), surface: () => undefined } as never,
       secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 

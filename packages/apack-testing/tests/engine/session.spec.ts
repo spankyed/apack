@@ -288,17 +288,17 @@ describe('the in-page bridge', () => {
     };
 
     for (const bridge of [refuse, () => { throw new Error('threw before answering'); }, undefined]) {
-      let inspect: ((inspection: unknown) => void) | undefined;
+      let observe: ((record: unknown) => void) | undefined;
       const win: Record<string, unknown> = {
         [BRIDGE_FUNCTION]: bridge,
-        applicationState: { system: { inspect: (observer: typeof inspect) => { inspect = observer; } } },
+        applicationState: { onEvent: (observer: typeof observe) => { observe = observer; } },
       };
       new Function('window', `return ${installed}`)(win);
       const circular: Record<string, unknown> = { type: 'CIRCULAR' };
       circular.self = circular;
       expect(() => {
-        inspect!({ type: '@xstate.event', event: { type: 'PING' }, actorRef: { id: 'x' } });
-        inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'x' } });
+        observe!({ event: { type: 'PING' }, to: 'x' });
+        observe!({ event: circular, to: 'x' });
       }).not.toThrow();
     }
 
@@ -311,17 +311,17 @@ describe('the in-page bridge', () => {
     await session.ready();
     const installed = expressions.find((source) => source.includes(BRIDGE_FLAG))!;
     const delivered: unknown[] = [];
-    let inspect: ((inspection: unknown) => void) | undefined;
+    let observe: ((record: unknown) => void) | undefined;
     const win = {
       [BRIDGE_FUNCTION]: async (payload: unknown) => { delivered.push(payload); },
-      applicationState: { system: { inspect: (observer: typeof inspect) => { inspect = observer; } } },
+      applicationState: { onEvent: (observer: typeof observe) => { observe = observer; } },
     };
     new Function('window', `return ${installed}`)(win);
     const circular: Record<string, unknown> = { type: 'CIRCULAR' };
     circular.self = circular;
-    inspect!({ type: '@xstate.event', event: { type: 'PING', n: 1 }, actorRef: { id: 'a' } });
-    inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'b' } });
-    inspect!({ type: '@xstate.snapshot', event: { type: 'IGNORED' } });
+    observe!({ event: { type: 'PING', n: 1 }, to: 'a' });
+    observe!({ event: circular, to: 'b' });
+    observe!({ event: { type: 42 }, to: 'c' });
 
     expect(delivered).toEqual([
       { to: 'a', type: 'PING', event: { type: 'PING', n: 1 } },

@@ -53,11 +53,10 @@ beforeAll(async () => {
     'src/types.ts': 'export interface MemoEntity { title: string; copyState?: "saved" | "pending" | "idle" | "error" | undefined }\nexport interface ReminderEntity { at: string }\n',
     'src/system.contract.ts': CONTRACT(),
     'src/system.ts': [
-      "import { setup } from 'xstate';",
-      "import { defineSystem } from '@apackdev/sdk/framework';",
+      "import { state } from '@apackdev/state';",
+      "import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';",
       "import type { Contract } from './system.contract.ts';",
-      'export const notifierSpec = defineSystem<Contract>();',
-      'const entry = { spec: notifierSpec, machine: setup({ types: notifierSpec.types }).createMachine({ id: "notifier" }) };',
+      'const entry = state<{}, IncomingOnlyEventsOf<Contract>>()({});',
       'export default entry;',
     ].join('\n'),
   }, path.join(REPO_ROOT, 'node_modules'));

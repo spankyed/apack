@@ -1,19 +1,24 @@
-import { entityIs, freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
-import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
-import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
-import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
-import type { OutgoingLibraryEvents } from '#features/library/be/types.ts'
-import type { SearchIndexFormData } from './types/search-index.ts'
-import { fromAsk, type ask } from '#generated/events.ts'
-import type { EARS } from '#generated/ears.ts'
-import { onOutcome, outcomeOf } from '@apackdev/sdk/helpers'
-import { Trash2 } from 'lucide-vue-next'
-import { contextMenuFn } from '@apackdev/sdk/fe'
-import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
-import { targetIs, TRAIL_CLICK } from '@apackdev/sdk/fe'
-import { tagStorage } from './services/tagStorage.ts'
-import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe'
+import type { OutcomeOf, Read, Value } from '@apackdev/state';
+import type { OpenEntity } from '@apackdev/sdk/events';
+import {
+  canGoBack,
+  canGoForward,
+  createNavHistory,
+  entityIs,
+  goBack,
+  goForward,
+  pushNavHistory,
+  type NavHistory,
+  type SurfaceChrome,
+  type TrailClickEvent,
+} from '@apackdev/sdk/fe';
+import { Trash2 } from 'lucide-vue-next';
+import type { EARS } from '#generated/ears.ts';
+import { state, type PackNet } from '#generated/state.ts';
+import type { DocumentDTO, DocumentItem, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem } from '#generated/types.ts';
+import type { ContentSection, OutgoingLibraryEvents } from '#features/library/be/types.ts';
+import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts';
+import { tagStorage } from './services/tagStorage.ts';
 
 // The library surface over its views. The canvas holds a `folder` view for the folder shown and for each one expanded
 // in the tree, the `document` view for the document open, and the `index` view, and hands each result here
@@ -22,101 +27,120 @@ import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoFo
 // system says a folder on disk changed (`FOLDER_CHANGED`). Every answer lands in the slot its folder or document
 // names, so a late answer for a folder left behind writes nothing that is shown.
 //
-// A document is fetched by the state that shows it. Everything else this window asks — a folder's contents, whether
-// its symlinks are broken, each write — is an ask the machine makes by name (`made`), so several run at once and how
+// A document is fetched by the `edit.fetching` state that shows it. Everything else this window asks — a folder's
+// contents, whether its symlinks are broken, each write — is declared under `calls`, so several run at once and how
 // each ended is handled for what it was.
 
-// Helper function to convert DocumentItem to DocumentDTO
-function documentItemToDTO(item: DocumentItem): DocumentDTO {
+export const id = 'library' as const;
+
+type LibraryAsks = PackNet['systems']['library']['asks'];
+
+function documentItemToDTO(item: Read<DocumentItem>): DocumentDTO {
   return {
     id: item.id,
     name: item.name,
-    content: item.content,
+    content: item.content as ContentSection[],
     shortCode: item.shortCode,
-    tags: item.tags || [],
+    tags: item.tags ? [...item.tags] : [],
     collectionId: item.parentId || undefined,
     collectionPath: [], // Not available in DocumentItem
     displayOrder: item.displayOrder,
     createdAt: item.createdAt,
-    updatedAt: item.updatedAt
-  }
+    updatedAt: item.updatedAt,
+  };
 }
 
-function parseSymlinkId(id: string): { rootId: string; relPath: string } | null {
-  if (!id.startsWith('symlink:')) return null
-  const rest = id.slice('symlink:'.length)
-  const slashIdx = rest.indexOf('/')
+function parseSymlinkId(itemId: string): { rootId: string; relPath: string } | null {
+  if (!itemId.startsWith('symlink:')) return null;
+  const rest = itemId.slice('symlink:'.length);
+  const slashIdx = rest.indexOf('/');
   return slashIdx === -1
     ? { rootId: rest, relPath: '' }
-    : { rootId: rest.slice(0, slashIdx), relPath: rest.slice(slashIdx + 1) }
+    : { rootId: rest.slice(0, slashIdx), relPath: rest.slice(slashIdx + 1) };
 }
 
-function findItemById(context: LibraryContext, id: string): LibraryItem | undefined {
-  const top = context.items.find(i => i.id === id)
-  if (top) return top
-  for (const children of Object.values(context.expandedFolderChildren)) {
-    const found = children.find(i => i.id === id)
-    if (found) return found
+function findItemById(
+  items: readonly Read<LibraryItem>[],
+  expandedFolderChildren: Read<Record<EARS.EntityId, LibraryItem[]>>,
+  itemId: string,
+): Read<LibraryItem> | undefined {
+  const top = items.find(i => i.id === itemId);
+  if (top) return top;
+  for (const children of Object.values(expandedFolderChildren)) {
+    const found = children.find(i => i.id === itemId);
+    if (found) return found;
   }
-  return undefined
+  return undefined;
 }
-
-export const id = 'library' as const;
 
 /** The folders this window shows: the one open, and each one expanded in the tree */
-function shownFolders(context: LibraryContext): (EARS.EntityId | null)[] {
-  return [context.currentFolderId, ...context.expandedFolderIds.filter(each => each !== context.currentFolderId)]
+function shownFolders(data: Read<LibraryData>): (EARS.EntityId | null)[] {
+  return [data.currentFolderId, ...data.expandedFolderIds.filter(each => each !== data.currentFolderId)];
+}
+
+/**
+ * The selection once a folder's contents changed under it: the folder this window just made, once it is shown, or
+ * what was selected and is still there — a commit elsewhere re-runs the view, and must not drop what the user picked
+ */
+function selectionAfter(
+  items: readonly Read<LibraryItem>[],
+  expandedFolderChildren: Read<Record<EARS.EntityId, LibraryItem[]>>,
+  newItemId: EARS.EntityId | null | undefined,
+  currentSelected: readonly EARS.EntityId[],
+): Pick<LibraryContext, 'selectedItems' | 'selectedDocument'> {
+  const selectedItems = newItemId && findItemById(items, expandedFolderChildren, newItemId)
+    ? [newItemId]
+    : currentSelected.filter(each => findItemById(items, expandedFolderChildren, each));
+  const only = selectedItems.length === 1 ? findItemById(items, expandedFolderChildren, selectedItems[0]) : undefined;
+  return { selectedItems, selectedDocument: only?.type === 'document' ? documentItemToDTO(only) : null };
 }
 
 /**
  * A folder's contents arrived, from its view or fetched from disk: the context with them in the slot their folder
  * names — the folder open, or one expanded in the tree — and nothing changed for a folder this window no longer shows
  */
-function folderShown(context: LibraryContext, data: FolderContents): Partial<LibraryContext> {
-  const items = data.items || []
-  const folderId = data.currentFolderId || null
-  const shown: Partial<LibraryContext> = {}
+function folderShown(context: Read<LibraryData>, data: Read<FolderContents>): Partial<LibraryData> {
+  const items = (data.items || []) as LibraryItem[];
+  const folderId = data.currentFolderId || null;
+  const shown: Partial<LibraryData> = {};
+  let expandedFolderChildren = context.expandedFolderChildren as Record<EARS.EntityId, LibraryItem[]>;
 
   if (folderId && context.expandedFolderIds.includes(folderId)) {
-    shown.expandedFolderChildren = { ...context.expandedFolderChildren, [folderId]: items }
-    shown.loadingFolderIds = context.loadingFolderIds.filter(each => each !== folderId)
+    expandedFolderChildren = { ...expandedFolderChildren, [folderId]: items };
+    shown.expandedFolderChildren = expandedFolderChildren;
+    shown.loadingFolderIds = context.loadingFolderIds.filter(each => each !== folderId);
   }
-  if (folderId !== context.currentFolderId) return shown
+  if (folderId !== context.currentFolderId) return shown;
 
   const documents = items
     .filter((item): item is DocumentItem => item.type === 'document')
-    .map(documentItemToDTO)
-  tagStorage.updateTagsFromDocuments(documents)
+    .map(documentItemToDTO);
+  tagStorage.updateTagsFromDocuments(documents);
 
-  // Detect broken symlink state
-  const isBroken = data.isBroken ?? false
-  const lastKnownPath = data.lastKnownPath ?? null
+  const isBroken = data.isBroken ?? false;
+  const lastKnownPath = data.lastKnownPath ?? null;
+  const hasSymlinkedItems = items.some(item => (item as any).isSymlinked);
+  const isInSymlinkContext = isBroken || hasSymlinkedItems || (folderId?.startsWith('symlink:') ?? false);
 
-  // Detect symlink context
-  const hasSymlinkedItems = items.some(item => (item as any).isSymlinked)
-  const isInSymlinkContext = isBroken || hasSymlinkedItems || (folderId?.startsWith('symlink:') ?? false)
-
-  // Find the symlink root ID
-  let currentSymlinkRootId: string | null = null
+  let currentSymlinkRootId: string | null = null;
   if (isInSymlinkContext && folderId) {
-    const parsed = parseSymlinkId(folderId)
-    currentSymlinkRootId = parsed ? parsed.rootId : folderId
+    const parsed = parseSymlinkId(folderId);
+    currentSymlinkRootId = parsed ? parsed.rootId : folderId;
   }
 
-  // Derive symlinkBasePath from symlinked items
-  let symlinkBasePath: string | null = null
+  let symlinkBasePath: string | null = null;
   if (isInSymlinkContext && items.length > 0) {
-    const symlinkItem = items.find(i => (i as any).isSymlinked)
+    const symlinkItem = items.find(i => (i as any).isSymlinked);
     if (symlinkItem) {
-      const fullPath = (symlinkItem as any).symlinkPath || (symlinkItem as any).filePath
+      const fullPath = (symlinkItem as any).symlinkPath || (symlinkItem as any).filePath;
       if (fullPath && symlinkItem.name) {
-        const parsed = parseSymlinkId(symlinkItem.id)
+        const parsed = parseSymlinkId(symlinkItem.id);
         if (parsed) {
           if (parsed.relPath) {
-            const idx = fullPath.lastIndexOf(parsed.relPath)
-            if (idx > 0) symlinkBasePath = fullPath.slice(0, idx - 1)
+            const idx = fullPath.lastIndexOf(parsed.relPath);
+            if (idx > 0) symlinkBasePath = fullPath.slice(0, idx - 1);
           } else {
-            symlinkBasePath = fullPath.slice(0, fullPath.length - symlinkItem.name.length - 1)
+            symlinkBasePath = fullPath.slice(0, fullPath.length - symlinkItem.name.length - 1);
           }
         }
       }
@@ -127,74 +151,38 @@ function folderShown(context: LibraryContext, data: FolderContents): Partial<Lib
     ...shown,
     items,
     currentFolderId: folderId,
-    currentPath: data.currentPath || [],
-    breadcrumbs: data.breadcrumbs || [],
-    searchIndices: data.searchIndices || [],
+    currentPath: data.currentPath ? [...data.currentPath] : [],
+    breadcrumbs: data.breadcrumbs ? [...data.breadcrumbs] : [],
+    searchIndices: data.searchIndices ? [...data.searchIndices] : [],
     isInSymlinkContext,
     currentSymlinkRootId,
     symlinkBasePath,
     isBroken,
     lastKnownPath,
-    ...selectionAfter({ ...context, ...shown, items }),
-  }
-}
-
-/**
- * The selection once a folder's contents changed under it: the folder this window just made, once it is shown, or
- * what was selected and is still there — a commit elsewhere re-runs the view, and must not drop what the user picked
- */
-function selectionAfter(context: LibraryContext): Pick<LibraryContext, 'selectedItems' | 'selectedDocument'> {
-  const selectedItems = context.newItemId && findItemById(context, context.newItemId)
-    ? [context.newItemId]
-    : context.selectedItems.filter(each => findItemById(context, each))
-  const only = selectedItems.length === 1 ? findItemById(context, selectedItems[0]) : undefined
-  return { selectedItems, selectedDocument: only?.type === 'document' ? documentItemToDTO(only) : null }
+    ...selectionAfter(items, expandedFolderChildren, context.newItemId, context.selectedItems),
+  };
 }
 
 /** The symlinked folders among a folder's contents: whether each still reaches its folder on disk no view can see, so it is asked */
-const symlinksIn = (data: FolderContents): EARS.EntityId[] =>
-  (data.items || []).filter(item => item.type === 'folder' && item.isSymlink).map(item => item.id)
-import type { ContentSection } from '#features/library/be/types.ts';
+const symlinksIn = (data: Read<FolderContents>): EARS.EntityId[] =>
+  (data.items || []).filter(item => item.type === 'folder' && item.isSymlink).map(item => item.id);
 
-/** The library surface's actor, as its own components reach it with `useSurface<LibraryActor>()` */
-export type LibraryActor = ActorRefFrom<typeof librarySystem>
+/** The key a fetch of a folder on disk is made under: its folder */
+const contentsKey = (folderId: EARS.EntityId | null): string => `${folderId}`;
 
 export type LibraryEvents =
   | OpenEntity
-  | { type: 'SURFACE_ACTIVATED' }
-  | { type: 'TRAIL_CLICK'; trail: string[] }
+  | TrailClickEvent
   | { type: 'VIEW_BROWSER' }
-
   // Document events
   | { type: 'CREATE_DOCUMENT' }
   | LibraryInboxEvent
   | { type: 'DELETE_DOCUMENT'; documentId: EARS.EntityId }
   | { type: 'SAVE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId }
   | { type: 'CANCEL_EDIT' }
-
-  // Search Index events
-  | { type: 'CREATE_SEARCH_INDEX' }
-  | { type: 'SAVE_SEARCH_INDEX'; config: SearchIndexFormData }
-  | { type: 'CANCEL_CREATE_INDEX' }
-  | { type: 'LIST_SEARCH_INDICES' }
-  | { type: 'EDIT_SEARCH_INDEX'; indexId: string }
-  | { type: 'UPDATE_SEARCH_INDEX'; indexId: string; config: SearchIndexFormData }
-  | { type: 'DELETE_SEARCH_INDEX'; indexId: string }
-  | { type: 'CANCEL_EDIT_INDEX' }
-
-  // Search test events
-  | { type: 'TEST_SEARCH_INDEX'; indexId: string }
-  | { type: 'UPDATE_TEST_QUERY'; query: string }
-  | { type: 'EXECUTE_TEST_SEARCH' }
-  | { type: 'CANCEL_TEST_SEARCH' }
-
-  // Collection events
-  | { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: EARS.EntityId }
-
   // Tree view events
   | { type: 'EXPAND_FOLDER'; folderId: EARS.EntityId }
   | { type: 'COLLAPSE_FOLDER'; folderId: EARS.EntityId }
-
   // File browser events
   | { type: 'DOUBLE_CLICK_ITEM'; item: LibraryItem }
   | { type: 'SELECT_ITEMS'; itemIds: EARS.EntityId[] }
@@ -203,7 +191,6 @@ export type LibraryEvents =
   | { type: 'CREATE_FOLDER'; name: string }
   | { type: 'SORT_BY'; column: 'name' | 'modified' | 'size' | 'kind' }
   | { type: 'MOVE_ITEMS'; itemIds: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }
-  | { type: 'SEARCH'; query: string }
   | { type: 'BREADCRUMB_CLICK'; folderId: EARS.EntityId | null }
   | { type: 'CLEAR_ITEM_TO_EDIT' }
   // Symlink events
@@ -223,430 +210,117 @@ export type LibraryEvents =
   | { type: 'FORGET_IMPORT' }
   | { type: 'EXPORT'; directory: string; format: 'markdown' | 'json' }
   | { type: 'FORGET_EXPORT' }
-  | OutgoingLibraryEvents
-  | Made
+  | OutgoingLibraryEvents;
 
-/**
- * The asks this window makes. A fetch of a folder on disk is one per folder, so a second for the same folder replaces
- * the one under way and its end names the folder it was for. A check of symlinks and each write is asked on its own.
- * An import and an export are one at a time
- */
-const made = makes(({ one, each }) => ({
-  // What is on disk under a symlinked folder, which no view can see
-  contents: each(fromAsk('library', 'GET_FOLDER_CONTENTS')),
-  symlinks: each(fromAsk('library', 'CHECK_SYMLINKS')),
-  // This window's writes. What one changed reaches every window through the views; one refused is shown here
-  createDocument: each(fromAsk('library', 'CREATE_DOCUMENT')),
-  updateDocument: each(fromAsk('library', 'UPDATE_DOCUMENT')),
-  createCollection: each(fromAsk('library', 'CREATE_COLLECTION')),
-  createSymlinkCollection: each(fromAsk('library', 'CREATE_SYMLINK_COLLECTION')),
-  renameItem: each(fromAsk('library', 'RENAME_ITEM')),
-  deleteItems: each(fromAsk('library', 'DELETE_ITEMS')),
-  moveItems: each(fromAsk('library', 'MOVE_ITEMS')),
-  updateSymlinkPath: each(fromAsk('library', 'UPDATE_SYMLINK_PATH')),
-  importLibrary: one(fromAsk('library', 'IMPORT_LIBRARY')),
-  exportLibrary: one(fromAsk('library', 'EXPORT_LIBRARY')),
-}))
-
-/** How an ask the machine made ended */
-type Made = MadeEvent<typeof made>
-
-/** What the machine holds: what the surface publishes, the asks under way, and how the last import and export ended */
-type LibraryMachineContext = LibraryContext & {
-  /** Which of the asks the machine makes (`made`) are under way */
-  making: Making<typeof made>
+type LibraryData = Omit<
+  LibraryContext,
+  'editingDocument' | 'editingDocumentId' | 'editingItem' | 'itemToEdit' | 'newItemId' | 'editingIndexId' | 'editingIndex' | 'testingIndexId' | 'testingIndex'
+> & {
+  editingDocument: DocumentDTO | undefined;
+  editingDocumentId: EARS.EntityId | undefined;
+  editingItem: LibraryItem | undefined;
+  itemToEdit: EARS.EntityId | null;
+  newItemId: EARS.EntityId | null;
+  editingIndexId: string | undefined;
+  editingIndex: LibraryContext['editingIndex'];
+  testingIndexId: string | undefined;
+  testingIndex: LibraryContext['testingIndex'];
   /** How the last import ended, until another folder is picked */
-  imported?: Extract<Made, { type: 'made.importLibrary' }>['outcome']
+  imported: OutcomeOf<LibraryAsks['IMPORT_LIBRARY']> | undefined;
   /** How the last export ended, until another is made */
-  exported?: Extract<Made, { type: 'made.exportLibrary' }>['outcome']
+  exported: OutcomeOf<LibraryAsks['EXPORT_LIBRARY']> | undefined;
+};
+
+type LibraryShape = {
+  data: LibraryData;
+  calls: {
+    contents: { readonly each: LibraryAsks['GET_FOLDER_CONTENTS']['args'] };
+    symlinks: { readonly many: LibraryAsks['CHECK_SYMLINKS']['args'] };
+    createDocument: { readonly many: LibraryAsks['CREATE_DOCUMENT']['args'] };
+    updateDocument: { readonly many: LibraryAsks['UPDATE_DOCUMENT']['args'] };
+    createCollection: { readonly many: LibraryAsks['CREATE_COLLECTION']['args'] };
+    createSymlinkCollection: { readonly many: LibraryAsks['CREATE_SYMLINK_COLLECTION']['args'] };
+    renameItem: { readonly many: LibraryAsks['RENAME_ITEM']['args'] };
+    deleteItems: { readonly many: LibraryAsks['DELETE_ITEMS']['args'] };
+    moveItems: { readonly many: LibraryAsks['MOVE_ITEMS']['args'] };
+    updateSymlinkPath: { readonly many: LibraryAsks['UPDATE_SYMLINK_PATH']['args'] };
+    importLibrary: { readonly one: LibraryAsks['IMPORT_LIBRARY']['args'] };
+    exportLibrary: { readonly one: LibraryAsks['EXPORT_LIBRARY']['args'] };
+  };
+  states: {
+    browser: {};
+    create: {};
+    edit: {
+      states: {
+        ready: {};
+        fetching: {};
+      };
+    };
+  };
+};
+
+function navigateData(data: Read<LibraryData>, folderId: EARS.EntityId | null): Partial<LibraryData> {
+  if (folderId === data.currentFolderId) {
+    return { newItemId: null, selectedItems: [], selectedDocument: null };
+  }
+  return {
+    currentFolderId: folderId,
+    newItemId: null,
+    navHistory: pushNavHistory(data.navHistory as NavHistory<EARS.EntityId | null>, folderId),
+    selectedItems: [],
+    selectedDocument: null,
+  };
 }
 
-/** The key a fetch of a folder on disk is made under: its folder */
-const contentsKey = (folderId: EARS.EntityId | null): string => `${folderId}`
+function editingDocumentData(data: Read<LibraryData>, documentId: EARS.EntityId): Partial<LibraryData> {
+  const item = findItemById(data.items, data.expandedFolderChildren, documentId);
+  // A symlinked document's tree item has no content: the backend reads it from the filesystem
+  const symlinked = documentId.startsWith('symlink:') || (item?.type === 'document' && (item as Read<DocumentItem>).isSymlinked);
+  return {
+    currentView: 'edit' as const,
+    editingDocumentId: documentId,
+    editingDocument: item?.type === 'document' && !symlinked ? documentItemToDTO(item) : undefined,
+    selectedItems: [],
+    selectedDocument: null,
+  };
+}
 
-/** How a fetch of the document open on disk ended */
-type DocumentFetched = Awaited<ReturnType<typeof ask<'library', 'GET_DOCUMENT'>>>
-
-export const librarySystem = setup({
-  types: {
-    context: {} as LibraryMachineContext,
-    events: {} as LibraryEvents,
-  },
-  actors: {
-    // A document on disk is read when it is opened, which no view can do for it
-    getDocument: fromAsk('library', 'GET_DOCUMENT'),
-    ...made.actors,
-  },
-  actions: {
-    // File browser actions
-    navigate: assign(({ context, event }) => {
-      if (event.type !== 'OPEN_ENTITY' && event.type !== 'NAVIGATE_TO_FOLDER' && event.type !== 'BREADCRUMB_CLICK' && event.type !== 'DOUBLE_CLICK_ITEM') return {}
-      const folderId = event.type === 'OPEN_ENTITY' ? event.id : event.type === 'DOUBLE_CLICK_ITEM' ? event.item.id : event.folderId
-      if (folderId === context.currentFolderId) return { newItemId: null }
-      return { currentFolderId: folderId, newItemId: null, navHistory: pushNavHistory(context.navHistory, folderId) }
-    }),
-    readFolder: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'FOLDER.READ') return
-      const { folderId, folder } = event
-      if (folder.onDisk) {
-        if (!context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: [...context.diskFolderIds, folderId] })
-        made.make(enqueue, 'contents', contentsKey(folderId), { folderId: folderId })
-        return
-      }
-      if (context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: context.diskFolderIds.filter(each => each !== folderId) })
-      enqueue.assign(({ context }) => folderShown(context, folder.contents))
-      const symlinks = symlinksIn(folder.contents)
-      if (symlinks.length > 0) made.make(enqueue, 'symlinks', freshKey(), { ids: symlinks })
-    }),
-    folderFetched: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'made.contents') return
-      if (!event.outcome.ok) {
-        // A folder that could not be fetched is not being loaded any more; `showRefusal` says why
-        const folderId = event.key
-        enqueue.assign(({ context }) => ({ loadingFolderIds: context.loadingFolderIds.filter(each => each !== folderId) }))
-        return
-      }
-      const contents = event.outcome.value
-      enqueue.assign(({ context }) => folderShown(context, contents))
-      const symlinks = symlinksIn(contents)
-      if (symlinks.length > 0) made.make(enqueue, 'symlinks', freshKey(), { ids: symlinks })
-    }),
-    fetchChangedFolders: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'FOLDER_CHANGED') return
-      for (const folderId of shownFolders(context)) {
-        if (!context.diskFolderIds.includes(folderId)) continue
-        if (event.folderId === null || event.folderId === folderId) made.make(enqueue, 'contents', contentsKey(folderId), { folderId: folderId })
-      }
-    }),
-    markBrokenSymlinks: assign(({ context, event }) => {
-      if (event.type !== 'made.symlinks' || !event.outcome.ok) return {}
-      const { ids, broken } = event.outcome.value
-      const mark = (items: LibraryItem[]) => items.map(item => (item.type === 'folder' && ids.includes(item.id)
-        ? { ...item, isBroken: broken.includes(item.id) }
-        : item))
-      return {
-        items: mark(context.items),
-        expandedFolderChildren: Object.fromEntries(Object.entries(context.expandedFolderChildren).map(([folderId, items]) => [folderId, mark(items)])),
-      }
-    }),
-    openDocument: ({ event, self }) => {
-      if (event.type === 'DOUBLE_CLICK_ITEM') {
-        if (event.item.type === 'document') {
-          // A symlinked document's content is on disk, which its view says and the editor then fetches
-          self.send({ type: 'EDIT_DOCUMENT', documentId: event.item.id })
-        }
-      }
+export const libraryChrome: SurfaceChrome<Value<LibraryShape>> = {
+  default: { label: 'Library', target: 'browser' },
+  states: {
+    browser: {
+      breadcrumb: { label: 'Library', target: 'browser' },
     },
-    createDocument: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'SAVE_DOCUMENT') return
-      if (event.tags?.length) tagStorage.addTags(event.tags)
-      made.make(enqueue, 'createDocument', freshKey(), {
-        name: event.name,
-        content: event.content,
-        tags: event.tags,
-        collectionId: event.collectionId || context.currentFolderId || undefined,
-      })
-    }),
-    // A file made in the folder on disk that is open, which the browser then names in place
-    createDocumentOnDisk: enqueueActions(({ context, enqueue }) => {
-      if (!context.currentFolderId) return
-      made.make(enqueue, 'createDocument', freshKey(), { name: 'New Document.txt', content: [], tags: [], collectionId: context.currentFolderId })
-    }),
-    createFolder: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'CREATE_FOLDER') return
-      made.make(enqueue, 'createCollection', freshKey(), { name: event.name, parentId: context.currentFolderId || undefined })
-    }),
-    deleteSelectedItems: enqueueActions(({ context, enqueue }) => {
-      if (context.selectedItems.length > 0) made.make(enqueue, 'deleteItems', freshKey(), { ids: context.selectedItems })
-    }),
-    moveItems: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'MOVE_ITEMS') return
-      made.make(enqueue, 'moveItems', freshKey(), { ids: event.itemIds, targetFolderId: event.targetFolderId })
-    }),
-    // Tree view actions
-    expandFolder: assign(({ context, event }) => {
-      if (event.type !== 'EXPAND_FOLDER') return {}
-      const { folderId } = event
-      const alreadyExpanded = context.expandedFolderIds.includes(folderId)
-      if (alreadyExpanded) return {}
-      const isCached = folderId in context.expandedFolderChildren
-      return {
-        expandedFolderIds: [...context.expandedFolderIds, folderId],
-        loadingFolderIds: isCached
-          ? context.loadingFolderIds
-          : [...context.loadingFolderIds, folderId],
-      }
-    }),
-    collapseFolder: assign(({ context, event }) => {
-      if (event.type !== 'COLLAPSE_FOLDER') return {}
-      const { folderId } = event
-      return {
-        expandedFolderIds: context.expandedFolderIds.filter(id => id !== folderId),
-        loadingFolderIds: context.loadingFolderIds.filter(id => id !== folderId),
-      }
-    }),
-
-    renameItem: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'RENAME_ITEM') return
-      const itemType = findItemById(context, event.itemId)?.type === 'folder' ? 'folder' : 'document'
-      made.make(enqueue, 'renameItem', freshKey(), { id: event.itemId, name: event.name, itemType })
-    }),
-
-    // State update actions
-    selectItems: assign({
-      selectedItems: ({ event }) => event.type === 'SELECT_ITEMS' ? event.itemIds || [] : [],
-      selectedDocument: ({ event, context }) => {
-        if (event.type === 'SELECT_ITEMS' && event.itemIds?.length === 1) {
-          const item = findItemById(context, event.itemIds[0])
-          return item?.type === 'document' ? documentItemToDTO(item as DocumentItem) : null
-        }
-        return null
-      }
-    }),
-    setSortOrder: assign({
-      sortBy: ({ context, event }) => (event.type === 'SORT_BY' ? event.column : context.sortBy),
-      sortDirection: ({ context, event }) => {
-        const column = event.type === 'SORT_BY' ? event.column : context.sortBy
-        // Toggle direction if same column, otherwise default to 'asc'
-        return context.sortBy === column && context.sortDirection === 'asc' ? 'desc' : 'asc'
+    create: {
+      breadcrumb: { label: 'New Document', target: 'create' },
+    },
+    edit: {
+      breadcrumb: ({ data }) => ({
+        label: `${data.editingDocument?.name || 'Document'}`,
+        target: 'edit',
+      }),
+      menu: ({ data }) => {
+        if (!data.editingDocument) return [];
+        return [
+          {
+            label: 'Delete Document',
+            icon: Trash2,
+            event: { type: 'DELETE_DOCUMENT' as const, documentId: data.editingDocument.id },
+            iconColor: 'text-red-400',
+            confirm: `Are you sure you want to delete "${data.editingDocument.name || 'this document'}"?`,
+          },
+        ];
       },
-    }),
-    clearSelection: assign({
-      selectedItems: [],
-      selectedDocument: null,
-    }),
-    readDocument: assign(({ context, event }) => {
-      if (event.type !== 'DOCUMENT.READ' || event.documentId !== context.editingDocumentId) return {}
-      const { document } = event
-      return !document.onDisk && document.document ? { editingDocument: document.document } : {}
-    }),
-    takeFetchedDocument: assign(({ event }) => {
-      const outcome = outcomeOf<DocumentFetched>(event)
-      return outcome.ok ? { editingDocument: outcome.value.document } : {}
-    }),
-    takeFetchFailure: assign(({ event }) => {
-      const outcome = outcomeOf<DocumentFetched>(event)
-      return outcome.ok ? {} : { writeError: outcome.failure.message }
-    }),
-    takeIndex: ({ event }) => {
-      if (event.type === 'INDEX.READ') tagStorage.updateTagsFromDocuments(event.index.documents)
     },
-    updateDocument: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'SAVE_DOCUMENT' || !context.editingDocument) return
-      // Update tags in this surface's storage
-      const oldTags = context.editingDocument.tags || []
-      const newTags = event.tags || []
-
-      const removed = oldTags.filter(tag => !newTags.includes(tag))
-      const added = newTags.filter(tag => !oldTags.includes(tag))
-
-      if (removed.length) tagStorage.removeTags(removed)
-      if (added.length) tagStorage.addTags(added)
-
-      made.make(enqueue, 'updateDocument', freshKey(), {
-        id: context.editingDocument.id,
-        name: event.name,
-        content: event.content,
-        tags: event.tags,
-      })
-    }),
-
-    setEditingDocument: assign(({ context, event }) => {
-      if (event.type !== 'EDIT_DOCUMENT' && event.type !== 'OPEN_ENTITY') return {};
-      const documentId = event.type === 'OPEN_ENTITY' ? event.id : event.documentId;
-      const item = findItemById(context, documentId);
-      // A symlinked document's tree item has no content: the backend reads it from the filesystem
-      const symlinked = documentId.startsWith('symlink:') || (item?.type === 'document' && (item as DocumentItem).isSymlinked);
-      return { editingDocumentId: documentId,
-        editingDocument: item?.type === 'document' && !symlinked ? documentItemToDTO(item) : undefined };
-    }),
-    clearEditingDocument: assign({
-      editingDocument: undefined,
-    }),
-    /** An ask this machine made was not done: it is shown, whichever it was */
-    showRefusal: assign(({ event }) => {
-      if (!('outcome' in event) || event.outcome.ok) return {}
-      return { writeError: event.outcome.failure.message }
-    }),
-    // The folder this window made opens for naming here, and nowhere else; one made on disk is shown by fetching it
-    nameCreatedFolder: assign(({ event }) => {
-      if ((event.type !== 'made.createCollection' && event.type !== 'made.createSymlinkCollection') || !event.outcome.ok) return {}
-      const collection = event.outcome.value.collection
-      return collection ? { itemToEdit: collection.id, newItemId: collection.id } : {}
-    }),
-    sendDeleteDocument: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'DELETE_DOCUMENT') return
-      made.make(enqueue, 'deleteItems', freshKey(), { ids: [event.documentId] })
-    }),
-    // [SEARCH_INDEX_FF] Search index actions — commented out
-    // requestSearchIndices: ({ context }) => {
-    //   tell(id, {
-    //     type: 'LIST_SEARCH_INDICES',
-    //     folderId: context.currentFolderId,
-    //   })
-    // },
-    // setSearchIndices: assign({
-    //   searchIndices: ({ event }) => {
-    //     if (event.type === 'SEARCH_INDICES_LOADED') {
-    //       return event.data.indices
-    //     }
-    //     return []
-    //   },
-    // }),
-    // saveSearchIndex: ({ context, event }) => {
-    //   if (event.type === 'SAVE_SEARCH_INDEX') {
-    //     tell(id, {
-    //       type: 'CREATE_SEARCH_INDEX',
-    //       config: event.config,
-    //       folderId: context.currentFolderId,
-    //     })
-    //   }
-    // },
-    // updateSearchIndex: ({ event }) => {
-    //   if (event.type === 'UPDATE_SEARCH_INDEX') {
-    //     tell(id, {
-    //       type: 'UPDATE_SEARCH_INDEX',
-    //       id: event.indexId,
-    //       config: event.config,
-    //     })
-    //   }
-    // },
-    // deleteSearchIndex: ({ event }) => {
-    //   if (event.type === 'DELETE_SEARCH_INDEX') {
-    //     tell(id, {
-    //       type: 'DELETE_SEARCH_INDEX',
-    //       id: event.indexId,
-    //     })
-    //   }
-    // },
-    // setEditingIndex: assign({
-    //   editingIndexId: ({ event }) => {
-    //     if (event.type === 'EDIT_SEARCH_INDEX') {
-    //       return event.indexId
-    //     }
-    //     return undefined
-    //   },
-    //   editingIndex: ({ context, event }) => {
-    //     if (event.type === 'EDIT_SEARCH_INDEX') {
-    //       return context.searchIndices.find(idx => idx.id === event.indexId)
-    //     }
-    //     return undefined
-    //   },
-    // }),
-    // clearEditingIndex: assign({
-    //   editingIndexId: undefined,
-    //   editingIndex: undefined,
-    // }),
-    //
-    // // Search test actions
-    // setTestingIndex: assign({
-    //   testingIndexId: ({ event }) => {
-    //     if (event.type === 'TEST_SEARCH_INDEX') {
-    //       return event.indexId
-    //     }
-    //     return undefined
-    //   },
-    //   testingIndex: ({ context, event }) => {
-    //     if (event.type === 'TEST_SEARCH_INDEX') {
-    //       return context.searchIndices.find(idx => idx.id === event.indexId)
-    //     }
-    //     return undefined
-    //   },
-    //   testQuery: '',
-    //   testResults: [],
-    //   isSearching: false,
-    // }),
-    // updateTestQuery: assign({
-    //   testQuery: ({ event }) => {
-    //     if (event.type === 'UPDATE_TEST_QUERY') {
-    //       return event.query
-    //     }
-    //     return ''
-    //   },
-    // }),
-    // executeTestSearch: ({ context }) => {
-    //   if (context.testingIndexId && context.testQuery) {
-    //     tell(id, {
-    //       type: 'SEARCH_IN_INDEX',
-    //       indexId: context.testingIndexId,
-    //       query: context.testQuery,
-    //       limit: 10,
-    //     })
-    //   }
-    // },
-    // setSearching: assign({
-    //   isSearching: true,
-    // }),
-    // setSearchResults: assign({
-    //   testResults: ({ event }) => {
-    //     if (event.type === 'SEARCH_RESULTS') {
-    //       return event.data.results
-    //     }
-    //     return []
-    //   },
-    //   isSearching: false,
-    // }),
-    // clearTestSearch: assign({
-    //   testingIndexId: undefined,
-    //   testingIndex: undefined,
-    //   testQuery: '',
-    //   testResults: [],
-    //   isSearching: false,
-    // }),
-    // A folder on disk, fetched again at the user's ask; a stored one is a view, and already current
-    refreshFolder: enqueueActions(({ event, enqueue }) => {
-      if (event.type === 'REFRESH_FOLDER') made.make(enqueue, 'contents', contentsKey(event.folderId), { folderId: event.folderId })
-    }),
-
-    // Symlink actions
-    createSymlink: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'CREATE_SYMLINK') return
-      const pathParts = event.symlinkPath.split(/[/\\]/).filter(Boolean)
-      made.make(enqueue, 'createSymlinkCollection', freshKey(), {
-        name: pathParts[pathParts.length - 1] || 'Symlink',
-        symlinkPath: event.symlinkPath,
-        parentId: context.currentFolderId || undefined,
-      })
-    }),
-    relinkSymlink: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'RELINK_SYMLINK') return
-      made.make(enqueue, 'updateSymlinkPath', freshKey(), { collectionId: event.collectionId, newPath: event.newPath })
-    }),
-    removeBrokenSymlink: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'REMOVE_BROKEN_SYMLINK') return
-      made.make(enqueue, 'deleteItems', freshKey(), { ids: [event.collectionId] })
-    }),
-
-    // Import and export, from the settings form
-    importLibrary: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'IMPORT') return
-      enqueue.assign({ imported: undefined })
-      made.make(enqueue, 'importLibrary', { directory: event.directory })
-    }),
-    exportLibrary: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'EXPORT') return
-      enqueue.assign({ exported: undefined })
-      made.make(enqueue, 'exportLibrary', { directory: event.directory, format: event.format })
-    }),
   },
-  guards: { entityIs: entityIs<Contract['opens']>,
-    targetIs,
-    /** The document open is gone: deleted here or in another window */
-    documentGone: ({ context, event }) => event.type === 'DOCUMENT.READ' && event.documentId === context.editingDocumentId
-      && !event.document.onDisk && event.document.document === null,
-    /** The document open is a file on disk, not yet read: it is fetched, which no view can do for it */
-    documentToFetch: ({ context, event }) => event.type === 'DOCUMENT.READ' && event.documentId === context.editingDocumentId
-      && event.document.onDisk && !context.editingDocument,
-  },
-}).createMachine({
-  id: 'library',
+};
+
+export const librarySystem = state<LibraryShape, LibraryEvents>()({
   initial: 'browser',
-  context: {
-    // Core view state
+  data: {
     currentView: 'browser',
     editingDocument: undefined,
-
-    // File browser fields
+    editingDocumentId: undefined,
     items: [],
     currentFolderId: null,
     currentPath: [],
@@ -658,303 +332,419 @@ export const librarySystem = setup({
     editingItem: undefined,
     itemToEdit: null,
     newItemId: null,
-
-    // Tree view fields
     expandedFolderIds: [],
     expandedFolderChildren: {},
     loadingFolderIds: [],
-
     diskFolderIds: [],
-
-    // Search index fields
     searchIndices: [],
     editingIndexId: undefined,
     editingIndex: undefined,
-
-    // Search test fields
     testingIndexId: undefined,
     testingIndex: undefined,
     testQuery: '',
     testResults: [],
     isSearching: false,
-
-    // Symlink context
     isInSymlinkContext: false,
     currentSymlinkRootId: null,
     symlinkBasePath: null,
     isBroken: false,
     lastKnownPath: null,
-
     writeError: null,
-    making: made.none(),
-
+    imported: undefined,
+    exported: undefined,
     navHistory: createNavHistory<EARS.EntityId | null>(null),
   },
+  calls: ({ one, each, many }) => ({
+    contents: each('library', 'GET_FOLDER_CONTENTS', {
+      args: (_key, input) => input,
+      done: (outcome, { key, data, call }) => {
+        if (!outcome.ok) {
+          return {
+            data: {
+              loadingFolderIds: data.loadingFolderIds.filter(eachId => eachId !== key),
+              writeError: outcome.failure.message,
+            },
+          };
+        }
+        const contents = outcome.value;
+        const symlinks = symlinksIn(contents);
+        if (symlinks.length > 0) call('symlinks', { ids: symlinks });
+        return { data: folderShown(data, contents) };
+      },
+    }),
+    symlinks: many('library', 'CHECK_SYMLINKS', {
+      done: (outcome, { data }) => {
+        if (!outcome.ok) return { data: { writeError: outcome.failure.message } };
+        const { ids, broken } = outcome.value;
+        const mark = (items: readonly Read<LibraryItem>[]): LibraryItem[] =>
+          items.map(item =>
+            item.type === 'folder' && ids.includes(item.id)
+              ? { ...(item as LibraryItem & { type: 'folder' }), isBroken: broken.includes(item.id) }
+              : (item as LibraryItem),
+          );
+        return {
+          data: {
+            items: mark(data.items),
+            expandedFolderChildren: Object.fromEntries(
+              Object.entries(data.expandedFolderChildren).map(([folderId, items]) => [folderId, mark(items)]),
+            ),
+          },
+        };
+      },
+    }),
+    createDocument: many('library', 'CREATE_DOCUMENT', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    updateDocument: many('library', 'UPDATE_DOCUMENT', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    createCollection: many('library', 'CREATE_COLLECTION', {
+      done: (outcome) => {
+        if (!outcome.ok) return { data: { writeError: outcome.failure.message } };
+        const collection = outcome.value.collection;
+        return collection ? { data: { itemToEdit: collection.id, newItemId: collection.id } } : undefined;
+      },
+    }),
+    createSymlinkCollection: many('library', 'CREATE_SYMLINK_COLLECTION', {
+      done: (outcome) => {
+        if (!outcome.ok) return { data: { writeError: outcome.failure.message } };
+        const collection = outcome.value.collection;
+        return collection ? { data: { itemToEdit: collection.id, newItemId: collection.id } } : undefined;
+      },
+    }),
+    renameItem: many('library', 'RENAME_ITEM', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    deleteItems: many('library', 'DELETE_ITEMS', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    moveItems: many('library', 'MOVE_ITEMS', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    updateSymlinkPath: many('library', 'UPDATE_SYMLINK_PATH', {
+      done: (outcome) => (outcome.ok ? undefined : { data: { writeError: outcome.failure.message } }),
+    }),
+    importLibrary: one('library', 'IMPORT_LIBRARY', {
+      done: (outcome) => ({ data: { imported: outcome } }),
+    }),
+    exportLibrary: one('library', 'EXPORT_LIBRARY', {
+      done: (outcome) => ({ data: { exported: outcome } }),
+    }),
+  }),
   on: {
-    OPEN_ENTITY: [
-      { guard: { type: 'entityIs', params: { entity: 'Document' } }, target: '.edit', actions: ['setEditingDocument', 'clearSelection'] },
-      { guard: { type: 'entityIs', params: { entity: 'Collection' } }, target: '.browser', actions: ['navigate', 'clearSelection'] },
-    ],
-    EDIT_DOCUMENT: { target: '.edit', actions: ['setEditingDocument', 'clearSelection'] },
-    'FOLDER.READ': {
-      actions: 'readFolder',
+    OPEN_ENTITY: (event, { data }) => {
+      if (entityIs<Contract['opens']>({ event }, { entity: 'Document' })) {
+        return { at: 'edit', data: editingDocumentData(data, event.id as EARS.EntityId) };
+      }
+      if (entityIs<Contract['opens']>({ event }, { entity: 'Collection' })) {
+        return {
+          at: 'browser',
+          data: {
+            currentView: 'browser',
+            editingDocumentId: undefined,
+            ...navigateData(data, event.id as EARS.EntityId),
+          },
+        };
+      }
     },
-    'INDEX.READ': {
-      actions: 'takeIndex',
+    EDIT_DOCUMENT: (event, { data }) => ({
+      at: 'edit',
+      data: editingDocumentData(data, event.documentId),
+    }),
+    'FOLDER.READ': (event, { data, call, cancel }) => {
+      const { folderId, folder } = event;
+      if (folder.onDisk) {
+        const key = contentsKey(folderId);
+        cancel('contents', key);
+        call('contents', key, { folderId });
+        if (!data.diskFolderIds.includes(folderId)) {
+          return { data: { diskFolderIds: [...data.diskFolderIds, folderId] } };
+        }
+        return;
+      }
+      const symlinks = symlinksIn(folder.contents);
+      if (symlinks.length > 0) call('symlinks', { ids: symlinks });
+      return {
+        data: {
+          ...(data.diskFolderIds.includes(folderId)
+            ? { diskFolderIds: data.diskFolderIds.filter(each => each !== folderId) }
+            : {}),
+          ...folderShown(data, folder.contents),
+        },
+      };
     },
-    FOLDER_CHANGED: {
-      actions: 'fetchChangedFolders',
+    'INDEX.READ': (event) => {
+      tagStorage.updateTagsFromDocuments(event.index.documents);
     },
-    // What this window asked for ended: a folder on disk fetched, its symlinks checked, a folder made for it to name.
-    // One that was not done is shown, whichever it was; what a write changed reaches every window through the views
-    [made.done]: { actions: made.settle() },
-    'made.contents': { actions: ['folderFetched', 'showRefusal'] },
-    'made.symlinks': { actions: ['markBrokenSymlinks', 'showRefusal'] },
-    'made.createCollection': { actions: ['nameCreatedFolder', 'showRefusal'] },
-    'made.createSymlinkCollection': { actions: ['nameCreatedFolder', 'showRefusal'] },
-    'made.createDocument': { actions: 'showRefusal' },
-    'made.updateDocument': { actions: 'showRefusal' },
-    'made.renameItem': { actions: 'showRefusal' },
-    'made.deleteItems': { actions: 'showRefusal' },
-    'made.moveItems': { actions: 'showRefusal' },
-    'made.updateSymlinkPath': { actions: 'showRefusal' },
-    IMPORT: { actions: 'importLibrary' },
-    FORGET_IMPORT: { actions: assign({ imported: undefined }) },
-    'made.importLibrary': { actions: assign(({ event }) => ({ imported: event.outcome })) },
-    EXPORT: { actions: 'exportLibrary' },
-    FORGET_EXPORT: { actions: assign({ exported: undefined }) },
-    'made.exportLibrary': { actions: assign(({ event }) => ({ exported: event.outcome })) },
-    VIEW_BROWSER: {
-      target: '.browser',
+    FOLDER_CHANGED: (event, { data, call, cancel }) => {
+      for (const folderId of shownFolders(data)) {
+        if (!data.diskFolderIds.includes(folderId)) continue;
+        if (event.folderId === null || event.folderId === folderId) {
+          const key = contentsKey(folderId);
+          cancel('contents', key);
+          call('contents', key, { folderId });
+        }
+      }
     },
-
-    // File browser events
-    NAVIGATE_TO_FOLDER: {
-      target: '.browser',
-      actions: ['navigate', 'clearSelection'],
+    IMPORT: (event, { call, cancel }) => {
+      cancel('importLibrary');
+      call('importLibrary', { directory: event.directory });
+      return { data: { imported: undefined } };
     },
-    BREADCRUMB_CLICK: {
-      actions: ['navigate', 'clearSelection'],
+    FORGET_IMPORT: () => ({ data: { imported: undefined } }),
+    EXPORT: (event, { call, cancel }) => {
+      cancel('exportLibrary');
+      call('exportLibrary', { directory: event.directory, format: event.format });
+      return { data: { exported: undefined } };
     },
-    NAVIGATE_BACK: {
-      guard: ({ context }) => canGoBack(context.navHistory),
-      actions: [
-        assign(({ context }) => {
-          const result = goBack(context.navHistory)!;
-          return { navHistory: result.history, currentFolderId: result.entry };
-        }),
-        'clearSelection',
-      ],
+    FORGET_EXPORT: () => ({ data: { exported: undefined } }),
+    VIEW_BROWSER: () => ({ at: 'browser', data: { currentView: 'browser', editingDocumentId: undefined } }),
+    NAVIGATE_TO_FOLDER: (event, { data }) => ({
+      at: 'browser',
+      data: {
+        currentView: 'browser',
+        editingDocumentId: undefined,
+        ...navigateData(data, event.folderId),
+      },
+    }),
+    BREADCRUMB_CLICK: (event, { data }) => ({ data: navigateData(data, event.folderId) }),
+    NAVIGATE_BACK: (_event, { data }) => {
+      const nav = data.navHistory as NavHistory<EARS.EntityId | null>;
+      if (!canGoBack(nav)) return;
+      const result = goBack(nav)!;
+      return {
+        data: {
+          navHistory: result.history,
+          currentFolderId: result.entry,
+          selectedItems: [],
+          selectedDocument: null,
+        },
+      };
     },
-    NAVIGATE_FORWARD: {
-      guard: ({ context }) => canGoForward(context.navHistory),
-      actions: [
-        assign(({ context }) => {
-          const result = goForward(context.navHistory)!;
-          return { navHistory: result.history, currentFolderId: result.entry };
-        }),
-        'clearSelection',
-      ],
+    NAVIGATE_FORWARD: (_event, { data }) => {
+      const nav = data.navHistory as NavHistory<EARS.EntityId | null>;
+      if (!canGoForward(nav)) return;
+      const result = goForward(nav)!;
+      return {
+        data: {
+          navHistory: result.history,
+          currentFolderId: result.entry,
+          selectedItems: [],
+          selectedDocument: null,
+        },
+      };
     },
-    DOUBLE_CLICK_ITEM: [
-      { guard: ({ event }) => event.item.type === 'folder', target: '.browser', actions: ['navigate', 'clearSelection'] },
-      { actions: ['openDocument', 'clearSelection', assign({ newItemId: null })] },
-    ],
-    SELECT_ITEMS: {
-      actions: ['selectItems', assign({ newItemId: null })],
+    DOUBLE_CLICK_ITEM: (event, { data }) => {
+      if (event.item.type === 'folder') {
+        return {
+          at: 'browser',
+          data: {
+            currentView: 'browser',
+            editingDocumentId: undefined,
+            ...navigateData(data, event.item.id),
+          },
+        };
+      }
+      if (event.item.type === 'document') {
+        return {
+          at: 'edit',
+          data: {
+            ...editingDocumentData(data, event.item.id),
+            newItemId: null,
+          },
+        };
+      }
+      return { data: { selectedItems: [], selectedDocument: null, newItemId: null } };
     },
-    SORT_BY: {
-      actions: 'setSortOrder',
+    SELECT_ITEMS: (event, { data }) => {
+      const selectedItems = event.itemIds || [];
+      let selectedDocument: DocumentDTO | null = null;
+      if (selectedItems.length === 1) {
+        const item = findItemById(data.items, data.expandedFolderChildren, selectedItems[0]);
+        selectedDocument = item?.type === 'document' ? documentItemToDTO(item) : null;
+      }
+      return { data: { selectedItems, selectedDocument, newItemId: null } };
     },
-    DELETE_SELECTED_ITEMS: {
-      actions: 'deleteSelectedItems',
+    SORT_BY: (event, { data }) => ({
+      data: {
+        sortBy: event.column,
+        sortDirection: data.sortBy === event.column && data.sortDirection === 'asc' ? 'desc' as const : 'asc' as const,
+      },
+    }),
+    DELETE_SELECTED_ITEMS: (_event, { data, call }) => {
+      if (data.selectedItems.length > 0) call('deleteItems', { ids: [...data.selectedItems] });
     },
-    RENAME_ITEM: {
-      actions: 'renameItem',
+    RENAME_ITEM: (event, { data, call }) => {
+      const itemType = findItemById(data.items, data.expandedFolderChildren, event.itemId)?.type === 'folder' ? 'folder' : 'document';
+      call('renameItem', { id: event.itemId, name: event.name, itemType });
     },
-    CREATE_FOLDER: {
-      actions: 'createFolder',
+    CREATE_FOLDER: (event, { data, call }) => {
+      call('createCollection', { name: event.name, parentId: data.currentFolderId || undefined });
     },
-    MOVE_ITEMS: {
-      actions: 'moveItems',
+    MOVE_ITEMS: (event, { call }) => {
+      call('moveItems', { ids: event.itemIds, targetFolderId: event.targetFolderId });
     },
-    CLEAR_ITEM_TO_EDIT: {
-      actions: assign({
-        itemToEdit: null
-      })
+    CLEAR_ITEM_TO_EDIT: () => ({ data: { itemToEdit: null } }),
+    EXPAND_FOLDER: (event, { data }) => {
+      const { folderId } = event;
+      if (data.expandedFolderIds.includes(folderId)) return;
+      const isCached = folderId in data.expandedFolderChildren;
+      return {
+        data: {
+          expandedFolderIds: [...data.expandedFolderIds, folderId],
+          loadingFolderIds: isCached ? data.loadingFolderIds : [...data.loadingFolderIds, folderId],
+        },
+      };
     },
-
-    // Tree view events
-    EXPAND_FOLDER: {
-      actions: 'expandFolder',
+    COLLAPSE_FOLDER: (event, { data }) => ({
+      data: {
+        expandedFolderIds: data.expandedFolderIds.filter(each => each !== event.folderId),
+        loadingFolderIds: data.loadingFolderIds.filter(each => each !== event.folderId),
+      },
+    }),
+    CREATE_SYMLINK: (event, { data, call }) => {
+      const pathParts = event.symlinkPath.split(/[/\\]/).filter(Boolean);
+      call('createSymlinkCollection', {
+        name: pathParts[pathParts.length - 1] || 'Symlink',
+        symlinkPath: event.symlinkPath,
+        parentId: data.currentFolderId || undefined,
+      });
     },
-    COLLAPSE_FOLDER: {
-      actions: 'collapseFolder',
+    REFRESH_FOLDER: (event, { call, cancel }) => {
+      const key = contentsKey(event.folderId);
+      cancel('contents', key);
+      call('contents', key, { folderId: event.folderId });
     },
-
-    CREATE_SYMLINK: {
-      actions: 'createSymlink',
+    RELINK_SYMLINK: (event, { call }) => {
+      call('updateSymlinkPath', { collectionId: event.collectionId, newPath: event.newPath });
     },
-    REFRESH_FOLDER: {
-      actions: 'refreshFolder',
+    REMOVE_BROKEN_SYMLINK: (event, { call }) => {
+      call('deleteItems', { ids: [event.collectionId] });
+      return { data: { isBroken: false, lastKnownPath: null } };
     },
-    RELINK_SYMLINK: {
-      actions: ['relinkSymlink'],
+    CLEAR_WRITE_ERROR: () => ({ data: { writeError: null } }),
+    TRAIL_CLICK: (event) => {
+      if (event.target === 'browser') return { at: 'browser', data: { currentView: 'browser', editingDocumentId: undefined } };
+      if (event.target === 'create') return { at: 'create', data: { currentView: 'create', editingDocumentId: undefined } };
+      if (event.target === 'edit') return { at: 'edit', data: { currentView: 'edit' } };
     },
-    REMOVE_BROKEN_SYMLINK: {
-      actions: ['removeBrokenSymlink', assign({ isBroken: false, lastKnownPath: null })],
-    },
-
-    CLEAR_WRITE_ERROR: {
-      actions: assign({ writeError: null }),
-    },
-    // [SEARCH_INDEX_FF] Search index events — commented out
-    // SEARCH_INDICES_LOADED: { actions: 'setSearchIndices' },
-    // SEARCH_INDEX_CREATED: { actions: 'requestSearchIndices' },
-    // SEARCH_INDEX_UPDATED: { actions: 'requestSearchIndices' },
-    // SEARCH_INDEX_DELETED: { actions: 'requestSearchIndices' },
-    // SEARCH_RESULTS: { actions: 'setSearchResults' },
-    ...TRAIL_CLICK([
-      ['.browser', 'browser'],
-      ['.create', 'create'],
-      ['.edit', 'edit'],
-      // [SEARCH_INDEX_FF] ['.createIndex', 'createIndex'],
-      // [SEARCH_INDEX_FF] ['.editIndex', 'editIndex'],
-      // [SEARCH_INDEX_FF] ['.testIndex', 'testIndex'],
-    ]),
   },
   states: {
     browser: {
-      entry: assign({ currentView: 'browser' }),
-      meta: breadcrumb('browser', 'Library', true),
       on: {
-        CREATE_DOCUMENT: [
-          {
-            guard: ({ context }) => context.isInSymlinkContext,
-            // Stay in the browser: the file is made in the folder on disk, and named there
-            actions: 'createDocumentOnDisk',
-          },
-          { target: 'create' },
-        ],
-        // [SEARCH_INDEX_FF] Search index transitions — commented out
-        // CREATE_SEARCH_INDEX: 'createIndex',
-        // EDIT_SEARCH_INDEX: { target: 'editIndex', actions: 'setEditingIndex' },
-        // TEST_SEARCH_INDEX: { target: 'testIndex', actions: 'setTestingIndex' },
+        CREATE_DOCUMENT: (_event, { data, call }) => {
+          if (data.isInSymlinkContext) {
+            if (data.currentFolderId) {
+              call('createDocument', {
+                name: 'New Document.txt',
+                content: [],
+                tags: [],
+                collectionId: data.currentFolderId,
+              });
+            }
+            return;
+          }
+          return { at: 'create', data: { currentView: 'create', editingDocumentId: undefined } };
+        },
       },
     },
     create: {
-      entry: assign({ currentView: 'create' }),
-      meta: breadcrumb('create', 'New Document'),
       on: {
-        SAVE_DOCUMENT: {
-          target: 'browser',
-          actions: 'createDocument',
+        SAVE_DOCUMENT: (event, { data, call }) => {
+          if (event.tags?.length) tagStorage.addTags(event.tags);
+          call('createDocument', {
+            name: event.name,
+            content: event.content,
+            tags: event.tags,
+            collectionId: event.collectionId || data.currentFolderId || undefined,
+          });
+          return { at: 'browser', data: { currentView: 'browser', editingDocumentId: undefined } };
         },
-        CANCEL_EDIT: 'browser',
+        CANCEL_EDIT: () => ({ at: 'browser', data: { currentView: 'browser', editingDocumentId: undefined } }),
       },
     },
     edit: {
-      entry: assign({ currentView: 'edit' }),
-      exit: assign({ editingDocumentId: undefined }),
       initial: 'ready',
       states: {
         ready: {},
         fetching: {
-          invoke: {
-            src: 'getDocument',
-            input: ({ context }) => ({ id: context.editingDocumentId! }),
-            onDone: onOutcome<DocumentFetched>()({
-              done: { target: 'ready', actions: 'takeFetchedDocument' },
-              failed: {
-                // Nothing to edit: back to where it was opened from, saying why
-                'not-found': { target: '#library.browser', actions: ['clearEditingDocument', 'takeFetchFailure'] },
-                'no-access': { target: 'ready', actions: 'takeFetchFailure' },
-                failed: { target: 'ready', actions: 'takeFetchFailure' },
-                unavailable: { target: 'ready', actions: 'takeFetchFailure' },
-              },
-            }),
+          run: async ({ data, ask }) => {
+            const outcome = await ask('library', 'GET_DOCUMENT', { id: data.editingDocumentId! });
+            if (outcome.ok) {
+              return { at: 'edit.ready', data: { editingDocument: outcome.value.document } };
+            }
+            if (outcome.failure.kind === 'not-found') {
+              // Nothing to edit: back to where it was opened from, saying why
+              return {
+                at: 'browser',
+                data: {
+                  currentView: 'browser',
+                  editingDocument: undefined,
+                  editingDocumentId: undefined,
+                  writeError: outcome.failure.message,
+                },
+              };
+            }
+            return { at: 'edit.ready', data: { writeError: outcome.failure.message } };
           },
+          failed: (error) => ({
+            at: 'edit.ready',
+            data: { writeError: error instanceof Error ? error.message : String(error) },
+          }),
         },
-      },
-      meta: {
-        ...breadcrumbWithParams<LibraryContext>({
-          target: 'edit',
-          getLabel: (ctx) => `${ctx.editingDocument?.name || 'Document'}`,
-        }),
-        ...contextMenuFn<LibraryContext>((ctx) => {
-          if (!ctx.editingDocument) return []
-          return [
-            { label: 'Delete Document', icon: Trash2, event: { type: 'DELETE_DOCUMENT' as const, documentId: ctx.editingDocument.id }, iconColor: 'text-red-400', confirm: `Are you sure you want to delete "${ctx.editingDocument.name || 'this document'}"?` },
-          ]
-        }),
       },
       on: {
-        'DOCUMENT.READ': [
-          { guard: 'documentGone', target: 'browser', actions: 'clearEditingDocument' },
-          { guard: 'documentToFetch', target: '.fetching' },
-          { actions: 'readDocument' },
-        ],
-        SAVE_DOCUMENT: {
-          target: 'browser',
-          actions: ['updateDocument', 'clearEditingDocument'],
+        'DOCUMENT.READ': (event, { data, snapshot }) => {
+          if (event.documentId !== data.editingDocumentId) return;
+          if (!event.document.onDisk && event.document.document === null) {
+            return {
+              at: 'browser',
+              data: { currentView: 'browser', editingDocument: undefined, editingDocumentId: undefined },
+            };
+          }
+          if (event.document.onDisk && !data.editingDocument) {
+            if (snapshot.at === 'edit.fetching') return;
+            return { at: 'edit.fetching' };
+          }
+          if (!event.document.onDisk && event.document.document) {
+            return { data: { editingDocument: event.document.document } };
+          }
         },
-        CANCEL_EDIT: {
-          target: 'browser',
-          actions: 'clearEditingDocument',
+        SAVE_DOCUMENT: (event, { data, call }) => {
+          if (data.editingDocument) {
+            const oldTags = data.editingDocument.tags || [];
+            const newTags = event.tags || [];
+            const removed = oldTags.filter(tag => !newTags.includes(tag));
+            const added = newTags.filter(tag => !oldTags.includes(tag));
+            if (removed.length) tagStorage.removeTags(removed);
+            if (added.length) tagStorage.addTags(added);
+
+            call('updateDocument', {
+              id: data.editingDocument.id,
+              name: event.name,
+              content: event.content,
+              tags: event.tags,
+            });
+          }
+          return {
+            at: 'browser',
+            data: { currentView: 'browser', editingDocument: undefined, editingDocumentId: undefined },
+          };
         },
-        DELETE_DOCUMENT: {
-          target: 'browser',
-          actions: ['sendDeleteDocument', 'clearEditingDocument'],
+        CANCEL_EDIT: () => ({
+          at: 'browser',
+          data: { currentView: 'browser', editingDocument: undefined, editingDocumentId: undefined },
+        }),
+        DELETE_DOCUMENT: (event, { call }) => {
+          call('deleteItems', { ids: [event.documentId] });
+          return {
+            at: 'browser',
+            data: { currentView: 'browser', editingDocument: undefined, editingDocumentId: undefined },
+          };
         },
       },
     },
-    // [SEARCH_INDEX_FF] Search index states — commented out
-    // createIndex: {
-    //   entry: assign({ currentView: 'create-index' }),
-    //   meta: breadcrumb('createIndex', 'Create Search Index'),
-    //   on: {
-    //     SAVE_SEARCH_INDEX: {
-    //       target: 'browser',
-    //       actions: 'saveSearchIndex',
-    //     },
-    //     CANCEL_CREATE_INDEX: 'browser',
-    //   },
-    // },
-    // editIndex: {
-    //   entry: assign({ currentView: 'edit-index' }),
-    //   meta: breadcrumbWithParams<LibraryContext>({
-    //     target: 'editIndex',
-    //     getLabel: (ctx) => `${ctx.editingIndex?.name || 'Index'}`,
-    //   }),
-    //   on: {
-    //     UPDATE_SEARCH_INDEX: {
-    //       target: 'browser',
-    //       actions: ['updateSearchIndex', 'clearEditingIndex'],
-    //     },
-    //     CANCEL_EDIT_INDEX: {
-    //       target: 'browser',
-    //       actions: 'clearEditingIndex',
-    //     },
-    //   },
-    // },
-    // testIndex: {
-    //   entry: assign({ currentView: 'test-index' }),
-    //   meta: breadcrumbWithParams<LibraryContext>({
-    //     target: 'testIndex',
-    //     getLabel: (ctx) => `${ctx.testingIndex?.name || 'Index'}`,
-    //   }),
-    //   on: {
-    //     UPDATE_TEST_QUERY: {
-    //       actions: 'updateTestQuery',
-    //     },
-    //     EXECUTE_TEST_SEARCH: {
-    //       actions: ['setSearching', 'executeTestSearch'],
-    //     },
-    //     CANCEL_TEST_SEARCH: {
-    //       target: 'browser',
-    //       actions: 'clearTestSearch',
-    //     },
-    //   },
-    // },
   },
-})
+});
+
+export default librarySystem;

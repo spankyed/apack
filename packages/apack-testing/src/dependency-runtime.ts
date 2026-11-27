@@ -1,5 +1,5 @@
 // Loads a dependency's backend runtime (runtime/index.cjs) into the test process on the pack's own
-// shared-instance packages, xstate and zod, the way the app loads it on its own (@apackdev/host/packs/runtime, bridge.ts).
+// shared-instance packages (`@apackdev/sdk`, `@apackdev/state`) and `zod`, the way the app loads it on its own (@apackdev/host/packs/runtime, bridge.ts).
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import {
@@ -8,10 +8,19 @@ import {
 import { withModuleBridge } from '@apackdev/host/packs';
 import type { PackRegistration } from '@apackdev/sdk/framework';
 
-/** The shared-instance exports (@apackdev/sdk's, EARS among them as @apackdev/sdk/ears) a backend runtime can require, as the pack resolves them */
+/** Subpaths of shared-instance packages never loaded by a dependency's backend runtime (pull Vue, test helpers, or TypeScript) */
+const NON_BACKEND_SHARED_SUBPATHS = new Set([
+  '@apackdev/state/vue',
+  '@apackdev/state/testing',
+  '@apackdev/state/graph',
+]);
+
+/** The shared-instance exports a backend runtime can require, as the pack resolves them */
 function sharedSpecifiers(packDir: string): string[] {
   const fromFile = path.join(packDir, 'package.json');
-  return SHARED_INSTANCE_PACKAGES.flatMap((pkg) => sharedInstanceSpecifiers(pkg, sharedInstanceExports(pkg, fromFile)));
+  return SHARED_INSTANCE_PACKAGES
+    .flatMap((pkg) => sharedInstanceSpecifiers(pkg, sharedInstanceExports(pkg, fromFile)))
+    .filter((specifier) => !NON_BACKEND_SHARED_SUBPATHS.has(specifier));
 }
 
 function unavailable(specifier: string, reason: string): unknown {
@@ -24,7 +33,7 @@ function unavailable(specifier: string, reason: string): unknown {
 /** The modules dependency runtimes share with the test process, imported from the pack */
 async function sharedModules(packDir: string): Promise<Record<string, unknown>> {
   const modules: Record<string, unknown> = {};
-  for (const specifier of [...sharedSpecifiers(packDir), ...getSharedBeDeps()]) {
+  for (const specifier of new Set([...sharedSpecifiers(packDir), ...getSharedBeDeps()])) {
     try {
       modules[specifier] = await import(/* @vite-ignore */ specifier);
     } catch (err) {

@@ -1,3 +1,4 @@
+import type { Read } from '@apackdev/state';
 import type { HelpCatalog, HelpTarget } from '@apackdev/sdk/framework';
 
 interface HelpView {
@@ -23,7 +24,7 @@ export function createHelpContext(): HelpContext {
 }
 
 /** Help navigation stays with Settings; the catalog remains independent of persisted settings. */
-export function reduceHelp(context: HelpContext, event: HelpEvent): HelpContext {
+export function reduceHelp(context: Read<HelpContext>, event: HelpEvent): Read<HelpContext> {
   const { target, query, history } = context;
   switch (event.type) {
     case 'HELP_CATALOG':

@@ -283,7 +283,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface, useSurfaceStorage } from '@apackdev/sdk/fe'
+import { useSurfaceStorage } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 
 import { ref, computed, watch, onMounted } from 'vue';
 import {
@@ -305,17 +306,15 @@ import {
   HardDrive,
   Image as ImageIcon
 } from 'lucide-vue-next';
-import type { DatabaseState } from '../state.ts';
 import ToastNotification from '@apackdev/ui/design/ToastNotification';
 
-const actor: DatabaseState = useSurface();
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = useSurfaceStorage();
 
 // Get backup info from state
-const { state: database, send } = useState(actor);
-const isExporting = computed(() => database.value.data.making.export);
-const isImporting = computed(() => database.value.data.making.import);
+const { state: database, send } = useState('database');
+const isExporting = computed(() => database.value.pending.export);
+const isImporting = computed(() => database.value.pending.import);
 
 // Tab state
 const activeTab = ref<'export' | 'import'>('export');

@@ -528,7 +528,7 @@ describe('the snapshot format', () => {
   };
     const MANIFEST_SYSTEM_FIELDS: Record<keyof PackSystemEntry, true> = { contract: true, entry: true, events: true };
   const MANIFEST_SYSTEM_EVENTS_FIELDS: Record<keyof NonNullable<PackSystemEntry['events']>, true> = { incoming: true };
-  const MANIFEST_SURFACE_FIELDS: Record<keyof PackSurfaceEntry, true> = { contract: true, default: true, defaultVisible: true, label: true, state: true, icon: true, canvas: true, panel: true, chat: true, isPinned: true, hotkeys: true, options: true, fallbackPanel: true };
+  const MANIFEST_SURFACE_FIELDS: Record<keyof PackSurfaceEntry, true> = { chrome: true, contract: true, default: true, defaultVisible: true, label: true, state: true, icon: true, canvas: true, panel: true, chat: true, isPinned: true, hotkeys: true, options: true, fallbackPanel: true };
   /** A dependency's content formats, which a dependent's `content.sources` compiles its own sources with */
   const FORMAT_FIELDS: Record<keyof ContentFormatConfig, true> = {
     compiler: true, entity: true, fields: true, format: true, identity: true, media: true, tree: true,
@@ -587,7 +587,7 @@ describe('the snapshot format', () => {
         feature: ['description', 'designation', 'entities', 'projections', 'references', 'repositories', 'services', 'settings', 'surface', 'system', 'types', 'views'],
         system: ['contract', 'entry', 'events'],
         systemEvents: ['incoming'],
-        surface: ['canvas', 'chat', 'contract', 'default', 'defaultVisible', 'fallbackPanel', 'hotkeys', 'icon', 'isPinned', 'label', 'options', 'panel', 'state'],
+        surface: ['canvas', 'chat', 'chrome', 'contract', 'default', 'defaultVisible', 'fallbackPanel', 'hotkeys', 'icon', 'isPinned', 'label', 'options', 'panel', 'state'],
         contentFormat: ['compiler', 'entity', 'fields', 'format', 'identity', 'media', 'tree'],
         contentTree: ['branch', 'branchEntity', 'relKind'],
         contentField: ['default', 'from', 'type'],

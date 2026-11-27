@@ -14,7 +14,7 @@ src/components/   app-level pieces: BaseForm, BaseNode + node-styles/node-dimens
 src/components/tiptap/   TiptapEditor, TiptapSearchBar, internal menus (TiptapBubbleMenu, TiptapBlockMenu,
                   TiptapImageBubbleMenu, bubble-menu/*), extensions.ts + extensions/*, composables/*,
                   editor-config.ts, tiptap-theme.css
-src/composables/  useClickOutside, useCollapsibleState, useContextMenu, useDebounce, useExternalFileDrag, useInfiniteScroll
+src/composables/  useClickOutside, useContextMenu, useDebounce, useExternalFileDrag, useInfiniteScroll
 src/utils/        json-detection, path-truncation (pure helpers)
 scripts/exports.ts         computes the exports map; `--check` mode (the build reads it too)
 tsdown.config.ts           compile config
@@ -88,7 +88,7 @@ Contracts and host-shared state that packs need even without `@apackdev/ui` live
 - registries of what pack frontends registered, which read the renderer's bound registry (`bindFeHost({ packs })`): `textEditorExtensionsRegistry` (`TiptapEditor.vue`); and `EXTRA_BLOCK_ITEMS_KEY` (`TiptapBlockMenu.vue`). DSL readers use static catalog data; `internal/dsl-libraries.ts` shares owned Monaco libraries and follows declaration updates
 - `openLink` (`tiptap/composables/createEditorClickHandler.ts`)
 
-UI modules also read `stepRegistry` from `@apackdev/sdk/steps` (`node-styles.ts`, `node-dimensions.ts`) and types from `@apackdev/sdk/steps` (`RunNodeListItem.vue`) and `@apackdev/sdk/types` (`KeyboardShortcutInput.vue`). The dependency goes one way only: `@apackdev/sdk` must not import `@apackdev/ui`, and the SDK's `package.json` doesn't declare it. `@apackdev/sdk` is a peer (`>=0.1.0 <1.0.0`; the range has to span the 0.x line — Changesets majors a peer dependent whose range excludes the version its peer moves to, and the fixed release group carries that major to all five packages, so `~0.1.0` or `^0.1.0` would turn the next minor into a 1.0.0 release: `apack-cli/tests/build/release-plan.spec.ts`), as are `vue`, `xstate`, `@xstate/vue`, `reka-ui`, `lucide-vue-next`, `@vue-flow/core`, the tiptap core packages, `monaco-editor` and `elkjs`. Tiptap extensions, `highlight.js`, `lowlight`, `tiptap-markdown` and `@guolao/vue-monaco-editor` are regular dependencies.
+UI modules also read `stepRegistry` from `@apackdev/sdk/steps` (`node-styles.ts`, `node-dimensions.ts`) and types from `@apackdev/sdk/steps` (`RunNodeListItem.vue`) and `@apackdev/sdk/types` (`KeyboardShortcutInput.vue`). The dependency goes one way only: `@apackdev/sdk` must not import `@apackdev/ui`, and the SDK's `package.json` doesn't declare it. `@apackdev/sdk` is a peer (`>=0.1.0 <1.0.0`; the range has to span the 0.x line — Changesets majors a peer dependent whose range excludes the version its peer moves to, and the fixed release group carries that major to all five packages, so `~0.1.0` or `^0.1.0` would turn the next minor into a 1.0.0 release: `apack-cli/tests/build/release-plan.spec.ts`), as are `vue`, `reka-ui`, `lucide-vue-next`, `@vue-flow/core`, the tiptap core packages, `monaco-editor` and `elkjs`. Tiptap extensions, `highlight.js`, `lowlight`, `tiptap-markdown` and `@guolao/vue-monaco-editor` are regular dependencies.
 
 ## Component conventions (as used in `src/`)
 

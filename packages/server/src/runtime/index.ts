@@ -1,7 +1,6 @@
 import { createViewObservation } from '@apackdev/host/diagnostics';
 import { createStartupPerformance, observeIndexAdmission } from './startup-performance.ts';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
-import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
@@ -16,7 +15,7 @@ import { loadAppPacks, startPacks } from '@apackdev/host/packs/runtime';
 import {
   APPLICATION_SYSTEM_EVENTS, createApplicationSystem, createPacksSystem, createSettingsSystem, hostRegistration, hostDeclaration, packsEvents, settingsEvents,
 } from '@apackdev/host/features';
-import { createAppBus, createParticipantClaims, HOST } from '@apackdev/host/bus';
+import { createAppBus, createParticipantClaims, type BackendBus } from '@apackdev/host/bus';
 import { createHostRuntime } from '@apackdev/host/services';
 import { createViewHost, type ViewHost } from '@apackdev/host/views';
 import { _settingsAdmin } from '@apackdev/sdk/services';
@@ -38,15 +37,13 @@ const APP_VERSION: string = process.env.APACK_APP_MANIFEST
 
 const logger = createLogger('backend');
 
-/** An actor observer that reports the actor's error as fatal, and tells Electron main (a `__fatal` JSON line on stderr) */
-function logErrors(actor: string) {
-  return {
-    error: (error: unknown) => {
-      logger.error(`${actor} State Error:`, { error });
-      reportError({ error, title: 'Something went wrong', source: actor, severity: 'fatal' });
-      const err = error instanceof Error ? error : new Error(String(error));
-      process.stderr.write(JSON.stringify({ __fatal: true, message: err.message, stack: err.stack, source: actor }) + '\n');
-    },
+/** Reports a fatal backend bus error, and tells Electron main (a `__fatal` JSON line on stderr) */
+function logFatalError(actor: string) {
+  return (error: unknown) => {
+    logger.error(`${actor} State Error:`, { error });
+    reportError({ error, title: 'Something went wrong', source: actor, severity: 'fatal' });
+    const err = error instanceof Error ? error : new Error(String(error));
+    process.stderr.write(JSON.stringify({ __fatal: true, message: err.message, stack: err.stack, source: actor }) + '\n');
   };
 }
 
@@ -167,8 +164,8 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
  */
 export const appClaims = createParticipantClaims();
 
-// Exported for graceful shutdown (SIGTERM handler stops the actor system)
-export let backendActor: ReturnType<typeof createActor<ReturnType<typeof createAppBus>>>;
+// Exported for graceful shutdown (SIGTERM handler stops the backend bus)
+export let backendActor: BackendBus;
 
 export let appStartupPerformance: ReturnType<typeof createStartupPerformance>;
 export async function setupBackend(): Promise<void> {
@@ -266,10 +263,8 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
     await catchUpProjections();
   }
 
-  // ── Start backend actor ──────────────────────────────────────────────
-  backendActor = createActor(createAppBus(packs, appClaims), {
-    systemId: HOST.bus,
-  }).start();
-
-  backendActor.subscribe(logErrors('Backend'));
+  // ── Start backend bus ────────────────────────────────────────────────
+  backendActor = createAppBus(packs, appClaims);
+  backendActor.onError(logFatalError('Backend'));
+  backendActor.start();
 }

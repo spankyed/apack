@@ -1,14 +1,17 @@
-import { _packEntityTypes } from '@apackdev/sdk/framework';
+import { _packEntityTypes, isState } from '@apackdev/sdk/framework';
 import { writeInstalledPackFixture, sealPack, sealBuild, eventContractsFixture } from '../../../packs/runtime/build-fixture.ts';
 import { _declarationRevision } from '@apackdev/pack-format';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createActor, setup, type AnyEventObject } from 'xstate';
+import { system as createStateSystem } from '@apackdev/state';
+import { defectGuard } from '@apackdev/state/testing';
 import { HOST } from '../../../../src/refs.ts';
+
+type AnyEventObject = { type: string; [key: string]: unknown };
 import { _appDirOf, resolveAppEnvironment } from '@apackdev/sdk/env';
-import { startTestRuntime, resetTestData, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
+import { startTestRuntime, resetTestData, takeSystemErrors } from '@apackdev/sdk/testing';
 import { readInstalledPacks, recordUserInstall, setPackEnabled } from '../../../../src/packs/installed.ts';
 import { registry } from '../../../packs/runtime/test-host.ts';
 import { appliedContent, appState } from '../../../../src/app-state/index.ts';
@@ -100,28 +103,42 @@ async function stubRelease(source: string) {
 function runPacksSystem({ deferStops = false } = {}) {
   const sent: AnyEventObject[] = [];
   const stops: Array<() => void> = [];
-  const busStub = setup({ types: {} as { events: AnyEventObject } }).createMachine({
-    on: { '*': { actions: ({ event }) => {
-      sent.push(event);
-      if (typeof event.afterStop === 'function') {
-        if (deferStops) stops.push(event.afterStop);
-        else event.afterStop();
+  const guard = defectGuard();
+  const sys = createStateSystem({ side: 'backend', onDefect: guard.onDefect });
+  sys.attach({
+    tell: (to, event) => { sent.push({ type: 'OUTGOING', message: { to, event } }); },
+    ask: (_to, _name, _args, _progress, done) => {
+      done({ ok: false, failure: { kind: 'unavailable', message: 'unused' } });
+      return () => {};
+    },
+    follow: (_feature, _view, _args, _updated, failed) => {
+      failed({ kind: 'unavailable', message: 'unused' });
+      return { stop: () => {} };
+    },
+  });
+  sys.attach('bus', {
+    tell: (_peer, event) => {
+      const ev = event as AnyEventObject;
+      sent.push(ev);
+      if (typeof ev.afterStop === 'function') {
+        const afterStop = ev.afterStop as () => void;
+        if (deferStops) stops.push(afterStop);
+        else afterStop();
       }
-    } } },
+    },
   });
-  const stopListening = testRootEvents.onSurfaceSend((message) => void sent.push({ type: 'OUTGOING', message }));
-  const root = setup({ actors: { bus: busStub, packs: createPacksSystem(registry) } }).createMachine({
-    invoke: [
-      { src: 'bus', systemId: HOST.bus },
-      { src: 'packs', systemId: HOST.packs },
-    ],
+  sys.attach('role:brain', {
+    tell: (_peer, event) => { sent.push(event as AnyEventObject); },
   });
-  const actor = createActor(root).start();
+  const stateDef = createPacksSystem(registry);
+  expect(isState(stateDef)).toBe(true);
+  const handle = sys.start(HOST.packs, stateDef);
   const stop = () => {
-    actor.stop();
-    stopListening();
+    sys.stop();
+    guard.assertNone();
+    guard[Symbol.dispose]();
   };
-  return { sent, stops, send: (event: AnyEventObject) => actor.system.get(HOST.packs).send(event), stop };
+  return { sent, stops, send: (event: AnyEventObject) => sys.send(handle, event as never), stop };
 }
 
 /** The pack-scoped events the system emitted, unwrapped from the bus envelope */
@@ -415,9 +432,7 @@ describe('pack information without activation', () => {
     expect(() => readPackBuild(dir)).not.toThrow();
     setPackEnabled(PACK_ID, kind !== 'disabled');
     if (kind === 'activation-failed') {
-      const bus = createActor(setup({}).createMachine({})).start();
-      try { expect(activatePack(registry, PACK_ID, bus)).toBe(false); }
-      finally { bus.stop(); }
+      expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(false);
       expect(registry.loadProblem(PACK_ID)).toContain('Do not activate');
     }
     registry.refreshCatalog(resolveAppEnvironment().packsDir);
@@ -556,6 +571,26 @@ describe('a decision that could not be saved', () => {
       expect(registry.getPackRegistration(PACK_ID)).not.toBeNull();
       expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_DEACTIVATED');
       expect(emitted(system.sent).find(event => event.type === 'PACK_ENABLED_CHANGED')).toMatchObject({ enabled: true });
+    } finally {
+      system.stop();
+    }
+  });
+
+  it('does not activate an installed pack when recordInstalled fails to save', async () => {
+    const system = runPacksSystem();
+    try {
+      const source = packSource('1.0.0');
+      // Block writing installed-packs.json so recordInstalled returns false after files are placed
+      fs.mkdirSync(resolveAppEnvironment({ env: 'test', userDataDir: tmpDir }).installedPacksFile, { recursive: true });
+
+      system.send({ type: 'INSTALL_PACK', packSlug: source, sourceKind: 'local' });
+
+      await vi.waitFor(() => {
+        expect(emitted(system.sent).map(event => event.type)).toContain('PACK_INSTALL_FAILED');
+      });
+      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
+      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_INSTALL_COMPLETE');
+      expect(registry.getPackRegistration(PACK_ID)).toBeNull();
     } finally {
       system.stop();
     }
@@ -878,7 +913,7 @@ describe('app-source update offers and acceptance', () => {
       }
       system.send({ type: 'GET_INSTALLED_PACKS' });
       const last = emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop();
-      expect(last?.packs.find((pack: InstalledPackSummary) => pack.id === PACK_ID)?.appUpdate).toBeUndefined();
+      expect((last?.packs as InstalledPackSummary[] | undefined)?.find(pack => pack.id === PACK_ID)?.appUpdate).toBeUndefined();
     } finally { system.stop(); }
   });
 
@@ -891,11 +926,11 @@ describe('app-source update offers and acceptance', () => {
     const system = runPacksSystem();
     try {
       system.send({ type: 'GET_INSTALLED_PACKS' });
-      expect(emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs[0].appUpdate)
+      expect((emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs as InstalledPackSummary[] | undefined)?.[0]?.appUpdate)
         .toMatchObject({ version: '1.0.0', sourceRevision: source.sourceRevision });
       await installPackFromLocal(dir, undefined, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
       system.send({ type: 'GET_INSTALLED_PACKS' });
-      expect(emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs[0].appUpdate).toBeUndefined();
+      expect((emitted(system.sent).filter(event => event.type === 'PACKS_LIST').pop()?.packs as InstalledPackSummary[] | undefined)?.[0]?.appUpdate).toBeUndefined();
       system.send({ type: 'UPDATE_APP_PACK', packId: PACK_ID, sourceRevision: source.sourceRevision });
       await vi.waitFor(() => expect(emitted(system.sent).map(event => event.type)).toContain('PACK_UPDATE_FAILED'));
       expect(emitted(system.sent).find(event => event.type === 'PACK_UPDATE_FAILED')?.error).toContain('user-managed');
@@ -916,10 +951,10 @@ describe('app-source update offers and acceptance', () => {
     const system = runPacksSystem();
     try {
       system.send({ type: 'GET_INSTALLED_PACKS' });
-      const pack = emitted(system.sent).find(event => event.type === 'PACKS_LIST')?.packs[0];
-      expect(pack.appUpdate).toBeUndefined();
-      expect(pack.availableVersion).toBeUndefined();
-      expect(pack.appSourceProblem).toContain('not built');
+      const pack = (emitted(system.sent).find(event => event.type === 'PACKS_LIST')?.packs as InstalledPackSummary[] | undefined)?.[0];
+      expect(pack?.appUpdate).toBeUndefined();
+      expect(pack?.availableVersion).toBeUndefined();
+      expect(pack?.appSourceProblem).toContain('not built');
       system.send({ type: 'UPDATE_PACK', packId: PACK_ID });
       expect(emitted(system.sent).find(event => event.type === 'PACK_UPDATE_FAILED')?.error).toContain('app-source');
       expect(fetch).not.toHaveBeenCalled();
@@ -1322,9 +1357,14 @@ describe('the claim on a pack', () => {
       // The pack is still registered until the bus finishes, so another operation may not start on it yet
       expect(registry.getPackRegistration(PACK_ID)).not.toBeNull();
       expect(probeClaim(PACK_ID)).toBe(false);
+      // PACK_DEACTIVATED must not be broadcast until teardownPack finishes (after afterStop)
+      expect(emitted(system.sent).map(e => e.type)).not.toContain('PACK_DEACTIVATED');
+      const listsBeforeFinish = emitted(system.sent).filter(e => e.type === 'PACKS_LIST').length;
       system.stops.splice(0).forEach(finish => finish());
       await vi.waitFor(() => expect(probeClaim(PACK_ID)).toBe(true));
       expect(registry.getPackRegistration(PACK_ID)).toBeNull();
+      expect(emitted(system.sent).map(e => e.type)).toContain('PACK_DEACTIVATED');
+      expect(emitted(system.sent).filter(e => e.type === 'PACKS_LIST').length).toBeGreaterThan(listsBeforeFinish);
     } finally { system.stop(); }
   });
 

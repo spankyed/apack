@@ -47,7 +47,7 @@ export interface LifecycleBridge {
   registerPowerState(handler: (state: PowerState) => void): () => void;
   registerWindowPortHandler(handler: (port: UtilityMessagePort, info: WindowPortInfo) => void): () => void;
   registerWindowGoneHandler(handler: (windowId: number) => void): () => void;
-  notifyServerReady(port: number): void;
+  notifyServerReady(socket?: string): void;
 }
 
 /** Creates an isolated lifecycle bridge bound to `proc` (defaults to the current Node/Electron `process`). */
@@ -208,8 +208,11 @@ export function createLifecycleBridge(
     };
   }
 
-  function notifyServerReady(port: number): void {
-    proc.parentPort?.postMessage({ type: 'ready', port });
+  function notifyServerReady(socket?: string): void {
+    proc.parentPort?.postMessage({
+      type: 'ready',
+      ...(socket !== undefined ? { socket } : {}),
+    });
   }
 
   return {
@@ -247,5 +250,5 @@ export const registerWindowGoneHandler = (
   handler: (windowId: number) => void,
 ): (() => void) => defaultBridge.registerWindowGoneHandler(handler);
 
-/** Notifies Electron main over `parentPort` once the WebSocket server is listening (chunk-proof structured signal). */
-export const notifyServerReady = (port: number): void => defaultBridge.notifyServerReady(port);
+/** Notifies Electron main over `parentPort` once the server is listening (chunk-proof structured signal). */
+export const notifyServerReady = (socket?: string): void => defaultBridge.notifyServerReady(socket);

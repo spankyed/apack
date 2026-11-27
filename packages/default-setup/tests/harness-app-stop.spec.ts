@@ -12,7 +12,10 @@ import { repository } from '#generated/repository.ts'
 import { onShutdown } from '#features/hooks.ts'
 import { registerSchedule } from '#features/brain/be/services/scheduler.ts'
 import { listen, notify } from '#features/brain/be/services/brain.ts'
-import { getAllFlowActorIds } from '#features/brain/be/flow-system.ts'
+import { services } from '#generated/services.ts'
+
+const activeFlowIds = (app: TestApp) =>
+  Object.keys((app.system('brain').read().data as { flows?: Record<string, unknown> }).flows ?? {})
 
 const EVERY_SECOND = '* * * * * *'
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -48,7 +51,7 @@ describe('a real schedule', () => {
     const app = await startEverySecond()
     await settles(() => ranTick(app))
     // from the app running, so the empty list after stopping means stopped rather than never started
-    expect(getAllFlowActorIds()).not.toEqual([])
+    expect(activeFlowIds(app)).not.toEqual([])
 
     app.stop()
 
@@ -62,6 +65,6 @@ describe('a real schedule', () => {
       unsubscribe()
     }
     expect(ticks).toEqual([])
-    expect(getAllFlowActorIds()).toEqual([])
+    expect(services.runHistory.findRuns().filter((r) => r.status === 'active')).toEqual([])
   })
 })

@@ -33,20 +33,19 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue';
-import { useState, useSurface, useShell, untypedOpenSurface } from '@apackdev/sdk/fe';
+import { useShell, untypedOpenSurface } from '@apackdev/sdk/fe';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
-import type { SettingsState } from '@apackdev/host/fe';
+import { useHostState } from '@apackdev/host/fe';
 import { Eye, EyeOff, ExternalLink } from 'lucide-vue-next';
 import { useWindowSettingsSnapshot } from '@/runtime/settings';
 import { useSettingsFormLookup } from '@/views/settings/forms';
 import { useContextualHelp } from '@/views/settings/contextual-help';
 import SettingsEditor from '../components/SettingsEditor.vue';
 
-const actor: SettingsState = useSurface();
 const shell = useShell();
 const snapshot = useWindowSettingsSnapshot();
 const settingsForm = useSettingsFormLookup();
-const { state: settings, send } = useState(actor);
+const { state: settings, send } = useHostState('settings');
 const { hasHelp, openFeatureHelp } = useContextualHelp();
 const features = computed(() => Object.entries(snapshot.value?.catalog.features ?? {}).map(([name, definition]) => {
   const id = resolveName(name);

@@ -74,6 +74,41 @@ describe('reportError', () => {
     expect(takeSystemErrors()).toEqual([]);
   });
 
+  it('never overwrites a stopped or completed RunNode result on a late async rejection', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const history = testRunHistory();
+    const stoppedId = history.start({ kind: 'step', label: 'Stopped step', stepNodeType: 'llm', input: { prompt: 'hi' } }).id;
+    history.update(stoppedId, { result: { partial: 'before stop' } });
+    history.stopActive();
+    expect(history.get(stoppedId)?.status).toBe('stopped');
+
+    reportError({
+      error: new Error('late async rejection after stop'),
+      source: 'brain-llm',
+      step: { phase: 'llm.execute', runNodeId: stoppedId, nodeId: 'Node-3' as EARS.EntityId, nodeType: 'llm', eventType: 'user.message' },
+    });
+
+    expect(history.get(stoppedId)).toMatchObject({
+      status: 'stopped',
+      result: { partial: 'before stop' },
+    });
+
+    const completedId = history.start({ kind: 'step', label: 'Completed step', stepNodeType: 'action' }).id;
+    history.update(completedId, { result: { ok: true } });
+    history.finish(completedId, 'completed');
+
+    reportError({
+      error: new Error('late error after completion'),
+      source: 'brain-action',
+      step: { phase: 'action.execute', runNodeId: completedId, nodeId: 'Node-4' as EARS.EntityId, nodeType: 'action', eventType: 'user.message' },
+    });
+
+    expect(history.get(completedId)).toMatchObject({
+      status: 'completed',
+      result: { ok: true },
+    });
+  });
+
   it('sends a step error to no surface when none plays the brain role, still recording it', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { toSurfaces } = capture(() => reportError({

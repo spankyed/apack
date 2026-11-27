@@ -4,13 +4,8 @@
 
 ```ts
 
-import type { ActionArgs } from 'xstate';
 import type { BaseEntity } from '@elmdb/ears';
 import { EARS as EARS_2 } from '@elmdb/ears';
-import type { EventObject } from 'xstate';
-import type { MachineContext } from 'xstate';
-import type { Mapper } from 'xstate';
-import type { ParameterizedObject } from 'xstate';
 import type { ShortCode } from '@elmdb/ears';
 
 // @public (undocumented)
@@ -81,9 +76,6 @@ export type ContentSection = FieldContent | ListContent | MarkdownContent | Text
 
 // @public (undocumented)
 export type ContentType = ContentSection['type'];
-
-// @public
-export function defineSystem<C extends SystemContract>(): SystemSpec<C>;
 
 // @public
 export interface DocumentEntity extends BaseEntity {
@@ -330,37 +322,13 @@ export type Simplify<T> = {
 export type SystemEvents = HostLifecycleEvents
 /**
 * How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
-* no machine handles one: every system may ask, so every system receives them
+* no system handles one directly: every system may ask, so every system receives them
 */
 | AskAnswered | AskFailed | AskProgressed
 /** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */
 | {
     type: typeof ASK_CANCELLED;
 };
-
-// @public
-export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {
-    actions<P extends ActionParams>(defs: {
-        [K in keyof P]: (args: SystemArgs<C> & {
-            client?: string;
-        }, params: P[K]) => void;
-    }): {
-        [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
-    };
-    answers<Elsewhere extends AskName<C> = never>(defs: {
-        readonly [K in Exclude<AskName<C>, Elsewhere>]: AnswerHandler<C, K>;
-    }): Answers<C, Exclude<AskName<C>, Elsewhere>>;
-    input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
-        client?: string;
-    }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
-    // (undocumented)
-    typeOf: ReturnType<typeof safeEvents<MachineEvents<C>>>;
-    // (undocumented)
-    types: {
-        context: ContractContext<C>;
-        events: MachineEvents<C>;
-    };
-}
 
 // @public (undocumented)
 export interface TemplateInput {

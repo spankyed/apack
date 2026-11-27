@@ -14,7 +14,7 @@ const setupFiles = [
 ];
 const globalSetup = [path.resolve(root, './tests/_support/compiler-store-run.ts')];
 
-// Proven-pure unit specs (no XState, bindHost, vi.mock, fake timers, global spies, or process/global writes).
+// Proven-pure unit specs (no bindHost, vi.mock, fake timers, global spies, or process/global writes).
 // Any new spec added outside this list defaults to `@apackdev/cli:isolated` (`isolate: true`).
 const PURE_SPECS = [
   'tests/app/beta-app.spec.ts',

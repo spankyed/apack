@@ -4,9 +4,8 @@
 
 ```ts
 
-import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
-import type { AnyStateMachine } from 'xstate';
+import type { AnyState } from '@apackdev/state';
 import { CallCounting } from '@elmdb/ears';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
@@ -33,6 +32,7 @@ import type { rerank } from 'ai';
 import { RowRules } from '@elmdb/ears';
 import type { SearchDeclaration } from '@elmdb/ears';
 import type { streamText } from 'ai';
+import type { System } from '@apackdev/state';
 import type { ToolLoopAgent } from 'ai';
 import type { ToolLoopAgentSettings } from 'ai';
 import type { ToolSet } from 'ai';

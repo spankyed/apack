@@ -184,8 +184,6 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-
 import { computed, ref, watch, nextTick } from 'vue';
 import TabItem from './tab-item.vue';
 import GroupLabel from './group-label.vue';
@@ -193,9 +191,10 @@ import type { Tab } from '#generated/types.ts';
 import type { ThreadTabGroup, TabGroupColor } from './types.ts';
 import { categorizeThreadTabs } from './tab-utils.ts';
 import { useTabDragDrop } from './useTabDragDrop.ts';
-import { type ThreadsState } from '#features/threads/fe/state.ts';
+import { useState } from '#generated/state-fe.ts';
 
-const actor: ThreadsState = useSurface();
+const { send } = useState('threads');
+const actor = { send };
 
 const props = defineProps<{
   tabs: readonly Tab[];

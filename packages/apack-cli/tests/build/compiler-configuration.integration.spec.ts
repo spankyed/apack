@@ -30,10 +30,10 @@ it('invalidates generated metadata when external inherited path mappings change'
     'apack.json': JSON.stringify(manifest), 'package.json': packageJson(manifest.id),
     'tsconfig.json': JSON.stringify({ ...config, extends: '../base.json' }),
     'src/contract.ts': "export type { Contract } from 'external-contract';",
-    'src/surface.ts': "import { createMachine } from 'xstate'; export default createMachine({ id: 'view' });",
-    'src/system.ts': `import { setup } from 'xstate'; import { defineSystem } from '@apackdev/sdk/framework';
-import type { Contract } from './contract.ts'; const spec = defineSystem<Contract>();
-export default { spec, machine: setup({ types: spec.types }).createMachine({ id: 'view' }) };`,
+    'src/surface.ts': "import { state } from '@apackdev/state'; export default state()({});",
+    'src/system.ts': `import { state } from '@apackdev/state'; import type { IncomingOnlyEventsOf } from '@apackdev/sdk/events';
+import type { Contract } from './contract.ts';
+export default state<{}, IncomingOnlyEventsOf<Contract>>()({});`,
   }, path.join(REPO_ROOT, 'node_modules'));
   const first = await callCli(pack, 'generate-entries');
   expect(first.code, first.output).toBe(0);

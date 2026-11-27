@@ -90,7 +90,14 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       'src/f.ts:1: untypedTell from @apackdev/sdk/events']],
   },
   'raw-transport': {
-    onFile: [['export const send = () => _rootEvents.emitOutgoing(event);\n', 'src/f.ts:1: _rootEvents']],
+    onFile: [
+      ['export const send = () => _rootEvents.emitOutgoing(event);\n', 'src/f.ts:1: _rootEvents'],
+      ["import { createLink } from '@apackdev/link';\n", 'src/f.ts:1: @apackdev/link'],
+      ["import { muxTransport } from '@apackdev/link/mux';\n", 'src/f.ts:1: @apackdev/link/mux'],
+      ['export const port = window.electronAPI.backendPort;\n', 'src/f.ts:1: electronAPI.backendPort'],
+      ['export const port = electronAPI.backendPort;\n', 'src/f.ts:1: electronAPI.backendPort'],
+    ],
+    elsewhere: 'raw-transport allows unrelated backendPort accesses, other electronAPI members, and similarly named packages',
   },
   // Two shapes and eleven allowed ones, transcribed when the repo script's console rule moved here
   'window-storage': {
@@ -102,7 +109,6 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       ["globalThis.sessionStorage.removeItem('draft');\n", 'src/f.ts:1: sessionStorage'],
     ],
   },
-  'machine-selectors': { onFile: [["import { useSelector } from '@xstate/vue';\n", 'src/f.ts:1: @xstate/vue']] },
   'backend-console': { elsewhere: 'backend-console fires under a backend path and not under a frontend one' },
   // A `_`-prefixed import from an @apackdev package, which needs no pack fixture to be offending
   'internal-package-imports': { elsewhere: 'internal-package-imports' },
@@ -128,20 +134,6 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       ["export const on = { ASK_FAILED: { actions: 'showFailure' } };\n", 'src/f.ts:1: ASK_FAILED:'],
     ],
     elsewhere: "ask-answers leaves a pack's tests and its reads of an answer alone",
-  },
-  // Both spellings of the reserved key, since a property name is the same key written two ways
-  'ask-ends': {
-    onFile: [
-      ["export const on = { 'xstate.done.actor.push': { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
-      ["export const on = { [`xstate.done.actor.${PUSH}`]: { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
-    ],
-  },
-  'swallowed-ask-ends': {
-    onFile: [[
-      "import { makes } from '@apackdev/sdk/fe';\nexport const on = {\n  '*': { actions: 'route' },\n};\n",
-      "src/f.ts:2: '*'",
-    ]],
-    elsewhere: 'swallowed-ask-ends leaves a wildcard that settles beside it, and a machine that makes no asks',
   },
   'reserved-event-keys': {
     onFile: [
@@ -227,14 +219,6 @@ describe('every rule', () => {
    * Telling an answer from another event is reading one, and a spec driving an asking machine has to hand it the
    * answers its system would: neither is an answer written in place of a system's, or a transition for one.
    */
-  it('swallowed-ask-ends leaves a wildcard that settles beside it, and a machine that makes no asks', () => {
-    const dir = pack({
-      'src/settles.ts': "import { makes } from '@apackdev/sdk/fe';\nconst made = makes(() => ({}));\nexport const on = { [made.done]: { actions: made.settle() }, '*': { actions: 'route' } };\n",
-      'src/asks-nothing.ts': "export const on = { '*': { actions: 'route' } };\n",
-    });
-    expect(problems(dir, 'swallowed-ask-ends')).toEqual([]);
-  });
-
   it("ask-answers leaves a pack's tests and its reads of an answer alone", () => {
     const dir = completePack({
       'src/reads-it.ts': "export const taken = (event: E) => event.type === 'ASK_ANSWERED';\n",
@@ -256,6 +240,19 @@ describe('every rule', () => {
 
     expect(packRuleProblems(dir, ['src', 'tests']).get('reserved-event-keys'))
       .toEqual(['tests/drives-a-machine.spec.ts:1: _call:']);
+  });
+
+  it('raw-transport allows unrelated backendPort accesses, other electronAPI members, and similarly named packages', () => {
+    const dir = completePack({
+      'src/f.ts': [
+        "import { foo } from '@apackdev/linker';",
+        'export const a = config.backendPort;',
+        'export const b = { backendPort: 1 };',
+        'export const c = window.electronAPI.speech;',
+        'export const d = foo;',
+      ].join('\n') + '\n',
+    });
+    expect(problems(dir, 'raw-transport')).toEqual([]);
   });
 
   it('backend-console fires under a backend path and not under a frontend one', () => {
@@ -645,15 +642,9 @@ describe('when several rules are right about one site', () => {
       // component-sends sits beside untyped-sends: both answer "which send, from where"
       // window-storage sits beside backend-console: both say which API to reach for instead of a global
       'untyped-sends', 'component-sends', 'raw-transport', 'backend-console', 'window-storage',
-      // machine-selectors is one more "which API to reach for": the SDK's reader instead of the machine library's
-      'machine-selectors',
       'repository-casts',
       // ask-answers and reserved-event-keys contest nothing: no other rule reads an object's properties
       'ask-answers',
-      // ask-ends reads a string, which no other rule does
-      'ask-ends',
-      // swallowed-ask-ends reads an object's keys in a file that imports makes, which no other rule does
-      'swallowed-ask-ends',
       // reserved-event-keys is last and contests nothing: no other rule reads a property name, so where it
       // sits is free, and a convention belongs after the rules about what a module imports
       'reserved-event-keys',

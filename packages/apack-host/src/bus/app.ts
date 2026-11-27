@@ -1,11 +1,11 @@
-// The app's bus: the bus machine wired to the app's root event bus (the api's tRPC clients), which the
+// The app's bus: the `@apackdev/state` bus wired to the app's root event bus (the api's tRPC clients), which the
 // SDK reaches through the bound HostRuntime's transport.
 import { _rootEvents } from '@apackdev/sdk/runtime';
 import type { HostSurfaceEvents } from '@apackdev/sdk/events';
 import { appState } from '../app-state/index.ts';
 import type { PackRegistry } from '../packs/registry.ts';
 import { getPacksWithClientLoadedFrontends } from '../packs/layout.ts';
-import { createBusMachine } from './machine.ts';
+import { createBus, type BackendBus } from './bus.ts';
 import { surfaceVisibility } from '../features/application/be/system.ts';
 import { HOST } from '../refs.ts';
 import type { ParticipantClaims } from './participants.ts';
@@ -14,8 +14,8 @@ import type { ParticipantClaims } from './participants.ts';
 export type ApplicationConnectedEvent = Extract<HostSurfaceEvents['host/application'], { type: 'CLIENT_CONNECTED' }>;
 
 /** The app's bus: the systems in `registry`, and clients over the root event bus on the shared bus core */
-export function createAppBus(registry: PackRegistry, claims?: ParticipantClaims) {
-  return createBusMachine({
+export function createAppBus(registry: PackRegistry, claims?: ParticipantClaims): BackendBus {
+  return createBus({
     registry,
     participantClient: claims && ((ref) => claims.clientFor(ref)),
     onOutgoing: (message) => _rootEvents.emitOutgoing(message),

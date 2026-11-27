@@ -33,11 +33,11 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue';
 import ContributionBoundary from '@/views/layout/ContributionBoundary.vue';
-import { SurfaceScope, useSurface } from '@apackdev/sdk/fe';
+import { SurfaceScope } from '@apackdev/sdk/fe';
 import type { SettingUpdate, SettingsTarget } from '@apackdev/sdk/types';
 import { splitRef, type FeatureRef } from '@apackdev/sdk/ids';
 import { fePacks } from '@/runtime/packs';
-import type { SettingsState } from '@apackdev/host/fe';
+import { useHostState } from '@apackdev/host/fe';
 import { RotateCcw } from 'lucide-vue-next';
 import ConfirmationDialog from '@apackdev/ui/design/ConfirmationDialog';
 import { useSettingsSaveStatus } from '@/views/settings/save';
@@ -51,7 +51,7 @@ const formOwner = computed(() => props.target.kind === 'pack' ? props.target.pac
 const formRef = computed(() => props.target.kind === 'feature' ? props.target.featureRef
   : props.target.kind === 'pack' ? `${props.target.packId}/${props.target.groupId}` : 'host/app');
 const isCurrentForm = () => fePacks.settingsForm(props.target) === props.form;
-const actor: SettingsState = useSurface();
+const { send } = useHostState('settings');
 const confirmReset = ref(false);
 const { saveStatus, problems, updateSettings, resetSettings } = useSettingsSaveStatus();
 const update = (event: SettingUpdate) => updateSettings({
@@ -59,7 +59,7 @@ const update = (event: SettingUpdate) => updateSettings({
 });
 const reset = () => resetSettings(props.target);
 function openJson() {
-  actor.send({ type: 'TAB.SELECT', tab: 'general' });
-  actor.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
+  send({ type: 'TAB.SELECT', tab: 'general' });
+  send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
 }
 </script>

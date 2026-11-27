@@ -13,15 +13,13 @@ const setupFiles = [
 
 // Pure subdirectories opted into `isolate: false`; every other tree defaults to `isolate: true`.
 const PURE_DIRS = ['build', 'utils', 'ids', 'events', 'framework', 'steps', 'services'] as const;
-// Specs inside PURE_DIRS that use bindHost, XState, process.env writes, or global spies stay isolated.
+// Specs inside PURE_DIRS that use bindHost, process.env writes, or global spies stay isolated.
 const PURE_DIR_ISOLATED = [
   'tests/build/flow-compiler.spec.ts',
   'tests/build/flow-dsl-validator.spec.ts',
   'tests/build/flow-round-trip.spec.ts',
   'tests/events/calls.spec.ts',
   'tests/events/define-events.spec.ts',
-  'tests/framework/define-system-actions.spec.ts',
-  'tests/framework/define-system-answers.spec.ts',
   'tests/framework/pack-system.spec.ts',
   'tests/services/embeddings.spec.ts',
   'tests/services/emitter.spec.ts',

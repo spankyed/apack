@@ -4,22 +4,22 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '@apackdev/testing';
 
-/** Selects a declared feature form through the host Settings actor. */
+/** Selects a declared feature form through the host Settings surface. */
 async function selectFeature(page: Page, featureId: string): Promise<void> {
   await page.evaluate((id) => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'features' });
     settings.send({ type: 'FEATURE.SELECT', featureId: id });
   }, featureId);
 }
 
-/** Records the event types a surface's actor receives from here on */
+/** Records the event types a surface receives from here on */
 async function recordEvents(page: Page, surfaceId: string): Promise<() => Promise<string[]>> {
   await page.evaluate((id) => {
     const win = window as any;
     win.__addressingEvents = [];
-    win.applicationState.system.inspect((inspection: { type: string; actorRef?: { id: string }; event: { type: string } }) => {
-      if (inspection.type === '@xstate.event' && inspection.actorRef?.id === id) win.__addressingEvents.push(inspection.event.type);
+    win.applicationState.onEvent(({ to, event }: { to: string; event: { type: string } }) => {
+      if (to === id) win.__addressingEvents.push(event.type);
     });
   }, surfaceId);
   return () => page.evaluate(() => [...(window as any).__addressingEvents] as string[]);
@@ -44,7 +44,7 @@ test('a surface setting changed in Settings is what its canvas reads', async ({ 
   await app.waitForSurface('default-setup/code');
   await app.navigate('host/settings');
   await appPage.evaluate(() => {
-    const settings = (window as any).applicationState.system.get('host/settings');
+    const settings = (window as any).applicationState.surface('host/settings');
     settings.send({ type: 'TAB.SELECT', tab: 'general' });
     settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' });
   });
@@ -54,8 +54,7 @@ test('a surface setting changed in Settings is what its canvas reads', async ({ 
     .filter({ has: inputs }).last().getByPlaceholder('Path override (auto-detected if empty)');
   await claude.fill(override);
   // CLI Providers owns its save feedback; observe the accepted value at the receiving feature.
-  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-    .get('default-setup/code').getSnapshot().context.settings.cliPaths?.['claude-code'])).toBe(override);
+  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.surface('default-setup/code').getSnapshot().context.settings.cliPaths?.['claude-code'])).toBe(override);
   await app.navigate('default-setup/code');
   await app.navigate('host/settings');
   await expect(claude).toHaveValue(override);
@@ -78,7 +77,7 @@ test('a link to another surface opens it and hands it the events', async ({ app,
   await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.activeSurface.id))
     .toBe('host/settings');
   const settings = () => appPage.evaluate(() => {
-    const { activeTab, selectedFeatureId } = (window as any).applicationState.system.get('host/settings').getSnapshot().context;
+    const { activeTab, selectedFeatureId } = (window as any).applicationState.surface('host/settings').getSnapshot().context;
     return { activeTab, selectedFeatureId };
   });
   await expect.poll(settings).toEqual({ activeTab: 'features', selectedFeatureId: 'default-setup/logs' });

@@ -5,7 +5,7 @@ import { HOST_PACK_ID } from '@apackdev/sdk/ids';
 import type { PackRegistry } from '../registry.ts';
 import { installPackFromLocal } from '../installer.ts';
 import { recordUserInstall } from '../installed.ts';
-import { acceptInstalledPack } from './lifecycle.ts';
+import { acceptInstalledPack, type PackBusTarget } from './lifecycle.ts';
 
 const logger = createLogger('pack-dev-install');
 
@@ -20,7 +20,7 @@ const logger = createLogger('pack-dev-install');
 export async function installDevPack(
   registry: PackRegistry,
   packRoot: string,
-  backendActor: import('xstate').AnyActorRef,
+  backendActor: PackBusTarget,
 ): Promise<{ id: string; dir: string }> {
   const { packsDir, installedPacksFile } = resolveAppEnvironment();
   using claims = new DisposableStack();

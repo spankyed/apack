@@ -2,12 +2,11 @@
 // subscription is established: a query that fails leaves the packs unloaded until the next connection,
 // which accepts fresh frontends before announcing them so their systems send startup data.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createActor, type Actor } from 'xstate';
 import type { Surface } from '@apackdev/sdk/fe';
-import { createShellMachine, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, surface, settle } from './fakes.ts';
 
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 let warn: ReturnType<typeof vi.spyOn>;
 let fake: ReturnType<typeof fakeShell>['client'];
 let packClientReady: typeof fake.packClientReady;
@@ -23,10 +22,7 @@ beforeEach(() => {
   ({ load: loadPackFrontend, unload: unloadPackFrontend } = shell.packFrontends);
   toastError = shell.notify.error;
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  app = createActor(createShellMachine(shell.options), {
-    systemId: 'host/application',
-    input: { ownsLastActiveSurface: false },
-  }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
 });
 
 afterEach(() => {
@@ -57,7 +53,7 @@ describe('loading pack frontends from the loaded packs', () => {
 
     expect(loadPackFrontend).toHaveBeenCalledTimes(1);
     expect(app.getSnapshot().context.surfaces.map(p => p.id)).toContain('ext/own');
-    expect(app.system.get('ext/own')).toBeDefined();
+    expect(app.surface('ext/own')).toBeDefined();
     expect(packClientReady).toHaveBeenCalledWith('ext', 'runtime');
   });
 
@@ -123,7 +119,7 @@ describe('loading pack frontends from the loaded packs', () => {
     const { surfaces, acceptedPackRuntimes } = app.getSnapshot().context;
     expect(surfaces.map(p => p.id)).toEqual(['notes']);
     expect(acceptedPackRuntimes).toEqual({});
-    expect(app.system.get('ext/own')).toBeUndefined();
+    expect(app.surface('ext/own')).toBeUndefined();
     expect(packClientReady).not.toHaveBeenCalled();
     // What the dropped load registered is undone
     expect(unloadPackFrontend).toHaveBeenCalledWith('ext');
@@ -149,7 +145,7 @@ describe('loading pack frontends from the loaded packs', () => {
     await settle();
 
     expect(app.getSnapshot().context.packsWithFrontend).toEqual(['good']);
-    expect(app.system.get('good-surface')).toBeDefined();
+    expect(app.surface('good-surface')).toBeDefined();
     expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ 'good': 'runtime' });
     expect(packClientReady).not.toHaveBeenCalledWith('bad');
     // The failure names the pack, not the read, which succeeded
@@ -234,8 +230,8 @@ it('discards a late result from the lost connection before accepting a fresh reg
   await settle();
   expect(unloadPackFrontend).not.toHaveBeenCalled();
   expect(loadPackFrontend).toHaveBeenCalledTimes(2);
-  expect(app.system.get('ext/stale')).toBeUndefined();
-  expect(app.system.get('ext/new')).toBeDefined();
+  expect(app.surface('ext/stale')).toBeUndefined();
+  expect(app.surface('ext/new')).toBeDefined();
   expect(packClientReady.mock.calls).toEqual([['ext', 'runtime']]);
 
 });
@@ -246,16 +242,16 @@ it('preserves the selected actor through disconnect and replaces it after fresh 
   connect();
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   dropConnection();
-  expect(app.system.get('ext/own')).toBe(previous);
+  expect(app.surface('ext/own')).toBe(previous);
   expect(app.getSnapshot().context.activeSurface.id).toBe('ext/own');
   expect(app.getSnapshot().context.pendingSurfaceId).toBeNull();
   connect();
   await settle();
   expect(app.getSnapshot().context.activeSurface.id).toBe('ext/own');
-  expect(app.system.get('ext/own')).toBeDefined();
-  expect(app.system.get('ext/own')).not.toBe(previous);
+  expect(app.surface('ext/own')).toBeDefined();
+  expect(app.surface('ext/own')).not.toBe(previous);
 });
 
 it('does not restart an interrupted loader while the connection remains down', async () => {
@@ -271,7 +267,7 @@ it('does not restart an interrupted loader while the connection remains down', a
   app.send({ type: 'LOAD_PACK_FRONTENDS' });
   await settle();
   expect(loadPackFrontend).toHaveBeenCalledTimes(1);
-  expect(app.system.get('ext/stale')).toBeUndefined();
+  expect(app.surface('ext/stale')).toBeUndefined();
   expect(app.getSnapshot().context.packLoadRunning).toBe(false);
   expect(packClientReady).not.toHaveBeenCalled();
 });
@@ -283,12 +279,12 @@ it('keeps the accepted frontend and selection when a reconnect read fails', asyn
   connect();
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   loadedPacksQuery.mockRejectedValueOnce(new Error('read refused'));
   dropConnection();
   connect();
   await settle();
-  expect(app.system.get('ext/own')).toBe(previous);
+  expect(app.surface('ext/own')).toBe(previous);
   expect(app.getSnapshot().context.activeSurface.id).toBe('ext/own');
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ 'ext': 'runtime' });
   expect(unloadPackFrontend).not.toHaveBeenCalled();
@@ -300,20 +296,20 @@ it('keeps accepted actors while preparing a replacement, and unloads them when i
   connect();
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   let refuse!: (error: Error) => void;
   loadPackFrontend.mockReturnValueOnce(new Promise((_resolve, reject) => { refuse = reject; }));
   packClientReady.mockClear();
   dropConnection();
   connect();
   await settle();
-  expect(app.system.get('ext/own')).toBe(previous);
+  expect(app.surface('ext/own')).toBe(previous);
   expect(packClientReady).not.toHaveBeenCalled();
   refuse(new Error('candidate refused'));
   await settle();
   // Kept, it would never be announced ready on this connection and its settings binding is gone
   expect(previous?.getSnapshot().status).toBe('stopped');
-  expect(app.system.get('ext/own')).toBeUndefined();
+  expect(app.surface('ext/own')).toBeUndefined();
   expect(app.getSnapshot().context.activeSurface.id).toBe('notes');
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({});
   expect(unloadPackFrontend.mock.calls).toEqual([['ext']]);
@@ -322,7 +318,7 @@ it('keeps accepted actors while preparing a replacement, and unloads them when i
   loadPackFrontend.mockResolvedValueOnce([surface('ext/own')]);
   app.send({ type: 'LOAD_PACK_FRONTENDS' });
   await settle();
-  expect(app.system.get('ext/own')).toBeDefined();
+  expect(app.surface('ext/own')).toBeDefined();
   expect(packClientReady).toHaveBeenCalledWith('ext', 'runtime');
 });
 
@@ -332,7 +328,7 @@ it('removes an absent owner only after an authoritative reconnect read', async (
   connect();
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   dropConnection();
   expect(previous?.getSnapshot().status).toBe('active');
   loadedPacksQuery.mockResolvedValueOnce([]);
@@ -340,7 +336,7 @@ it('removes an absent owner only after an authoritative reconnect read', async (
   await settle();
   expect(unloadPackFrontend.mock.calls).toEqual([['ext']]);
   expect(previous?.getSnapshot().status).toBe('stopped');
-  expect(app.system.get('ext/own')).toBeUndefined();
+  expect(app.surface('ext/own')).toBeUndefined();
   expect(app.getSnapshot().context.activeSurface.id).toBe('notes');
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({});
 });
@@ -351,14 +347,14 @@ it('reconciles removed surfaces when an accepted replacement has no frontend', a
   connect();
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   loadPackFrontend.mockResolvedValueOnce(null);
   packClientReady.mockClear();
   dropConnection();
   connect();
   await settle();
   expect(previous?.getSnapshot().status).toBe('stopped');
-  expect(app.system.get('ext/removed')).toBeUndefined();
+  expect(app.surface('ext/removed')).toBeUndefined();
   expect(app.getSnapshot().context.surfaces.map(surface => surface.id)).toEqual(['notes']);
   expect(app.getSnapshot().context.activeSurface.id).toBe('notes');
   expect(app.getSnapshot().context.packsWithFrontend).toEqual([]);
@@ -375,7 +371,7 @@ it('publishes new surface definitions without duplicate actors or changing tab o
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'ext/own' });
   app.send({ type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: { 'ext/own': false } });
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   const order = app.getSnapshot().context.surfaces.map(surface => surface.id);
   const replacement = { ...surface('ext/own'), label: 'Updated' };
   loadPackFrontend.mockImplementation(pack => Promise.resolve(pack.id === 'ext' ? [replacement] : [surface('other/own')]));
@@ -383,7 +379,7 @@ it('publishes new surface definitions without duplicate actors or changing tab o
   connect();
   await settle();
   expect(previous?.getSnapshot().status).toBe('stopped');
-  expect(app.system.get('ext/own')).not.toBe(previous);
+  expect(app.surface('ext/own')).not.toBe(previous);
   expect(app.getSnapshot().context.activeSurface).toBe(replacement);
   expect(app.getSnapshot().context.surfaces.map(surface => surface.id)).toEqual(order);
   expect(app.getSnapshot().context.surfaceVisibility).toEqual({ 'ext/own': false });
@@ -398,17 +394,17 @@ it('refreshes only changed runtimes and leaves unrelated actors and selection in
   connect();
   await settle();
   app.send({ type: 'SELECT_SURFACE', surface: 'other/own' });
-  const other = app.system.get('other/own');
-  const previous = app.system.get('ext/own');
+  const other = app.surface('other/own');
+  const previous = app.surface('ext/own');
   loadPackFrontend.mockClear();
   packClientReady.mockClear();
   loadedPacksQuery.mockResolvedValue([{ ...entries[0], registrationId: 'second' }, entries[1]]);
   fake.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: { ext: 'second', other: 'unchanged' } } });
   await settle();
   expect(loadPackFrontend.mock.calls.map(([pack]) => pack.id)).toEqual(['ext']);
-  expect(app.system.get('other/own')).toBe(other);
+  expect(app.surface('other/own')).toBe(other);
   expect(previous?.getSnapshot().status).toBe('stopped');
-  expect(app.system.get('ext/own')).not.toBe(previous);
+  expect(app.surface('ext/own')).not.toBe(previous);
   expect(app.getSnapshot().context.activeSurface.id).toBe('other/own');
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ ext: 'second', other: 'unchanged' });
   expect(packClientReady.mock.calls).toEqual([['ext', 'second']]);
@@ -432,7 +428,7 @@ it('loads a refused incumbent again in a run queued while the refusal was handle
   await settle();
   // The unload is not one "while loading": the queued run's acceptance must not be discarded
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ ext: 'second' });
-  expect(app.system.get('ext/own')).toBeDefined();
+  expect(app.surface('ext/own')).toBeDefined();
   expect(unloadPackFrontend.mock.calls).toEqual([['ext']]);
 });
 
@@ -441,7 +437,7 @@ it('unloads the incumbent when a changed runtime is refused, and loads it on the
   loadPackFrontend.mockResolvedValue([surface('ext/own')]);
   connect();
   await settle();
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   loadedPacksQuery.mockResolvedValue([{ id: 'ext', registrationId: 'second' }]);
   loadPackFrontend.mockRejectedValueOnce(new Error('candidate refused'));
   fake.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: { ext: 'second' } } });
@@ -460,7 +456,7 @@ it('uses runtime publication as a reconciliation hint and ignores unchanged revi
   loadPackFrontend.mockResolvedValue([surface('ext/own')]);
   connect();
   await settle();
-  const previous = app.system.get('ext/own');
+  const previous = app.surface('ext/own');
   loadedPacksQuery.mockClear();
   fake.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: { ext: 'current' } } });
   await settle();
@@ -469,7 +465,7 @@ it('uses runtime publication as a reconciliation hint and ignores unchanged revi
   fake.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: {} } });
   await settle();
   expect(loadedPacksQuery).toHaveBeenCalledOnce();
-  expect(app.system.get('ext/own')).toBe(previous);
+  expect(app.surface('ext/own')).toBe(previous);
   expect(loadPackFrontend).toHaveBeenCalledOnce();
   expect(unloadPackFrontend).not.toHaveBeenCalled();
 });
@@ -489,4 +485,75 @@ it('queues a newer runtime received during preparation and accepts the latest re
   expect(loadPackFrontend).toHaveBeenCalledTimes(2);
   expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ ext: 'second' });
   expect(packClientReady.mock.calls).toEqual([['ext', 'first'], ['ext', 'second']]);
+});
+
+it('does not unload a newly installed pack frontend when packs.catalog has not received its declaration yet, but does unload an explicitly disabled one', async () => {
+  const local = fakeShell({ surfaces: [surface('notes')] });
+  local.catalog.status.mockReturnValue('ready');
+  const shell = createShell(local.options, { ownsLastActiveSurface: false }).start();
+  try {
+    // Newly installed pack: declaration is NOT in catalog yet (decl === undefined)
+    const brandNew = surface('newpack/main');
+    local.bindings.set('newpack/main', {
+      packId: 'newpack',
+      registrationId: 'reg-new',
+      declarationRevision: 'decl-new',
+      buildRevision: 'build-new',
+      declaration: { label: 'New', state: 'state.ts' },
+      binding: brandNew,
+    });
+    shell.send({ type: 'PACK_FRONTEND_LOADED', packId: 'newpack', registrationId: 'reg-new', surfaces: [brandNew] });
+    await settle();
+    expect(local.packFrontends.unload).not.toHaveBeenCalled();
+
+    // Explicitly disabled pack in catalog (decl.enabled === false) MUST be unloaded
+    const disabledSurface = surface('disabledpack/main');
+    local.declarations.set('disabledpack/main', {
+      featureRef: 'disabledpack/main' as import('@apackdev/sdk/ids').FeatureRef,
+      packId: 'disabledpack',
+      origin: 'installed',
+      enabled: false,
+      declarationRevision: 'decl-dis',
+      buildRevision: 'build-dis',
+      declaration: { label: 'Disabled', state: 'state.ts' },
+    });
+    local.bindings.set('disabledpack/main', {
+      packId: 'disabledpack',
+      registrationId: 'reg-dis',
+      declarationRevision: 'decl-dis',
+      buildRevision: 'build-dis',
+      declaration: { label: 'Disabled', state: 'state.ts' },
+      binding: disabledSurface,
+    });
+    shell.send({ type: 'PACK_FRONTEND_LOADED', packId: 'disabledpack', registrationId: 'reg-dis', surfaces: [disabledSurface] });
+    await settle();
+    expect(local.packFrontends.unload).toHaveBeenCalledWith('disabledpack');
+  } finally {
+    shell.stop();
+  }
+});
+
+it('retries LOAD_PACK_FRONTENDS on PACK_RUNTIMES_UPDATED when packFrontendsNeedRefresh is true after a failed reconnect read', async () => {
+  loadedPacksQuery.mockResolvedValue([{ id: 'ext', registrationId: 'rev-1', feEntry: 'runtime/fe.js' }]);
+  loadPackFrontend.mockResolvedValue([surface('ext/own')]);
+  connect();
+  await settle();
+  expect(app.getSnapshot().context.acceptedPackRuntimes).toEqual({ ext: 'rev-1' });
+
+  // Reconnect fails its initial loadedPacks() read, leaving packFrontendsNeedRefresh = true
+  loadedPacksQuery.mockRejectedValueOnce(new Error('temporary transport blip'));
+  dropConnection();
+  connect();
+  await settle();
+  expect(app.getSnapshot().context.packFrontendsNeedRefresh).toBe(true);
+
+  // Subsequent PACK_RUNTIMES_UPDATED with identical revision map still retries LOAD_PACK_FRONTENDS
+  loadedPacksQuery.mockResolvedValue([{ id: 'ext', registrationId: 'rev-1', feEntry: 'runtime/fe.js' }]);
+  loadedPacksQuery.mockClear();
+  fake.receive({ to: 'host/application', event: { type: 'PACK_RUNTIMES_UPDATED', runtimes: { ext: 'rev-1' } } });
+  await settle();
+
+  expect(loadedPacksQuery).toHaveBeenCalledOnce();
+  expect(app.getSnapshot().context.packFrontendsNeedRefresh).toBe(false);
+  expect(loadPackFrontend).toHaveBeenCalledTimes(2);
 });

@@ -1,4 +1,4 @@
-import { createMachine } from 'xstate';
+import { state } from '@apackdev/state';
 import { selectDefaultSurfaceDeclaration, getEligibleSurface } from '../../src/fe/surface-selection.ts';
 import type { FeatureRef } from '@apackdev/sdk/ids';
 import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
@@ -43,7 +43,7 @@ function remove(packId: string): Surface[] {
   return unregister(packId);
 }
 
-const surface = (label: string) => ({ label, state: createMachine({}) }) satisfies SurfaceDefinition;
+const surface = (label: string) => ({ label, state: state()({}) }) satisfies SurfaceDefinition;
 // A frontend registration carries `node` beside `fe`: the label and the field defaults are what both
 // halves read, so codegen emits that facet into this registration and the backend's alike
 const NoteNode = {}; const NoteForm = {}; const CardView = {}; const Choice = {};

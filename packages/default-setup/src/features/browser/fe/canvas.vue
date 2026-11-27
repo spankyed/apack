@@ -69,13 +69,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { isAnyMenuOpen, useState } from '@apackdev/sdk/fe';
-import { type BrowserState } from './state.ts';
+import { isAnyMenuOpen } from '@apackdev/sdk/fe';
+import { useState } from '#generated/state-fe.ts';
 import BrowserTabBar from './components/BrowserTabBar.vue';
 import BrowserNavBar from './components/BrowserNavBar.vue';
 import BrowserBookmarkBar from './components/BrowserBookmarkBar.vue';
 
-const { state: browser, send } = useState<BrowserState>();
+const { state: browser, send } = useState('browser');
 // This feature's own settings, from its own machine — the app sends them to it (`FEATURE_SETTINGS_UPDATED`)
 const showBookmarksBar = computed(() => browser.value.data.settings?.showBookmarksBar ?? true);
 

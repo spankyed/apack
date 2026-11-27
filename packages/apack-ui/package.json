@@ -234,11 +234,6 @@
       "types": "./dist/composables/useClickOutside.d.ts",
       "default": "./dist/composables/useClickOutside.js"
     },
-    "./composables/useCollapsibleState": {
-      "@apackdev/source": "./src/composables/useCollapsibleState.ts",
-      "types": "./dist/composables/useCollapsibleState.d.ts",
-      "default": "./dist/composables/useCollapsibleState.js"
-    },
     "./composables/useContextMenu": {
       "@apackdev/source": "./src/composables/useContextMenu.ts",
       "types": "./dist/composables/useContextMenu.d.ts",
@@ -387,14 +382,12 @@
     "@tiptap/starter-kit": "^3.32.0",
     "@tiptap/vue-3": "^3.32.0",
     "@vue-flow/core": "^1.44.0",
-    "@xstate/vue": "^4.0.2",
     "elkjs": "^0.9.0",
     "lucide-vue-next": "^0.503.0",
     "monaco-editor": "^0.55.1",
     "reka-ui": "^2.2.1",
     "typescript": ">=5.7",
-    "vue": "^3.5.18",
-    "xstate": "^5.19.2"
+    "vue": "^3.5.18"
   },
   "peerDependenciesMeta": {
     "elkjs": {

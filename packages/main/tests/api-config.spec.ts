@@ -13,11 +13,11 @@ describe('api-server utilityProcess configuration', () => {
     vi.stubEnv('NODE_OPTIONS', '--max-old-space-size=4096 --conditions=@apackdev/source');
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
 
-    const env = getEnvironment(3001, { apiToken: 'tok', startupId: 'start-1' });
+    const env = getEnvironment({ startupId: 'start-1' });
 
     expect(env.NODE_ENV).toBe('development');
-    expect(env.API_PORT).toBe('3001');
-    expect(env.APACK_API_TOKEN).toBe('tok');
+    expect('API_PORT' in env).toBe(false);
+    expect('APACK_API_TOKEN' in env).toBe(false);
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect('ELECTRON_RUN_AS_NODE' in env).toBe(false);
     expect('APACK_APP_MANIFEST' in env).toBe(false);
@@ -33,7 +33,7 @@ describe('api-server utilityProcess configuration', () => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
 
     try {
-      const env = getEnvironment(3001, { apiToken: 'tok' });
+      const env = getEnvironment();
 
       expect(env.NODE_ENV).toBe('production');
       expect('ELECTRON_RUN_AS_NODE' in env).toBe(false);

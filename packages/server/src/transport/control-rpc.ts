@@ -12,16 +12,22 @@ import type { LoadedPackEntry, PackCatalogFrame } from '@apackdev/host/packs';
 import { SettingsRefusedError } from '@apackdev/host/settings';
 import {
   ControlRpcError,
-  createControlClient,
   createControlServer,
-  type ControlClient,
-  type ControlContract,
   type ControlLane,
   type ControlServer,
 } from '@apackdev/host/transport/mux';
+import {
+  createHostControlClient,
+  type HostControlContract,
+  type SettingsMutationEvent,
+  type SettingsPackIdentity,
+} from '@apackdev/host/transport/control-contract';
 import { providerLabels } from '@apackdev/sdk/models';
 import { _RECORDING_MODES } from '@apackdev/sdk/runtime';
 import type { SecretMetadata, SecretProvider, SecretsSnapshot } from '@apackdev/sdk/services';
+
+export { createHostControlClient };
+export type { HostControlContract, SettingsMutationEvent, SettingsPackIdentity };
 
 const SECRET_LABEL_MIN_LENGTH = 1;
 const SECRET_LABEL_MAX_LENGTH = 100;
@@ -42,74 +48,10 @@ const SETTINGS_OPEN_PACK_KEYS: ReadonlySet<string> = new Set([
   'buildRevision',
 ]);
 const SETTINGS_CLOSE_KEYS: ReadonlySet<string> = new Set(['credential']);
-const SETTINGS_MUTATE_KEYS: ReadonlySet<string> = new Set(['credential', 'event']);
+const SETTINGS_MUTATE_KEYS: ReadonlySet<string> = new Set(['credential', 'event', 'sender', 'call', 'from']);
 const PACKS_CLIENT_READY_KEYS: ReadonlySet<string> = new Set(['packId', 'registrationId']);
 const DEV_RELOAD_KEYS: ReadonlySet<string> = new Set(['packId']);
 const DEV_INSTALL_KEYS: ReadonlySet<string> = new Set(['root']);
-
-export interface SettingsPackIdentity {
-  readonly id: string;
-  readonly registrationId: string;
-  readonly declarationRevision: string;
-  readonly buildRevision: string;
-}
-
-export interface SettingsMutationEvent {
-  readonly type: string;
-  readonly [key: string]: unknown;
-}
-
-/**
- * Typed Control RPC contract shared between host dispatchers and window/tool clients.
- */
-export interface HostControlContract extends ControlContract {
-  readonly requests: {
-    readonly 'secrets.list': { readonly input: void; readonly output: SecretsSnapshot };
-    readonly 'secrets.add': {
-      readonly input: { readonly provider: SecretProvider; readonly label: string; readonly value: string };
-      readonly output: SecretsSnapshot;
-    };
-    readonly 'secrets.replaceValue': {
-      readonly input: { readonly id: string; readonly value: string };
-      readonly output: SecretsSnapshot;
-    };
-    readonly 'secrets.select': { readonly input: { readonly id: string }; readonly output: SecretsSnapshot };
-    readonly 'secrets.rename': {
-      readonly input: { readonly id: string; readonly label: string };
-      readonly output: SecretsSnapshot;
-    };
-    readonly 'secrets.delete': { readonly input: { readonly id: string }; readonly output: SecretsSnapshot };
-    readonly 'secrets.allowUnprotected': { readonly input: void; readonly output: SecretsSnapshot };
-    readonly 'settings.openHost': { readonly input: void; readonly output: { readonly credential: string } };
-    readonly 'settings.openPack': {
-      readonly input: SettingsPackIdentity;
-      readonly output: { readonly credential: string };
-    };
-    readonly 'settings.close': { readonly input: { readonly credential: string }; readonly output: void };
-    readonly 'settings.mutate': {
-      readonly input: { readonly credential: string; readonly event: SettingsMutationEvent };
-      readonly output: void;
-    };
-    readonly 'packs.loaded': { readonly input: void; readonly output: LoadedPackEntry[] };
-    readonly 'packs.clientReady': {
-      readonly input: { readonly packId: string; readonly registrationId: string };
-      readonly output: void;
-    };
-    readonly 'performance.start': {
-      readonly input: { readonly mode: RecordingMode; readonly startup?: boolean };
-      readonly output: void;
-    };
-    readonly 'performance.stop': { readonly input: void; readonly output: PerformanceRecordingReport };
-    readonly 'dev.reload': { readonly input: { readonly packId: string }; readonly output: { readonly ok: true } };
-    readonly 'dev.install': {
-      readonly input: { readonly root: string };
-      readonly output: { readonly ok: true; readonly packId?: string };
-    };
-  };
-  readonly subscriptions: {
-    readonly 'packs.catalog': { readonly input: void; readonly output: PackCatalogFrame };
-  };
-}
 
 export interface HostControlSecretsDeps {
   snapshot(): SecretsSnapshot | Promise<SecretsSnapshot>;
@@ -125,11 +67,22 @@ export interface HostControlSecretsDeps {
   allowUnprotected(): void | Promise<void>;
 }
 
+export interface HostControlSettingsMutateMeta {
+  readonly sender?: string;
+  readonly call?: string;
+  readonly from?: string;
+}
+
 export interface HostControlSettingsDeps {
   openHost(connectionId: string): string | Promise<string>;
   openPack(connectionId: string, expected: SettingsPackIdentity): string | Promise<string>;
   close(connectionId: string, credential: string): void | Promise<void>;
-  mutate(connectionId: string, credential: string, event: SettingsMutationEvent): void | Promise<void>;
+  mutate(
+    connectionId: string,
+    credential: string,
+    event: SettingsMutationEvent,
+    meta?: HostControlSettingsMutateMeta,
+  ): void | Promise<void>;
   releaseConnection(connectionId: string): void;
 }
 
@@ -488,9 +441,19 @@ export function createHostControlServer(
         const eventObj = asPlainObject(obj.event, 'settings.mutate.event');
         const type = assertBoundedString(eventObj.type, 'event.type', 1);
         const event: SettingsMutationEvent = { ...eventObj, type };
+        const sender = obj.sender === undefined ? undefined : assertBoundedString(obj.sender, 'sender', 1);
+        const call = obj.call === undefined ? undefined : assertBoundedString(obj.call, 'call', 1);
+        const from = obj.from === undefined ? undefined : assertBoundedString(obj.from, 'from', 1);
+        const mutateMeta: HostControlSettingsMutateMeta | undefined = sender !== undefined || call !== undefined || from !== undefined
+          ? {
+              ...(sender !== undefined ? { sender } : {}),
+              ...(call !== undefined ? { call } : {}),
+              ...(from !== undefined ? { from } : {}),
+            }
+          : undefined;
         assertSettingsConnectionOpen(meta.signal);
         try {
-          await deps.settings.mutate(deps.connectionId, credential, event);
+          await deps.settings.mutate(deps.connectionId, credential, event, mutateMeta);
         } catch (error) {
           mapSettingsError(error);
         }
@@ -564,8 +527,9 @@ export function createHostControlServer(
     },
 
     subscriptions: {
+      // Emit catalog frames synchronously (no microtask coalescing) so they stay FIFO-ordered ahead of
+      // `link`-lane `PACK_ACTIVATED`/`PACK_RUNTIMES_UPDATED` broadcasts emitted later in the same turn.
       'packs.catalog': {
-        coalesce: true,
         subscribe: (_input, sink) => {
           const publish = (): void => {
             if (sink.closed) return;
@@ -608,11 +572,4 @@ export function createHostControlServer(
       if (hasError) throw firstError;
     },
   };
-}
-
-/**
- * Attaches a typed Host Control RPC client to `lane`.
- */
-export function createHostControlClient(lane: ControlLane): ControlClient<HostControlContract> {
-  return createControlClient<HostControlContract>(lane);
 }

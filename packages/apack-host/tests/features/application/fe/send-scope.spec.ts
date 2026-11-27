@@ -6,30 +6,32 @@
 // once per window. The renderer's `sendToSurface` reaches this window's only. Two shells over one backend is the
 // cheapest faithful way to say that: each shell is a window, and the bus delivers to both subscriptions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createActor, setup } from 'xstate';
-import type { Surface } from '@apackdev/sdk/fe';
-import { createShellMachine } from '../../../../src/fe/index.ts';
+import { state } from '@apackdev/state';
+import type { Surface, SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { createShell } from '../../../../src/fe/index.ts';
 import { _currentDelivery } from '@apackdev/sdk/events';
 import { fakeShell, settle } from './fakes.ts';
 
 /** What each window's copy of the surface heard */
 let heard: Array<{ window: string; type: string }>;
 
+type TestSurfaceEvent = SurfaceLifecycleEvent | { type: 'SELECT_ARTIFACT'; artifactId: string };
+
 function recording(id: string, window: string): Surface {
-  const state = setup({}).createMachine({
-    on: { '*': { actions: ({ event }) => { if (!event.type.startsWith('SURFACE_')) heard.push({ window, type: event.type }); } } },
+  const s = state<{}, TestSurfaceEvent>()({
+    on: {
+      SELECT_ARTIFACT: (event) => { heard.push({ window, type: event.type }); },
+    },
   });
-  return { id, label: id, icon: 'Zap', state, canvas: {} } as unknown as Surface;
+  return { id, label: id, icon: 'Zap', state: s, canvas: {} } as unknown as Surface;
 }
 
 /**
- * A window: its own shell, its own client subscription, its own copy of the surface's actor. Each `createActor` is
- * its own XState system, so two windows' surfaces can share an id — but the shell must be registered at
- * `host/application` in each, since that is the id its own code resolves surfaces against.
+ * A window: its own shell, its own client subscription, its own copy of the surface's state.
  */
 function windowNamed(name: string) {
   const shell = fakeShell({ surfaces: [recording('default-setup/notes', name), recording('default-setup/threads', name)] });
-  const app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: false } }).start();
+  const app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
   shell.client.connect();
   return { shell, app };
 }
@@ -56,13 +58,19 @@ describe('a surface handling what the shell gave it', () => {
   /** A window whose surface records the delivery in scope for every event it handles */
   function watching() {
     const seen: Array<{ type: string; receiver: string | undefined }> = [];
-    const state = setup({}).createMachine({
-      on: { '*': { actions: ({ event }) => { seen.push({ type: event.type, receiver: _currentDelivery()?.receiver }); } } },
+    const record = (event: { type: string }) => { seen.push({ type: event.type, receiver: _currentDelivery()?.receiver }); };
+    const s = state<{}, TestSurfaceEvent>()({
+      on: {
+        SURFACE_STARTED: record,
+        SURFACE_ACTIVATED: record,
+        SURFACE_DEACTIVATED: record,
+        SELECT_ARTIFACT: record,
+      },
     });
     const shell = fakeShell({
-      surfaces: [{ id: 'default-setup/notes', label: 'notes', icon: 'Zap', state, canvas: {} } as unknown as Surface],
+      surfaces: [{ id: 'default-setup/notes', label: 'notes', icon: 'Zap', state: s, canvas: {} } as unknown as Surface],
     });
-    const app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: false } }).start();
+    const app = createShell(shell.options, { ownsLastActiveSurface: false }).start();
     shell.client.connect();
     return { seen, shell, app };
   }
@@ -126,10 +134,16 @@ describe('a surface handling what the shell gave it', () => {
     try {
       await settle();
       const seen: Array<{ type: string; receiver: string | undefined }> = [];
-      const state = setup({}).createMachine({
-        on: { '*': { actions: ({ event }) => { seen.push({ type: event.type, receiver: _currentDelivery()?.receiver }); } } },
+      const record = (event: { type: string }) => { seen.push({ type: event.type, receiver: _currentDelivery()?.receiver }); };
+      const s = state<{}, TestSurfaceEvent>()({
+        on: {
+          SURFACE_STARTED: record,
+          SURFACE_ACTIVATED: record,
+          SURFACE_DEACTIVATED: record,
+          SELECT_ARTIFACT: record,
+        },
       });
-      const later = { id: 'ext/own', label: 'own', icon: 'Zap', state, canvas: {} } as unknown as Surface;
+      const later = { id: 'ext/own', label: 'own', icon: 'Zap', state: s, canvas: {} } as unknown as Surface;
       w.shell.acceptSurface(later);
       w.app.send({ type: 'PACK_FRONTEND_LOADED', registrationId: 'runtime', packId: 'ext', surfaces: [later] });
       await settle();

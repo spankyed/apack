@@ -1,5 +1,5 @@
-// findRunningApp: an app runs on a data dir when its API's port file names a port that answers, or a live process
-// holds the Electron instance lock; stale files don't count
+// findRunningApp: an app runs on a data dir when a live process holds `app.lock` or `api-runtime.json`;
+// stale files don't count.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -13,12 +13,12 @@ afterEach(removeTempDirs);
 
 function context() {
   const userDataDir = tempDir('running-app-');
-  return { userDataDir, apiPortFile: path.join(_appDirOf(userDataDir), 'api-port') };
+  return { userDataDir, runtimeFile: path.join(_appDirOf(userDataDir), 'api-runtime.json') };
 }
 
-/** What a running API publishes: its port and its process */
-function publishApi(dir: string, { port = 3001, pid = process.pid } = {}): void {
-  fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port, pid }));
+/** What a running API publishes: its process id (and optional tool socket) in `api-runtime.json`. */
+function publishRuntime(dir: string, { pid = process.pid } = {}): void {
+  fs.writeFileSync(path.join(_appDirOf(dir), 'api-runtime.json'), JSON.stringify({ pid }));
 }
 
 /** A pid no process has any more */
@@ -43,20 +43,18 @@ describe('findRunningApp', () => {
     expect(findRunningApp(context())).toBeNull();
   });
 
-  it('counts a port file whose API process is running', () => {
+  it('counts a live api-runtime.json record ({ pid } or { pid, socket, token }) and ignores stale or garbled ones', async () => {
     const live = context();
-    publishApi(live.userDataDir, { port: 3001 });
-    expect(findRunningApp(live)?.why).toBe(`its API is running on port 3001 (pid ${process.pid})`);
-  });
+    publishRuntime(live.userDataDir);
+    expect(findRunningApp(live)).toEqual({ why: `its API is running (pid ${process.pid})`, pid: process.pid });
 
-  it("doesn't count a port file a crashed run left behind, or one it can't read", async () => {
-    const crashed = context();
-    publishApi(crashed.userDataDir, { pid: await exitedPid() });
-    expect(findRunningApp(crashed)).toBeNull();
+    const stale = context();
+    publishRuntime(stale.userDataDir, { pid: await exitedPid() });
+    expect(findRunningApp(stale)).toBeNull();
 
-    for (const content of ['not json', '3001', JSON.stringify({ port: 3001 }), JSON.stringify({ port: 'x', pid: process.pid })]) {
+    for (const content of ['not json', '3001', '{}', JSON.stringify({ pid: 'x' })]) {
       const garbled = context();
-      fs.writeFileSync(garbled.apiPortFile, content);
+      fs.writeFileSync(garbled.runtimeFile, content);
       expect(findRunningApp(garbled), content).toBeNull();
     }
   });
@@ -71,8 +69,6 @@ describe('findRunningApp', () => {
     expect(findRunningApp(crashed)).toBeNull();
   });
 
-  // It guards a database, so a file it cannot resolve means an app may be using the dir. Chromium's lock,
-  // which this replaced, was the other way round: unreadable, or Windows, and the answer was "no app".
   it("counts one it can't check: another machine's, or one it can't read", () => {
     const remote = context();
     appLock(remote.userDataDir, anApp(process.pid, 'another-machine.local'));
@@ -85,17 +81,13 @@ describe('findRunningApp', () => {
     }
   });
 
-  // The window the port file cannot cover: the app is up and its API has not published a port yet, or is
-  // being restarted after a crash. Without this a tool would take the write lock, and the API would then
-  // refuse to come back.
-  it('answers before the API has published a port, and while a crashed one is restarting', async () => {
+  it('answers before the API has published api-runtime.json, and while a crashed one is restarting', async () => {
     const ctx = context();
     const stop = publishRunningApp(ctx.userDataDir);
     try {
       expect(findRunningApp(ctx)?.why).toBe(`its process is running (pid ${process.pid})`);
 
-      // The API boots, then crashes: its port file names a process that has gone
-      publishApi(ctx.userDataDir, { pid: await exitedPid() });
+      publishRuntime(ctx.userDataDir, { pid: await exitedPid() });
       expect(findRunningApp(ctx)?.why).toBe(`its process is running (pid ${process.pid})`);
     } finally {
       stop();
@@ -113,8 +105,6 @@ describe('findRunningApp', () => {
     expect(findRunningApp(ctx)?.why).toBe(`its process is running (pid ${process.ppid})`);
   });
 
-  // The pid alone can't tell the runs apart: the OS reuses pids, so a crashed app's replacement can hold
-  // the one that crashed. What each run writes about itself is what makes its own marker its own.
   it("leaves a later run's marker alone even when it holds the same pid", () => {
     const ctx = context();
     const stop = publishRunningApp(ctx.userDataDir);
@@ -129,22 +119,16 @@ describe('findRunningApp', () => {
   });
 });
 
-// `readApiEndpoint` bounds its answer by the boot that wrote the port file, where a wrong "nothing is
-// running" costs a connection error to a dead port. The app's own file does not: there a wrong answer lets
-// a tool write while the app has the database open, so its pid is taken at face value.
-// A refusal has to say how to get out of itself. The app marker survives a crash, and `lockIsHeld` takes its
-// pid at face value, so one naming a pid the OS has since reused reads as an app that is running — and
-// without the file named, the data dir is one no tool can ever write to again.
 describe('the way out of a refusal', () => {
-  it("names the app's marker, and doesn't name the port file, which clears itself", () => {
+  it("names the app's marker, and doesn't name api-runtime.json, which clears itself", () => {
     const ctx = context();
     fs.writeFileSync(appLockFile(ctx.userDataDir), JSON.stringify({ pid: process.pid, machine: os.hostname(), since: '' }));
     expect(findRunningApp(ctx)?.marker).toBe(appLockFile(ctx.userDataDir));
 
     fs.rmSync(appLockFile(ctx.userDataDir));
-    publishApi(ctx.userDataDir);
+    publishRuntime(ctx.userDataDir);
     expect(findRunningApp(ctx)?.why).toMatch(/its API is running/);
-    expect(findRunningApp(ctx)?.marker, 'a port file is bound by its boot, so it needs no way out').toBeUndefined();
+    expect(findRunningApp(ctx)?.marker, 'api-runtime.json is bound by its boot, so it needs no way out').toBeUndefined();
   });
 
   it('names it for a marker it cannot resolve, and one from another machine', () => {
@@ -158,13 +142,13 @@ describe('the way out of a refusal', () => {
   });
 });
 
-describe('findRunningApp, on a port file left by a previous boot', () => {
-  it('ignores a port file that predates this boot, whatever pid it names', () => {
+describe('findRunningApp, on an api-runtime.json left by a previous boot', () => {
+  it('ignores an api-runtime.json that predates this boot, whatever pid it names', () => {
     const ctx = context();
-    publishApi(ctx.userDataDir);
-    expect(findRunningApp(ctx)?.why).toMatch(/its API is running on port 3001/);
+    publishRuntime(ctx.userDataDir);
+    expect(findRunningApp(ctx)?.why).toMatch(/its API is running/);
 
-    backdateToPreviousBoot(ctx.apiPortFile);
+    backdateToPreviousBoot(ctx.runtimeFile);
     expect(findRunningApp(ctx)).toBeNull();
   });
 

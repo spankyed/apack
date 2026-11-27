@@ -7,7 +7,7 @@ import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 import { nextTick } from 'vue';
 import type { ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 import type { createPerformanceController, RecordingMode } from '@apackdev/host/diagnostics';
-import { trpc } from '@/transport';
+import { windowTransport } from '@/transport';
 
 type Controller = ReturnType<typeof createPerformanceController>;
 export interface PerformanceViewDelivery { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }
@@ -36,7 +36,7 @@ function createWindowRecording() {
     async start(mode: RecordingMode, options?: { startup: true; carrier?: PerformanceCarrier }) {
       let admitted = false;
       try {
-        await trpc.performance.start.mutate({ mode, ...(options?.startup && { startup: true }) });
+        await windowTransport.controlCall('performance.start', { mode, ...(options?.startup && { startup: true }) });
         admitted = true;
         rendererResourceFailed = false;
         if (mode !== 'disabled') {
@@ -60,7 +60,7 @@ function createWindowRecording() {
         controller = undefined;
         if (rendererLease) await rendererBridge()?.stop(rendererLease).catch(() => {});
         rendererLease = undefined; longTasks?.stop(); longTasks = undefined;
-        if (admitted) await trpc.performance.stop.mutate().catch(() => {});
+        if (admitted) await windowTransport.controlCall('performance.stop').catch(() => {});
         throw error;
       }
     },
@@ -88,7 +88,7 @@ function createWindowRecording() {
       startupViews = undefined;
       // Both owners are stopped even if the socket was lost. A failed report remains a failed trial.
       const lease = rendererLease; rendererLease = undefined;
-      const [renderer, backend, resources] = await Promise.allSettled([resource.stop(), trpc.performance.stop.mutate(),
+      const [renderer, backend, resources] = await Promise.allSettled([resource.stop(), windowTransport.controlCall('performance.stop'),
         lease ? Promise.resolve().then(() => {
           const bridge = rendererBridge();
           if (!bridge) throw Error('Renderer diagnostic bridge was lost');

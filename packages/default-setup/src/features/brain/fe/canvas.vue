@@ -126,16 +126,15 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 
 import { computed, onMounted, onUnmounted } from 'vue'
-import { type BrainState } from '#features/brain/fe/state.ts';
 import RunNodeGraph from './components/RunNodeGraph.vue';
 import EventsList from './components/EventsList.vue';
 import StepNodeDetails from './components/StepNodeDetails.vue';
 import { tell } from '#generated/events.ts';
 
-const { state: brain, send } = useState<BrainState>();
+const { state: brain, send } = useState('brain');
 
 // Selectors for state
 const canGoBack = computed(() => (brain.value.data.flowHierarchy?.length ?? 0) > 1);

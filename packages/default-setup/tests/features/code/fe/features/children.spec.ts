@@ -1,68 +1,42 @@
-// A panel's ask reaches the backend from inside the surface's own send, which is the only send that names the surface
-// as its sender, so the backend can answer it.
-//
-// `useSurface()` hands a component the surface with its `send` run inside a delivery naming the surface; a send straight
-// to a child runs in none, so what the child asks the backend carries no sender and its answer is dropped. The stand-in
-// below records whether a backend send was made inside that `send`, which is the fact the real delivery turns into a
-// sender.
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createActor, sendTo, setup, type AnyActorRef } from 'xstate';
+// Code surface starts its panel children directly via `@apackdev/state` `starts`, so components read and send
+// straight to each child handle and every child ask crosses the surface's system port with full sender identity.
+import { afterEach, expect, it, vi } from 'vitest';
+import { startMachine } from '../_support/asks.ts';
 
-const asks = vi.hoisted(() => [] as { type: string; insideSurfaceSend: boolean }[]);
-const insideSurfaceSend = vi.hoisted(() => ({ value: false }));
-vi.mock('#generated/events.ts', async () => {
-  const { fromPromise } = await import('xstate');
-  return {
-    // An ask a machine invokes: recorded as it is made, and never answered, so the search stays under way
-    fromAsk: (_to: string, type: string) => fromPromise(() => {
-      asks.push({ type, insideSurfaceSend: insideSurfaceSend.value });
-      return new Promise(() => {});
-    }),
-  };
-});
-vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({ getParentContext: () => ({ baseDirectory: '/work' }) }));
+vi.mock('#features/code/fe/utils/terminal-pool.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#features/code/fe/utils/terminal-pool.ts')>()),
+  terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn(), setCopyOnSelect: vi.fn(), setViewSettings: vi.fn() },
+}));
+vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
+  terminalEventBus: { emit: vi.fn(), clearOutput: vi.fn(), prunePersistedOutputs: vi.fn() },
+}));
 
-const { searchState } = await import('#features/code/fe/features/search/state.ts');
-const { panelChild } = await import('#features/code/fe/features/children.ts');
+const codeState = (await import('#features/code/fe/state.ts')).default;
 
-/** The code surface as far as a panel reaches it: a search child, and events routed to it by their prefix */
-const surfaceMachine = setup({ actors: { searchState } }).createMachine({
-  invoke: { id: 'search', src: 'searchState' },
-  on: { '*': { actions: sendTo('search', ({ event }) => event) } },
+let h: ReturnType<typeof startMachine<any, any>> | undefined;
+afterEach(() => {
+  h?.stop();
+  h = undefined;
 });
 
-let actor: ReturnType<typeof createActor<typeof surfaceMachine>>;
-/** The surface as `useSurface()` gives it: its `send` is the one that names the surface */
-let surface: AnyActorRef;
+it('starts all eight panel children natively and routes child asks through the system port', async () => {
+  h = startMachine(codeState, { id: 'default-setup/code' });
+  h.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
+  await h.latestAsk('GET_CODE_START').answer({ baseDirectory: '/work' });
 
-beforeEach(() => {
-  asks.length = 0;
-  actor = createActor(surfaceMachine).start();
-  surface = new Proxy(actor, {
-    get: (target, prop) => prop === 'send'
-      ? (event: { type: string }) => {
-          insideSurfaceSend.value = true;
-          try { target.send(event); } finally { insideSurfaceSend.value = false; }
-        }
-      : (Reflect.get(target, prop, target) as unknown),
-  }) as AnyActorRef;
-});
-afterEach(() => actor.stop());
+  for (const name of ['explorer', 'terminal', 'search', 'commit', 'pr', 'codeActions', 'codePrompts', 'github'] as const) {
+    expect(h.child(name), `child ${name} is running`).toBeDefined();
+  }
 
-it("asks the backend from inside the surface's send, so the answer has somewhere to go", () => {
-  panelChild(surface, 'search')!.send({ type: 'search.START', query: 'needle' });
+  const searchHandle = h.childHandle('search');
+  (h.sys.send as (to: unknown, ev: unknown) => void)(searchHandle, { type: 'search.START', query: 'needle' });
 
-  expect(asks).toEqual([{ type: 'search.SEARCH_FILES', insideSurfaceSend: true }]);
-});
-
-it('reads the state of the child it was asked for', () => {
-  const search = panelChild(surface, 'search')!;
-  search.send({ type: 'search.START', query: 'needle' });
-
-  expect(search.getSnapshot().context.searchQuery).toBe('needle');
-  expect(search.getSnapshot().matches('searching')).toBe(true);
-});
-
-it('hands back nothing for a child the surface has not spawned', () => {
-  expect(panelChild(surface, 'commit')).toBeUndefined();
+  expect(h.latestAsk('search.SEARCH_FILES').event).toMatchObject({
+    type: 'search.SEARCH_FILES',
+    path: '/work',
+    query: 'needle',
+  });
+  const search = h.child('search') as { at: string; data: { searchQuery: string } };
+  expect(search.at).toBe('searching');
+  expect(search.data.searchQuery).toBe('needle');
 });

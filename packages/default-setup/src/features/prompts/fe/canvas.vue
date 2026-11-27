@@ -41,18 +41,16 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
-
 import { computed, watch } from 'vue';
-import type { PromptsState } from './state.ts';
 import PromptsList from './components/PromptsList.vue';
 import PromptDetail from './components/PromptDetail.vue';
 import type { EARS } from '@apackdev/sdk';
 import type { TemplateInput } from '@apackdev/sdk';
 import { useView } from '#generated/fe.ts';
 import { useSettings } from '#generated/settings-fe.ts';
+import { useState } from '#generated/state-fe.ts';
 
-const { state: prompts, send } = useState<PromptsState>();
+const { state: prompts, send } = useState('prompts');
 const showingList = computed(() => prompts.value.at === 'list');
 const showingDetail = computed(() => prompts.value.at === 'detail');
 

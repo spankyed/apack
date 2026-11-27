@@ -33,7 +33,7 @@ export const TARGET_USAGE = [
   '                         a pack directory, or a directory of them (an app, a checkout)',
 ].join('\n');
 
-export type DbTarget = Pick<AppEnvironment, 'env' | 'userDataDir' | 'apiPortFile'> & {
+export type DbTarget = Pick<AppEnvironment, 'env' | 'userDataDir'> & {
   /** The command named this data dir (`--data-dir` or `--profile`) rather than taking the default */
   named: boolean;
   /** `--schema-from`: packs naming the entity types a data dir doesn't publish — a snapshot, a pack, or a directory of packs */
@@ -65,7 +65,7 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
     : undefined;
   const context = resolveAppEnvironment({ env, ...(userDataDir !== undefined && { userDataDir }) });
   const target: DbTarget = {
-    env, userDataDir: context.userDataDir, apiPortFile: context.apiPortFile, named: named.length === 1,
+    env, userDataDir: context.userDataDir, named: named.length === 1,
     ...(schemaFrom !== undefined && { schemaFrom: path.resolve(schemaFrom) }),
   };
   return { values: parsed.values as typeof parsed.values & Record<keyof O, unknown>, positionals: parsed.positionals, target };

@@ -1,18 +1,17 @@
 // A backend that is slow to answer: after half a minute the shell tells the user it cannot connect, and goes on
 // waiting. The clock says when to tell, and never that the backend will not come.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createActor, type Actor } from 'xstate';
-import { createShellMachine, type ShellMachine } from '../../../../src/fe/index.ts';
+import { createShell, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, surface } from './fakes.ts';
 
 let shell = fakeShell({ surfaces: [surface('default-setup/notes')] });
-let app: Actor<ShellMachine>;
+let app: ShellRuntime;
 
 beforeEach(() => {
   vi.useFakeTimers();
   shell = fakeShell({ surfaces: [surface('default-setup/notes')] });
   shell.client.describeConnection.mockResolvedValue('127.0.0.1 refused the connection');
-  app = createActor(createShellMachine(shell.options), { systemId: 'host/application', input: { ownsLastActiveSurface: true } }).start();
+  app = createShell(shell.options, { ownsLastActiveSurface: true }).start();
   shell.client.connect();
 });
 
@@ -36,7 +35,7 @@ it('takes the page down and carries on when the backend answers after that', asy
 
   backendAnswers();
 
-  expect(app.getSnapshot().value).toEqual({ running: 'connected' });
+  expect(app.getSnapshot().value).toBe('running.connected');
   expect(shell.notify.clearErrorPage).toHaveBeenCalledWith('Unable to connect');
 });
 

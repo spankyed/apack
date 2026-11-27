@@ -6,7 +6,7 @@ import { preparePack, packageJson, tsconfig } from './pack-builds.ts';
 export function runtimePack(root: string) {
   const modules = path.join(root, 'node_modules');
   fs.mkdirSync(modules);
-  for (const name of ['@apackdev', 'xstate']) {
+  for (const name of ['@apackdev']) {
     fs.symlinkSync(path.join(REPO_ROOT, 'node_modules', name), path.join(modules, name), 'dir');
   }
   const library = path.join(modules, 'borrowed');
@@ -21,7 +21,7 @@ export function runtimePack(root: string) {
     'apack.json': JSON.stringify({ id: 'runtime-consumer', name: 'Runtime Consumer', version: '1.0.0',
       features: { view: { description: 'Imported runtime value.', surface: { label: 'View', state: 'src/surface.ts' } } } }),
     'package.json': packageJson('runtime-consumer'), 'tsconfig.json': tsconfig,
-    'src/surface.ts': "import { createMachine } from 'xstate'; import { marker } from 'borrowed'; export default createMachine({ context: { marker } });",
+    'src/surface.ts': "import { state } from '@apackdev/state'; import { marker } from 'borrowed'; export default state<{ data: { marker: typeof marker } }>()({ data: { marker } });",
   }, modules);
   return { pack, helper, frontend: path.join(pack, 'dist/runtime/fe.js') };
 }
@@ -29,7 +29,7 @@ export function runtimePack(root: string) {
 export function vueRuntimePack(root: string, kind: 'inline' | 'external' | 'linked' = 'inline') {
   const consumer = runtimePack(root);
   const { pack } = consumer;
-  fs.writeFileSync(path.join(pack, 'src/surface.ts'), "import { createMachine } from 'xstate'; export default createMachine({});");
+  fs.writeFileSync(path.join(pack, 'src/surface.ts'), "import { state } from '@apackdev/state'; export default state()({});");
   const script = kind === 'external' ? '<script src="../../outside.ts" lang="ts"></script>'
     : '<script setup lang="ts">import { marker } from "borrowed";</script>';
   if (kind === 'external') fs.writeFileSync(path.join(root, 'outside.ts'), "import { marker } from 'borrowed'; export default { data: () => ({ marker }) };");

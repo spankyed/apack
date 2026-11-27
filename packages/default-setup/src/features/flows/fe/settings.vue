@@ -199,7 +199,7 @@
 
 <script setup lang="ts">
 import { AlertTriangle, Brain, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
+import { useSettingsDraft } from '@apackdev/sdk/fe'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
@@ -210,7 +210,7 @@ import { ref, computed, watch } from 'vue'
 import { useView } from '#generated/fe.ts'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
-import { type FlowsState } from './state.ts'
+import { useState } from '#generated/state-fe.ts'
 import { ref as featureRef } from '#generated/ref.ts'
 
 interface Props {
@@ -229,7 +229,7 @@ const emit = defineEmits<{
 const enableFlowPreview = useSettingsDraft(() => props.settings?.enableFlowPreview ?? true)
 
 // Get flows actor and state via selectors
-const { state: flowsMachine, send } = useState<FlowsState>()
+const { state: flowsMachine, send } = useState('flows')
 // The flows, and the root flow among them (the flow with the root role, not a setting): the list view
 const flowList = useView('flows', 'list')
 const flows = computed(() => flowList.data?.flows ?? [])

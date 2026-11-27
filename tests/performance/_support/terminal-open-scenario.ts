@@ -58,7 +58,7 @@ export async function terminalOpenScenario({ app, appPage, electronApp }: Parame
       const result = await appPage.evaluate(async ({ mode, fixtureId }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
-        const code = () => win.applicationState.system.get('default-setup/code').getSnapshot().context;
+        const code = () => win.applicationState.surface('default-setup/code').getSnapshot().context;
         await recording.start(mode);
 
         const before = code().panelTerminalId ?? null;
@@ -113,7 +113,7 @@ export async function terminalOpenScenario({ app, appPage, electronApp }: Parame
           win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/code', events: [{ type: 'terminal.CLOSE', terminalId }] });
         }, result.opened);
         await appPage.waitForFunction(terminalId =>
-          ((window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code')
+          ((window as unknown as PerformanceWindow).applicationState.surface('default-setup/code')
             .getSnapshot().context.panelTerminalId ?? null) !== terminalId, result.opened);
       }
     }

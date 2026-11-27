@@ -5,7 +5,9 @@ import { entry, keepAlive } from '#generated/flow-helpers.ts';
 import { repository } from '#generated/repository.ts';
 import { packSettings } from '#generated/settings.ts';
 import { services } from '#generated/services.ts';
-import { getAllFlowActorIds } from '#features/brain/be/flow-system.ts';
+
+const activeFlowIds = (app: TestApp) =>
+  Object.keys((app.system('brain').read().data as { flows?: Record<string, unknown> }).flows ?? {});
 
 const initialized = (app: TestApp) => app.flowSteps('Onboarding Flow').filter(step => step.label === 'setup onboarding' && step.status === 'completed');
 const thread = () => repository.threadQueries.idByRole('assistant_birth');
@@ -30,10 +32,10 @@ async function initializedOnce(app: TestApp) {
 it('starts on readiness without keys, once across connections and preference reset', async () => {
   const app = await start();
   expect(thread()).toBeUndefined();
-  const rootActors = getAllFlowActorIds().length;
+  const rootActors = activeFlowIds(app).length;
   await app.connect();
   await initializedOnce(app);
-  expect(getAllFlowActorIds()).toHaveLength(rootActors + 1);
+  expect(activeFlowIds(app)).toHaveLength(rootActors + 1);
   const first = thread();
   const state = structuredClone(progress());
   await app.connect();
@@ -42,7 +44,7 @@ it('starts on readiness without keys, once across connections and preference res
   await app.nextEmit('host/settings', 'ASK_ANSWERED', { answering: reset });
   await app.settle();
   expect(initialized(app)).toHaveLength(1);
-  expect(getAllFlowActorIds()).toHaveLength(rootActors + 1);
+  expect(activeFlowIds(app)).toHaveLength(rootActors + 1);
   expect(thread()).toBe(first);
   expect(progress()).toEqual(state);
   expect(packSettings.forGroup('assistant').get()).toEqual({ name: '' });
@@ -76,7 +78,7 @@ it('resumes existing progress after data replacement and explicit restart', asyn
   const first = thread();
   const state = structuredClone(progress());
   await app.send('brain', { type: 'DATA_REPLACED' });
-  expect(app.system('brain').getSnapshot().matches('stopped')).toBe(true);
+  expect(app.system('brain').read().at).toBe('stopped');
   await app.connect();
   expect(initialized(app)).toHaveLength(1);
   await app.send('brain', { type: 'START_BRAIN' });
@@ -122,12 +124,12 @@ it('keeps delayed readiness bound to its root across consecutive restarts', asyn
   await app.connect();
   await initializedOnce(app);
   const first = thread();
-  const actors = getAllFlowActorIds().length;
+  const actors = activeFlowIds(app).length;
   app.system('brain').send({ type: 'RESTART_BRAIN' });
   app.system('brain').send({ type: 'RESTART_BRAIN' });
   await app.settle();
   await expect.poll(() => initialized(app).length).toBe(2);
   expect(thread()).toBe(first);
-  expect(getAllFlowActorIds()).toHaveLength(actors);
+  expect(activeFlowIds(app)).toHaveLength(actors);
   expect(initialized(app)[1]?.result).toMatchObject({ created: false });
 });

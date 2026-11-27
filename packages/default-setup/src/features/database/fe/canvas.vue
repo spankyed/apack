@@ -50,10 +50,8 @@
 </template>
 
 <script setup lang="ts">
-import { useState, useSurface } from '@apackdev/sdk/fe'
-
 import { ref, onUnmounted } from 'vue'
-import type { DatabaseState } from './state.ts'
+import { useState } from '#generated/state-fe.ts'
 
 import SimpleTable from './components/simple-table/SimpleTable.vue'
 import SchemaPanel from './components/SchemaPanel.vue'
@@ -61,8 +59,7 @@ import QueryEditor from './components/QueryEditor.vue'
 import RunHistoryViewer from './components/runs/RunHistoryViewer.vue'
 import BackupRestore from './components/BackupRestore.vue'
 
-const databaseActor: DatabaseState = useSurface()
-const { state: database } = useState(databaseActor)
+const { state: database } = useState('database')
 
 // Active mode for query editor
 const activeMode = ref<'query' | 'examples'>('query')

@@ -80,15 +80,14 @@
 </template>
 
 <script setup lang="ts">
-import { useState } from '@apackdev/sdk/fe'
+import { useState } from '#generated/state-fe.ts'
 
 import { computed, ref, watch } from 'vue'
-import type { BrainState } from '#features/brain/fe/state.ts'
 import RunNodeListItem from '@apackdev/ui/components/RunNodeListItem'
 import type { RunTree } from '@apackdev/sdk/steps'
 import { tell } from '#generated/events.ts'
 
-const { state: brain } = useState<BrainState>();
+const { state: brain } = useState('brain');
 
 // Infinite scroll: show 50 items at a time
 const PAGE_SIZE = 50;

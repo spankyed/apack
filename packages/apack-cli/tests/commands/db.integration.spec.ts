@@ -153,9 +153,9 @@ async function ok(args: string[]) {
 const holdLock = (dir: string) =>
   fs.writeFileSync(path.join(_appDirOf(dir), 'app.lock'), JSON.stringify({ pid: process.pid, machine: os.hostname(), since: new Date().toISOString() }));
 
-/** What a running API publishes: its port and its process */
+/** What a running API publishes: its runtime record with its process id */
 function publishApi(dir: string): void {
-  fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port: 3001, pid: process.pid }));
+  fs.writeFileSync(path.join(_appDirOf(dir), 'api-runtime.json'), JSON.stringify({ pid: process.pid }));
 }
 
 describe('apack db query', () => {
@@ -500,7 +500,7 @@ describe('apack db exec', () => {
 
     /** An app on the data dir, as a tool finds one: what its API publishes */
     const runningApp = (dir: string) => {
-      fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port: 4321, pid: process.pid }));
+      fs.writeFileSync(path.join(_appDirOf(dir), 'api-runtime.json'), JSON.stringify({ pid: process.pid }));
     };
 
     it('refuses an invalid settings row as it commits, keeping what was there', async () => {

@@ -2,8 +2,7 @@ import { execFile } from 'child_process';
 import { ipcMain, powerMonitor, shell, utilityProcess } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { randomBytes, randomUUID } from 'crypto';
-import getPort, { clearLockedPorts } from 'get-port';
+import { randomUUID } from 'crypto';
 import { AppModule } from '../../AppModule.ts';
 import { MainModuleScope } from '../../MainModuleScope.ts';
 import {
@@ -30,6 +29,10 @@ export class ApiServer implements AppModule {
   private restartAttempts = 0;
   /** The current launch's forgiveness, pending: a launch that exits takes its own with it */
   private restartReset?: ReturnType<typeof setTimeout>;
+  /** Pending delayed restart timer scheduled after a crash exit, cancelled on reload/quit/start */
+  private restartTimer?: ReturnType<typeof setTimeout>;
+  /** In-flight `startApiServer()` promise so concurrent starts serialize across async orphan cleanup */
+  private starting?: Promise<void>;
   /**
    * The current startup's readiness, which `waitForReady` hands out. A crash before the API is ready restarts it
    * within the same startup, so the promise is renewed only once it has settled: the launch that becomes ready
@@ -38,26 +41,18 @@ export class ApiServer implements AppModule {
   private serverReady: Promise<void>;
   private serverReadyResolve?: () => void;
   private serverReadyReject?: (error: Error) => void;
-  private actualPort?: number;
-  /** The port the last successful launch used, reused on restart so the renderer's URL stays valid */
-  private preferredPort: number = API_CONFIG.DEFAULT_PORT;
+  private actualSocket?: string;
   private lastError?: { message: string; stack?: string };
   /** The reload in flight, so a rebuild arriving mid-reload joins it rather than starting a second API */
   private reloading?: Promise<void>;
   /** Whether the next readiness is a reload's, which `handleServerReady` consumes onto `api:started` */
   private announceReload = false;
   private readonly startupId = randomUUID();
-  /**
-   * The API's token for this app run: the API refuses connections and requests without it. The API process gets it
-   * in its environment, the app's windows through the preload (`api:token`); web pages in the in-app browser have
-   * no preload and never see it.
-   */
-  private readonly apiToken = randomBytes(32).toString('base64url');
 
   constructor() {
     process.env.APACK_STARTUP_ID = this.startupId;
     this.processManager = new ProcessManager({
-      onReady: (port) => this.handleServerReady(port),
+      onReady: (socket) => this.handleServerReady(socket),
       onExit: (code, signal) => this.handleProcessExit(code, signal),
       onError: (error) => this.handleProcessError(error),
     });
@@ -88,16 +83,12 @@ export class ApiServer implements AppModule {
       logInfo('App events log file location:', getLogger().getAppEventsLogPath());
     }
 
-    // The app's windows read the API token as their preload loads
-    ipcMain.on('api:token', (event) => { event.returnValue = this.apiToken; });
-
     // Direct MessagePort handoff between app windows and the API UtilityProcess
     ipcMain.on(API_PORT_CHANNELS.REQUEST, (event) => { this.portBroker.handleRequest(event); });
 
     // Let renderer query current API status on startup (avoids IPC race condition)
     ipcMain.handle('api:get-status', () => ({
       running: this.processManager.isRunning(),
-      port: this.actualPort,
       error: this.lastError,
       restartAttempts: this.restartAttempts,
       startupId: this.startupId,
@@ -135,8 +126,11 @@ export class ApiServer implements AppModule {
       if (this.shutdownComplete) return;
       event.preventDefault();
       this.isShuttingDown = true;
+      this.clearRestartTimer();
+      clearTimeout(this.restartReset);
       this.portBroker.onBackendStopped();
-      this.shutdown ??= this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT)
+      const stopProcess = () => this.processManager.stop(API_CONFIG.SHUTDOWN_TIMEOUT);
+      this.shutdown ??= (this.starting ? this.starting.catch(() => {}).then(stopProcess) : stopProcess())
         .catch(error => { logError('[MAIN] API shutdown failed; quitting without it:', error); })
         .then(() => {
           this.shutdownComplete = true;
@@ -146,18 +140,35 @@ export class ApiServer implements AppModule {
 
   }
 
-  private async startApiServer(): Promise<void> {
-    if (this.isShuttingDown || this.processManager.isRunning()) return;
+  private clearRestartTimer(): void {
+    if (this.restartTimer !== undefined) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
+  }
 
-    this.lastError = undefined; // Clear stale error so getStatus() doesn't report old crashes during restart
-    // A launch after the last one settled starts a new startup; a restart after a crash continues the current one
-    if (!this.serverReadyResolve) this.serverReady = this.createReadyPromise();
-    logInfo('[MAIN] Starting API server...');
-    broadcastEvent(API_EVENTS.STARTING);
+  private startApiServer(): Promise<void> {
+    if (this.starting) return this.starting;
+    if (this.isShuttingDown || this.processManager.isRunning()) return Promise.resolve();
+    this.clearRestartTimer();
 
-    const paths = getApiPaths();
-    await this.cleanupOrphanedApiChildren(paths.apiPath);
-    await this.launchApiServer(paths.apiPath);
+    this.starting = (async () => {
+      try {
+        this.lastError = undefined; // Clear stale error so getStatus() doesn't report old crashes during restart
+        // A launch after the last one settled starts a new startup; a restart after a crash continues the current one
+        if (!this.serverReadyResolve) this.serverReady = this.createReadyPromise();
+        logInfo('[MAIN] Starting API server...');
+        broadcastEvent(API_EVENTS.STARTING);
+
+        const paths = getApiPaths();
+        await this.cleanupOrphanedApiChildren(paths.apiPath);
+        if (this.isShuttingDown || this.processManager.isRunning()) return;
+        await this.launchApiServer(paths.apiPath);
+      } finally {
+        this.starting = undefined;
+      }
+    })();
+    return this.starting;
   }
 
   private async cleanupOrphanedApiChildren(apiPath: string): Promise<void> {
@@ -225,15 +236,7 @@ export class ApiServer implements AppModule {
       return;
     }
     logInfo('[MAIN] Server file found, proceeding with launch...');
-
-    // Prefer the port the renderer already knows. get-port locks a port it hands out for 15-30s,
-    // so asking for the same one again inside RESTART_DELAY falls back to a random port and leaves
-    // the renderer's WebSocket pointed at the old one. clearLockedPorts releases our own lock; if
-    // the port is genuinely taken, get-port still moves on.
-    clearLockedPorts();
-    const port = await getPort({ port: this.preferredPort });
     if (this.isShuttingDown) return;
-    logInfo(`[MAIN] Selected port ${port} for API server`);
 
     // Fork as an Electron UtilityProcess so the API runs on Electron's built-in Node 24 in both dev and production
     // and can receive brokered MessagePortMain channels directly from main.
@@ -246,8 +249,7 @@ export class ApiServer implements AppModule {
 
     const apiProcess = utilityProcess.fork(serverPath, [], {
       cwd: apiPath,
-      env: getEnvironment(port, {
-        apiToken: this.apiToken,
+      env: getEnvironment({
         startupId: this.startupId,
         logDir: getAppEnvironment().logsDir,
       }),
@@ -260,18 +262,15 @@ export class ApiServer implements AppModule {
     this.scheduleRestartResetTimeout();
   }
 
-  private handleServerReady(port: number): void {
-    this.actualPort = port;
-    this.preferredPort = port;
+  private handleServerReady(socket?: string): void {
+    this.actualSocket = socket;
     this.lastError = undefined;
-    logInfo(`[MAIN] API server is running on port ${port}`);
+    logInfo(socket ? `[MAIN] API server is ready (tool socket: ${socket})` : '[MAIN] API server is ready');
     const activeProcess = this.processManager.getProcess();
     if (activeProcess) this.portBroker.onBackendReady(activeProcess);
-    // `reloaded` says the old socket died on purpose, which is what lets the window resubscribe at once
-    // rather than wait out its client's backoff — see `reloadApiServer`
     const reloaded = this.announceReload;
     this.announceReload = false;
-    broadcastEvent(API_EVENTS.STARTED, { port, startupId: this.startupId, ...(reloaded && { reloaded: true }) });
+    broadcastEvent(API_EVENTS.STARTED, { startupId: this.startupId, ...(reloaded && { reloaded: true }) });
     
     if (this.serverReadyResolve) {
       this.serverReadyResolve();
@@ -292,14 +291,16 @@ export class ApiServer implements AppModule {
         message: errors[0].message,
         stack: errors.map(e => e.stack || e.message).join('\n\n'),
       };
-    } else {
-      this.lastError = { message: stderr || `Backend process exited unexpectedly (code ${code})` };
+    } else if (stderr) {
+      this.lastError = { message: stderr };
+    } else if (!this.lastError) {
+      this.lastError = { message: `Backend process exited unexpectedly (code ${code})` };
     }
     const willRestart = !this.isShuttingDown && this.restartAttempts < API_CONFIG.MAX_RESTART_ATTEMPTS;
     broadcastEvent(API_EVENTS.STOPPED, { error: this.lastError, restarting: willRestart });
 
     // Reset state
-    this.actualPort = undefined;
+    this.actualSocket = undefined;
 
     // Handle restart
     if (willRestart) {
@@ -311,7 +312,11 @@ export class ApiServer implements AppModule {
         startupId: this.startupId,
       });
 
-      setTimeout(() => this.startApiServer(), API_CONFIG.RESTART_DELAY);
+      this.clearRestartTimer();
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = undefined;
+        void this.startApiServer();
+      }, API_CONFIG.RESTART_DELAY);
     } else if (this.restartAttempts >= API_CONFIG.MAX_RESTART_ATTEMPTS) {
       // What the API said as it exited is what the user is shown: an unreadable database names its fix there
       const failure = this.lastError.message;
@@ -326,7 +331,11 @@ export class ApiServer implements AppModule {
   private handleProcessError(error: Error): void {
     this.lastError = { message: error.message, stack: error.stack };
     logError('[MAIN] Failed to start API server:', error);
-    broadcastEvent(API_EVENTS.ERROR, { error: error.message });
+    // Avoid broadcasting terminal `api:error` while automatic restarts can still recover; `handleProcessExit`
+    // drives recovery or broadcasts terminal `api:error` once restart attempts are exhausted.
+    if (!this.isShuttingDown && this.restartAttempts >= API_CONFIG.MAX_RESTART_ATTEMPTS) {
+      broadcastEvent(API_EVENTS.ERROR, { error: error.message });
+    }
   }
 
   /**
@@ -364,6 +373,9 @@ export class ApiServer implements AppModule {
   public reloadApiServer(): Promise<void> {
     this.reloading ??= (async () => {
       try {
+        this.clearRestartTimer();
+        clearTimeout(this.restartReset);
+        if (this.starting) await this.starting.catch(() => {});
         // Read by `handleServerReady`, which happens after this resolves — so it is a flag and not this
         // promise, however much one field would be tidier than two
         this.announceReload = true;
@@ -380,7 +392,7 @@ export class ApiServer implements AppModule {
   public getStatus(): {
     running: boolean;
     pid?: number;
-    port?: number;
+    socket?: string;
     restartAttempts: number;
     startupId: string;
     logPath: string;
@@ -390,7 +402,7 @@ export class ApiServer implements AppModule {
     return {
       running: this.processManager.isRunning(),
       pid: this.processManager.getPid(),
-      port: this.actualPort,
+      ...(this.actualSocket !== undefined ? { socket: this.actualSocket } : {}),
       restartAttempts: this.restartAttempts,
       startupId: this.startupId,
       logPath: getLogger().getLogPath(),

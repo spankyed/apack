@@ -4,8 +4,6 @@
 
 ```ts
 
-import { PromiseActorLogic } from 'xstate';
-
 // @public
 export const done: <TValue>(value: TValue) => Outcome<TValue, never>;
 
@@ -17,18 +15,6 @@ export type FailureOf<TOutcome> = TOutcome extends {
     readonly ok: false;
     readonly failure: infer TFailure;
 } ? TFailure : never;
-
-// @public
-export function fromOutcome<TValue, TFailure extends OutcomeFailure, TInput = undefined>(work: (args: {
-    readonly input: TInput;
-    readonly signal: AbortSignal;
-}) => PromiseLike<Outcome<TValue, TFailure>>): PromiseActorLogic<Outcome<TValue, TFailure>, TInput>;
-
-// @public
-export function onOutcome<TOutcome extends Outcome<unknown, OutcomeFailure>>(): <const TDone extends object, const TFailed extends { readonly [K in FailureOf<TOutcome>["kind"]]: object; }>(branches: {
-    readonly done: TDone;
-    readonly failed: TFailed & { readonly [K in Exclude<keyof TFailed, FailureOf<TOutcome>["kind"]>]: never; };
-}) => Array<OutcomeTransition<TDone | TFailed[keyof TFailed]>>;
 
 // @public
 export type Outcome<TValue, TFailure extends OutcomeFailure> = {
@@ -44,18 +30,6 @@ export interface OutcomeFailure {
     // (undocumented)
     readonly kind: string;
 }
-
-// @public
-export function outcomeOf<TOutcome extends Outcome<unknown, OutcomeFailure>>(event: {
-    readonly type: string;
-}): TOutcome;
-
-// @public
-export type OutcomeTransition<TBranch> = TBranch & {
-    readonly guard: (args: {
-        readonly event: unknown;
-    }) => boolean;
-};
 
 // @public
 export function safeEvents<TEvent extends {
