@@ -258,4 +258,45 @@ describe('host settings system (@apackdev/state)', () => {
       run.stop();
     }
   });
+
+  it('reconciles PACK_CHANGED arriving during resetting when AppDataBusyError returns to idle', async () => {
+    const featureTells: Array<{ to: string; event: Record<string, unknown> }> = [];
+    const stopIn = testRootEvents.onIncoming((msg) => featureTells.push({ to: msg.to, event: msg.event }));
+    const run = runSettingsSystem();
+    try {
+      let rejectBusy!: (err: Error) => void;
+      resetMock = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectBusy = reject; }));
+
+      const busyReset = { type: 'RESET_APP' as const };
+      bindSettingsRequest(busyReset, () => ({ kind: 'host', service: admin }));
+      run.broadcasts.length = 0;
+      run.sys.send(run.handle, busyReset);
+      expect(run.sys.read(run.handle).at).toBe('resetting');
+
+      // Register a second pack and send PACK_CHANGED while still resetting
+      registry.registerPack({
+        id: 'late-pack',
+        features: {
+          panel: { settings: { defaults: { mode: 'fast' }, schema: { type: 'object', properties: { mode: { type: 'string' } }, required: ['mode'] } } },
+        },
+      });
+      run.sys.send(run.handle, { type: 'PACK_CHANGED', packId: 'late-pack' });
+      expect(featureTells).toEqual([]);
+
+      // Reset never started (AppDataBusyError): returning to idle reconciles the pack change
+      rejectBusy(new AppDataBusyError('Another reset is running'));
+      await vi.waitFor(() => expect(run.sys.read(run.handle).at).toBe('idle'));
+
+      expect(run.broadcasts).toContainEqual({ to: HOST.settings, event: { type: 'APP_RESET_FAILED', error: 'Another reset is running' } });
+      expect(run.broadcasts.some((b) => b.event.type === 'SETTINGS_UPDATED')).toBe(true);
+      expect(featureTells).toContainEqual({
+        to: 'late-pack/panel',
+        event: expect.objectContaining({ type: 'FEATURE_SETTINGS_UPDATED', settings: { mode: 'fast' } }),
+      });
+    } finally {
+      run.stop();
+      stopIn();
+      if (registry.getPackRegistration('late-pack')) registry.unregisterPack('late-pack');
+    }
+  });
 });

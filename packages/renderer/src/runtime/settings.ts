@@ -51,7 +51,9 @@ function assertConnected(accepted: SettingsConnection): void {
 }
 
 function releaseCredential(credential: string): void {
-  void windowTransport.controlCall('settings.close', { credential }).catch(error => console.error('Could not release settings access', error));
+  // Only close on an already-open session; after transport teardown the server's `lane.onClose` has already
+  // revoked every lease on that connection, so we must never queue an orphaned `settings.close` onto the next session.
+  void windowTransport.tryControlCall('settings.close', { credential }).catch(error => console.error('Could not release settings access', error));
 }
 
 function snapshotReady(accepted: SettingsConnection, allowRecovery = false): Promise<void> {

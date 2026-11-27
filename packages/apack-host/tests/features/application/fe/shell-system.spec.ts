@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRenderer, defineComponent, h } from 'vue';
+import { createRenderer, defineComponent, h, nextTick, watch } from 'vue';
 import { forNet } from '@apackdev/state';
 import { vueBinding } from '@apackdev/state/vue';
 import type { Surface, SurfaceChrome, SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import type { ViewUpdate } from '@apackdev/sdk/framework';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
-import { createShell, HOST, type ShellRuntime } from '../../../../src/fe/index.ts';
+import { createShell, HOST, provideHostState, useHostState, type ShellRuntime } from '../../../../src/fe/index.ts';
 import { fakeShell, settle, surface as emptySurface } from './fakes.ts';
 
 const PACK_ID = 'notes-pack';
@@ -418,5 +418,93 @@ describe('frontend @apackdev/state shell system', () => {
     shell.stop();
     expect(notesExits).toBe(2);
     expect(boardExits).toBe(1);
+  });
+
+  it('stops surface handles synchronously before packFrontends.unload while preserving last snapshot across Vue unmount', async () => {
+    const order: string[] = [];
+    const notesState = buildNotesState({ onExit: () => { order.push('surface:exit'); } });
+    const notesSurface: Surface = {
+      id: NOTES_REF,
+      label: 'Notes',
+      state: notesState,
+      canvas: {},
+    };
+    const { fake, shell } = startFakeShell([emptySurface('host/packs'), notesSurface]);
+    fake.packFrontends.unload.mockImplementation(() => { order.push('packFrontends:unload'); });
+    await settle();
+
+    // Wrap vueBinding identically to generated #generated/state-fe & useHostState
+    const rawBinding = vueBinding<{ notes: typeof notesState }>((name) => resolveName(name, PACK_ID));
+    const usePackState: typeof rawBinding.useState = ((source: unknown) => {
+      const bound = (rawBinding.useState as (s: unknown) => { readonly state: { readonly value: unknown } })(source);
+      if (typeof source !== 'string') return bound;
+      let last: unknown = bound.state.value;
+      return {
+        ...bound,
+        state: {
+          __v_isRef: true,
+          __v_isReadonly: true,
+          get value() {
+            const now = bound.state.value;
+            if (now !== undefined) last = now;
+            return now !== undefined ? now : last;
+          },
+        },
+      };
+    }) as typeof rawBinding.useState;
+
+    const { createApp } = createRenderer<object, object>({
+      createElement: () => ({}),
+      createText: () => ({}),
+      createComment: () => ({}),
+      setText: () => {},
+      setElementText: () => {},
+      insert: () => {},
+      remove: () => {},
+      patchProp: () => {},
+      parentNode: () => null,
+      nextSibling: () => null,
+    });
+
+    const syncErrors: unknown[] = [];
+    let unmountedChild = false;
+    const ChildSurface = defineComponent({
+      setup() {
+        const { state: notes } = usePackState('notes');
+        watch(() => notes.value.data.selectedId, () => {}, { flush: 'sync' });
+        return () => {
+          // Accessing .at and .data must never observe undefined even right after synchronous sys.stop()
+          void notes.value.at;
+          void notes.value.data.selectedId;
+          return h('div');
+        };
+      },
+      unmounted() {
+        unmountedChild = true;
+      },
+    });
+    const Root = defineComponent({
+      setup() {
+        const { state: appState } = useHostState('application');
+        return () => (appState.value.data.surfaces.some((s) => s.id === NOTES_REF) ? h(ChildSurface) : null);
+      },
+    });
+
+    const app = createApp(Root);
+    app.config.errorHandler = (err) => syncErrors.push(err);
+    provideHostState(app, shell.system);
+    rawBinding.provide(app, shell.system);
+    app.mount({});
+
+    // Unload pack: surface handle must stop synchronously BEFORE packFrontends.unload runs
+    shell.send({ type: 'PACK_SURFACES_UNLOADED', packId: PACK_ID });
+    expect(shell.system.read({ ref: NOTES_REF })).toBeUndefined();
+    expect(order).toEqual(['surface:exit', 'packFrontends:unload']);
+
+    await nextTick();
+    expect(unmountedChild).toBe(true);
+    expect(syncErrors).toEqual([]);
+
+    app.unmount();
   });
 });

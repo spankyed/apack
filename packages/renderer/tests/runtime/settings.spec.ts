@@ -5,30 +5,35 @@ import { startFeTestRuntime } from '@apackdev/sdk/testing';
 import type { Message } from '@apackdev/sdk/events';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 
-const { linkSend, openHost, openPack, close, mutate } = vi.hoisted(() => ({
-  linkSend: vi.fn(async (_message: Message) => {}),
-  openHost: vi.fn(async () => ({ credential: 'host-access' })),
-  openPack: vi.fn(async (_input?: unknown) => ({ credential: 'pack-access' })),
-  close: vi.fn(async (_input: { credential: string }) => {}),
-  mutate: vi.fn(async (_input: { credential: string; event: Record<string, unknown>; sender?: string; call?: string; from?: string }) => {}),
-}));
+const { linkSend, openHost, openPack, close, mutate, sessionOpen, dispatchControl } = vi.hoisted(() => {
+  const linkSend = vi.fn(async (_message: Message) => {});
+  const openHost = vi.fn(async () => ({ credential: 'host-access' }));
+  const openPack = vi.fn(async (_input?: unknown) => ({ credential: 'pack-access' }));
+  const close = vi.fn(async (_input: { credential: string }) => {});
+  const mutate = vi.fn(async (_input: { credential: string; event: Record<string, unknown>; sender?: string; call?: string; from?: string }) => {});
+  const sessionOpen = { current: true };
+  const dispatchControl = (method: string, input?: unknown) => {
+    switch (method) {
+      case 'settings.openHost': return openHost();
+      case 'settings.openPack': return openPack(input as never);
+      case 'settings.close': return close(input as never);
+      case 'settings.mutate': return mutate(input as never);
+      default: return Promise.reject(new Error(`Unexpected method: ${method}`));
+    }
+  };
+  return { linkSend, openHost, openPack, close, mutate, sessionOpen, dispatchControl };
+});
 vi.mock('@/transport', () => ({
   windowTransport: {
     linkSend,
-    controlCall: (method: string, input?: unknown) => {
-      switch (method) {
-        case 'settings.openHost': return openHost();
-        case 'settings.openPack': return openPack(input as never);
-        case 'settings.close': return close(input as never);
-        case 'settings.mutate': return mutate(input as never);
-        default: return Promise.reject(new Error(`Unexpected method: ${method}`));
-      }
-    },
+    controlCall: dispatchControl,
+    tryControlCall: (method: string, input?: unknown) =>
+      sessionOpen.current ? dispatchControl(method, input) : Promise.resolve(undefined),
   },
 }));
 import { windowSettings, settingsPort, connectWindowSettings, disconnectWindowSettings, settingsForPack } from '../../src/runtime/settings';
 
-afterEach(async () => { disconnectWindowSettings(); await flush(); vi.clearAllMocks(); });
+afterEach(async () => { sessionOpen.current = true; disconnectWindowSettings(); await flush(); vi.clearAllMocks(); });
 const snapshot: SettingsSnapshot = {
   runId: 'test-run', revision: 0, status: 'ready',
   values: { app: { hotkeys: {}, personal: {}, projects: [] }, packs: { example: { assistant: { name: 'Ada' } } }, features: { 'example/code': { limit: 3 } } },
@@ -130,4 +135,12 @@ it('does not report a dropped bootstrap as a new connected shell', async () => {
   expect(await ready).toBe(false);
   await flush();
   expect(linkSend).not.toHaveBeenCalled();
+});
+
+it('does not queue settings.close when disconnecting after transport teardown', async () => {
+  await connect();
+  sessionOpen.current = false;
+  disconnectWindowSettings();
+  await flush();
+  expect(close).not.toHaveBeenCalled();
 });

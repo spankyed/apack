@@ -108,9 +108,7 @@ export const _SERIALISATION_MATRIX = {
     loop: '{"id":"x","self":"[circular]"}',
     repeated: '{"left":{"id":"s"},"right":{"id":"s"}}',
     date: '{"at":"2026-01-02T03:04:05.000Z"}',
-    // The placeholder frame keeps the message's `id` so a reader can tie it to the request, and the input's own
-    // `id` is read as one — which is what this cell shows rather than a collision to design away
-    unreadable: '{"id":"x","jsonrpc":"2.0","result":{"data":"[unserialisable]","type":"data"}}',
+    unreadable: _THROWS,
     fn: '{}',
     absent: '{}',
   },

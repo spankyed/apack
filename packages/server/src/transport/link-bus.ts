@@ -42,7 +42,14 @@ import {
   LINK_CLAIM_CONFLICT,
 } from '@apackdev/host/transport/link-protocol';
 import type { ViewHost } from '@apackdev/host/views';
-import { newCall, type Message } from '@apackdev/sdk/events';
+import {
+  _askEnded,
+  _askSignal,
+  _clientOf,
+  _currentDelivery,
+  newCall,
+  type Message,
+} from '@apackdev/sdk/events';
 import { splitRef } from '@apackdev/sdk/ids';
 import { createLogger } from '@apackdev/sdk/logger';
 import { _withPerformanceCarrier } from '@apackdev/sdk/runtime';
@@ -205,17 +212,49 @@ export function createLinkBus(deps: LinkBusDeps): Accepting<string> {
 
         const payload = isPlainObject(args) ? args : {};
         const incomingEvent = { ...payload, type: name };
+        const call = newCall();
         return _withPerformanceCarrier(diagnostics, () =>
           deliverAs(
-            { to, client: connectionId, call: newCall(), ...(diagnostics ? { diagnostics } : {}) },
+            { to, client: connectionId, call, ...(diagnostics ? { diagnostics } : {}) },
             incomingEvent,
-            () => backendBus.port.ask(
-              to,
-              name,
-              args,
-              (update) => heard(update),
-              (outcome) => endedCb(outcome),
-            ),
+            () => {
+              const signal = _askSignal(call, _clientOf(_currentDelivery()));
+              if (signal.aborted) {
+                _askEnded(call);
+                endedCb({ ok: false, failure: { kind: 'unavailable', message: 'Connection ended' } });
+                return () => {};
+              }
+              let settled = false;
+              let cancel: (() => void) | undefined;
+              const onAbort = () => {
+                cancel?.();
+              };
+              const finish = (outcome: Parameters<typeof endedCb>[0]) => {
+                if (settled) return;
+                settled = true;
+                signal.removeEventListener('abort', onAbort);
+                _askEnded(call);
+                endedCb(outcome);
+              };
+              cancel = backendBus.port.ask(
+                to,
+                name,
+                args,
+                (update) => { if (!settled && !signal.aborted) heard(update); },
+                finish,
+              );
+              if (!settled) {
+                if (signal.aborted) cancel();
+                else signal.addEventListener('abort', onAbort, { once: true });
+              }
+              return () => {
+                if (settled) return;
+                settled = true;
+                signal.removeEventListener('abort', onAbort);
+                _askEnded(call);
+                cancel?.();
+              };
+            },
             { kinds, taken: true },
           ),
         );

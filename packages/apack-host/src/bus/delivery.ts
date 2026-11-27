@@ -35,7 +35,9 @@ import { _replyTo, _runDelivery, _unavailable, type _AskDelivery, type _Asker, t
  * is a return address a sender cannot forge into pointing at someone else's window.
  */
 function askerOf({ sender, client }: Pick<Message, 'sender' | 'client'>): _Asker | undefined {
-  if (sender === undefined) return undefined;
+  if (sender === undefined) {
+    return client === undefined ? undefined : { kind: 'connection', ref: '', client };
+  }
   return client === undefined ? { kind: 'bus', ref: sender } : { kind: 'connection', ref: sender, client };
 }
 
@@ -60,6 +62,7 @@ export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' |
  * answer, and is left as an event nobody handled.
  */
 export function answerUnavailable(message: Pick<Message, 'to' | 'sender' | 'client' | 'call' | 'event'>, why: string): void {
+  if (message.sender === undefined) return;
   const reply = _replyTo({ receiver: message.to, asker: askerOf(message), ...(message.call === undefined ? {} : { call: message.call }) });
   reply?.(_unavailable(message.event.type, why));
 }

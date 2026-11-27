@@ -35,6 +35,7 @@ vi.mock('@/transport', () => ({
   windowTransport: {
     subscribe: subscribeTransport,
     controlCall,
+    tryControlCall: controlCall,
     controlSubscribe,
     linkSend,
     linkAsk,

@@ -4,12 +4,15 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { port as wrapMessagePort } from '@apackdev/link';
+import { createParticipantClaims, HOST } from '@apackdev/host/bus';
 import type { PackCatalogFrame } from '@apackdev/host/packs';
-import { SettingsRefusedError } from '@apackdev/host/settings';
+import { createSettingsAccess, settingsRequestAccess, SettingsRefusedError } from '@apackdev/host/settings';
 import { ControlRpcError, muxTransport } from '@apackdev/host/transport/mux';
 import { createHostControlClient } from '@apackdev/host/transport/control-contract';
 import { connectToolClient, inspectApiRuntime, readApiRuntime } from '@apackdev/host/transport/tool-client';
 import { runtimeFilePath } from '@apackdev/host/transport/tool-socket';
+import type { Message } from '@apackdev/sdk/events';
+import { bindHost } from '@apackdev/sdk/runtime';
 import {
   createLifecycleBridge,
   type LifecycleProcess,
@@ -17,7 +20,8 @@ import {
   type UtilityParentPort,
 } from '../../src/boot/lifecycle.ts';
 import type { HostControlServerDeps } from '../../src/transport/control-rpc.ts';
-import { startHostTransport, type HostTransport } from '../../src/transport/tool-server.ts';
+import { RootEventEmitter } from '../../src/transport/emitter.ts';
+import { createRuntimeSettingsControlDeps, startHostTransport, type HostTransport } from '../../src/transport/tool-server.ts';
 
 const isPosix = process.platform !== 'win32';
 const cleanupDirs: string[] = [];
@@ -391,7 +395,8 @@ describe('startHostTransport end-to-end wiring', () => {
     const rendererControl = createHostControlClient(rendererMux.control);
 
     const { credential } = await rendererControl.call('settings.openHost');
-    expect(harness.leases.get(credential)).toBe('window:42:1');
+    const connId = harness.leases.get(credential);
+    expect(connId).toMatch(/^window:42:1:/);
 
     // Window destruction triggers window-gone -> disposes control server, releases leases, closes port
     portEmitter.emit('message', {
@@ -401,7 +406,7 @@ describe('startHostTransport end-to-end wiring', () => {
     expect(goneWindows).toEqual([42]);
     expect(transport.activeWindowCount).toBe(0);
     expect(harness.leases.size).toBe(0);
-    expect(harness.releasedConnections).toContain('window:42:1');
+    expect(harness.releasedConnections).toContain(connId);
 
     await vi.waitFor(() => {
       expect(rendererMux.control.closed).toBe(true);
@@ -431,7 +436,8 @@ describe('startHostTransport end-to-end wiring', () => {
     const mux1 = muxTransport(wrapMessagePort(rendererPort1));
     const ctrl1 = createHostControlClient(mux1.control);
     const { credential: cred1 } = await ctrl1.call('settings.openHost');
-    expect(harness.leases.get(cred1)).toBe('window:7:1');
+    const connId1 = harness.leases.get(cred1);
+    expect(connId1).toMatch(/^window:7:1:/);
 
     // Soft reload hands over a fresh port for the same windowId with generation 2
     const [serverPort2, rendererPort2] = createMessagePortPair();
@@ -441,17 +447,154 @@ describe('startHostTransport end-to-end wiring', () => {
     });
     expect(transport.activeWindowCount).toBe(1);
     expect(harness.leases.has(cred1)).toBe(false);
-    expect(harness.releasedConnections).toContain('window:7:1');
+    expect(harness.releasedConnections).toContain(connId1);
 
     const mux2 = muxTransport(wrapMessagePort(rendererPort2));
     const ctrl2 = createHostControlClient(mux2.control);
     const { credential: cred2 } = await ctrl2.call('settings.openHost');
-    expect(harness.leases.get(cred2)).toBe('window:7:2');
+    const connId2 = harness.leases.get(cred2);
+    expect(connId2).toMatch(/^window:7:2:/);
+    expect(connId2).not.toBe(connId1);
 
     await vi.waitFor(() => expect(mux1.control.closed).toBe(true));
     ctrl1.dispose();
     ctrl2.dispose();
     mux2.close();
+  });
+
+  it('mints distinct connectionIds when the same (windowId, generation) reattaches on soft reload', async () => {
+    const appDir = makeTempDir('window-same-gen-');
+    const { bridge, portEmitter } = createFakeLifecycle();
+    const harness = createHarnessDeps({ enableDev: false });
+
+    const transport = trackTransport(await startHostTransport({
+      appDir,
+      appEnv: 'production',
+      env: {},
+      token: 'tok',
+      lifecycle: bridge,
+      createControlDeps: harness.factory,
+    }));
+
+    const [serverPort1, rendererPort1] = createMessagePortPair();
+    portEmitter.emit('message', {
+      data: { type: 'window-port', windowId: 9, generation: 1 },
+      ports: [serverPort1],
+    });
+    const mux1 = muxTransport(wrapMessagePort(rendererPort1));
+    const ctrl1 = createHostControlClient(mux1.control);
+    const { credential: cred1 } = await ctrl1.call('settings.openHost');
+    const connId1 = harness.leases.get(cred1);
+    expect(connId1).toMatch(/^window:9:1:/);
+
+    // Same (windowId, generation) reattaches (renderer soft-reload without backend restart)
+    const [serverPort2, rendererPort2] = createMessagePortPair();
+    portEmitter.emit('message', {
+      data: { type: 'window-port', windowId: 9, generation: 1 },
+      ports: [serverPort2],
+    });
+    expect(transport.activeWindowCount).toBe(1);
+    expect(harness.leases.has(cred1)).toBe(false);
+    expect(harness.releasedConnections).toContain(connId1);
+
+    const mux2 = muxTransport(wrapMessagePort(rendererPort2));
+    const ctrl2 = createHostControlClient(mux2.control);
+    const { credential: cred2 } = await ctrl2.call('settings.openHost');
+    const connId2 = harness.leases.get(cred2);
+    expect(connId2).toMatch(/^window:9:1:/);
+    expect(connId2).not.toBe(connId1);
+
+    await vi.waitFor(() => expect(mux1.control.closed).toBe(true));
+    ctrl1.dispose();
+    ctrl2.dispose();
+    mux2.close();
+  });
+
+  it('enforces live settings.mutate allowlist, sender validation, credential refusal, and request binding', async () => {
+    const appDir = makeTempDir('live-settings-mutate-');
+    const shortTmp = makeShortTmpDir();
+    const { bridge } = createFakeLifecycle();
+    const emitter = new RootEventEmitter();
+    const incoming: Message[] = [];
+    emitter.onIncoming((msg) => incoming.push(msg));
+    bindHost({ transport: { rootEvents: emitter } } as never);
+
+    const claims = createParticipantClaims();
+    const packs = {
+      getEventValidationMap: () => new Map([
+        [HOST.settings, new Set(['GET_SETTINGS', 'UPDATE_SETTINGS', 'RESET_SETTINGS', 'RESET_APP'])],
+      ]),
+      getSurfaceEventValidationMap: () => new Map([
+        [HOST.settings, new Set(['SETTINGS_LOADED'])],
+      ]),
+      askKinds: () => undefined,
+    };
+    const fakeService = {
+      get: () => undefined,
+      set: () => {},
+      reset: () => {},
+      resetAll: () => {},
+      replaceAll: () => {},
+      recover: () => {},
+    };
+    const access = createSettingsAccess(fakeService as never, () => null);
+    const harness = createHarnessDeps({ enableDev: false });
+    const liveSettings = createRuntimeSettingsControlDeps({ packs, claims, access });
+
+    trackTransport(await startHostTransport({
+      appDir,
+      appEnv: 'development',
+      env: {},
+      tmpDir: shortTmp,
+      token: 'settings-token',
+      lifecycle: bridge,
+      createControlDeps: (connectionId) => ({
+        ...harness.factory(connectionId),
+        settings: liveSettings,
+      }),
+    }));
+
+    await using client = await connectToolClient({ appDir });
+    const { credential } = await client.control.call('settings.openHost');
+
+    // Allowlist rejection (GET_SETTINGS is not in SETTINGS_MUTATIONS)
+    await expect(client.control.call('settings.mutate', {
+      credential,
+      event: { type: 'GET_SETTINGS' },
+    })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    // Invalid meta.sender rejection
+    await expect(client.control.call('settings.mutate', {
+      credential,
+      event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Ada' },
+      sender: 'no-pack/ghost',
+    })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    // Invalid credential refusal
+    await expect(client.control.call('settings.mutate', {
+      credential: 'forged-credential',
+      event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Ada' },
+      sender: HOST.settings,
+    })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    // Valid mutation binds settings request authority onto the delivered event and routes to HOST.settings
+    await client.control.call('settings.mutate', {
+      credential,
+      event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Ada' },
+      sender: HOST.settings,
+      call: 'call-live-1',
+    });
+
+    expect(incoming).toHaveLength(1);
+    expect(incoming[0]).toMatchObject({
+      to: HOST.settings,
+      sender: HOST.settings,
+      call: 'call-live-1',
+      event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Ada' },
+    });
+    expect(incoming[0]!.client).toMatch(/^tool:/);
+    // Verify the live request binding resolves to host admin service
+    expect(settingsRequestAccess(incoming[0]!.event)).toEqual({ kind: 'host', service: fakeService });
   });
 
   it('exposes the local tool socket when APACK_TOOL_SOCKET=1 in production while still refusing dev.* operations', async () => {

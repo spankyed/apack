@@ -122,9 +122,18 @@ export function decodeBusSendPayload(
   return decodeBusEnvelope(to, payload, diagnostics);
 }
 
+function fitsCauseLimit(encoded: string): boolean {
+  if (encoded.length > MAX_CAUSE_BYTES) return false;
+  const wire = JSON.stringify(encoded);
+  if (wire.length > MAX_CAUSE_BYTES) return false;
+  return utf8Encoder.encode(wire).byteLength <= MAX_CAUSE_BYTES;
+}
+
 /**
  * Encodes an ephemeral `PerformanceCarrier` into a bounded `@apackdev/link` `Sending.cause` string.
- * Returns `undefined` when no traceparent is present or the serialized carrier exceeds 1024 bytes.
+ * Bounds the outer JSON-escaped UTF-8 wire representation (`JSON.stringify(cause)`) to `<= 1024` bytes,
+ * falling back to `{ traceparent }` alone when adding `tracestate` would exceed the limit, or `undefined`
+ * if even `{ traceparent }` exceeds the limit.
  */
 export function encodeDiagnosticCause(carrier?: PerformanceCarrier): string | undefined {
   if (!carrier) return undefined;
@@ -135,11 +144,12 @@ export function encodeDiagnosticCause(carrier?: PerformanceCarrier): string | un
     ...(traceparent !== undefined ? { traceparent } : {}),
     ...(tracestate !== undefined ? { tracestate } : {}),
   });
-  if (encoded.length > MAX_CAUSE_BYTES) return undefined;
-  if (encoded.length * 3 > MAX_CAUSE_BYTES && utf8Encoder.encode(encoded).byteLength > MAX_CAUSE_BYTES) {
-    return undefined;
+  if (fitsCauseLimit(encoded)) return encoded;
+  if (traceparent !== undefined && tracestate !== undefined) {
+    const traceparentOnly = JSON.stringify({ traceparent });
+    if (fitsCauseLimit(traceparentOnly)) return traceparentOnly;
   }
-  return encoded;
+  return undefined;
 }
 
 /** Returns `{ cause }` for `@apackdev/link`'s `Sending` parameter when a carrier is active, else `undefined`. */

@@ -41,9 +41,17 @@ function withoutCycles(value: unknown, path: WeakSet<object>): unknown {
 }
 
 /** The message id, when the value carries one — what ties a report back to its request. */
-const frameId = (data: unknown): { id?: unknown } => {
-  const id = (data as { id?: unknown })?.id;
-  return id === undefined ? {} : { id };
+const frameId = (data: unknown): { id?: string } => {
+  if (data === null || typeof data !== 'object') return {};
+  try {
+    const id = (data as { id?: unknown }).id;
+    if (typeof id === 'string') return { id };
+    if (typeof id === 'number' || typeof id === 'boolean') return { id: String(id) };
+    if (typeof id === 'bigint') return { id: id.toString() };
+    return {};
+  } catch {
+    return {};
+  }
 };
 
 /**

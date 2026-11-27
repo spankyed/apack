@@ -8,12 +8,12 @@
 // What these cases cover is the serialising, which is the half that was broken. The other half, a write that
 // fails, is `appendCappedLine`'s and is covered where it lives — a case here could not fail, which a mutation
 // showed: with the appender's own swallow in place, nothing this file does can make the write throw.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { LogEvent } from '@apackdev/sdk/logger';
-import { rootEvents } from '../../src/transport/emitter.ts';
+import { RootEventEmitter, rootEvents } from '../../src/transport/emitter.ts';
 
 let logDir: string;
 let previous: string | undefined;
@@ -100,5 +100,41 @@ describe('an ordinary log event', () => {
     const line = JSON.parse(written()[0]);
     expect(line).toMatchObject({ level: 'info', message: 'plain', source: 'memos' });
     expect(typeof line.timestamp, 'so a reader can order them').toBe('string');
+  });
+});
+
+describe('RootEventEmitter.emitConnectionEnded', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('isolates exceptions across connection-ended listeners so every holder releases its resources', () => {
+    const emitter = new RootEventEmitter();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const calls: string[] = [];
+
+    emitter.onConnectionEnded((client) => {
+      calls.push(`first:${client}`);
+      throw new Error('claim registry boom');
+    });
+    emitter.onConnectionEnded((client) => {
+      calls.push(`second:${client}`);
+    });
+    emitter.onConnectionEnded((client) => {
+      calls.push(`third:${client}`);
+      throw new Error('terminal grid boom');
+    });
+    emitter.onConnectionEnded((client) => {
+      calls.push(`fourth:${client}`);
+    });
+
+    expect(() => emitter.emitConnectionEnded('window:1:1:abc')).not.toThrow();
+    expect(calls).toEqual([
+      'first:window:1:1:abc',
+      'second:window:1:1:abc',
+      'third:window:1:1:abc',
+      'fourth:window:1:1:abc',
+    ]);
+    expect(errorSpy).toHaveBeenCalledTimes(2);
   });
 });

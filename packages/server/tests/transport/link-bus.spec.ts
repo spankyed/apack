@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dial, join, memoryPair, type Port } from '@apackdev/link';
+import { state, system as createStateSystem } from '@apackdev/state';
 import { createParticipantClaims, HOST, type BackendBus } from '@apackdev/host/bus';
 import {
   BUS_CLAIM_ASK,
@@ -12,7 +13,7 @@ import {
   LINK_CLAIM_CONFLICT,
 } from '@apackdev/host/transport/link-protocol';
 import type { ViewHost } from '@apackdev/host/views';
-import type { Message } from '@apackdev/sdk/events';
+import { currentClient, type Message } from '@apackdev/sdk/events';
 import type { ViewUpdate } from '@apackdev/sdk/framework';
 import { bindHost } from '@apackdev/sdk/runtime';
 import { RootEventEmitter } from '../../src/transport/emitter.ts';
@@ -236,6 +237,57 @@ describe('createLinkBus (@apackdev/link bus hub)', () => {
     await vi.waitFor(() => expect(resolvePending).toBeDefined());
     cancel();
     await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+  });
+
+  it('preserves currentClient() and aborts on disconnect for native @apackdev/link asks', async () => {
+    let observedClient: string | undefined;
+    let askAborted = false;
+    let releaseAsk: (() => void) | undefined;
+
+    type AskDefs = {
+      ENTITY_EXISTS: { args: { id: string }; answer: { exists: boolean; client?: string } };
+    };
+    const appState = state<{}, never, AskDefs>()({
+      answers: {
+        ENTITY_EXISTS: async (args, { signal }) => {
+          observedClient = currentClient();
+          if (args.id === 'hold') {
+            await new Promise<void>((resolve) => {
+              releaseAsk = resolve;
+              signal.addEventListener('abort', () => {
+                askAborted = true;
+                resolve();
+              }, { once: true });
+            });
+          }
+          return { exists: true, client: observedClient };
+        },
+      },
+    });
+
+    const sys = createStateSystem({ side: 'backend' });
+    sys.start(HOST.application, appState);
+    cleanups.push(() => sys.stop());
+
+    const liveBus = {
+      getSystem: (id: string) => (id === HOST.application ? {} : undefined),
+      port: sys.port,
+    } as unknown as BackendBus;
+
+    const { connectClient, acceptor } = setup({ bus: liveBus });
+    const client = connectClient('window:31:1:session-a');
+
+    const immediate = await askPromise(client.remote, HOST.application, 'ENTITY_EXISTS', { id: 'fast' });
+    expect(immediate).toEqual({ ok: true, value: { exists: true, client: 'window:31:1:session-a' } });
+    expect(observedClient).toBe('window:31:1:session-a');
+
+    // Start a long-running native ask and disconnect the link -> handler's AbortSignal must abort
+    client.remote.ask(HOST.application, 'ENTITY_EXISTS', { id: 'hold' }, () => {}, () => {});
+    await vi.waitFor(() => expect(releaseAsk).toBeDefined());
+    expect(askAborted).toBe(false);
+
+    acceptor.gone('window:31:1:session-a');
+    await vi.waitFor(() => expect(askAborted).toBe(true));
   });
 
   it('streams EARS view updates via follow and stops watches on unfollow or link close', async () => {

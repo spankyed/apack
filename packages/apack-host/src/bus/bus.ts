@@ -43,6 +43,171 @@ type StateEvent = { type: string; [key: string]: unknown };
 
 const ROLE_PEERS = ['role:brain', 'role:code'] as const;
 
+/** Internal bus events accepted via `INCOMING` messages addressed to `HOST.bus`. */
+const ALLOWED_INCOMING_BUS_EVENTS = new Set<string>([
+  'PACK_CHANGED',
+  'DATA_REPLACED',
+  'DATA_CHANGED_ELSEWHERE',
+]);
+
+type LooseFn = (...args: any[]) => unknown;
+type LooseDef = {
+  data?: Record<string, unknown>;
+  initial?: string;
+  on?: Record<string, LooseFn>;
+  internal?: Record<string, LooseFn>;
+  answers?: Record<string, LooseFn>;
+  listen?: LooseFn;
+  run?: LooseFn;
+  failed?: LooseFn;
+  states?: Record<string, LooseDef>;
+  starts?: (start: LooseFn) => Record<string, unknown>;
+  follows?: (follow: LooseFn) => Record<string, Record<string, unknown>>;
+  loads?: (load: LooseFn) => Record<string, Record<string, unknown>>;
+  calls?: (calls: { one: LooseFn; each: LooseFn; many: LooseFn }) => Record<string, Record<string, unknown>>;
+};
+
+function wrapScope(senderRef: string, scope: any, tagEvent: (event: unknown, ref: string) => unknown): any {
+  if (!scope || typeof scope !== 'object') return scope;
+  const wrapped = Object.create(scope);
+  if (typeof scope.broadcast === 'function') {
+    wrapped.broadcast = (to: string, event: unknown) => {
+      scope.broadcast(to, tagEvent(event, senderRef));
+    };
+  }
+  if (typeof scope.tell === 'function') {
+    wrapped.tell = (to: unknown, event: unknown) => {
+      const tagged = typeof to === 'object' && to !== null && 'peer' in to
+        && typeof (to as { peer?: unknown }).peer === 'string'
+        && (to as { peer: string }).peer.startsWith('role:')
+        ? tagEvent(event, senderRef)
+        : event;
+      scope.tell(to, tagged);
+    };
+  }
+  return wrapped;
+}
+
+function invokeInSystemScope<T>(senderRef: string, event: unknown, run: () => T): T {
+  if (_currentDelivery()?.receiver === senderRef) return run();
+  const evObj = event !== null && typeof event === 'object' ? (event as object) : {};
+  return deliverAs({ to: senderRef }, evObj, run);
+}
+
+function wrapTwoArgHandler(senderRef: string, fn: LooseFn, tagEvent: (event: unknown, ref: string) => unknown): LooseFn {
+  return (first: unknown, scope: unknown) =>
+    invokeInSystemScope(senderRef, first, () => fn(first, wrapScope(senderRef, scope, tagEvent)));
+}
+
+function wrapHandlerRecord(
+  senderRef: string,
+  record: Record<string, LooseFn> | undefined,
+  tagEvent: (event: unknown, ref: string) => unknown,
+): Record<string, LooseFn> | undefined {
+  if (!record) return undefined;
+  const next: Record<string, LooseFn> = {};
+  for (const [key, fn] of Object.entries(record)) {
+    next[key] = typeof fn === 'function' ? wrapTwoArgHandler(senderRef, fn, tagEvent) : fn;
+  }
+  return next;
+}
+
+function instrumentDef(senderRef: string, def: LooseDef, tagEvent: (event: unknown, ref: string) => unknown): LooseDef {
+  const next: LooseDef = { ...def };
+  if (def.on) next.on = wrapHandlerRecord(senderRef, def.on, tagEvent);
+  if (def.internal) next.internal = wrapHandlerRecord(senderRef, def.internal, tagEvent);
+  if (def.answers) next.answers = wrapHandlerRecord(senderRef, def.answers, tagEvent);
+  if (typeof def.run === 'function') {
+    const origRun = def.run;
+    next.run = (scope: unknown) =>
+      invokeInSystemScope(senderRef, {}, () => origRun(wrapScope(senderRef, scope, tagEvent)));
+  }
+  if (typeof def.failed === 'function') {
+    const origFailed = def.failed;
+    next.failed = (error: unknown, scope: unknown) =>
+      invokeInSystemScope(senderRef, {}, () => origFailed(error, wrapScope(senderRef, scope, tagEvent)));
+  }
+  if (typeof def.listen === 'function') {
+    const origListen = def.listen;
+    next.listen = (scope: unknown) => origListen(wrapScope(senderRef, scope, tagEvent));
+  }
+  if (typeof def.follows === 'function') {
+    const origFollows = def.follows;
+    next.follows = (follow: LooseFn) => {
+      const specs = origFollows(follow);
+      const wrapped: Record<string, Record<string, unknown>> = {};
+      for (const [key, spec] of Object.entries(specs)) {
+        wrapped[key] = typeof spec.updated === 'function'
+          ? { ...spec, updated: wrapTwoArgHandler(senderRef, spec.updated as LooseFn, tagEvent) }
+          : spec;
+      }
+      return wrapped;
+    };
+  }
+  if (typeof def.loads === 'function') {
+    const origLoads = def.loads;
+    next.loads = (load: LooseFn) => {
+      const specs = origLoads(load);
+      const wrapped: Record<string, Record<string, unknown>> = {};
+      for (const [key, spec] of Object.entries(specs)) {
+        wrapped[key] = {
+          ...spec,
+          ...(typeof spec.done === 'function' ? { done: wrapTwoArgHandler(senderRef, spec.done as LooseFn, tagEvent) } : {}),
+          ...(typeof spec.progress === 'function' ? { progress: wrapTwoArgHandler(senderRef, spec.progress as LooseFn, tagEvent) } : {}),
+        };
+      }
+      return wrapped;
+    };
+  }
+  if (typeof def.calls === 'function') {
+    const origCalls = def.calls;
+    next.calls = (calls) => {
+      const specs = origCalls(calls);
+      const wrapped: Record<string, Record<string, unknown>> = {};
+      for (const [key, spec] of Object.entries(specs)) {
+        wrapped[key] = {
+          ...spec,
+          ...(typeof spec.done === 'function' ? { done: wrapTwoArgHandler(senderRef, spec.done as LooseFn, tagEvent) } : {}),
+          ...(typeof spec.progress === 'function' ? { progress: wrapTwoArgHandler(senderRef, spec.progress as LooseFn, tagEvent) } : {}),
+        };
+      }
+      return wrapped;
+    };
+  }
+  if (def.states) {
+    const wrappedStates: Record<string, LooseDef> = {};
+    for (const [name, childDef] of Object.entries(def.states)) {
+      wrappedStates[name] = instrumentDef(senderRef, childDef, tagEvent);
+    }
+    next.states = wrappedStates;
+  }
+  if (typeof def.starts === 'function') {
+    const origStarts = def.starts;
+    next.starts = (start: LooseFn) => {
+      const specs = origStarts(start);
+      const wrapped: Record<string, unknown> = {};
+      for (const [key, spec] of Object.entries(specs)) {
+        if (isState(spec)) {
+          wrapped[key] = instrumentState(senderRef, spec, tagEvent);
+        } else if (spec && typeof spec === 'object' && 'state' in spec && isState((spec as { state: unknown }).state)) {
+          wrapped[key] = { ...spec, state: instrumentState(senderRef, (spec as { state: AnyState }).state, tagEvent) };
+        } else {
+          wrapped[key] = spec;
+        }
+      }
+      return wrapped;
+    };
+  }
+  return next;
+}
+
+function instrumentState(senderRef: string, stateObj: AnyState, tagEvent: (event: unknown, ref: string) => unknown): AnyState {
+  return {
+    ...stateObj,
+    def: instrumentDef(senderRef, stateObj.def as LooseDef, tagEvent),
+  } as AnyState;
+}
+
 const defaultClock: Clock = {
   now: () => Date.now(),
   after: (ms, fn) => {
@@ -195,7 +360,7 @@ function dispatchStateAsk(
   deliverAs({ to, sender, client, call, diagnostics }, incoming, () => {
     const delivery = _currentDelivery();
     if (delivery?.ask) delivery.ask.taken = true;
-    const reply = _replyTo(delivery);
+    const reply = sender !== undefined ? _replyTo(delivery) : undefined;
     const signal = _askSignal(call, _clientOf(delivery));
     if (signal.aborted) {
       _askEnded(call);
@@ -290,6 +455,13 @@ export function createBus(options: BusOptions): BackendBus {
   const queue: BackendEvents[] = [];
   let draining = false;
   let scheduledDrain = false;
+  const eventEmitters = new WeakMap<object, string>();
+  const tagEvent = (event: unknown, ref: string): unknown => {
+    if (event === null || typeof event !== 'object') return event;
+    const target = eventEmitters.has(event) ? { ...(event as Record<string, unknown>) } : event;
+    eventEmitters.set(target, ref);
+    return target;
+  };
 
   const scheduleDrain = () => {
     if (scheduledDrain || status === 'stopped') return;
@@ -333,6 +505,7 @@ export function createBus(options: BusOptions): BackendBus {
       throw error;
     } finally {
       draining = false;
+      if (queue.length > 0 && !isStopped()) scheduleDrain();
     }
   };
 
@@ -353,6 +526,7 @@ export function createBus(options: BusOptions): BackendBus {
       throw error;
     } finally {
       draining = false;
+      if (queue.length > 0 && !isStopped()) scheduleDrain();
     }
   };
 
@@ -369,6 +543,7 @@ export function createBus(options: BusOptions): BackendBus {
       throw error;
     } finally {
       draining = false;
+      if (queue.length > 0 && !isStopped()) scheduleDrain();
     }
   };
 
@@ -418,7 +593,8 @@ export function createBus(options: BusOptions): BackendBus {
       if (!isState(entry)) {
         throw new Error(`Backend system "${id}" must be an @apackdev/state State definition.`);
       }
-      const handle = sys.start(id, entry as AnyState as State<any, any, any, never>);
+      const instrumented = instrumentState(id, entry as AnyState, tagEvent);
+      const handle = sys.start(id, instrumented as State<any, any, any, never>);
       handles.set(id, makeRunningRef(id, handle));
     }
     return spawned;
@@ -521,8 +697,29 @@ export function createBus(options: BusOptions): BackendBus {
 
     // Messages addressed directly to `host/bus` (e.g. `untypedTell(HOST.bus, { type: 'DATA_REPLACED' })`)
     if (to === HOST.bus) {
-      reportUndeclaredIncoming(to, incoming.type, message);
-      queue.push(incoming as BackendEvents);
+      if (!ALLOWED_INCOMING_BUS_EVENTS.has(incoming.type)) {
+        const senderDesc = senderSuffix(message);
+        const pair = `${HOST.bus}/${incoming.type}/${senderDesc}/false`;
+        if (!reportedDrops.has(pair)) {
+          reportedDrops.add(pair);
+          reportError({
+            source: 'bus',
+            operation: 'tell',
+            severity: 'diagnostic',
+            error: new Error(`Refused incoming event "${incoming.type}"${senderDesc} addressed to "${HOST.bus}": not an allowed bus event.`),
+          });
+        }
+        return;
+      }
+      if (incoming.type === 'PACK_CHANGED') {
+        if (typeof incoming.packId !== 'string') {
+          reportUndeclaredIncoming(to, incoming.type, message);
+          return;
+        }
+        queue.push({ type: 'PACK_CHANGED', packId: incoming.packId });
+      } else {
+        queue.push({ type: incoming.type as 'DATA_REPLACED' | 'DATA_CHANGED_ELSEWHERE' });
+      }
       return;
     }
 
@@ -645,8 +842,21 @@ export function createBus(options: BusOptions): BackendBus {
     }
   }
 
+  function settlePendingTeardowns(events: readonly BackendEvents[]): void {
+    for (const event of events) {
+      if (event.type === 'TEARDOWN_PACK' && event.afterStop) {
+        try { event.afterStop(); } catch (error) { notifyError(error); }
+      } else if (event.type === 'SYSTEMS_STOPPED') {
+        try { event.afterStop(); } catch (error) { notifyError(error); }
+      }
+    }
+  }
+
   function send(event: BackendEvents | StateEvent): void {
-    if (status === 'stopped') return;
+    if (status === 'stopped') {
+      settlePendingTeardowns([event as BackendEvents]);
+      return;
+    }
     queue.push(event as BackendEvents);
     drain();
   }
@@ -667,15 +877,15 @@ export function createBus(options: BusOptions): BackendBus {
         sys.attach({
           tell: (to, event) => {
             if (isStopped()) return;
-            const receiver = _currentDelivery()?.receiver;
-            const packId = receiver ? splitRef(receiver)?.packId : undefined;
+            const sender = event !== null && typeof event === 'object' ? eventEmitters.get(event) : undefined;
+            const packId = sender ? splitRef(sender)?.packId : undefined;
             deliverOutgoingFromFlush({
               type: 'OUTGOING',
               message: {
                 to,
                 event: event as StateEvent,
                 ...(packId !== undefined ? { from: packId } : {}),
-                ...(receiver !== undefined ? { sender: receiver } : {}),
+                ...(sender !== undefined ? { sender } : {}),
                 call: newCall(),
               },
             });
@@ -702,13 +912,13 @@ export function createBus(options: BusOptions): BackendBus {
               const role = name.slice('role:'.length);
               const target = registry.designation?.(role);
               if (!target) return;
-              const receiver = _currentDelivery()?.receiver;
+              const sender = event !== null && typeof event === 'object' ? eventEmitters.get(event) : undefined;
               enqueueFromFlush({
                 type: 'INCOMING',
                 message: {
                   to: target,
                   event: event as StateEvent,
-                  ...(receiver !== undefined ? { sender: receiver } : {}),
+                  ...(sender !== undefined ? { sender } : {}),
                   call: newCall(),
                 },
               });
@@ -731,11 +941,12 @@ export function createBus(options: BusOptions): BackendBus {
       status = 'stopped';
       stopListening?.();
       stopListening = undefined;
-      queue.length = 0;
+      const pending = queue.splice(0);
       handles.clear();
       sys.stop();
       for (const detach of detaches) detach();
       detaches.length = 0;
+      settlePendingTeardowns(pending);
     },
     send,
     getSystem: (id) => handles.get(id),

@@ -127,7 +127,7 @@ type SettingsShape = {
   states: {
     idle: {};
     replacingData: {};
-    resetting: {};
+    resetting: { data: { packChanged: boolean } };
   };
 };
 
@@ -198,7 +198,7 @@ export const settingsSystem = hostState<
           return { data: { applied: tellChangedFeatures(data.applied) } };
         },
         RESET_APP: (event, { broadcast }) => {
-          if (canResetApp(event)) return { at: 'resetting' };
+          if (canResetApp(event)) return { at: 'resetting', data: { packChanged: false } };
           broadcast('settings', {
             type: 'APP_RESET_FAILED',
             error: 'Resetting the app requires host-issued settings administration.',
@@ -240,10 +240,16 @@ export const settingsSystem = hostState<
     // Serialized single-in-flight reset. Any further RESET_APP events are
     // ignored here; the frontend is about to full-reload on APP_RESET_COMPLETE.
     resetting: {
+      data: { packChanged: false },
+      on: {
+        // Track pack changes arriving while the reset is pending so a busy-refused reset reconciles on return to idle.
+        PACK_CHANGED: () => ({ data: { packChanged: true } }),
+      },
       // The host resets the whole app: stores, each pack's onInit and boot apply, migrations.
       // Writes and pack changes made by the reset aren't told as changes: tellEveryFeature re-baselines once it has
       // run, whether it finished or not, since a reset that failed partway changed some of the data and settings
-      // already. One that never began (AppDataBusyError) changed nothing, and has nothing to re-baseline.
+      // already. One that never began (AppDataBusyError) changed nothing, and only reconciles pack changes that arrived
+      // while resetting.
       run: async ({ broadcast, tell }) => {
         await hostService('appData').reset();
         broadcastSettings('SETTINGS_UPDATED', broadcast);
@@ -254,10 +260,14 @@ export const settingsSystem = hostState<
         broadcast('settings', { type: 'APP_RESET_COMPLETE' });
         return { at: 'idle', data: { applied } };
       },
-      failed: (error, { broadcast }) => {
+      failed: (error, { data, broadcast }) => {
         // A reset that never began: the user is told why, and nothing is logged as having gone wrong
         if (error instanceof AppDataBusyError) {
           broadcast('settings', { type: 'APP_RESET_FAILED', error: error.message });
+          if (data.packChanged) {
+            broadcastSettings('SETTINGS_UPDATED', broadcast);
+            return { at: 'idle', data: { applied: tellChangedFeatures(data.applied) } };
+          }
           return { at: 'idle' };
         }
         broadcastSettings('SETTINGS_UPDATED', broadcast);
