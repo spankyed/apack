@@ -42,7 +42,7 @@ export async function terminalHiddenScenario({ app, appPage, electronApp }: Para
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
         const code = () => win.applicationState.surface('default-setup/code');
-        const living = () => code().getSnapshot().children?.terminal?.getSnapshot().context.terminals?.length ?? 0;
+        const living = () => win.applicationState.system.snapshot()['default-setup/code/terminal']?.data?.terminals?.length ?? 0;
         await recording.start(mode);
 
         const before = code().getSnapshot().context.panelTerminalId ?? null;
@@ -56,10 +56,9 @@ export async function terminalHiddenScenario({ app, appPage, electronApp }: Para
           await win.__waitForPerformanceView({
             awaitsDelivery: false,
             accept: () => false,
-            subscribe: notify => {
-              const subscription = code().subscribe(notify);
-              return () => subscription.unsubscribe();
-            },
+            subscribe: notify => win.applicationState.system.subscribe(changed => {
+              if (changed.includes('default-setup/code') || changed.includes('default-setup/code/terminal')) notify();
+            }),
             check: () => {
               const context = code().getSnapshot().context;
               const panelTerminalId = context.panelTerminalId ?? null;

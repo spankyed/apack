@@ -14,12 +14,14 @@ export interface SurfaceStateValue {
   readonly data: unknown;
 }
 
-type BreadcrumbSpec<V extends SurfaceStateValue> =
+/** Static or state-derived breadcrumb declaration for a surface or one of its states. */
+export type BreadcrumbSpec<V extends SurfaceStateValue> =
   | BreadcrumbItem
   | readonly BreadcrumbItem[]
   | ((state: V) => BreadcrumbItem | readonly BreadcrumbItem[] | undefined);
 
-type MenuSpec<V extends SurfaceStateValue> =
+/** Static or state-derived context menu declaration for a surface or one of its states. */
+export type MenuSpec<V extends SurfaceStateValue> =
   | readonly ContextMenuItem[]
   | ((state: V) => readonly ContextMenuItem[]);
 

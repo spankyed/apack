@@ -1,19 +1,19 @@
 # @app/renderer
 
-The Vue 3 app every apack window runs. It hosts surfaces; it doesn't implement them. Built-in surfaces come from `packages/default-setup` (compiled in), and external packs' surfaces load at runtime from `pack://`. The renderer owns the window: the tRPC client, the shared-dependency globals packs import through, the layout and Packs views, and the composition that ties them to the host's machines. What decides anything — the app shell, the Packs surface's machine, pack-frontend loading, the install a deep link asks for — is `@apackdev/host/fe`, as the app runtime behind the API is `@apackdev/host`. What this package renders is a feature's frontend half, which is a **surface**; `plugin` is reserved for a ProseMirror `Plugin` or a bundler plugin, and `packages/internal-repo-checks/tests/surface-vocabulary.spec.ts` is the rule. The root `CLAUDE.md` covers the model; `docs/public-facing/architecture.md` ("Frontend boot", "Host dependency sharing") covers pack loading from a pack author's side, and `packages/apack-host/src/packs/runtime/CLAUDE.md` covers the backend half.
+The Vue 3 app every apack window runs. It hosts surfaces; it doesn't implement them. Built-in surfaces come from `packages/default-setup` (compiled in), and external packs' surfaces load at runtime from `pack://`. The renderer owns the window: the `MessagePort` transport (`@apackdev/link` + Control RPC), the shared-dependency globals packs import through, the layout and Packs views, and the composition that ties them to the host's state machines. What decides anything — the app shell, the Packs surface's machine, pack-frontend loading, the install a deep link asks for — is `@apackdev/host/fe`, as the app runtime behind the API is `@apackdev/host`. What this package renders is a feature's frontend half, which is a **surface**; `plugin` is reserved for a ProseMirror `Plugin` or a bundler plugin, and `packages/internal-repo-checks/tests/surface-vocabulary.spec.ts` is the rule. The root `CLAUDE.md` covers the model; `docs/public-facing/architecture.md` ("Frontend boot", "Host dependency sharing") covers pack loading from a pack author's side, and `packages/apack-host/src/packs/runtime/CLAUDE.md` covers the backend half.
 
 ## Layout
 
 `src/` is one folder per job this package does, and `packages/server/src` is the same five minus the last, so a concept
 found in one is looked for in the same place in the other (`tests/source-layout.spec.ts` says so on both sides):
 
-| Folder | What belongs there | The API's counterpart |
+| Folder | What belongs there | The server's counterpart |
 |---|---|---|
 | `boot/` | what runs before the app exists: error reporting, the window's environment | `boot/` |
 | `runtime/` | this window's resources and the frontend port binding | `runtime/` |
-| `transport/` | the wire to the API: the tRPC client, the `ShellClient`, the secrets client | `transport/` (the routers) |
+| `transport/` | the wire to the server: `windowTransport` (`@apackdev/link` + Control RPC), `ShellClient`, the secrets client | `transport/` (the link bus & Control RPC server) |
 | `adapters/` | this window's implementations of ports the host defines (`ShellStorage`, `ShellNotify`, `PackFrontendIO`) | `adapters/` |
-| `views/` | Vue: the app's roots, the layout, the Packs and Settings views | — the API renders nothing |
+| `views/` | Vue: the app's roots, the layout, the Packs and Settings views | — the server renders nothing |
 
 `main.ts`, `types.ts` and the ambient declarations sit at the root. There is no `core/`, `shared/`, `lib/` or
 `utils/`: a folder named for a layer rather than a job takes whatever nobody placed, and the guard rejects one.
@@ -32,7 +32,7 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
    - `application` backs `@apackdev/sdk/fe`'s `untypedOpenSurface` and its neighbours;
    - `secrets` is `src/transport/secrets.ts`, the API's secrets procedures behind `secretsClient` (the only ones pack frontends call directly);
    - `settings` is `src/runtime/settings.ts`, the `SettingsPort` behind `@apackdev/sdk/fe`'s settings composables. It reads the running Settings view's actor, found by the `settings` role rather than by name, so what a feature reads of its own settings doesn't name the view that draws them;
-   - `client` is `feClient` (`src/transport/client.ts`), the window's one client to the API: the `ShellClient` from `@apackdev/host/fe`. Its `send` is how `@apackdev/sdk/events`' `tell` sends here, over `bus.send`, reporting a rejected send to the console, the app's log (`fe-client` source) and a toast, without the payload. The shell (`createAppShell()`) subscribes through it, and reads the loaded packs and asks for packs' startup data through it; it follows the API across a restart on a new port (Electron's API status). Views do not call `trpc.bus` or `trpc.packs`. `runtime/catalog.ts` owns the independent `packs.catalog` declaration subscription; the shell client starts/stops its connection lifetime without gating pack activation on it. Surface sends and subscriptions throw (no backend app is bound in the renderer).
+   - `client` is `feClient` (`src/transport/client.ts`), the window's one client to the server: the `ShellClient` from `@apackdev/host/fe`, backed by `windowTransport` (`src/transport/index.ts`). Its `send` is how `@apackdev/sdk/events`' `tell` sends here, over `windowTransport.linkSend`, reporting a rejected send to the console, the app's log (`fe-client` source) and a toast, without the payload. The shell (`createAppShell()`) subscribes through it, and reads the loaded packs and asks for packs' startup data through it; `windowTransport` follows the server across a restart automatically whenever preload hands over a fresh `MessagePort` generation. Views do not touch `windowTransport` directly. `runtime/catalog.ts` owns the independent `packs.catalog` Control RPC declaration subscription; the shell client starts/stops its connection lifetime without gating pack activation on it. Surface sends and subscriptions throw (no backend app is bound in the renderer).
 6. Sets the globals:
    - `window.applicationState` is the actor. The E2E fixture (`@apackdev/testing`) finds the main window by it and drives it.
    - `window.__disableOnboardingUI()` sends `ONBOARDING_COMPLETE`.
@@ -67,19 +67,21 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
   `sharedFeModules()` is *derived* from the three lists the bundler checks against rather than written
   beside them — and `fe-bundler-externals.spec.ts` asks the question directly, that every specifier a
   bundle leaves bare is one this map names.
-- **Resolution:** conditions include `@apackdev/source`. The API's router type comes from `@app/server` (a type-only import, a dev dependency).
+- **Resolution:** conditions include `@apackdev/source`.
 - `base: './'` (loaded from `file://` in builds), `modulePreload: false`, and a long `optimizeDeps.include` list (Monaco, the terminal emulator, tiptap, vidstack, …) for the dev server.
 - `tsconfig.app.json` includes `../apack-sdk/src/fe/**/*` (the `Window.electronAPI` declaration, see `packages/preload/CLAUDE.md`) and maps `@/*` → `src/*`.
 
-## tRPC client (`src/transport/index.ts`)
+## Window transport (`src/transport/index.ts`)
 
-- Connects a `wsLink` to `ws://${API_HOST}:<electronAPI.apiPort>` (port default 3001) with `ApiSocket`, which offers the subprotocols `apack` and `apack-token.<electronAPI.apiToken>`; the API refuses connections without the token. The token isn't in the URL, which the browser prints on a failed connection. `AppRouter` is a type-only import from `@app/server`.
-- `trpc` is a `Proxy` over the current connection, so importers keep one binding across reconnects.
-- `reconnectApiClient(port)` closes the socket and reconnects only when the port changed, returning whether it did. A restart on the same port keeps the socket; the ws client reconnects on its own.
+- Connects over Electron's brokered `MessagePort` (`window.electronAPI.backendPort.connect`), with no loopback TCP port or token header.
+- Multiplexes one `MessagePort` per backend generation with `muxTransport` into two lanes:
+  - `mux.link` → `@apackdev/link` (`dial` + `join`) for bus sends (`linkSend`), direct asks with `AbortSignal` (`linkAsk`), incoming bus messages, and EARS view `follow` subscriptions (`linkFollow`).
+  - `mux.control` → `createHostControlClient` for off-bus Host Control RPC calls (`controlCall`: `secrets.*`, `settings.*`, `packs.*`, `performance.*`) and subscriptions (`controlSubscribe`: `packs.catalog`).
+- Eagerly attaches to `window.electronAPI.backendPort` on module load so pre-shell calls await the first port cleanly; whenever the backend restarts or reloads, preload delivers a new `MessagePort` generation and `windowTransport` tears down the prior session, installs the new one, and notifies subscribers (`onDisconnected` / `onConnected`).
 
 ## App shell (`src/runtime/shell.ts`)
 
-The shell's machine is the host's: `createShellMachine` in `@apackdev/host/fe` (`packages/apack-host/src/fe/shell/`, described in `packages/apack-host/CLAUDE.md`). This file only composes it with the window's I/O, as `createAppShell()`:
+The shell's state machine is the host's: `createShell` in `@apackdev/host/fe` (`packages/apack-host/src/features/application/fe/`, described in `packages/apack-host/CLAUDE.md`). This file only composes it with the window's I/O, as `createAppShell()`:
 
 | Option | The renderer's |
 |---|---|

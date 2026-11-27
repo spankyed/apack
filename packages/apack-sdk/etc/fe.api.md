@@ -89,6 +89,9 @@ export function breadcrumbList<C>(getCrumbs: (ctx: C) => Array<{
     }>;
 };
 
+// @public
+export type BreadcrumbSpec<V extends SurfaceStateValue> = BreadcrumbItem | readonly BreadcrumbItem[] | ((state: V) => BreadcrumbItem | readonly BreadcrumbItem[] | undefined);
+
 // @public (undocumented)
 export function breadcrumbWithParams<C>(input: {
     target: string;
@@ -604,6 +607,9 @@ export function loadTabGroups(storage: SurfaceStorage, name: string): TabGroup[]
 // @public
 export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
 
+// @public
+export type MenuSpec<V extends SurfaceStateValue> = readonly ContextMenuItem[] | ((state: V) => readonly ContextMenuItem[]);
+
 // @public (undocumented)
 export interface NavHistory<T> {
     // (undocumented)
@@ -1002,15 +1008,6 @@ export interface TabGroup {
 // @public (undocumented)
 export type TabGroupColor = (typeof ALL_COLORS)[number];
 
-// @public (undocumented)
-export const targetIs: (input: {
-    event: {
-        type: string;
-    };
-}, params: {
-    view: string;
-}) => boolean;
-
 // @public
 export function terminalViews(target?: string): TerminalViewStream;
 
@@ -1050,20 +1047,7 @@ export const textEditorExtensionsRegistry: {
     onChanged(listener: () => void): () => void;
 };
 
-// @public (undocumented)
-export function TRAIL_CLICK<T extends TransitionConfig>(routes: RouteTuple[]): {
-    [x: string]: {
-        guard: {
-            type: string;
-            params: {
-                view: string;
-            };
-        };
-        target: string;
-    }[];
-};
-
-// @public (undocumented)
+// @public
 export type TrailClickEvent<TInfo = unknown> = {
     type: 'TRAIL_CLICK';
     target: string;

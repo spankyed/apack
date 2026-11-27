@@ -69,9 +69,8 @@ export async function terminalOutputScenario({ app, appPage, electronApp }: Para
       const result = await appPage.evaluate(async ({ mode, fixtureId, terminalId, command, corpusBytes }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
-        const code = () => win.applicationState.surface('default-setup/code');
-        const alive = (id: string) => !!code().getSnapshot().children?.terminal?.getSnapshot()
-          .context.terminals?.find(t => t.id === id);
+        const alive = (id: string) => !!win.applicationState.system.snapshot()['default-setup/code/terminal']
+          ?.data?.terminals?.find(t => t.id === id);
         await recording.start(mode);
 
         const started = performance.now();
@@ -89,10 +88,9 @@ export async function terminalOutputScenario({ app, appPage, electronApp }: Para
           await win.__waitForPerformanceView({
             awaitsDelivery: false,
             accept: () => false,
-            subscribe: notify => {
-              const subscription = code().subscribe(notify);
-              return () => subscription.unsubscribe();
-            },
+            subscribe: notify => win.applicationState.system.subscribe(changed => {
+              if (changed.includes('default-setup/code/terminal')) notify();
+            }),
             check: () => {
               // The shell exited, so every byte it wrote has been sent
               if (alive(terminalId)) return false;

@@ -27,7 +27,7 @@ export function surfaceIsRunning(ref: string): boolean {
  * The snapshot's type is the caller's to name, since only it knows which surface the ref belongs to:
  *
  * ```ts
- * useUntypedSurfaceState(ref('notes'), (s: SnapshotFrom<NotesState>) => s.context.notes)
+ * useUntypedSurfaceState(ref('notes'), (s: { context: NotesContext }) => s.context.notes)
  * ```
  *
  * It follows the surface *arriving* as well as changing: a read made while another pack's frontend is still loading

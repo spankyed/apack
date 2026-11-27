@@ -1,9 +1,9 @@
 // An ask: an event a system answers exactly once, with what it was asked for or with why it could not be done.
 //
 // A system's contract declares its asks (`asks`), each with the fields it takes, what it answers with, what it may
-// say before answering and the ways it may fail that an asker can act on. The system answers them with a table
-// (`defineSystem`'s `answers`). An asker gets how the ask ended as a value: it awaits `ask`, or its machine invokes
-// or spawns `fromAsk`.
+// say before answering and the ways it may fail that an asker can act on. The system answers them with its
+// `@apackdev/state` `answers` handlers. An asker gets how the ask ended as a value: it awaits `ask`, or its state
+// declares the call under `calls` or `loads`.
 //
 // On the wire the answer is one of two standard messages, correlated by the envelope's call like any reply:
 // `ASK_ANSWERED` with the answer, or `ASK_FAILED` with a failure of a kind and a message, with `ASK_PROGRESS` before
@@ -106,8 +106,8 @@ export type AskFailed<K extends string = string, F extends { kind: string } = As
 export type AskProgressed<K extends string = string, P = unknown> = { type: 'ASK_PROGRESS'; asked: K; update: P };
 
 /**
- * The event a machine that invokes an ask (`fromAsk`) is sent for each thing its handler tells it before the answer:
- * `<ask>.progress`, so a transition names the ask it is about and needs no guard.
+ * The progress event shape for a contract's ask: `<ask>.progress`, pairing the ask name with its declared
+ * progress payload.
  */
 export type ProgressEventOf<C, K extends AskName<C>> = { type: `${K}.progress`; update: ProgressPayload<ContractAsks<C>[K]> };
 

@@ -90,7 +90,14 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       'src/f.ts:1: untypedTell from @apackdev/sdk/events']],
   },
   'raw-transport': {
-    onFile: [['export const send = () => _rootEvents.emitOutgoing(event);\n', 'src/f.ts:1: _rootEvents']],
+    onFile: [
+      ['export const send = () => _rootEvents.emitOutgoing(event);\n', 'src/f.ts:1: _rootEvents'],
+      ["import { createLink } from '@apackdev/link';\n", 'src/f.ts:1: @apackdev/link'],
+      ["import { muxTransport } from '@apackdev/link/mux';\n", 'src/f.ts:1: @apackdev/link/mux'],
+      ['export const port = window.electronAPI.backendPort;\n', 'src/f.ts:1: electronAPI.backendPort'],
+      ['export const port = electronAPI.backendPort;\n', 'src/f.ts:1: electronAPI.backendPort'],
+    ],
+    elsewhere: 'raw-transport allows unrelated backendPort accesses, other electronAPI members, and similarly named packages',
   },
   // Two shapes and eleven allowed ones, transcribed when the repo script's console rule moved here
   'window-storage': {
@@ -233,6 +240,19 @@ describe('every rule', () => {
 
     expect(packRuleProblems(dir, ['src', 'tests']).get('reserved-event-keys'))
       .toEqual(['tests/drives-a-machine.spec.ts:1: _call:']);
+  });
+
+  it('raw-transport allows unrelated backendPort accesses, other electronAPI members, and similarly named packages', () => {
+    const dir = completePack({
+      'src/f.ts': [
+        "import { foo } from '@apackdev/linker';",
+        'export const a = config.backendPort;',
+        'export const b = { backendPort: 1 };',
+        'export const c = window.electronAPI.speech;',
+        'export const d = foo;',
+      ].join('\n') + '\n',
+    });
+    expect(problems(dir, 'raw-transport')).toEqual([]);
   });
 
   it('backend-console fires under a backend path and not under a frontend one', () => {

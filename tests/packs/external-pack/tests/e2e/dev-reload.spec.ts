@@ -11,7 +11,7 @@ test('a reloaded pack is left running', async ({ app, appPage, connection }) => 
   const previous = await appPage.evaluate(packId => {
     const shell = (window as any).applicationState;
     return { runtime: shell.getSnapshot().context.acceptedPackRuntimes[packId],
-      actor: shell.system.get(`${packId}/memos`).sessionId };
+      actor: shell.surface(`${packId}/memos`).sessionId };
   }, PACK_ID);
 
   await connection.reloadPack(PACK_ID);
